@@ -8,6 +8,7 @@
  * Enum labels must match the tables in docs/glossary.md. Copy style follows
  * CLAUDE.md: sentence case, active verbs, errors say what happened and what to do.
  */
+import { formatCount } from "./format";
 import type {
   DashboardPeriod,
   OrphanReason,
@@ -142,6 +143,19 @@ export const copy = {
       tableCaption: "Visites par jour et par résultat",
       day: "Jour",
       total: "Total",
+    },
+    /** The KPI cards' bottom row (GH #111). */
+    kpiFooter: {
+      /** The mini-bar's visible caption joins STATUS_LABELS; this is its counts, read out. */
+      openSplit: (nNew: number, nAssigned: number, nFollowUp: number) =>
+        `${formatCount(nNew)} ${nNew <= 1 ? "nouveau" : "nouveaux"}, ` +
+        `${formatCount(nAssigned)} ${nAssigned <= 1 ? "assigné" : "assignés"}, ` +
+        `${formatCount(nFollowUp)} à relancer`,
+      /** French takes the singular for 0 and 1. */
+      conversionCaption: (converted: number, visited: number) =>
+        `${formatCount(converted)} ${converted <= 1 ? "converti" : "convertis"} sur ${formatCount(visited)} ` +
+        (visited <= 1 ? "prospect visité" : "prospects visités"),
+      noneVisited: "Aucun prospect visité sur la période",
     },
     /** Follows the delta chip: "+12,4 % vs période précédente". */
     vsPrevious: "vs période précédente",

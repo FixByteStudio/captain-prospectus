@@ -21,7 +21,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 ## Admin
 | Route | Purpose |
 |---|---|
-| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta}, openProspects, converted: {value, previous, delta}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}]}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
+| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}]}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
 | `GET /api/admin/prospects?status=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
@@ -159,6 +159,14 @@ figures to the same response, additively.
   `(visited_at + offset) / 86 400 000`, the Brussels day number: the offset
   changes at most once in a period (`periodOffsets` in `src/shared/period.ts`),
   so the statement binds a handful of parameters whatever the period.
+- **The KPI cards' series** (GH #111). Each has `period` entries on the days of
+  `visitsByDay` and sums to its card's figure. `visits.byDay` is
+  `visitsByDay` summed over outcomes. `converted.byDay` counts each Convertis
+  prospect once, on the Brussels day of its **first** conversion event in the
+  period, meaning the same events and key as `converted`. A prospect converted twice
+  counts on the earlier day only. `openProspectsByStatus` splits
+  `openProspects` into `new`, `assigned` and `follow_up` with the same filter,
+  and `openProspects` is its sum.
 
 ## The repair queue
 

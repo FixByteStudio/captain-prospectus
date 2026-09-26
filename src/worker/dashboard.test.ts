@@ -119,7 +119,7 @@ describe("GET /api/admin/dashboard", () => {
       expect(body.period).toBe(period);
       expect(body.from).toBe(from);
       expect(body.to).toBe(to);
-      expect(body.visits).toEqual({ value: 3, previous: 2, delta: 0.5 });
+      expect(body.visits).toMatchObject({ value: 3, previous: 2, delta: 0.5 });
     },
   );
 
@@ -134,7 +134,7 @@ describe("GET /api/admin/dashboard", () => {
     await seedVisits(await seedProspect(), [from, from + 1]);
 
     const body = await dashboard("?period=7");
-    expect(body.visits).toEqual({ value: 2, previous: 0, delta: null });
+    expect(body.visits).toMatchObject({ value: 2, previous: 0, delta: null });
   });
 
   it("has a delta of 0 when flat (I/O matrix, flat)", async () => {
@@ -142,7 +142,7 @@ describe("GET /api/admin/dashboard", () => {
     await seedVisits(await seedProspect(), [from, from - 1]);
 
     const body = await dashboard("?period=7");
-    expect(body.visits).toEqual({ value: 1, previous: 1, delta: 0 });
+    expect(body.visits).toMatchObject({ value: 1, previous: 1, delta: 0 });
   });
 
   it("counts a merged prospect's visits and leaves quarantined ones out", async () => {
@@ -225,7 +225,7 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
       await seedVisits(await seedProspect("converted"), [from], "converted");
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.converted).toEqual({ value: 1, previous: 0, delta: null });
+      expect(body.converted).toMatchObject({ value: 1, previous: 0, delta: null });
       expect(body.conversionRate).toEqual({
         value: 1,
         previous: null,
@@ -283,7 +283,7 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
       await seedProspect("converted", null, previousFrom - 1);
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.converted).toEqual({ value: 2, previous: 4, delta: -0.5 });
+      expect(body.converted).toMatchObject({ value: 2, previous: 4, delta: -0.5 });
       expect(body.conversionRate.visitedProspects).toEqual({ value: 1, previous: 2 });
     },
   );
@@ -309,13 +309,13 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
       await seedVisits(prospectId, [from], "converted");
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.converted).toEqual({ value: 1, previous: 0, delta: null });
+      expect(body.converted).toMatchObject({ value: 1, previous: 0, delta: null });
     },
   );
 
   it("has a null rate and no delta when nothing was visited (I/O matrix, no visits)", async () => {
     const body = await dashboard("?period=30");
-    expect(body.converted).toEqual({ value: 0, previous: 0, delta: null });
+    expect(body.converted).toMatchObject({ value: 0, previous: 0, delta: null });
     expect(body.conversionRate).toEqual({
       value: null,
       previous: null,
@@ -338,7 +338,7 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
       }
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.converted).toEqual({ value: 2, previous: 1, delta: 1 });
+      expect(body.converted).toMatchObject({ value: 2, previous: 1, delta: 1 });
       expect(body.conversionRate.value).toBe(0.25);
       expect(body.conversionRate.previous).toBe(0.2);
       expect(body.conversionRate.delta).toBeCloseTo(0.05, 12);
@@ -492,4 +492,135 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
       }
     },
   );
+});
+
+describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
+  const HOUR = 60 * 60 * 1000;
+  /** Brussels midnight of the period's day `i`; noon keeps clear of a DST hour. */
+  const dayStart = (from: number, i: number) =>
+    brusselsPeriod(from + i * DAY_MS + 12 * HOUR, 1).from;
+  const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0);
+  /** The period's series with `n` on each listed day and 0 elsewhere. */
+  const series = (period: number, days: Record<number, number>) =>
+    Array.from({ length: period }, (_, i) => days[i] ?? 0);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each(DASHBOARD_PERIODS)(
+    "sums each series to its figure and has period %i entries (I/O matrix, sums and length)",
+    async (period) => {
+      const { from, to } = brusselsPeriod(Date.now(), period);
+      const last = period - 1;
+      // Visits of every outcome on three days, one prospect converted twice,
+      // one by hand, one absorbed into a converted survivor.
+      const a = await seedProspect("converted");
+      await seedVisits(a, [from, dayStart(from, last) + HOUR], "converted");
+      await seedVisits(a, [dayStart(from, 1) + HOUR], "no_contact");
+      await seedVisits(await seedProspect("follow_up"), [to - 1], "follow_up");
+      await seedProspect("converted", null, dayStart(from, 1) + 2 * HOUR);
+      const survivor = await seedProspect("converted");
+      await seedVisits(survivor, [dayStart(from, 1)], "converted");
+      await seedVisits(await seedProspect("converted", survivor), [from + 1], "converted");
+      // Outside the period: in neither series.
+      await seedVisits(await seedProspect("converted"), [from - 1, to], "converted");
+      // Open prospects, one merged away.
+      await seedProspect("new");
+      await seedProspect("new", survivor);
+      await seedProspect("assigned");
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.visits.byDay).toHaveLength(period);
+      expect(body.converted.byDay).toHaveLength(period);
+      expect(sum(body.visits.byDay)).toBe(body.visits.value);
+      expect(sum(body.converted.byDay)).toBe(body.converted.value);
+      expect(body.converted.value).toBe(3);
+      expect(body.openProspectsByStatus).toEqual({ new: 1, assigned: 1, follow_up: 1 });
+      expect(
+        body.openProspectsByStatus.new +
+          body.openProspectsByStatus.assigned +
+          body.openProspectsByStatus.follow_up,
+      ).toBe(body.openProspects);
+      // Visites' series is the chart's days, summed over outcomes.
+      expect(body.visits.byDay).toEqual(
+        body.visitsByDay.map((d) => OUTCOMES.reduce((n, o) => n + d.counts[o], 0)),
+      );
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "puts a prospect converted twice on its first day only, period %i (I/O matrix, converted twice)",
+    async (period) => {
+      const { from } = brusselsPeriod(Date.now(), period);
+      const prospectId = await seedProspect("converted");
+      await seedVisits(
+        prospectId,
+        [dayStart(from, 1) + HOUR, dayStart(from, 4 % period) + 2 * HOUR],
+        "converted",
+      );
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.converted.byDay).toEqual(series(period, { 1: 1 }));
+    },
+  );
+
+  it("puts a visit's conversion and a later manual one on the visit's day (I/O matrix, visit then manual)", async () => {
+    const { from } = brusselsPeriod(Date.now(), 30);
+    const prospectId = await seedProspect("converted", null, dayStart(from, 5) + HOUR);
+    await seedVisits(prospectId, [dayStart(from, 2) + HOUR], "converted");
+
+    const body = await dashboard("?period=30");
+    expect(body.converted.byDay).toEqual(series(30, { 2: 1 }));
+  });
+
+  it("counts an absorbed prospect and its survivor once, on the first day (I/O matrix, merged)", async () => {
+    const { from } = brusselsPeriod(Date.now(), 30);
+    const survivor = await seedProspect("converted");
+    await seedVisits(await seedProspect("converted", survivor), [from + HOUR], "converted");
+    await seedVisits(survivor, [dayStart(from, 3) + HOUR], "converted");
+
+    const body = await dashboard("?period=30");
+    expect(body.converted.byDay).toEqual(series(30, { 0: 1 }));
+  });
+
+  it("leaves a conversion before the period out of the series (I/O matrix, previous period)", async () => {
+    const { from } = brusselsPeriod(Date.now(), 30);
+    await seedVisits(await seedProspect("converted"), [from - 1], "converted");
+    await seedProspect("converted", null, from - 1);
+
+    const body = await dashboard("?period=30");
+    expect(body.converted.byDay).toEqual(series(30, {}));
+    expect(body.converted.previous).toBe(2);
+  });
+
+  it.each([
+    ["2026-04-03T10:00:00.000Z", "2026-03-29", "2026-03-29T21:30:00.000Z"],
+    ["2026-10-30T10:00:00.000Z", "2026-10-25", "2026-10-25T22:30:00.000Z"],
+  ])(
+    "on %s, puts a conversion at 23:30 on the DST day %s on that date (I/O matrix, DST)",
+    async (now, dstDate, late) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.parse(now));
+      await seedVisits(await seedProspect("converted"), [Date.parse(late)], "converted");
+      await seedProspect("converted", null, Date.parse(late) + HOUR / 2);
+
+      for (const period of DASHBOARD_PERIODS) {
+        const body = await dashboard(`?period=${period}`);
+        const i = body.visitsByDay.findIndex((d) => d.date === dstDate);
+        expect(i, `period ${period}`).toBeGreaterThanOrEqual(0);
+        expect(body.converted.byDay[i], `period ${period}`).toBe(1);
+        // The manual one at midnight is the next day's.
+        expect(body.converted.byDay[i + 1], `period ${period}`).toBe(1);
+      }
+    },
+  );
+
+  it("has all-zero series and an all-zero split when nothing happened (I/O matrix, empty and open split zero)", async () => {
+    const body = await dashboard("?period=7");
+    expect(body.visits.byDay).toEqual(series(7, {}));
+    expect(body.converted.byDay).toEqual(series(7, {}));
+    expect(body.openProspects).toBe(0);
+    expect(body.openProspectsByStatus).toEqual({ new: 0, assigned: 0, follow_up: 0 });
+  });
 });
