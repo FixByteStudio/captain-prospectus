@@ -889,9 +889,14 @@ there is one, and the distance, `min-h-16` with its own 4px status edge — and
 tapping its header (`aria-expanded`, `aria-controls`) expands it in place to
 the same "Y aller"/"Visiter" pair as the card, no navigation and nothing
 written to Dexie. Opening one row closes whichever was already open: at most
-one is expanded at a time. Neither action needs a swipe (story 117.3 adds
-that as a second way in, not the only one). Without coordinates, "Y aller" is
-absent and "Visiter" takes the row's full width — on the card too.
+one is expanded at a time. A swipe on the header is a second way in, not the
+only one: a gesture decides its axis after 10px, and left starts Visiter,
+right starts Y aller, once it commits past 96px — the row sliding to reveal a
+96px panel underneath. A swipe that stays short of 96px, or one that decides
+vertical, snaps back and starts nothing, and the tap it might otherwise also
+fire is swallowed. Without coordinates, "Y aller" is absent, a right swipe
+does not move the row, and "Visiter" takes the row's full width — on the card
+too.
 
 **Pas encore envoyé.** A stop whose visit is sitting in `outboxVisits`, or a
 field prospect still in `outboxProspects`, carries a `warn`-tinted badge with
@@ -1215,18 +1220,52 @@ be tapped again (INVARIANT 5).
 ### Adding a place
 
 ```
-│  Nom      [                    ] │
+│  Nom                             │
+│  [ Le nom sur la devanture     ] │
+│  Indiquez le nom de l'établis…   │  after « Ajouter » with Nom empty
 │                                  │
 │  Type                            │
-│  [ Restaurant ] [ Restauration ] │  six targets, wrapping
-│  [ Café ] [ Bar ] [ Food truck ] │
-│  [ Autre ]                       │
+│  [ Restaurant ] [ Restauration ] │  2 columns, 6 choice tiles
+│  [ Café       ] [ Bar          ] │
+│  [ Food truck ] [ Autre        ] │
 │                                  │
 │  Position                        │
-│  50,8467  4,3525     Actualiser  │  or « Utiliser ma position »
-│                                  │
-│  [          Ajouter          ]   │
+│  ┌─────────────────────────────┐ │
+│  │ (o) 50,8466 · 4,3528        │ │  « Utiliser ma position »
+│  │               [Actualiser]  │ │  until there is a reading
+│  └─────────────────────────────┘ │
+│  Adresse (facultatif)            │
+│  [                             ] │
+│  Téléphone (facultatif)          │
+│  [                             ] │
+│  [          Ajouter           ]  │  sticky, above the tab bar
 ```
+
+**Type is six choice tiles in two columns.** They are DESIGN.md's Choice
+controls (field) over native radios (ADR-0015), so arrow keys move the pick
+and the group announces as one control. Restaurant is checked on open; only
+the checked tile is gold.
+
+**Position is a card, not a map.** The agent is often offline here, and a map
+without tiles would show nothing the coordinates don't. The card reads the
+same in both cases, makes no tile request, and costs no Leaflet on this
+screen. Coordinates use fr-FR with four decimals, about a shopfront. The
+reading shown is always the one « Ajouter » would save; while a new one is
+on its way, « Recherche de votre position… » shows under it.
+
+**The position is read on open.** field-operations.md says a field
+prospect's position defaults to where the agent stands, and Flow 4 needs it
+so the new place comes up as the nearest stop even when nobody taps anything.
+So the button reads « Utiliser ma position » only while there is no reading
+(refused, unavailable, or still locating, when it is disabled), and
+« Actualiser » once there is one. A place with no position is still added; it
+goes to the end of the round.
+
+**« Ajouter » puts the place on the round at once.** It writes one
+`outboxProspects` row and nothing else (INVARIANT 2), then returns to
+Tournée du jour with « Prospect ajouté… ». The round reads the outbox, so
+the place is a stop before any sync. A failed write stays on the form with
+the storage error, like the visit form.
 
 ### Sync is ambient, never a toast
 
