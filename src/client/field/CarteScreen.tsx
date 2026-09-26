@@ -22,6 +22,7 @@ import { cn } from "../lib/utils";
 import { useOnline } from "../hooks/use-online";
 import { CarteList } from "./CarteList";
 import { CarteSheet } from "./CarteSheet";
+import { PositionDenied } from "./PositionDenied";
 import { mapPins, walkingPath } from "./round-map";
 import { RoundMap } from "./RoundMap";
 import { useRound } from "./useRound";
@@ -136,12 +137,7 @@ export function CarteScreen() {
 
   const deniedNotice = denied && (
     <div className="bg-card border-border absolute inset-x-4 top-3 z-10 rounded-lg border p-3 shadow-sm">
-      <p className="text-sm">
-        {copy.today.positionDenied}{" "}
-        <button type="button" onClick={refresh} className="text-foreground underline">
-          {copy.today.retryPosition}
-        </button>
-      </p>
+      <PositionDenied onRetry={refresh} className="text-sm" />
     </div>
   );
 

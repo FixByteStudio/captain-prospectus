@@ -10,12 +10,13 @@ import { ArrowLeftIcon } from "lucide-react";
 import { Link } from "react-router";
 import { copy } from "../copy";
 
+/** Shared with step 2's « Résultat » button, which must look the same (design.md). */
+export const BACK_LINK_CLASS =
+  "text-muted-foreground hover:text-foreground inline-flex min-h-touch items-center gap-2 text-sm";
+
 export function BackLink() {
   return (
-    <Link
-      to="/tournee"
-      className="text-muted-foreground hover:text-foreground inline-flex min-h-touch items-center gap-2 text-sm"
-    >
+    <Link to="/tournee" className={BACK_LINK_CLASS}>
       <ArrowLeftIcon aria-hidden className="size-4" />
       {copy.visit.back}
     </Link>

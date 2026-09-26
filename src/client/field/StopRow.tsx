@@ -20,7 +20,7 @@ import { formatDistance } from "../format";
 import { cn } from "../lib/utils";
 import { STATUS_EDGE } from "../admin/status";
 import { StopNumber } from "./StopNumber";
-import { navigationUrl, type TodayItem } from "./today";
+import { navigationUrl, visitPath, type TodayItem } from "./today";
 import { useSwipe } from "./useSwipe";
 
 /** A pending prospect has no server status to key an edge off yet. */
@@ -84,7 +84,7 @@ export function StopActions({
           {copy.today.navigate}
         </a>
       )}
-      <Link to={`/tournee/${item.id}`} className={buttonVariants({ size: "touch" })}>
+      <Link to={visitPath(item.id)} className={buttonVariants({ size: "touch" })}>
         <ClipboardCheckIcon aria-hidden="true" />
         {copy.today.visit}
       </Link>
@@ -108,7 +108,7 @@ export function StopRow({
   const url = navigationUrl(item);
   const { offset, dragging, handlers } = useSwipe({
     canRight: url !== null,
-    onVisit: () => navigate(`/tournee/${item.id}`),
+    onVisit: () => navigate(visitPath(item.id)),
     onNavigate: () => {
       // Re-checked at release time, not just at setup: `canRight` already
       // guards this, but a stale closure must never open `null`.

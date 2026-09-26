@@ -21,7 +21,7 @@ import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { ArrowLeftIcon, InfoIcon } from "lucide-react";
-import { BackLink } from "./BackLink";
+import { BACK_LINK_CLASS, BackLink } from "./BackLink";
 import { OutcomeCard, outcomeDomId } from "./OutcomeCard";
 import { StepIndicator } from "./StepIndicator";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -155,8 +155,8 @@ export function VisitScreen() {
   /**
    * `useWatch`, not `form.watch()`: the latter returns a function the React
    * Compiler cannot memoize, so it bails out of compiling this component. Only
-   * the outcome is watched, because it is the one value the markup branches on —
-   * it decides whether the follow-up date exists at all.
+   * two values are watched: the outcome, which decides whether the follow-up
+   * date exists at all, and the answers, which step 2's controls render from.
    */
   const outcome = useWatch({ control: form.control, name: "outcome" });
   const answers = useWatch({ control: form.control, name: "answers" });
@@ -403,7 +403,7 @@ export function VisitScreen() {
                look as BackLink, since both name the place they return to. */
               <button
                 type="button"
-                className="text-muted-foreground hover:text-foreground -ml-1 inline-flex min-h-touch items-center gap-2 text-sm"
+                className={`${BACK_LINK_CLASS} -ml-1`}
                 onClick={() => setStep("outcome")}
               >
                 <ArrowLeftIcon aria-hidden className="size-4" />

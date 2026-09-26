@@ -909,8 +909,8 @@ instruction. So it gets a card: a gold 4px inset edge, its own `StopNumber` in
 │┃ Le Comptoir                     │  future follow-ups, not walkable
 │┃ À relancer le 18/09/2026        │
 ├──────────────────────────────────┤
-│   ⬤        ⬤                    │  tab bar (GH #66, "Tab bar" below):
-│ Tournée  Ajouter                 │  fixed at the bottom below 768px
+│   ⬤       ⬤        ⬤             │  tab bar (GH #66, "Tab bar" below):
+│ Tournée  Carte  Ajouter          │  fixed at the bottom below 768px
 └──────────────────────────────────┘
 ```
 
@@ -1089,7 +1089,8 @@ else is allowed to compete.
 
 ```
 ┌──────────────────────────────────┐
-│ ←  Le Bouchon des Filles         │
+│ ←  Retour à la tournée           │
+│ Le Bouchon des Filles            │
 ├──────────────────────────────────┤
 │  ┌────────────────────────────┐  │
 │  │ [x] Flyer remis            │  │  a card, not a bare row
@@ -1176,8 +1177,9 @@ with it, so the questions do not join it — they follow it.
 ```
      step 1                             step 2
 ┌──────────────────────────────────┐ ┌──────────────────────────────────┐
-│ ←  Le Bouchon des Filles         │ │ ←  Résultat                      │
+│ ←  Retour à la tournée           │ │ ←  Résultat                      │
 │ ●  Étape 1 sur 2 · Résultat      │ │ ●  Étape 2 sur 2 · Questions     │
+│ Le Bouchon des Filles            │ │ Le Bouchon des Filles            │
 ├──────────────────────────────────┤ ├──────────────────────────────────┤
 │ [x] Flyer remis                  │ │  Questions                       │
 ├──────────────────────────────────┤ │                                  │
