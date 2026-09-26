@@ -15,6 +15,11 @@ import type {
   VisitHistoryEntry,
 } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
+import { sendableBy, type OutboxStamp } from "./outbox-stamp";
+
+// Re-exported so the store module still names everything a row carries;
+// pure callers (`progress.ts`, `sync.ts`) import from `outbox-stamp.ts`.
+export { sendableBy, type OutboxStamp };
 
 export type MetaValues = {
   script: Script | null;
@@ -32,16 +37,6 @@ export type MetaValues = {
 };
 export type MetaKey = keyof MetaValues;
 
-/**
- * The email of the identity that wrote an outbox row — docs/backlog/005.
- *
- * Dexie-only bookkeeping, never on the wire: the Worker takes `agentEmail`
- * from the verified JWT (INVARIANT 10), so the stamp only decides whether this
- * device may send the row *under the identity now signed in*. Optional because
- * a row queued before v3 with no identity cached has none; `runSync` treats
- * that row as the current identity's.
- */
-export type OutboxStamp = { writtenBy?: string };
 export type StoredVisit = Visit & OutboxStamp;
 export type StoredFieldProspect = FieldProspect & OutboxStamp;
 export type MetaRow = { key: MetaKey; value: MetaValues[MetaKey] };
@@ -138,15 +133,6 @@ export async function setMeta<K extends MetaKey>(
   value: MetaValues[K],
 ): Promise<void> {
   await db.meta.put({ key, value });
-}
-
-/**
- * Whether `identity` may send this outbox row. An unstamped row predates v3
- * with no identity cached, and belongs to whoever syncs it first
- * (docs/backlog/005) — holding it back would strand it for good.
- */
-export function sendableBy(identity: string): (row: OutboxStamp) => boolean {
-  return (row) => row.writtenBy === undefined || row.writtenBy === identity;
 }
 
 export type OutboxCounts = {

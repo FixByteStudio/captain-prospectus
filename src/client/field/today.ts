@@ -152,3 +152,8 @@ export function navigationUrl(item: Pick<TodayItem, "lat" | "lng" | "name">): st
   const lng = item.lng.toFixed(6);
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=19/${lat}/${lng}`;
 }
+
+/** The visit form for a stop — one spelling for the tap and the swipe (GH #120). */
+export function visitPath(id: string): string {
+  return `/tournee/${id}`;
+}

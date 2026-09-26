@@ -16,6 +16,7 @@ import { brusselsPeriod } from "../../shared/period";
 import { DailyProgress } from "./DailyProgress";
 import { fieldDb, todaysSentVisits, type SentVisit } from "./db";
 import { NextStopCard } from "./NextStopCard";
+import { PositionDenied } from "./PositionDenied";
 import { dailyProgress } from "./progress";
 import { edgeFor, StopRow } from "./StopRow";
 import type { TodayItem } from "./today";
@@ -129,12 +130,7 @@ export function TodayScreen() {
 
       {locating && <p className="text-muted-foreground mt-1 text-sm">{copy.today.locating}</p>}
       {denied && (
-        <p className="text-muted-foreground mt-1 text-sm">
-          {copy.today.positionDenied}{" "}
-          <button type="button" onClick={refresh} className="text-foreground underline">
-            {copy.today.retryPosition}
-          </button>
-        </p>
+        <PositionDenied onRetry={refresh} className="text-muted-foreground mt-1 text-sm" />
       )}
 
       {!next && list.later.length === 0 ? (

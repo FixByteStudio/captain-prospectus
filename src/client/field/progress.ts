@@ -3,12 +3,12 @@
  * aujourd'hui" with a bar, and the dedupe-by-id union of the log and the
  * pending outbox (docs/domains/field-operations.md).
  *
- * Pure aside from importing `sendableBy` from `db.ts` — one definition of
- * "mine" (invariant: the outbox side and the log side must agree). `db.ts`
- * constructs `fieldDb` at module scope but never opens it here, so this
- * module still runs with no Dexie and no browser under test.
+ * Pure: `sendableBy` comes from `outbox-stamp.ts`, the one definition of
+ * "mine" the outbox side shares (the two sides must agree), and `db.ts`
+ * contributes types only.
  */
-import { sendableBy, type SentVisit, type StoredVisit } from "./db";
+import type { SentVisit, StoredVisit } from "./db";
+import { sendableBy } from "./outbox-stamp";
 
 export type DailyProgressValue = { n: number; total: number; percent: number };
 

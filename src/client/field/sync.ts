@@ -23,7 +23,8 @@ import {
 } from "../../shared/constants";
 import { syncResponseSchema } from "../../shared/schemas";
 import type { FieldProspect, SyncRequest, Visit } from "../../shared/schemas";
-import { type FieldDb, type OutboxStamp, outboxCounts, sendableBy, setMeta } from "./db";
+import { type FieldDb, outboxCounts, setMeta } from "./db";
+import { type OutboxStamp, sendableBy } from "./outbox-stamp";
 
 export type SyncStatus =
   | "ok"
