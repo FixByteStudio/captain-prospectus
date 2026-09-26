@@ -12,10 +12,12 @@ import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
 import { useDashboard } from "../queries";
+import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
 import { KpiCard, KpiCardSkeleton } from "./KpiCard";
 import { KpiSparkline } from "./KpiSparkline";
 import { OpenProspectsBar } from "./OpenProspectsBar";
+import { PipelinePanel, PipelinePanelSkeleton } from "./PipelinePanel";
 import { VisitsChart, VisitsChartSkeleton } from "./VisitsChart";
 
 function isPeriod(value: number): value is DashboardPeriod {
@@ -145,13 +147,28 @@ export function DashboardScreen() {
       )}
 
       {(data || !dashboard.isError) && (
-        // 2:1 with Pipeline par statut at ≥ lg (story 8 fills the third).
+        // 2:1 with Pipeline par statut at ≥ lg.
         <div
           aria-busy={dashboard.isFetching}
           className={cn("grid gap-6 lg:grid-cols-3", dashboard.isPlaceholderData && "opacity-60")}
         >
           <div className="min-w-0 lg:col-span-2">
             {data ? <VisitsChart days={data.visitsByDay} /> : <VisitsChartSkeleton />}
+          </div>
+          <div className="min-w-0 lg:col-span-1">
+            {data ? <PipelinePanel pipeline={data.pipeline} /> : <PipelinePanelSkeleton />}
+          </div>
+        </div>
+      )}
+
+      {(data || !dashboard.isError) && (
+        // Activité par agent and À traiter (story 9) at 3:2, as in the mockup.
+        <div
+          aria-busy={dashboard.isFetching}
+          className={cn("grid gap-6 lg:grid-cols-5", dashboard.isPlaceholderData && "opacity-60")}
+        >
+          <div className="min-w-0 lg:col-span-3">
+            {data ? <AgentActivityTable agents={data.agents} /> : <AgentActivityTableSkeleton />}
           </div>
         </div>
       )}

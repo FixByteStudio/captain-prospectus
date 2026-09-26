@@ -34,6 +34,7 @@ import {
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
   SCRIPTS_PAGE_SIZE,
+  STATUSES,
   type Outcome,
   type Status,
 } from "../../shared/constants";
@@ -207,7 +208,17 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
   const inCurrent = sql`(case when ${visits.visitedAt} >= ${from} then 1 else 0 end)`;
   const days = periodDays(from, to, period);
 
-  const [visitCounts, open, conversions, byDay, convertedDaily] = await Promise.all([
+  const [
+    visitCounts,
+    open,
+    conversions,
+    byDay,
+    convertedDaily,
+    pipelineRows,
+    agentVisits,
+    agentOpen,
+    agentConverted,
+  ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
      * Not filtered on `merged_into`: an absorbed prospect keeps its visits and
@@ -231,6 +242,35 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     conversionCounts(db, { from, to, previousFrom }),
     visitsByDay(db, days),
     convertedByDay(db, days),
+    // Pipeline par statut: every live prospect, a snapshot like `open`.
+    db
+      .select({ status: prospects.status, n: count() })
+      .from(prospects)
+      .where(isNull(prospects.mergedInto))
+      .groupBy(prospects.status),
+    // Activité par agent. Same rows as `visits.value`'s current period.
+    db
+      .select({ email: visits.agentEmail, n: count() })
+      .from(visits)
+      .where(and(gte(visits.visitedAt, from), lt(visits.visitedAt, to)))
+      .groupBy(visits.agentEmail),
+    db
+      .select({
+        email: sql<string>`${prospects.assignedTo}`,
+        followUp:
+          sql<number>`coalesce(sum(case when ${prospects.status} = ${"follow_up" satisfies Status} then 1 else 0 end), 0)`.mapWith(
+            Number,
+          ),
+        // Every live assigned prospect gives its assignee a row; only the
+        // open ones count.
+        n: sql<number>`coalesce(sum(case when ${inArray(prospects.status, [...OPEN_STATUSES])} then 1 else 0 end), 0)`.mapWith(
+          Number,
+        ),
+      })
+      .from(prospects)
+      .where(and(isNull(prospects.mergedInto), isNotNull(prospects.assignedTo)))
+      .groupBy(prospects.assignedTo),
+    agentConversions(db, { from, to }),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -270,8 +310,70 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       visitedProspects: { value: conversions.visited, previous: conversions.visitedPrevious },
     },
     visitsByDay: byDay,
+    pipeline: pipelineOf(pipelineRows),
+    agents: agentRows(assignableEmails(c.env), agentVisits, agentOpen, agentConverted),
   });
 });
+
+function pipelineOf(rows: { status: Status; n: number }[]): DashboardResponse["pipeline"] {
+  const pipeline = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<Status, number>;
+  for (const row of rows) if (row.status in pipeline) pipeline[row.status] = row.n;
+  return pipeline;
+}
+
+/**
+ * The roster with zeros, plus any other email with a visit in the period or a
+ * live prospect assigned now (docs/api.md › The dashboard).
+ */
+function agentRows(
+  roster: string[],
+  visitRows: { email: string; n: number }[],
+  openRows: { email: string; followUp: number; n: number }[],
+  convertedRows: { email: string; n: number }[],
+): DashboardResponse["agents"] {
+  const byEmail = new Map<string, DashboardResponse["agents"][number]>();
+  const row = (email: string) => {
+    let r = byEmail.get(email);
+    if (!r) {
+      r = { email, visits: 0, converted: 0, followUp: 0, openProspects: 0 };
+      byEmail.set(email, r);
+    }
+    return r;
+  };
+  for (const email of roster) row(email);
+  for (const v of visitRows) row(v.email).visits = v.n;
+  for (const o of openRows) {
+    const r = row(o.email);
+    r.followUp = o.followUp;
+    r.openProspects = o.n;
+  }
+  for (const c of convertedRows) row(c.email).converted = c.n;
+  return [...byEmail.values()].sort(
+    (a, b) => b.visits - a.visits || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0),
+  );
+}
+
+/**
+ * An agent's Convertis: distinct prospects, keyed as in `conversionCounts`,
+ * they visited with outcome `converted` in `[from, to)`. A manual conversion
+ * has no visitor and is credited to nobody.
+ */
+async function agentConversions(
+  db: Db,
+  { from, to }: { from: number; to: number },
+): Promise<{ email: string; n: number }[]> {
+  const converted = "converted" satisfies Outcome;
+  const key = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
+  const rows = await db.all<{ email: string; n: number }>(sql`
+    select ${visits.agentEmail} as email, count(distinct ${key}) as n
+    from ${visits}
+    inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
+    where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
+      and ${visits.outcome} = ${converted}
+    group by ${visits.agentEmail}
+  `);
+  return rows.map((r) => ({ email: r.email, n: Number(r.n) }));
+}
 
 function rateOf(n: number, d: number): number | null {
   return d === 0 ? null : n / d;

@@ -320,7 +320,7 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   conversion. The stories that add figures add cards or panels to the same
   grid.
 - **Visites dans le temps** (GH #110). Under the KPIs, 2:1 with the pipeline
-  at ≥ lg (the third is empty until the pipeline lands), full width below. A
+  at ≥ lg, full width below. A
   `Card` titled in `text-heading` holds shadcn Chart (`src/client/ui/chart.tsx`,
   Recharts, admin chunk only): a stacked bar per Brussels day, Personne sur
   place at the bottom through Converti at the top, coloured `outcome-no-contact`,
@@ -335,7 +335,27 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   included, under "lundi 21 septembre". Ticks read "lun. 21" over 7 days and
   "21/09" beyond, thinned by Recharts. A visually hidden table ("Visites par
   jour et par résultat") gives each day's counts and total.
-- **Loading.** Skeleton cards of the same shape stand in until the first
+- **Pipeline par statut** (GH #112). The 2:1 row's third column, under the
+  chart below lg. A `Card` titled in `text-heading` with "{n} prospects" in
+  meta on the right. One row per status in `STATUSES` order, zeros included:
+  the `STATUS_LABELS` label on the left; on the right the count in semibold
+  tabular figures — `muted-foreground` for Nouveau, `foreground` for Assigné,
+  `warn`, `success`, `destructive` for the others — and its share in meta, one
+  decimal. Under each, a 6px `secondary` track with a fill of that share in
+  `status-new`, `status-assigned`, `warn`, `success` or `destructive`. The
+  share is of the pipeline's own total; a total of 0 shows "0 prospect", 0,0 %
+  and empty tracks. The bars are decorative, the text carries the figures.
+- **Activité par agent** (GH #112). A row under that, 3:2 with À traiter (story 9) at ≥ lg, as
+  in the mockup, so the five columns fit at 1280 px; full width below.
+  A `Card` holding shadcn `Table`: the head row on `secondary` in
+  `text-overline` — Agent, Visites, Convertis, À relancer, Prospects ouverts —
+  then one 44px row per agent. There is no users table (ADR-0006), so the
+  agent cell is a 26px `secondary` circle with the email's uppercase initial,
+  then the email. Numbers are right-aligned tabular figures; Convertis is
+  `success` semibold and À relancer `warn` semibold. Rows are not links yet
+  (story 10). The table scrolls sideways inside its card at 390 px. With no
+  agent, the card says "Aucun agent pour l'instant."
+- **Loading.** Skeleton cards and panels of the same shape stand in until the first
   answer, with a visually hidden "Chargement du tableau de bord…". Switching
   period keeps the last period's cards on screen, dimmed, until the new
   figures land — never back to skeletons.
