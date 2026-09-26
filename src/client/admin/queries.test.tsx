@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createAdminQueryClient } from "./query-client";
-import { adminKeys, useImportBatches } from "./queries";
+import {
+  adminKeys,
+  parseProspectFilters,
+  prospectsHref,
+  toQueryString,
+  useImportBatches,
+} from "./queries";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -36,5 +42,36 @@ describe("useImportBatches", () => {
     await act(() => result.current.start([{ name: "Chez Léa", type: "restaurant" }]));
 
     expect(client.getQueryState(adminKeys.dashboard(30))?.isInvalidated).toBe(true);
+  });
+});
+
+describe("Prospects' URL filters (GH #114)", () => {
+  const parse = (query: string) => parseProspectFilters(new URLSearchParams(query));
+
+  it("round-trips every filter through one spelling", () => {
+    const filters = {
+      status: ["new" as const, "follow_up" as const],
+      dueBefore: 1_800_000_000_000,
+      assignedTo: "lea@example.com",
+      source: "osm" as const,
+    };
+    const query = toQueryString(filters);
+    expect(query).toBe(
+      "?status=new%2Cfollow_up&dueBefore=1800000000000&assignedTo=lea%40example.com&source=osm",
+    );
+    expect(parse(query.slice(1))).toEqual(filters);
+    expect(prospectsHref({})).toBe("/admin/prospects");
+  });
+
+  it("collapses duplicate statuses", () => {
+    expect(parse("status=new,new")).toEqual({ status: ["new"] });
+  });
+
+  it("drops what the API would reject instead of throwing", () => {
+    expect(parse("status=new,parti&dueBefore=abc&source=fax&assignedTo=nobody")).toEqual({});
+    expect(parse("status=&dueBefore=")).toEqual({});
+    expect(parse("status=new,&dueBefore=-1")).toEqual({});
+    // Past the largest Date: formatting it would throw.
+    expect(parse("dueBefore=9000000000000000")).toEqual({});
   });
 });

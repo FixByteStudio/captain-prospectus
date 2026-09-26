@@ -1,7 +1,9 @@
 import type { ComponentType, ReactNode } from "react";
+import { Link } from "react-router";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { copy } from "../../copy";
 import { deltaTone, formatDelta } from "../../format";
+import { cn } from "../../lib/utils";
 import { Badge } from "../../ui/badge";
 import { Card } from "../../ui/card";
 import { Skeleton } from "../../ui/skeleton";
@@ -32,6 +34,8 @@ type DeltaFormat = (delta: number | null) => string;
  * `deltaFormat` is `formatDelta` unless the delta is in points (Taux de
  * conversion). No coloured edge: on this app an edge means a status.
  * `footer` is the 32px row across the bottom: a sparkline or a bar (GH #111).
+ * `to` makes the whole card one link to the list behind the figure (GH #114),
+ * named by its label and figure so a screen reader does not read the chip.
  */
 export function KpiCard({
   label,
@@ -40,6 +44,7 @@ export function KpiCard({
   delta,
   deltaFormat = formatDelta,
   footer,
+  to,
 }: {
   label: string;
   icon: Icon;
@@ -47,9 +52,10 @@ export function KpiCard({
   delta?: number | null;
   deltaFormat?: DeltaFormat;
   footer?: ReactNode;
+  to?: string;
 }) {
-  return (
-    <Card className={SHELL}>
+  const card = (
+    <Card className={cn(SHELL, to && "group-hover:bg-accent/50 h-full transition-colors")}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-overline text-muted-foreground uppercase">{label}</h3>
         <span className="bg-secondary grid size-8 shrink-0 place-items-center rounded-lg">
@@ -65,6 +71,16 @@ export function KpiCard({
       )}
       {footer && <div className={FOOTER}>{footer}</div>}
     </Card>
+  );
+  if (!to) return card;
+  return (
+    <Link
+      to={to}
+      aria-label={copy.dashboard.openList(label, value)}
+      className="group focus-visible:ring-ring/50 block min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+    >
+      {card}
+    </Link>
   );
 }
 

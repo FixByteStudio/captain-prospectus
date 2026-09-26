@@ -143,6 +143,76 @@ describe("GET /api/admin/prospects", () => {
     const response = await call("/api/admin/prospects?status=parti");
     expect(response.status).toBe(400);
   });
+
+  /** Five prospects, one per status, named after it. */
+  async function onePerStatus(): Promise<void> {
+    const statuses = ["new", "assigned", "follow_up", "converted", "rejected"] as const;
+    await importRows(
+      statuses.map((status, i) => ({ name: status, lat: 50.8 + i / 100, lng: 4.3 })),
+    );
+    const db = getDb(env.DB);
+    for (const status of statuses) {
+      await db.update(prospects).set({ status }).where(eq(prospects.name, status));
+    }
+  }
+
+  async function names(query: string): Promise<{ names: string[]; total: number }> {
+    const body = (await (await call(`/api/admin/prospects?${query}`)).json()) as ProspectsResponse;
+    return { names: body.prospects.map((p) => p.name).sort(), total: body.total };
+  }
+
+  it("takes several statuses, comma-separated, and totals across them", async () => {
+    await onePerStatus();
+    expect(await names("status=new,assigned,follow_up")).toEqual({
+      names: ["assigned", "follow_up", "new"],
+      total: 3,
+    });
+  });
+
+  it("reads one status as before and collapses duplicates", async () => {
+    await onePerStatus();
+    expect(await names("status=assigned")).toEqual({ names: ["assigned"], total: 1 });
+    expect(await names("status=new,new")).toEqual({ names: ["new"], total: 1 });
+  });
+
+  it.each([
+    "status=new,parti",
+    "status=",
+    "status=new,",
+    "dueBefore=abc",
+    "dueBefore=-1",
+    "dueBefore=",
+    "dueBefore=1e3",
+    "dueBefore=9000000000000000",
+  ])("rejects %s with a validation error", async (query) => {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe("validation");
+  });
+
+  it("keeps a follow-up due strictly before dueBefore, and never one without a date", async () => {
+    const T = 1_800_000_000_000;
+    await importRows([
+      { name: "early", lat: 50.81, lng: 4.3 },
+      { name: "on time", lat: 50.82, lng: 4.3 },
+      { name: "undated", lat: 50.83, lng: 4.3 },
+    ]);
+    const db = getDb(env.DB);
+    await db.update(prospects).set({ status: "follow_up" });
+    await db
+      .update(prospects)
+      .set({ nextVisitAt: T - 1 })
+      .where(eq(prospects.name, "early"));
+    await db.update(prospects).set({ nextVisitAt: T }).where(eq(prospects.name, "on time"));
+
+    expect(await names(`status=follow_up&dueBefore=${T}`)).toEqual({ names: ["early"], total: 1 });
+  });
+
+  it("rejects a non-status item before any SQL runs", async () => {
+    // A quote inside a value is an enum miss (400), never a broken statement (500).
+    const response = await call(`/api/admin/prospects?status=${encodeURIComponent("new,')--")}`);
+    expect(response.status).toBe(400);
+  });
 });
 
 describe("POST /api/admin/prospects/batch", () => {

@@ -244,9 +244,41 @@ export const assignSchema = z.object({
   assignedTo: z.nullable(emailSchema),
 });
 
+/**
+ * `status=new,assigned` — one key, comma-separated, because `zValidator("query")`
+ * hands a repeated key's last value to a plain schema. A single value reads as
+ * before; an empty item (`status=`, `status=new,`) is a 400, not "any status".
+ * Duplicates collapse, so at most STATUSES.length values ever bind (invariant 7).
+ */
+export const statusListSchema = z.pipe(
+  z.pipe(
+    z.string(),
+    z.transform((value) => value.split(",")),
+  ),
+  z.pipe(
+    z.array(statusSchema).check(z.minLength(1)),
+    z.transform((values) => [...new Set(values)]),
+  ),
+);
+
+/**
+ * `next_visit_at < dueBefore`, the dashboard's Relances dues boundary. Epoch ms,
+ * decimal digits only: coercion alone would read "", " ", "1e3" and "0x10" as
+ * numbers. Capped at the largest instant a `Date` holds, so formatting it
+ * cannot throw.
+ */
+export const dueBeforeSchema = z.pipe(
+  z.pipe(
+    z.string().check(z.regex(/^\d+$/)),
+    z.transform((value) => Number(value)),
+  ),
+  z.number().check(z.int(), z.lte(8_640_000_000_000_000)),
+);
+
 /** Query string, so every value arrives as text and has to be coerced. */
 export const prospectsQuerySchema = z.object({
-  status: z.optional(statusSchema),
+  status: z.optional(statusListSchema),
+  dueBefore: z.optional(dueBeforeSchema),
   assignedTo: z.optional(emailSchema),
   source: z.optional(sourceSchema),
   limit: z._default(

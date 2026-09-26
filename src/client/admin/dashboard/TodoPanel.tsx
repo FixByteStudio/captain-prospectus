@@ -7,6 +7,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "../../ui/button";
 import { Card } from "../../ui/card";
 import { Skeleton } from "../../ui/skeleton";
+import { prospectsHref } from "../queries";
 
 const SHELL = "min-w-0 gap-0 p-4.5";
 
@@ -30,10 +31,13 @@ type Row = {
  */
 export function TodoPanel({
   followUpsDue,
+  dueBefore,
   orphans,
   duplicates,
 }: {
   followUpsDue: number | undefined;
+  /** The dashboard's `to`: the list behind Voir counts exactly `followUpsDue`. */
+  dueBefore: number;
   orphans: number | undefined;
   duplicates: number | undefined;
 }) {
@@ -45,8 +49,7 @@ export function TodoPanel({
       meta: t.followUpsMeta,
       count: followUpsDue,
       action: t.followUpsAction,
-      // Unfiltered until story 10 (#114) gives Prospects its URL filters.
-      to: "/admin/prospects",
+      to: prospectsHref({ status: ["follow_up"], dueBefore }),
     },
     {
       icon: LinkIcon,

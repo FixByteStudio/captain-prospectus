@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { MoreHorizontalIcon } from "lucide-react";
+import { MoreHorizontalIcon, XIcon } from "lucide-react";
 import { STATUSES } from "../../shared/constants";
 import type { Source, Status } from "../../shared/constants";
 import type { Prospect } from "../../shared/schemas";
 import { SOURCE_LABELS, STATUS_LABELS, TYPE_LABELS, copy } from "../copy";
-import { formatDate } from "../format";
+import { formatBrusselsDate, formatDate } from "../format";
 import { ApiError } from "../api";
 import { cn } from "../lib/utils";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import {
@@ -24,13 +25,23 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { STATUS_EDGE, STATUS_TEXT } from "./status";
-import { useAgents, useAssign, usePatchProspect, useProspects } from "./queries";
+import {
+  parseProspectFilters,
+  toQueryString,
+  useAgents,
+  useAssign,
+  usePatchProspect,
+  useProspects,
+} from "./queries";
 import type { ProspectFilters } from "./queries";
 
 /** Radix cannot hold an empty string as a value, so "any" stands for no filter. */
 const ANY = "any";
 
 const SOURCES: readonly Source[] = ["csv", "osm", "field"];
+
+/** Never mutated: every update builds a new set. */
+const NO_SELECTION: Set<string> = new Set();
 
 /** An empty cell is a dash, never a blank — a blank reads as a rendering bug. */
 function Empty() {
@@ -45,8 +56,22 @@ function failureMessage(error: unknown, fallback: string): string {
 }
 
 export function ProspectsScreen() {
-  const [filters, setFilters] = useState<ProspectFilters>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // The URL holds the filters, so a reload or a shared link (and the
+  // dashboard's cards, GH #114) opens the same list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => parseProspectFilters(searchParams), [searchParams]);
+  // The selection belongs to the list it was made on. Tied to the query, so a
+  // URL change from outside writeFilters (the sidebar link, Back) empties it
+  // too, and a bulk assign never reaches rows the new filter hides.
+  const query = searchParams.toString();
+  const [selection, setSelection] = useState(() => ({ query, ids: NO_SELECTION }));
+  const selected = selection.query === query ? selection.ids : NO_SELECTION;
+  function setSelected(update: Set<string> | ((current: Set<string>) => Set<string>)) {
+    setSelection((current) => {
+      const ids = current.query === query ? current.ids : NO_SELECTION;
+      return { query, ids: typeof update === "function" ? update(ids) : update };
+    });
+  }
   // Undefined, not the ANY sentinel: a value Radix cannot find among the items
   // renders a blank trigger instead of the placeholder, and nothing tells the
   // admin what the control wants.
@@ -59,15 +84,42 @@ export function ProspectsScreen() {
 
   const rows = useMemo(() => prospects.data?.prospects ?? [], [prospects.data]);
   const agentList = agents.data?.agents ?? [];
-  const filtered = Boolean(filters.status || filters.assignedTo || filters.source);
+  const filtered = Boolean(
+    filters.status || filters.dueBefore !== undefined || filters.assignedTo || filters.source,
+  );
 
-  function setFilter<K extends keyof ProspectFilters>(key: K, value: string) {
-    setSelected(new Set());
-    setFilters((current) => {
-      const next = { ...current };
-      if (value === ANY) delete next[key];
-      else next[key] = value as ProspectFilters[K];
-      return next;
+  /** Replace, not push: a filter tweak is not a page Back should step through. */
+  function writeFilters(next: ProspectFilters) {
+    setSearchParams(new URLSearchParams(toQueryString(next)), { replace: true });
+  }
+
+  function setFilter(key: "status" | "assignedTo" | "source", value: string) {
+    const next = { ...filters };
+    if (value === ANY) delete next[key];
+    else if (key === "status") next.status = [value as Status];
+    else if (key === "source") next.source = value as Source;
+    else next.assignedTo = value;
+    writeFilters(next);
+  }
+
+  function dropFilter(key: keyof ProspectFilters) {
+    const next = { ...filters };
+    delete next[key];
+    writeFilters(next);
+  }
+
+  // Filters the selects cannot show stay visible, and removable, as chips.
+  const chips: { key: keyof ProspectFilters; label: string }[] = [];
+  if (filters.status && filters.status.length > 1) {
+    chips.push({
+      key: "status",
+      label: copy.prospects.filters.severalStatuses(filters.status.map((s) => STATUS_LABELS[s])),
+    });
+  }
+  if (filters.dueBefore !== undefined) {
+    chips.push({
+      key: "dueBefore",
+      label: copy.prospects.filters.dueBefore(formatBrusselsDate(filters.dueBefore)),
     });
   }
 
@@ -143,7 +195,16 @@ export function ProspectsScreen() {
           <>
             <Filter
               label={copy.prospects.filters.status}
-              value={filters.status ?? ANY}
+              // Several statuses: "" shows the placeholder, and their chip says
+              // which. Not ANY, or choosing "Tous les statuts" would not fire.
+              value={
+                filters.status === undefined
+                  ? ANY
+                  : filters.status.length === 1
+                    ? (filters.status[0] ?? ANY)
+                    : ""
+              }
+              placeholder={copy.prospects.filters.someStatuses}
               onChange={(v) => setFilter("status", v)}
               anyLabel={copy.prospects.filters.anyStatus}
               options={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
@@ -162,6 +223,25 @@ export function ProspectsScreen() {
               anyLabel={copy.prospects.filters.anySource}
               options={SOURCES.map((s) => ({ value: s, label: SOURCE_LABELS[s] }))}
             />
+            {chips.map((chip) => (
+              <Badge
+                key={chip.key}
+                variant="secondary"
+                className="max-w-full gap-0.5 py-0 pr-0.5 whitespace-normal"
+              >
+                {chip.label}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  // Inset: the badge clips overflow, and with it an outer ring.
+                  className="size-6 focus-visible:ring-inset"
+                  aria-label={copy.prospects.filters.remove(chip.label)}
+                  onClick={() => dropFilter(chip.key)}
+                >
+                  <XIcon />
+                </Button>
+              </Badge>
+            ))}
             <span className="text-muted-foreground tnum ml-auto">
               {copy.prospects.count(prospects.data?.total ?? 0)}
             </span>
@@ -283,7 +363,7 @@ export function ProspectsScreen() {
             {filtered ? (
               <>
                 <p>{copy.prospects.noMatch}</p>
-                <Button variant="outline" size="sm" onClick={() => setFilters({})}>
+                <Button variant="outline" size="sm" onClick={() => writeFilters({})}>
                   {copy.prospects.clearFilters}
                 </Button>
               </>
@@ -314,9 +394,11 @@ function Filter({
   onChange,
   anyLabel,
   options,
+  placeholder,
 }: {
   label: string;
   value: string;
+  placeholder?: string;
   onChange: (value: string) => void;
   anyLabel: string;
   options: { value: string; label: string }[];
@@ -328,7 +410,7 @@ function Filter({
       </label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger id={`filter-${label}`} size="sm" className="w-44">
-          <SelectValue />
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ANY}>{anyLabel}</SelectItem>

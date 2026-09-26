@@ -23,7 +23,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 |---|---|
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
-| `GET /api/admin/prospects?status=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first |
+| `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue` |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
 | `PATCH /api/admin/prospects/:id` | Edit fields, `assignedTo`, `status`, `nextVisitAt` → the updated prospect. A `status` set here holds until a visit made after it ([prospecting](domains/prospecting.md#prospect-lifecycle)) |
 | `POST /api/admin/prospects/assign` | Bulk `{ids[], assignedTo}` → `{assigned}`; `assignedTo: null` unassigns |
@@ -70,7 +70,9 @@ a sync batch that would exceed it rather than sending one the server must refuse
 
 `GET /api/admin/prospects` returns at most `PROSPECTS_PAGE_SIZE` rows; `total`
 counts every row matching the filters, so the list header can say "412
-prospects" while holding one page. D1's free tier bills *scanned* rows, which is
+prospects" while holding one page. Several statuses are one comma-separated
+key, not a repeated one: the query validator hands a plain schema a repeated
+key's last value, so `status=a&status=b` would silently mean `b`. D1's free tier bills *scanned* rows, which is
 why the page size is a cap and not just a default.
 
 `GET /api/admin/prospects/duplicates` compares at most `DUPLICATES_SCAN_LIMIT`
