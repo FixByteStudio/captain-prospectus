@@ -21,7 +21,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 ## Admin
 | Route | Purpose |
 |---|---|
-| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}]}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
+| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}]}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
 | `GET /api/admin/prospects?status=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
@@ -167,6 +167,24 @@ figures to the same response, additively.
   counts on the earlier day only. `openProspectsByStatus` splits
   `openProspects` into `new`, `assigned` and `follow_up` with the same filter,
   and `openProspects` is its sum.
+- **Pipeline par statut** (`pipeline`, GH #112): live prospects
+  (`merged_into IS NULL`) per status, all five `STATUSES` with zeros. A
+  snapshot of now like `openProspects`, so it ignores the period, and
+  `new + assigned + follow_up` equals `openProspects`. The screen computes each
+  share from the pipeline's own total, and shows 0 % when that total is 0.
+- **Activité par agent** (`agents`, GH #112): one row for each email on the
+  roster (`ADMIN_EMAILS` ∪ `AGENT_EMAILS`), zeros included, plus any other
+  email with a visit in the period or a live prospect assigned now; sorted
+  by `visits` descending, then `email`. `visits` is that agent's rows among
+  Visites; every visitor has a row, so the column always sums to
+  `visits.value`. `converted` is the distinct prospects
+  (`coalesce(merged_into, id)`) they visited with outcome `converted` in the
+  period. Its column can differ from Convertis either way: a manual
+  conversion has no visitor and is credited to nobody, and one prospect
+  converted by two agents counts for both. `followUp` and `openProspects` are the live `follow_up` and
+  `OPEN_STATUSES` prospects assigned to them now, snapshots like
+  `openProspects`; an unassigned prospect is in no row. Each figure is one
+  grouped statement.
 
 ## The repair queue
 

@@ -562,6 +562,34 @@ export const dashboardResponseSchema = z.object({
       counts: z.record(outcomeSchema, countSchema),
     }),
   ),
+  /**
+   * Pipeline par statut: live prospects per status, a snapshot of now like
+   * `openProspects`, so `new + assigned + follow_up` equals it.
+   */
+  pipeline: z.object({
+    new: countSchema,
+    assigned: countSchema,
+    follow_up: countSchema,
+    converted: countSchema,
+    rejected: countSchema,
+  }),
+  /**
+   * Activité par agent: the roster plus anyone with a visit in the period or
+   * a live prospect assigned now, by `visits` descending then `email`.
+   */
+  agents: z.array(
+    z.object({
+      email: emailSchema,
+      /** Their rows in `visits` in the period; same rows as `visits.value`. */
+      visits: countSchema,
+      /** Distinct prospects they visited with outcome `converted` in the period. */
+      converted: countSchema,
+      /** Live `follow_up` prospects assigned to them now. */
+      followUp: countSchema,
+      /** Live open prospects assigned to them now. */
+      openProspects: countSchema,
+    }),
+  ),
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 

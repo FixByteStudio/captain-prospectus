@@ -37,6 +37,7 @@ async function seedProspect(
   status: Status = "assigned",
   mergedInto: string | null = null,
   statusSetAt: number | null = null,
+  assignedTo: string | null = AGENT,
 ): Promise<string> {
   const id = crypto.randomUUID();
   const now = Date.now();
@@ -49,7 +50,7 @@ async function seedProspect(
       source: "csv",
       dedupeKey: `test:${id}`,
       status,
-      assignedTo: AGENT,
+      assignedTo,
       mergedInto,
       statusSetAt,
       createdBy: ADMIN,
@@ -63,6 +64,7 @@ async function seedVisits(
   prospectId: string,
   visitedAts: number[],
   outcome: Outcome = "interested",
+  agentEmail: string = AGENT,
 ): Promise<void> {
   if (visitedAts.length === 0) return;
   const db = getDb(env.DB);
@@ -77,7 +79,7 @@ async function seedVisits(
     visitedAts.map((visitedAt) => ({
       id: crypto.randomUUID(),
       prospectId,
-      agentEmail: AGENT,
+      agentEmail,
       visitedAt,
       clientVisitedAt: visitedAt,
       receivedAt: visitedAt,
@@ -623,4 +625,167 @@ describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
     expect(body.openProspects).toBe(0);
     expect(body.openProspectsByStatus).toEqual({ new: 0, assigned: 0, follow_up: 0 });
   });
+});
+
+describe("Pipeline and Activité par agent (GH #112)", () => {
+  const OTHER = "other@example.com";
+  const zeros = (email: string) => ({
+    email,
+    visits: 0,
+    converted: 0,
+    followUp: 0,
+    openProspects: 0,
+  });
+
+  it.each(DASHBOARD_PERIODS)(
+    "has the same pipeline at period %i, whose open part is openProspects (I/O matrix, pipeline sums)",
+    async (period) => {
+      for (const status of [
+        "new",
+        "assigned",
+        "assigned",
+        "follow_up",
+        "converted",
+        "rejected",
+      ] as const) {
+        await seedProspect(status);
+      }
+      // Set long before any period: a snapshot still counts it.
+      const { previousFrom } = brusselsPeriod(Date.now(), period);
+      await seedProspect("converted", null, previousFrom - 1);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.pipeline).toEqual({
+        new: 1,
+        assigned: 2,
+        follow_up: 1,
+        converted: 2,
+        rejected: 1,
+      });
+      expect(body.pipeline.new + body.pipeline.assigned + body.pipeline.follow_up).toBe(
+        body.openProspects,
+      );
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "leaves an absorbed prospect out of the pipeline and every open count at period %i (I/O matrix, merged)",
+    async (period) => {
+      const survivor = await seedProspect("assigned");
+      await seedProspect("assigned", survivor);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.pipeline.assigned).toBe(1);
+      expect(body.agents.find((a) => a.email === AGENT)?.openProspects).toBe(1);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "counts a survivor and its absorbed prospect as one Convertis at period %i",
+    async (period) => {
+      const { from } = brusselsPeriod(Date.now(), period);
+      const survivor = await seedProspect("converted");
+      const absorbed = await seedProspect("converted", survivor);
+      await seedVisits(survivor, [from], "converted");
+      await seedVisits(absorbed, [from + 1], "converted");
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.agents.find((a) => a.email === AGENT)?.converted).toBe(1);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "credits a prospect converted by two agents to both at period %i",
+    async (period) => {
+      const { from } = brusselsPeriod(Date.now(), period);
+      const prospectId = await seedProspect("converted");
+      await seedVisits(prospectId, [from], "converted");
+      await seedVisits(prospectId, [from + 1], "converted", OTHER);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.agents.find((a) => a.email === AGENT)?.converted).toBe(1);
+      expect(body.agents.find((a) => a.email === OTHER)?.converted).toBe(1);
+      expect(body.converted.value).toBe(1);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "lists an off-roster assignee of a live converted prospect at period %i",
+    async (period) => {
+      await seedProspect("converted", null, null, OTHER);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.agents).toContainEqual(zeros(OTHER));
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "lists an idle roster agent with their follow_up prospects at period %i (I/O matrix, idle agent)",
+    async (period) => {
+      await seedProspect("follow_up");
+      await seedProspect("follow_up");
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.agents).toEqual([
+        zeros(ADMIN),
+        { email: AGENT, visits: 0, converted: 0, followUp: 2, openProspects: 2 },
+      ]);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "counts an agent's visits and Convertis in period %i only (I/O matrix, previous period)",
+    async (period) => {
+      const { from, to } = brusselsPeriod(Date.now(), period);
+      const converted = await seedProspect("converted");
+      // Twice on one prospect: one Convertis.
+      await seedVisits(converted, [from, from + 1], "converted");
+      await seedVisits(await seedProspect("assigned"), [to - 1], "interested", OTHER);
+      // Previous period and after `to`: in no row.
+      await seedVisits(await seedProspect("assigned"), [from - 1, to], "converted");
+      // A manual conversion is credited to nobody.
+      await seedProspect("converted", null, from, null);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.agents).toEqual([
+        { email: AGENT, visits: 2, converted: 1, followUp: 0, openProspects: 2 },
+        { email: OTHER, visits: 1, converted: 0, followUp: 0, openProspects: 0 },
+        zeros(ADMIN),
+      ]);
+      expect(body.agents.reduce((n, a) => n + a.visits, 0)).toBe(body.visits.value);
+      expect(body.converted.value).toBe(2);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "counts an unassigned open prospect in the pipeline only at period %i (I/O matrix, unassigned)",
+    async (period) => {
+      await seedProspect("new", null, null, null);
+      await seedProspect("assigned", null, null, OTHER);
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.pipeline.new).toBe(1);
+      expect(body.openProspects).toBe(2);
+      expect(body.agents).toEqual([
+        zeros(ADMIN),
+        zeros(AGENT),
+        { email: OTHER, visits: 0, converted: 0, followUp: 0, openProspects: 1 },
+      ]);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "has an all-zero pipeline and the roster with zeros at period %i when nothing happened (I/O matrix, empty)",
+    async (period) => {
+      const body = await dashboard(`?period=${period}`);
+      expect(body.pipeline).toEqual({
+        new: 0,
+        assigned: 0,
+        follow_up: 0,
+        converted: 0,
+        rejected: 0,
+      });
+      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT)]);
+    },
+  );
 });
