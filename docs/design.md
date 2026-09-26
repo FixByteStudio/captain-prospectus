@@ -1266,6 +1266,37 @@ Enregistrement… », so a second tap cannot queue the visit twice. If the write
 fails, the summary stays open with the storage error, and « Enregistrer » can
 be tapped again (INVARIANT 5).
 
+### From 768px, the form sits left, history and map right
+
+```
+┌───────────────────────────┬──────────────────────┐
+│ ← Retour à la tournée     │ Visites précédentes  │  sticky pane,
+│ Étape 1 sur 2 · Résultat  │ 12 sept.   Intéressé │  both steps
+│ Le Bouchon des Filles     │ ┌──────────────────┐ │
+│ [x] Flyer remis           │ │     (2)  ●       │ │  the place's own pin,
+│ Résultat …                │ │   © OpenStreetMap│ │  as Carte numbers it
+│ [      Continuer       ]  │ └──────────────────┘ │
+└───────────────────────────┴──────────────────────┘
+```
+
+The form takes three of five columns, the pane two (spec-gh-126). The pane is
+context, not a question, so it stays beside step 2 as well: the agent can
+read the last note while answering. Below 768px nothing changes — the history
+sits under step 1 and there is no map. `VisitHistory` renders in exactly one of
+those two slots, never both. The action bar sticks to the bottom of the form's
+own column rather than spanning the viewport under the pane.
+
+**The map is Carte's `RoundMap`, loaded lazily.** The pane only mounts from
+768px, and it imports `RoundMap` with `React.lazy`, so a phone never fetches
+or parses Leaflet for a visit. The chunk is the one Carte uses, still
+precached (ADR-0026). The pin is the place's own pin, exactly as Carte draws
+it: its walking-order number, gold only when it is the next stop. Its pin selects
+nothing and there is no path, since one place is not a route; the re-centre
+control and the agent's dot stay, as on Carte. The map is absent, with
+no notice, when there is no network (Leaflet requests a tile on every pan,
+Carte's own reason), when the place has no coordinates, or when it is not on
+today's round.
+
 ### Adding a place
 
 ```
@@ -1429,7 +1460,8 @@ elements at the same coordinates only differ by which one *paints* on top,
 and DOM order here would have hidden the save button under the tab bar, not
 the other way round. From 768px there is no tab bar underneath, so the action
 bar returns to `bottom: 0` and carries its own `.safe-bottom`-equivalent
-inset again. Scrolling content clears whichever bars sit below it —
+inset again — on the visit, as a bar sticky in the form's own column (see
+"From 768px, the form sits left"). Scrolling content clears whichever bars sit below it —
 `.pb-tab-bar` for a screen with no action bar of its own, `.pb-action-bar` for
 one that has one — both `calc()`'d off `--spacing-tab-bar-height` and the
 safe-area inset rather than a guessed pixel figure.

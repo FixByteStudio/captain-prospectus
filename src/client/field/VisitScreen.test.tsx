@@ -13,7 +13,7 @@
  * names the outcome, not the status. That is what most of these tests check.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import Dexie from "dexie";
@@ -23,6 +23,8 @@ import { OUTCOMES, type Outcome } from "../../shared/constants";
 import { fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
+import { RoundMap } from "./RoundMap";
+import type { TodayItem } from "./today";
 
 vi.mock("./useSync", () => ({
   useSyncState: () => ({ identity: "agent@example.com", syncNow: async () => {} }),
@@ -32,6 +34,25 @@ vi.mock("./useSync", () => ({
 // on this call ever resolving.
 vi.mock("../api", () => ({
   apiFetch: () => Promise.reject(new Error("offline")),
+}));
+
+/** The tablet side pane's inputs (spec-gh-126). `RoundMap` is mocked, as
+ * `CarteScreen.test.tsx` does: Leaflet is `RoundMap.test.tsx`'s business, and
+ * this only asserts whether the visit mounts it and with what. The round is
+ * empty by default, so the pane shows no map unless a test puts the place on
+ * it. */
+const round = vi.hoisted(() => ({ now: [] as TodayItem[], refresh: vi.fn() }));
+const network = vi.hoisted(() => ({ online: true }));
+vi.mock("./useRound", () => ({
+  useRound: () => ({
+    list: { now: round.now, later: [] },
+    point: { lat: 50.85, lng: 4.35 },
+    refresh: round.refresh,
+  }),
+}));
+vi.mock("../hooks/use-online", () => ({ useOnline: () => network.online }));
+vi.mock("./RoundMap", () => ({
+  RoundMap: vi.fn(() => <div data-testid="round-map" />),
 }));
 
 const PROSPECT: Prospect = {
@@ -190,6 +211,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.mocked(RoundMap).mockClear();
+  vi.mocked(RoundMap).mockImplementation(() => <div data-testid="round-map" />);
+  round.refresh.mockClear();
+  round.now = [];
+  network.online = true;
   await Promise.all([
     fieldDb.prospects.clear(),
     fieldDb.outboxVisits.clear(),
@@ -992,5 +1018,243 @@ describe("VisitScreen — save confirmation", () => {
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(within(await confirmation()).getByText(copy.visit.confirm.answers(1))).toBeTruthy();
+  });
+});
+
+/** This place as a stop on today's round, the next one, with coordinates. */
+function onRound(over: Partial<TodayItem> = {}) {
+  round.now = [
+    {
+      id: PROSPECT.id,
+      name: PROSPECT.name,
+      type: PROSPECT.type,
+      lat: 50.8467,
+      lng: 4.3525,
+      address: null,
+      status: "assigned",
+      nextVisitAt: null,
+      pending: false,
+      distanceM: null,
+      visitQueued: false,
+      ...over,
+    },
+  ];
+}
+
+/** A `matchMedia` whose width a test can change mid-render, firing `change`
+ * the way a rotation does. Starts at tablet width. */
+function resizable() {
+  let phone = false;
+  const listeners = new Set<() => void>();
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        get matches() {
+          return query === "(width < 768px)" && phone;
+        },
+        media: query,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      }) as unknown as MediaQueryList,
+  );
+  return {
+    toPhone() {
+      phone = true;
+      for (const fn of listeners) fn();
+    },
+  };
+}
+
+/** Lets the lazy `RoundMap` import settle, so "never rendered" is not just
+ * "not rendered yet". */
+async function settle() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("VisitScreen — tablet layout (GH #126)", () => {
+  it("on a phone: one column, history under step 1, and no side pane or map", async () => {
+    asPhone();
+    onRound();
+    await renderVisit({ expectContinue: false });
+    await settle();
+
+    expect(screen.getByText(copy.visit.previousVisits)).toBeTruthy();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByTestId("round-map")).toBeNull();
+    expect(RoundMap).not.toHaveBeenCalled();
+  });
+
+  it("from 768px: history then the place's own pin on the map, in the side pane", async () => {
+    onRound();
+    await fieldDb.visitHistory.add({
+      id: "44444444-4444-4444-8444-444444444444",
+      prospectId: PROSPECT.id,
+      agentEmail: "agent@example.com",
+      visitedAt: 1_700_000_000_000,
+      flyerGiven: false,
+      outcome: "follow_up",
+      followUpAt: null,
+      notes: "ferme le lundi",
+    });
+    await renderVisit({ expectContinue: false });
+
+    const pane = screen.getByRole("complementary");
+    expect(within(pane).getByText(copy.visit.previousVisits)).toBeTruthy();
+    expect(await within(pane).findByText("ferme le lundi")).toBeTruthy();
+    expect(await within(pane).findByTestId("round-map")).toBeTruthy();
+    // One copy of the history, in the pane only.
+    expect(screen.getAllByText(copy.visit.previousVisits)).toHaveLength(1);
+
+    const props = vi.mocked(RoundMap).mock.calls.at(-1)?.[0];
+    expect(props?.pins).toEqual([
+      expect.objectContaining({ id: PROSPECT.id, index: 1, next: true }),
+    ]);
+    expect(props?.path).toEqual([]);
+    expect(props?.position).toEqual({ lat: 50.85, lng: 4.35 });
+    // Its pin selects nothing; re-centre asks the round's own reading again.
+    expect(props?.onSelect).toBeUndefined();
+    props?.recentre();
+    expect(round.refresh).toHaveBeenCalledOnce();
+    // The landmark is named by its heading.
+    expect(screen.getByRole("complementary", { name: copy.visit.previousVisits })).toBe(pane);
+  });
+
+  it("numbers the pin by its place in the walking order, gold only for the next stop", async () => {
+    onRound();
+    const [self] = round.now;
+    if (!self) throw new Error("onRound set no stop");
+    round.now = [{ ...self, id: crypto.randomUUID(), name: "Avant" }, self];
+    await renderVisit({ expectContinue: false });
+    await screen.findByTestId("round-map");
+
+    expect(vi.mocked(RoundMap).mock.calls.at(-1)?.[0].pins).toEqual([
+      expect.objectContaining({ id: PROSPECT.id, index: 2, next: false }),
+    ]);
+  });
+
+  it("on a phone, step 2 shows no history and no side pane", async () => {
+    asPhone();
+    onRound();
+    const user = userEvent.setup();
+    await setMeta(fieldDb, "script", SCRIPT);
+    await renderVisit({ expectContinue: true });
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+    await settle();
+
+    expect(screen.queryByText(copy.visit.previousVisits)).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(RoundMap).not.toHaveBeenCalled();
+  });
+
+  it("a map that fails to load costs the map, not the visit", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(RoundMap).mockImplementation(() => {
+      throw new Error("chunk failed to load");
+    });
+    onRound();
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+    await settle();
+    await user.click(outcomeRadio("interested"));
+
+    expect(
+      within(screen.getByRole("complementary")).getByText(copy.visit.noPreviousVisits),
+    ).toBeTruthy();
+    expect(outcomeRadio("interested").checked).toBe(true);
+  });
+
+  it("keeps the side pane beside step 2", async () => {
+    onRound();
+    const user = userEvent.setup();
+    await setMeta(fieldDb, "script", SCRIPT);
+    await renderVisit({ expectContinue: true });
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+
+    const pane = screen.getByRole("complementary");
+    expect(within(pane).getByText(copy.visit.noPreviousVisits)).toBeTruthy();
+    expect(within(pane).getByTestId("round-map")).toBeTruthy();
+  });
+
+  it("offline, shows the history and mounts no map", async () => {
+    onRound();
+    network.online = false;
+    await renderVisit({ expectContinue: false });
+    await settle();
+
+    expect(
+      within(screen.getByRole("complementary")).getByText(copy.visit.previousVisits),
+    ).toBeTruthy();
+    expect(RoundMap).not.toHaveBeenCalled();
+  });
+
+  it("mounts no map for a place without coordinates, or one not on today's round", async () => {
+    onRound({ lat: null, lng: null });
+    const first = await renderVisit({ expectContinue: false });
+    await settle();
+    expect(screen.getByRole("complementary")).toBeTruthy();
+    expect(RoundMap).not.toHaveBeenCalled();
+    first.unmount();
+
+    round.now = [];
+    await renderVisit({ expectContinue: false });
+    await settle();
+    expect(screen.getByRole("complementary")).toBeTruthy();
+    expect(RoundMap).not.toHaveBeenCalled();
+  });
+
+  it("says there is no previous visit, in the pane", async () => {
+    await renderVisit({ expectContinue: false });
+    expect(
+      within(screen.getByRole("complementary")).getByText(copy.visit.noPreviousVisits),
+    ).toBeTruthy();
+  });
+
+  it("saves from the tablet layout: one outbox row with the answers and scriptId (#142)", async () => {
+    onRound();
+    const user = userEvent.setup();
+    await setMeta(fieldDb, "script", SCRIPT);
+    await renderVisit({ expectContinue: true });
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await user.click(await screen.findByRole("radio", { name: "Oui" }));
+    await confirmSave(user);
+
+    expect(await screen.findByText(ROUND_MARKER)).toBeTruthy();
+    const rows = await fieldDb.outboxVisits.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.answers).toEqual({ delivery: true });
+    expect(rows[0]?.scriptId).toBe(SCRIPT.id);
+  });
+
+  it("rotating to a phone unmounts the map, moves the history under step 1 and keeps the draft", async () => {
+    const screenSize = resizable();
+    onRound();
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+    await screen.findByTestId("round-map");
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("checkbox", { name: new RegExp(copy.visit.flyerGiven) }));
+    await user.type(screen.getByRole("textbox", { name: copy.visit.notes }), "gérant absent");
+
+    act(() => screenSize.toPhone());
+
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByTestId("round-map")).toBeNull();
+    expect(screen.getByText(copy.visit.previousVisits)).toBeTruthy();
+    expect(outcomeRadio("interested").checked).toBe(true);
+    expect(
+      (
+        screen.getByRole("checkbox", {
+          name: new RegExp(copy.visit.flyerGiven),
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("textbox", { name: copy.visit.notes }) as HTMLTextAreaElement).value,
+    ).toBe("gérant absent");
   });
 });
