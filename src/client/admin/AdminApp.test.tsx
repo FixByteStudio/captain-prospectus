@@ -31,6 +31,7 @@ const DASHBOARD: DashboardResponse = {
   agents: [
     { email: "agent@example.com", visits: 386, converted: 41, followUp: 64, openProspects: 150 },
   ],
+  followUpsDue: 6,
 };
 
 function json(body: unknown): Response {
@@ -49,6 +50,7 @@ beforeEach(() => {
       if (url.startsWith("/api/admin/prospects/duplicates"))
         return json({ pairs: [], truncated: false });
       if (url.startsWith("/api/admin/visits/orphaned")) return json({ visits: [], remaining: 0 });
+      if (url.startsWith("/api/admin/visits?")) return json({ visits: [], serverTime: 0 });
       return new Response("{}", { status: 404 });
     }),
   );
