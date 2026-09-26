@@ -24,11 +24,20 @@ const pin = (over: Partial<MapPin> = {}): MapPin => ({
   lat: 50.85,
   lng: 4.35,
   next: false,
+  name: "Curry House",
   ...over,
 });
 
 function markerIcons(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(".leaflet-marker-icon"));
+}
+
+/** The first marker, asserted to exist rather than indexed with `!` — a
+ * missing one is exactly the failure the selection tests below check for. */
+function firstMarker(container: HTMLElement): HTMLElement {
+  const marker = markerIcons(container).at(0);
+  if (!marker) throw new Error("no marker was drawn");
+  return marker;
 }
 
 afterEach(() => {
@@ -161,6 +170,133 @@ describe("RoundMap", () => {
 
     const surface = container.querySelector('[role="application"]');
     expect(surface?.className).toContain("isolate");
+  });
+});
+
+describe("RoundMap selection (spec-gh-122)", () => {
+  it("names each marker and calls onSelect(id) on a click, when onSelect is given", () => {
+    const onSelect = vi.fn();
+    const pins = [pin({ id: "a", index: 1, name: "Curry House" })];
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
+    );
+
+    const marker = firstMarker(container);
+    expect(marker.getAttribute("title")).toBe(copy.carte.pinLabel(1, "Curry House"));
+    expect(marker.getAttribute("role")).toBe("button");
+    expect(marker.className).toContain("leaflet-interactive");
+
+    fireEvent.click(marker);
+    expect(onSelect).toHaveBeenCalledWith("a");
+  });
+
+  it("leaves markers non-interactive and untitled with no onSelect", () => {
+    const pins = [pin({ id: "a" })];
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} />,
+    );
+
+    const marker = firstMarker(container);
+    expect(marker.getAttribute("title")).toBeNull();
+    expect(marker.className).not.toContain("leaflet-interactive");
+  });
+
+  it.each(["Enter", " "])("calls onSelect(id) when %j is pressed on a focused marker", (key) => {
+    const onSelect = vi.fn();
+    const pins = [pin({ id: "a" })];
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
+    );
+
+    const marker = firstMarker(container);
+    fireEvent.keyDown(marker, { key });
+
+    expect(onSelect).toHaveBeenCalledWith("a");
+  });
+
+  it("ignores any other key on a focused marker", () => {
+    const onSelect = vi.fn();
+    const pins = [pin({ id: "a" })];
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
+    );
+
+    fireEvent.keyDown(firstMarker(container), { key: "Tab" });
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does not count a pin tap as the agent's own hand on the map: auto-fit keeps following", () => {
+    const onSelect = vi.fn();
+    const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
+    const pins = [pin({ id: "a", lat: 1, lng: 2 }), pin({ id: "b", lat: 3, lng: 4 })];
+    const { container, rerender } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
+    );
+    fitBounds.mockClear();
+
+    const marker = firstMarker(container);
+    fireEvent.click(marker);
+    expect(onSelect).toHaveBeenCalledWith("a");
+
+    const newPins = [pin({ id: "a", lat: 9, lng: 9 }), pin({ id: "b", lat: 10, lng: 10 })];
+    rerender(
+      <RoundMap pins={newPins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
+    );
+
+    // A hand move (`movestart` firing with no `programmaticMove` flag) would
+    // have stopped this — see "RoundMap auto-fit" above.
+    expect(fitBounds).toHaveBeenCalled();
+  });
+});
+
+describe("RoundMap resize (spec-gh-122, matrix: Resize)", () => {
+  class FakeResizeObserver {
+    static instances: FakeResizeObserver[] = [];
+    callback: ResizeObserverCallback;
+    observed: Element[] = [];
+    disconnected = false;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      FakeResizeObserver.instances.push(this);
+    }
+    observe(target: Element) {
+      this.observed.push(target);
+    }
+    unobserve() {}
+    disconnect() {
+      this.disconnected = true;
+    }
+  }
+
+  it("observes its own container and invalidates the map's size when it resizes, disconnecting on unmount", () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+
+    try {
+      const invalidateSize = vi
+        .spyOn(L.Map.prototype, "invalidateSize")
+        .mockImplementation(function (this: L.Map) {
+          return this;
+        });
+
+      const { container, unmount } = render(
+        <RoundMap pins={[]} path={[]} position={null} recentre={() => {}} />,
+      );
+
+      const observer = FakeResizeObserver.instances.at(-1);
+      if (!observer) throw new Error("no ResizeObserver was created");
+      const surface = container.querySelector('[role="application"]');
+      expect(observer.observed).toEqual([surface]);
+
+      observer.callback([], observer as unknown as ResizeObserver);
+      expect(invalidateSize).toHaveBeenCalled();
+
+      expect(observer.disconnected).toBe(false);
+      unmount();
+      expect(observer.disconnected).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

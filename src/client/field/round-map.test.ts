@@ -24,9 +24,9 @@ describe("mapPins", () => {
     const c = item({ lat: 50.87, lng: 4.37 });
 
     expect(mapPins([a, b, c])).toEqual([
-      { id: a.id, index: 1, lat: 50.85, lng: 4.35, next: true },
-      { id: b.id, index: 2, lat: 50.86, lng: 4.36, next: false },
-      { id: c.id, index: 3, lat: 50.87, lng: 4.37, next: false },
+      { id: a.id, index: 1, lat: 50.85, lng: 4.35, next: true, name: a.name },
+      { id: b.id, index: 2, lat: 50.86, lng: 4.36, next: false, name: b.name },
+      { id: c.id, index: 3, lat: 50.87, lng: 4.37, next: false, name: c.name },
     ]);
   });
 
@@ -36,8 +36,15 @@ describe("mapPins", () => {
     const c = item({ lat: 50.87, lng: 4.37 });
 
     expect(mapPins([a, noCoords, c])).toEqual([
-      { id: a.id, index: 1, lat: 50.85, lng: 4.35, next: true },
-      { id: c.id, index: 3, lat: 50.87, lng: 4.37, next: false },
+      { id: a.id, index: 1, lat: 50.85, lng: 4.35, next: true, name: a.name },
+      { id: c.id, index: 3, lat: 50.87, lng: 4.37, next: false, name: c.name },
+    ]);
+  });
+
+  it("carries the stop's own name, for the pin's accessible label", () => {
+    const a = item({ lat: 50.85, lng: 4.35, name: "Curry House" });
+    expect(mapPins([a])).toEqual([
+      { id: a.id, index: 1, lat: 50.85, lng: 4.35, next: true, name: "Curry House" },
     ]);
   });
 
