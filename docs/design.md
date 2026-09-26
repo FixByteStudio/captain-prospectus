@@ -283,7 +283,7 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   selector on the screen. It wraps under the title on a phone.
 - **KPI card.** A shadcn `Card` with no coloured edge — on this app an edge
   means a status. Top to bottom: the label in `text-overline` with a 32px
-  `secondary` icon tile at the top right (Lucide `Store` for Prospects
+  `secondary` icon tile at the top right (Lucide `Building` for Prospects
   ouverts, `MapPin` for Visites, `BadgeCheck` for Convertis, `Percent` for
   Taux de conversion), the figure in `text-display` with tabular figures,
   then the delta chip and "vs période précédente" in meta. The chip
@@ -296,6 +296,25 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   Taux de conversion's figure is a percentage with one decimal, "10,6 %", or
   "—" when nothing was visited; its chip is in points, "+1,2 pt", "−0,4 pt",
   toned by the same rounding.
+  Across the bottom, 10px under the delta row, is a 32px row (GH #111):
+  - **Visites and Convertis** get a sparkline with one point per day
+    of the period (`byDay`, [api.md](api.md#the-dashboard)). It is a 2px line
+    scaled to the period's own min and max, so its shape fills the row as in
+    the mockup, and a flat series sits at mid-height. The bars keep a zero
+    baseline. It has no axis, dot, tooltip or animation, and its colour is the
+    chip's tone: `success` up, `destructive` down, `muted-foreground` flat or
+    "—". A green line never sits under a red chip. It is decorative
+    (`aria-hidden`), since the figure says the value.
+  - **Prospects ouverts** gets a 6px stacked bar of Nouveau (`status-new`),
+    Assigné (`status-assigned`) and À relancer (`warn`), with 2px card-coloured
+    gaps. "Nouveau · Assigné · À relancer" sits under it in meta, and a
+    visually hidden sentence reads out the counts. With nothing open, only the
+    `secondary` track shows.
+  - **Taux de conversion** gets a 6px Progress, gold on a `secondary` track,
+    under the same exception as the field's daily progress. The rate is capped
+    at 100 %. Under it is "{n} convertis sur {m} prospects visités" (singular
+    for 0 and 1), or "Aucun prospect visité sur la période" when the rate is
+    "—".
 - **Grid.** Cards are 4 across at ≥ lg, 2 × 2 at md and one column below,
   24px apart, in this order: Prospects ouverts, Visites, Convertis, Taux de
   conversion. The stories that add figures add cards or panels to the same
@@ -1225,18 +1244,52 @@ be tapped again (INVARIANT 5).
 ### Adding a place
 
 ```
-│  Nom      [                    ] │
+│  Nom                             │
+│  [ Le nom sur la devanture     ] │
+│  Indiquez le nom de l'établis…   │  after « Ajouter » with Nom empty
 │                                  │
 │  Type                            │
-│  [ Restaurant ] [ Restauration ] │  six targets, wrapping
-│  [ Café ] [ Bar ] [ Food truck ] │
-│  [ Autre ]                       │
+│  [ Restaurant ] [ Restauration ] │  2 columns, 6 choice tiles
+│  [ Café       ] [ Bar          ] │
+│  [ Food truck ] [ Autre        ] │
 │                                  │
 │  Position                        │
-│  50,8467  4,3525     Actualiser  │  or « Utiliser ma position »
-│                                  │
-│  [          Ajouter          ]   │
+│  ┌─────────────────────────────┐ │
+│  │ (o) 50,8466 · 4,3528        │ │  « Utiliser ma position »
+│  │               [Actualiser]  │ │  until there is a reading
+│  └─────────────────────────────┘ │
+│  Adresse (facultatif)            │
+│  [                             ] │
+│  Téléphone (facultatif)          │
+│  [                             ] │
+│  [          Ajouter           ]  │  sticky, above the tab bar
 ```
+
+**Type is six choice tiles in two columns.** They are DESIGN.md's Choice
+controls (field) over native radios (ADR-0015), so arrow keys move the pick
+and the group announces as one control. Restaurant is checked on open; only
+the checked tile is gold.
+
+**Position is a card, not a map.** The agent is often offline here, and a map
+without tiles would show nothing the coordinates don't. The card reads the
+same in both cases, makes no tile request, and costs no Leaflet on this
+screen. Coordinates use fr-FR with four decimals, about a shopfront. The
+reading shown is always the one « Ajouter » would save; while a new one is
+on its way, « Recherche de votre position… » shows under it.
+
+**The position is read on open.** field-operations.md says a field
+prospect's position defaults to where the agent stands, and Flow 4 needs it
+so the new place comes up as the nearest stop even when nobody taps anything.
+So the button reads « Utiliser ma position » only while there is no reading
+(refused, unavailable, or still locating, when it is disabled), and
+« Actualiser » once there is one. A place with no position is still added; it
+goes to the end of the round.
+
+**« Ajouter » puts the place on the round at once.** It writes one
+`outboxProspects` row and nothing else (INVARIANT 2), then returns to
+Tournée du jour with « Prospect ajouté… ». The round reads the outbox, so
+the place is a stop before any sync. A failed write stays on the form with
+the storage error, like the visit form.
 
 ### Sync is ambient, never a toast
 

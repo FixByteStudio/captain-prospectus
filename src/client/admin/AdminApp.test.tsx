@@ -16,9 +16,10 @@ const DASHBOARD: DashboardResponse = {
   period: 30,
   from: 0,
   to: 1,
-  visits: { value: 386, previous: 343, delta: 0.1254 },
+  visits: { value: 386, previous: 343, delta: 0.1254, byDay: [] },
   openProspects: 278,
-  converted: { value: 41, previous: 36, delta: 0.1389 },
+  openProspectsByStatus: { new: 128, assigned: 86, follow_up: 64 },
+  converted: { value: 41, previous: 36, delta: 0.1389, byDay: [] },
   conversionRate: {
     value: 0.106,
     previous: 0.094,

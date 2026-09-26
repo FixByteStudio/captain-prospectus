@@ -2,7 +2,8 @@
  * A place the agent found that the base does not have —
  * docs/domains/field-operations.md#field-prospects.
  *
- * Name and type are required; the position defaults to the current reading.
+ * Name and type are required; the position defaults to the current reading,
+ * which is what lets Flow 4 put the place on the round as the nearest stop.
  * The row goes into the outbox and appears on the round immediately, before
  * any sync, so an agent can add a food truck and visit it on the spot.
  *
@@ -19,6 +20,7 @@ import { useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod/mini";
+import { LocateFixedIcon, MapPinIcon, MapPinPlusIcon } from "lucide-react";
 import { BackLink } from "./BackLink";
 import { buttonVariants } from "@/ui/button-variants";
 import { cn } from "../lib/utils";
@@ -26,6 +28,7 @@ import { FieldRadioGroup, FieldRadioOption } from "@/ui/field-controls";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
 import { copy, TYPE_LABELS } from "../copy";
+import { formatCoordinate } from "../format";
 import { PROSPECT_TYPES, type ProspectType } from "../../shared/constants";
 import { fieldProspectSchema } from "../../shared/schemas";
 import { fieldDb } from "./db";
@@ -136,12 +139,16 @@ export function AddProspectScreen() {
         />
 
         <div className="mt-5">
-          <p className="mb-3 font-medium">{copy.fieldProspect.type}</p>
+          {/* The group's own aria-label names it; this is the same word for
+              sighted agents, hidden so it is not read twice. */}
+          <p aria-hidden="true" className="mb-3 font-medium">
+            {copy.fieldProspect.type}
+          </p>
           <FormField
             control={form.control}
             name="type"
             render={({ field }) => (
-              <FieldRadioGroup label={copy.fieldProspect.type}>
+              <FieldRadioGroup label={copy.fieldProspect.type} className="grid-cols-2">
                 {PROSPECT_TYPES.map((t) => (
                   <FieldRadioOption
                     key={t}
@@ -158,24 +165,47 @@ export function AddProspectScreen() {
           />
         </div>
 
-        <div className="border-border mt-6 border-t pt-4">
+        {/* A card, not a map: it reads the same offline, where the agent
+            often is, and asks nothing of the tile server — docs/design.md,
+            "Adding a place". */}
+        <div className="mt-6">
           <p className="font-medium">{copy.fieldProspect.position}</p>
-          <div className="mt-1.5 flex items-center justify-between gap-4">
-            {point ? (
-              <span className="tnum text-muted-foreground text-sm">
-                {copy.fieldProspect.positionSet(point.lat.toFixed(4), point.lng.toFixed(4))}
-              </span>
-            ) : (
-              <span className="text-muted-foreground text-sm">
-                {locating ? copy.today.locating : copy.fieldProspect.positionNone}
-              </span>
-            )}
+          {/* Wraps: at 390px the button drops under the coordinates, right-aligned. */}
+          <div className="bg-card border-border mt-1.5 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+            <span className="bg-secondary text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-md">
+              <MapPinIcon aria-hidden="true" className="size-5" />
+            </span>
+            <p aria-live="polite" className="min-w-0 flex-1 basis-40 text-base">
+              {/* The reading shown is the one « Ajouter » would save right now,
+                  so it stays on screen while « Actualiser » looks for a new one. */}
+              {point && (
+                <span className="tnum block">
+                  {copy.fieldProspect.positionSet(
+                    formatCoordinate(point.lat),
+                    formatCoordinate(point.lng),
+                  )}
+                </span>
+              )}
+              {locating ? (
+                <span className="text-muted-foreground block">{copy.today.locating}</span>
+              ) : (
+                !point && (
+                  <span className="text-muted-foreground block">
+                    {copy.fieldProspect.positionNone}
+                  </span>
+                )
+              )}
+            </p>
             <button
               type="button"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
+              className={cn(
+                buttonVariants({ variant: "secondary", size: "touch" }),
+                "ml-auto shrink-0",
+              )}
               onClick={refresh}
               disabled={locating}
             >
+              <LocateFixedIcon aria-hidden="true" />
               {point ? copy.fieldProspect.positionRefresh : copy.fieldProspect.useMyPosition}
             </button>
           </div>
@@ -234,6 +264,7 @@ export function AddProspectScreen() {
             className={cn(buttonVariants({ size: "touch" }), "w-full")}
             disabled={saving}
           >
+            <MapPinPlusIcon aria-hidden="true" />
             {saving ? copy.fieldProspect.saving : copy.fieldProspect.save}
           </button>
         </div>

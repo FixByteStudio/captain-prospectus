@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deltaTone,
+  formatCoordinate,
   formatCount,
   formatDay,
   formatDayTick,
@@ -96,6 +97,23 @@ describe("deltaTone", () => {
     [-0.0125, "down"],
   ] as const)("deltaTone(%s) -> %s", (delta, expected) => {
     expect(deltaTone(delta)).toBe(expected);
+  });
+});
+
+describe("formatCoordinate", () => {
+  it("always shows four decimals, with a French comma", () => {
+    expect(formatCoordinate(4.35)).toBe("4,3500");
+    expect(formatCoordinate(50.84664)).toBe("50,8466");
+    expect(formatCoordinate(4.35285)).toBe("4,3529");
+  });
+
+  it("keeps the sign west of Greenwich", () => {
+    expect(formatCoordinate(-1.55366)).toBe("-1,5537");
+  });
+
+  it("never prints a negative zero on the meridian", () => {
+    expect(formatCoordinate(-0.00003)).toBe("0,0000");
+    expect(formatCoordinate(-0)).toBe("0,0000");
   });
 });
 

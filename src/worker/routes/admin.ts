@@ -20,6 +20,7 @@ import {
   lte,
   ne,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { chunk } from "../../shared/chunk";
 import {
@@ -204,8 +205,9 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
   const db = getDb(c.env.DB);
   // 1 for a visit in the current period, 0 for one in the previous period.
   const inCurrent = sql`(case when ${visits.visitedAt} >= ${from} then 1 else 0 end)`;
+  const days = periodDays(from, to, period);
 
-  const [visitCounts, open, conversions, byDay] = await Promise.all([
+  const [visitCounts, open, conversions, byDay, convertedDaily] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
      * Not filtered on `merged_into`: an absorbed prospect keeps its visits and
@@ -219,30 +221,46 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       })
       .from(visits)
       .where(and(gte(visits.visitedAt, previousFrom), lt(visits.visitedAt, to))),
-    // A snapshot of now: the period does not apply.
+    // A snapshot of now: the period does not apply. Split by status for the
+    // card's mini-bar; the figure is the sum, so the two never disagree.
     db
-      .select({ n: count() })
+      .select({ status: prospects.status, n: count() })
       .from(prospects)
-      .where(and(isNull(prospects.mergedInto), inArray(prospects.status, [...OPEN_STATUSES]))),
+      .where(and(isNull(prospects.mergedInto), inArray(prospects.status, [...OPEN_STATUSES])))
+      .groupBy(prospects.status),
     conversionCounts(db, { from, to, previousFrom }),
-    visitsByDay(db, { from, to }, period),
+    visitsByDay(db, days),
+    convertedByDay(db, days),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
   const previous = visitCounts[0]?.previous ?? 0;
   const rate = rateOf(conversions.converted, conversions.visited);
   const previousRate = rateOf(conversions.convertedPrevious, conversions.visitedPrevious);
+  const openByStatus = { new: 0, assigned: 0, follow_up: 0 };
+  for (const row of open) {
+    if (row.status in openByStatus) openByStatus[row.status as keyof typeof openByStatus] = row.n;
+  }
 
   return c.json<DashboardResponse>({
     period,
     from,
     to,
-    visits: { value, previous, delta: deltaOf(value, previous) },
-    openProspects: open[0]?.n ?? 0,
+    visits: {
+      value,
+      previous,
+      delta: deltaOf(value, previous),
+      byDay: byDay.map((d) => OUTCOMES.reduce((n, o) => n + d.counts[o], 0)),
+    },
+    // Every row, not the split's three keys: a status added to OPEN_STATUSES
+    // still counts in the figure.
+    openProspects: open.reduce((n, row) => n + row.n, 0),
+    openProspectsByStatus: openByStatus,
     converted: {
       value: conversions.converted,
       previous: conversions.convertedPrevious,
       delta: deltaOf(conversions.converted, conversions.convertedPrevious),
+      byDay: convertedDaily,
     },
     conversionRate: {
       value: rate,
@@ -260,36 +278,44 @@ function rateOf(n: number, d: number): number | null {
 }
 
 /**
+ * The period's Brussels days, for the per-day figures below. `dayOf(t)` is
+ * the SQL day index of instant `t` in the period: `(t + offset) / DAY_MS` is
+ * the Brussels day number, and the offset switches once at most
+ * (`periodOffsets`), which keeps a statement at a handful of bound parameters
+ * however long the period (INVARIANT 7).
+ */
+type PeriodDays = { from: number; to: number; dates: string[]; dayOf: (t: SQL) => SQL };
+
+function periodDays(from: number, to: number, period: number): PeriodDays {
+  const { before, after, changeAt } = periodOffsets(from, to);
+  const firstDay = Math.floor((from + before) / DAY_MS);
+  return {
+    from,
+    to,
+    dates: periodDates(from, period),
+    // D1 binds a JS number as REAL, so the division is a float one: the cast
+    // floors it (the operand is never negative).
+    dayOf: (t) =>
+      sql`cast((${t} + case when ${t} >= ${changeAt} then ${after} else ${before} end) / ${DAY_MS} as integer) - ${firstDay}`,
+  };
+}
+
+/**
  * Visites dans le temps: the period's visits per Brussels day and outcome, in
  * one range read that `visits_visited_idx` serves. Same visits as `visits`
  * above: merged prospects' in, quarantined ones out, `visited_at` clamped.
- *
- * `(visited_at + offset) / DAY_MS` is the Brussels day number; the offset
- * switches once at most (`periodOffsets`), which keeps the statement at a
- * handful of bound parameters however long the period (INVARIANT 7).
  */
 async function visitsByDay(
   db: Db,
-  { from, to }: { from: number; to: number },
-  days: number,
+  { from, to, dates, dayOf }: PeriodDays,
 ): Promise<DashboardResponse["visitsByDay"]> {
-  const { before, after, changeAt } = periodOffsets(from, to);
-  const firstDay = Math.floor((from + before) / DAY_MS);
   const rows = await db.all<{ day: number; outcome: Outcome; n: number }>(sql`
-    select
-      -- D1 binds a JS number as REAL, so the division is a float one: the
-      -- cast floors it (the operand is never negative).
-      cast(
-        (${visits.visitedAt} + case when ${visits.visitedAt} >= ${changeAt} then ${after} else ${before} end)
-          / ${DAY_MS} as integer
-      ) - ${firstDay} as day,
-      ${visits.outcome} as outcome,
-      count(*) as n
+    select ${dayOf(sql`${visits.visitedAt}`)} as day, ${visits.outcome} as outcome, count(*) as n
     from ${visits}
     where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
     group by day, outcome
   `);
-  const result = periodDates(from, days).map((date) => ({
+  const result = dates.map((date) => ({
     date,
     counts: Object.fromEntries(OUTCOMES.map((o) => [o, 0])) as Record<Outcome, number>,
   }));
@@ -298,6 +324,46 @@ async function visitsByDay(
     // Out of range cannot happen for a visit in [from, to); skip rather than
     // grow the array if it ever did.
     if (entry && row.outcome in entry.counts) entry.counts[row.outcome] = Number(row.n);
+  }
+  return result;
+}
+
+/**
+ * Convertis per Brussels day, for the card's sparkline: the same events as
+ * `conversionCounts`' current period, and each prospect on the day of its
+ * first one, so the series sums to `converted.value` (docs/api.md › The
+ * dashboard).
+ */
+async function convertedByDay(db: Db, { from, to, dates, dayOf }: PeriodDays): Promise<number[]> {
+  const converted = "converted" satisfies Status;
+  const key = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
+  const rows = await db.all<{ day: number; n: number }>(sql`
+    select ${dayOf(sql`first_at`)} as day, count(*) as n
+    from (
+      select prospect_key, min(at) as first_at
+      from (
+        select ${key} as prospect_key, ${visits.visitedAt} as at
+        from ${visits}
+        inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
+        where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
+          and ${visits.outcome} = ${converted}
+        union all
+        select ${key}, ${prospects.statusSetAt}
+        from ${prospects}
+        where ${prospects.status} = ${converted}
+          and ${prospects.statusSetAt} >= ${from}
+          and ${prospects.statusSetAt} < ${to}
+          -- The manual status still in force, as in conversionCounts.
+          and (${prospects.lastVisitAt} is null or ${prospects.lastVisitAt} <= ${prospects.statusSetAt})
+      )
+      group by prospect_key
+    )
+    group by day
+  `);
+  const result = dates.map(() => 0);
+  for (const row of rows) {
+    const i = Number(row.day);
+    if (i >= 0 && i < result.length) result[i] = Number(row.n);
   }
   return result;
 }
