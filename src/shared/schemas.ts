@@ -512,15 +512,28 @@ export const dashboardResponseSchema = z.object({
     previous: countSchema,
     /** `null` when `previous` is 0: there is nothing to compare against. */
     delta: z.nullable(z.number()),
+    /** The sparkline: `value` per day, on `visitsByDay`'s days; sums to `value`. */
+    byDay: z.array(countSchema),
   }),
   /** A snapshot of now, so it carries no delta and ignores the period. */
   openProspects: countSchema,
+  /** `openProspects` by status, for the card's mini-bar; sums to it. */
+  openProspectsByStatus: z.object({
+    new: countSchema,
+    assigned: countSchema,
+    follow_up: countSchema,
+  }),
   /** Distinct prospects converted in the period, by visit or by hand. */
   converted: z.object({
     value: countSchema,
     previous: countSchema,
     /** `null` when `previous` is 0, as for `visits`. */
     delta: z.nullable(z.number()),
+    /**
+     * The sparkline: each prospect on the day of its first conversion in the
+     * period, on `visitsByDay`'s days, so it sums to `value`.
+     */
+    byDay: z.array(countSchema),
   }),
   /**
    * Convertis ÷ distinct prospects visited, as a ratio (0.106 is 10,6 %).

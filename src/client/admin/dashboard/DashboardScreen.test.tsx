@@ -1,7 +1,8 @@
 /**
- * Tableau de bord's states — GH #107, #109, #110: skeletons, the four cards,
- * the chart's text equivalent, the period selector and the load-failed alert. Rendered on its own with a fresh
- * client per test, so no answer leaks between them.
+ * Tableau de bord's states — GH #107, #109, #110, #111: skeletons, the four
+ * cards and their bottom rows, the chart's text equivalent, the period
+ * selector and the load-failed alert. Rendered on its own with a fresh client
+ * per test, so no answer leaks between them.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -31,14 +32,26 @@ function answer(
   over: Partial<DashboardResponse["visits"]> = {},
   rate: Partial<DashboardResponse["conversionRate"]> = {},
 ): DashboardResponse {
-  const visits = { value: period * 10, previous: period * 8, delta: 0.25, ...over };
+  const visits = {
+    value: period * 10,
+    previous: period * 8,
+    delta: 0.25,
+    byDay: Array.from({ length: period }, () => 10),
+    ...over,
+  };
   return {
     period: period as DashboardResponse["period"],
     from: 0,
     to: 1,
     visits,
     openProspects: 1284,
-    converted: { value: period + 2, previous: period, delta: 2 / period },
+    openProspectsByStatus: { new: 1000, assigned: 1, follow_up: 283 },
+    converted: {
+      value: period + 2,
+      previous: period,
+      delta: 2 / period,
+      byDay: Array.from({ length: period }, (_, i) => (i === 0 ? 2 : 1)),
+    },
     conversionRate: {
       value: 0.106,
       previous: 0.094,
@@ -84,6 +97,11 @@ function chip(label: string = copy.dashboard.visits): HTMLElement {
   const element = card(label).querySelector<HTMLElement>("[data-slot=badge]");
   if (!element) throw new Error("no delta chip");
   return element;
+}
+
+/** The progress indicator's transform inside a card: where its percentage lands. */
+function indicator(label: string): string | undefined {
+  return card(label).querySelector<HTMLElement>("[data-slot=progress-indicator]")?.style.transform;
 }
 
 /** The card whose overline label is `label`. */
@@ -177,6 +195,75 @@ describe("DashboardScreen", () => {
     );
   });
 
+  it("draws each card's bottom row: split, sparklines in the chip's tone, gold bar (GH #111)", async () => {
+    stubFetch((period) =>
+      json(
+        answer(
+          period,
+          { delta: -0.08 },
+          { value: 1.4, visitedProspects: { value: 5, previous: 1 } },
+        ),
+      ),
+    );
+    renderScreen();
+
+    const open = within(await findCard(copy.dashboard.openProspects));
+    expect(open.getByText("Nouveau · Assigné · À relancer")).toBeTruthy();
+    expect(
+      open.getByText("1 000 nouveaux, 1 assigné, 283 à relancer").closest(".sr-only"),
+    ).not.toBeNull();
+    const segments = card(copy.dashboard.openProspects).querySelectorAll(
+      "[aria-hidden=true] > span[style]",
+    );
+    expect([...segments].map((s) => (s as HTMLElement).style.flexGrow)).toEqual([
+      "1000",
+      "1",
+      "283",
+    ]);
+
+    // Recharts draws no SVG at happy-dom's 0 width, but the chart's scoped
+    // style carries the line's colour: the chip's tone, not a fixed green.
+    const style = (label: string) => card(label).querySelector("style")?.textContent ?? "";
+    expect(style(copy.dashboard.visits)).toContain("--color-value: var(--destructive)");
+    expect(style(copy.dashboard.converted)).toContain("--color-value: var(--success)");
+    expect(
+      card(copy.dashboard.visits).querySelector("[data-slot=chart]")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+
+    // Not capped by the endpoint (manual conversions), so the bar is.
+    const rate = within(card(copy.dashboard.conversionRate));
+    expect(rate.getByText("32 convertis sur 5 prospects visités")).toBeTruthy();
+    // The indicator's transform, not aria-valuenow: the vendored Progress
+    // never forwards `value` to the Radix root (#147).
+    expect(indicator(copy.dashboard.conversionRate)).toBe("translateX(-0%)");
+  });
+
+  it("keeps the rows' shape when nothing is open or visited (I/O matrix, open split zero and rate null)", async () => {
+    stubFetch((period) =>
+      json({
+        ...answer(
+          period,
+          {},
+          { value: null, delta: null, visitedProspects: { value: 0, previous: 0 } },
+        ),
+        openProspects: 0,
+        openProspectsByStatus: { new: 0, assigned: 0, follow_up: 0 },
+      }),
+    );
+    renderScreen();
+
+    const rate = within(await findCard(copy.dashboard.conversionRate));
+    expect(rate.getByText(copy.dashboard.kpiFooter.noneVisited)).toBeTruthy();
+    expect(indicator(copy.dashboard.conversionRate)).toBe("translateX(-100%)");
+    expect(
+      within(card(copy.dashboard.openProspects)).getByText("0 nouveau, 0 assigné, 0 à relancer"),
+    ).toBeTruthy();
+    const track = card(copy.dashboard.openProspects).querySelector<HTMLElement>(
+      ".bg-secondary.h-1\\.5",
+    );
+    expect(track?.children).toHaveLength(0);
+  });
+
   it("shows « — » for a rate with nothing visited, and for its delta (I/O matrix, no visits)", async () => {
     stubFetch((period) =>
       json(
@@ -237,18 +324,52 @@ describe("DashboardScreen", () => {
   });
 
   it.each([
-    [0.25, "tint-success", "lucide-arrow-up"],
-    [-0.03, "tint-destructive", "lucide-arrow-down"],
-    [null, "secondary", null],
-  ] as const)("colours a delta of %s as %s", async (delta, variant, arrow) => {
-    stubFetch((period) => json(answer(period, { delta })));
-    renderScreen();
-    await findCard(copy.dashboard.visits);
+    [0.25, "tint-success", "lucide-arrow-up", "--success"],
+    [-0.03, "tint-destructive", "lucide-arrow-down", "--destructive"],
+    [null, "secondary", null, "--muted-foreground"],
+    // Rounds to 0,0 %: flat, like the chip.
+    [0.0004, "secondary", null, "--muted-foreground"],
+  ] as const)(
+    "colours a delta of %s as %s, sparkline included",
+    async (delta, variant, arrow, line) => {
+      stubFetch((period) => json(answer(period, { delta })));
+      renderScreen();
+      await findCard(copy.dashboard.visits);
 
-    await waitFor(() => expect(chip().dataset.variant).toBe(variant));
-    const svg = chip().querySelector("svg");
-    if (arrow === null) expect(svg).toBeNull();
-    else expect(svg?.classList.contains(arrow)).toBe(true);
+      await waitFor(() => expect(chip().dataset.variant).toBe(variant));
+      const svg = chip().querySelector("svg");
+      if (arrow === null) expect(svg).toBeNull();
+      else expect(svg?.classList.contains(arrow)).toBe(true);
+      // The sparkline takes the chip's tone (GH #111).
+      expect(card(copy.dashboard.visits).querySelector("style")?.textContent).toContain(
+        `--color-value: var(${line})`,
+      );
+    },
+  );
+
+  it("agrees the captions with small counts and formats large ones (GH #111)", async () => {
+    stubFetch((period) =>
+      json({
+        ...answer(period, {}, { value: 0, visitedProspects: { value: 1, previous: 1 } }),
+        converted: {
+          value: 1,
+          previous: 1,
+          delta: 0,
+          byDay: Array.from({ length: period }, () => 0),
+        },
+        openProspectsByStatus: { new: 1, assigned: 2, follow_up: 1284 },
+      }),
+    );
+    renderScreen();
+
+    // A rate of 0 with a visit is a caption, not "Aucun prospect visité".
+    const rate = within(await findCard(copy.dashboard.conversionRate));
+    expect(rate.getByText("1 converti sur 1 prospect visité")).toBeTruthy();
+    // formatCount's narrow no-break space, as on the card's figure.
+    const split = within(card(copy.dashboard.openProspects)).getByText(/à relancer$/, {
+      selector: ".sr-only",
+    });
+    expect(split.textContent).toBe("1 nouveau, 2 assignés, 1\u202f284 à relancer");
   });
 
   it("keeps the last period's figures while the next one loads", async () => {

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { copy } from "../../copy";
 import { deltaTone, formatDelta } from "../../format";
@@ -10,6 +10,8 @@ type Icon = ComponentType<{ className?: string; "aria-hidden"?: boolean | "true"
 
 /** The shell both the card and its skeleton share, so loading never shifts the grid. */
 const SHELL = "min-w-0 gap-1 p-4.5 pb-4";
+/** 32px, whether it holds a sparkline or a bar and its caption (mockup). */
+const FOOTER = "mt-2.5 min-h-8";
 
 /** Neutral when flat or "—": colour means a direction, and there is none. */
 const TONE = {
@@ -29,6 +31,7 @@ type DeltaFormat = (delta: number | null) => string;
  * no delta row at all; `null` means there was no previous period, shown "—".
  * `deltaFormat` is `formatDelta` unless the delta is in points (Taux de
  * conversion). No coloured edge: on this app an edge means a status.
+ * `footer` is the 32px row across the bottom: a sparkline or a bar (GH #111).
  */
 export function KpiCard({
   label,
@@ -36,12 +39,14 @@ export function KpiCard({
   value,
   delta,
   deltaFormat = formatDelta,
+  footer,
 }: {
   label: string;
   icon: Icon;
   value: string;
   delta?: number | null;
   deltaFormat?: DeltaFormat;
+  footer?: ReactNode;
 }) {
   return (
     <Card className={SHELL}>
@@ -58,6 +63,7 @@ export function KpiCard({
       ) : (
         <DeltaRow delta={delta} format={deltaFormat} />
       )}
+      {footer && <div className={FOOTER}>{footer}</div>}
     </Card>
   );
 }
@@ -88,6 +94,7 @@ export function KpiCardSkeleton() {
       </div>
       <Skeleton className="h-8 w-20" />
       <Skeleton className="mt-1.5 h-5 w-40" />
+      <Skeleton className={`${FOOTER} h-8`} />
     </Card>
   );
 }

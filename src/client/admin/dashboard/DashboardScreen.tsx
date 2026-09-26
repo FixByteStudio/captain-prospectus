@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BadgeCheck, MapPin, Percent, Store } from "lucide-react";
+import { BadgeCheck, Building, MapPin, Percent } from "lucide-react";
 import {
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
@@ -12,7 +12,10 @@ import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
 import { useDashboard } from "../queries";
+import { ConversionBar } from "./ConversionBar";
 import { KpiCard, KpiCardSkeleton } from "./KpiCard";
+import { KpiSparkline } from "./KpiSparkline";
+import { OpenProspectsBar } from "./OpenProspectsBar";
 import { VisitsChart, VisitsChartSkeleton } from "./VisitsChart";
 
 function isPeriod(value: number): value is DashboardPeriod {
@@ -101,20 +104,23 @@ export function DashboardScreen() {
             <>
               <KpiCard
                 label={copy.dashboard.openProspects}
-                icon={Store}
+                icon={Building}
                 value={formatCount(data.openProspects)}
+                footer={<OpenProspectsBar split={data.openProspectsByStatus} />}
               />
               <KpiCard
                 label={copy.dashboard.visits}
                 icon={MapPin}
                 value={formatCount(data.visits.value)}
                 delta={data.visits.delta}
+                footer={<KpiSparkline byDay={data.visits.byDay} delta={data.visits.delta} />}
               />
               <KpiCard
                 label={copy.dashboard.converted}
                 icon={BadgeCheck}
                 value={formatCount(data.converted.value)}
                 delta={data.converted.delta}
+                footer={<KpiSparkline byDay={data.converted.byDay} delta={data.converted.delta} />}
               />
               <KpiCard
                 label={copy.dashboard.conversionRate}
@@ -122,6 +128,9 @@ export function DashboardScreen() {
                 value={formatPercent(data.conversionRate.value)}
                 delta={data.conversionRate.delta}
                 deltaFormat={formatPoints}
+                footer={
+                  <ConversionBar rate={data.conversionRate} converted={data.converted.value} />
+                }
               />
             </>
           ) : (
