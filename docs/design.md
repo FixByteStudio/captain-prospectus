@@ -869,9 +869,14 @@ there is one, and the distance, `min-h-16` with its own 4px status edge — and
 tapping its header (`aria-expanded`, `aria-controls`) expands it in place to
 the same "Y aller"/"Visiter" pair as the card, no navigation and nothing
 written to Dexie. Opening one row closes whichever was already open: at most
-one is expanded at a time. Neither action needs a swipe (story 117.3 adds
-that as a second way in, not the only one). Without coordinates, "Y aller" is
-absent and "Visiter" takes the row's full width — on the card too.
+one is expanded at a time. A swipe on the header is a second way in, not the
+only one: a gesture decides its axis after 10px, and left starts Visiter,
+right starts Y aller, once it commits past 96px — the row sliding to reveal a
+96px panel underneath. A swipe that stays short of 96px, or one that decides
+vertical, snaps back and starts nothing, and the tap it might otherwise also
+fire is swallowed. Without coordinates, "Y aller" is absent, a right swipe
+does not move the row, and "Visiter" takes the row's full width — on the card
+too.
 
 **Pas encore envoyé.** A stop whose visit is sitting in `outboxVisits`, or a
 field prospect still in `outboxProspects`, carries a `warn`-tinted badge with

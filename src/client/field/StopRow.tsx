@@ -6,10 +6,13 @@
  * time" here.
  *
  * Tapping the header expands it in place to the same "Y aller"/"Visiter" pair
- * the next-stop card carries — no swipe (story 117.3) and no navigation on tap.
+ * the next-stop card carries — no navigation on tap. A swipe on the header is
+ * the second way in (GH #120): left starts Visiter, right starts Y aller,
+ * both the same two destinations as `StopActions` below, nothing written to
+ * Dexie (invariant 2).
  */
-import { Link } from "react-router";
-import { ClipboardCheckIcon, NavigationIcon } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { CheckIcon, ClipboardCheckIcon, NavigationIcon } from "lucide-react";
 import { buttonVariants } from "@/ui/button-variants";
 import { Badge } from "@/ui/badge";
 import { copy, TYPE_LABELS } from "../copy";
@@ -18,6 +21,7 @@ import { cn } from "../lib/utils";
 import { STATUS_EDGE } from "../admin/status";
 import { StopNumber } from "./StopNumber";
 import { navigationUrl, type TodayItem } from "./today";
+import { useSwipe } from "./useSwipe";
 
 /** A pending prospect has no server status to key an edge off yet. */
 export function edgeFor(item: Pick<TodayItem, "status">): string {
@@ -100,31 +104,72 @@ export function StopRow({
   onToggle: () => void;
 }) {
   const panelId = `stop-actions-${item.id}`;
+  const navigate = useNavigate();
+  const url = navigationUrl(item);
+  const { offset, dragging, handlers } = useSwipe({
+    canRight: url !== null,
+    onVisit: () => navigate(`/tournee/${item.id}`),
+    onNavigate: () => {
+      // Re-checked at release time, not just at setup: `canRight` already
+      // guards this, but a stale closure must never open `null`.
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    },
+  });
 
   return (
     <li className="bg-card border-border overflow-hidden rounded-xl border">
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls={panelId}
-        onClick={onToggle}
-        className={cn(
-          "flex min-h-16 w-full items-center gap-3 py-2.5 pr-3 pl-3.5 text-left",
-          edgeFor(item),
+      <div className="relative">
+        {/* The two panels the header slides over. `aria-hidden`: the tap
+            path (StopActions below) is the only accessible way to these two
+            destinations — a screen reader never sees a gesture it can't
+            perform. */}
+        <div
+          aria-hidden="true"
+          className="bg-primary text-primary-foreground ring-primary-edge absolute inset-y-0 right-0 flex w-24 flex-col items-center justify-center gap-1 text-sm font-medium ring-1 ring-inset"
+        >
+          <CheckIcon aria-hidden="true" />
+          {copy.today.visit}
+        </div>
+        {url && (
+          <div
+            aria-hidden="true"
+            className="bg-secondary text-secondary-foreground absolute inset-y-0 left-0 flex w-24 flex-col items-center justify-center gap-1 text-sm font-medium"
+          >
+            <NavigationIcon aria-hidden="true" />
+            {copy.today.navigate}
+          </div>
         )}
-      >
-        <StopNumber index={index} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium">{item.name}</span>
-          <span className="text-muted-foreground text-meta block truncate">
-            {copy.today.meta(TYPE_LABELS[item.type], item.address)}
+
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={onToggle}
+          style={offset ? { transform: `translateX(${offset}px)` } : undefined}
+          className={cn(
+            "bg-card relative flex min-h-16 w-full touch-pan-y items-center gap-3 py-2.5 pr-3 pl-3.5 text-left",
+            // Follows the finger with no transition while dragging; snaps or
+            // reveals with one once released — zeroed globally under
+            // prefers-reduced-motion (app.css), so `motion-safe:` is belt and
+            // braces here.
+            !dragging && "motion-safe:transition-transform",
+            edgeFor(item),
+          )}
+          {...handlers}
+        >
+          <StopNumber index={index} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-base font-medium">{item.name}</span>
+            <span className="text-muted-foreground text-meta block truncate">
+              {copy.today.meta(TYPE_LABELS[item.type], item.address)}
+            </span>
+            <NotSyncedBadge item={item} />
           </span>
-          <NotSyncedBadge item={item} />
-        </span>
-        <span className="shrink-0 text-right">
-          <Distance item={item} className="font-medium" />
-        </span>
-      </button>
+          <span className="shrink-0 text-right">
+            <Distance item={item} className="font-medium" />
+          </span>
+        </button>
+      </div>
 
       {/* Always rendered so `aria-controls` never points at a missing id;
           `hidden` keeps a collapsed row's actions out of the accessibility

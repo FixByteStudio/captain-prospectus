@@ -2,9 +2,9 @@
  * The round — docs/design.md, "Next-stop card".
  *
  * The next stop gets a card, its own gold edge and both actions. Everything
- * after it is a quiet ledger that expands in place on tap — no swipe (story
- * 117.3) and no navigation on tap. Follow-ups not yet due sit in "Plus tard",
- * visible but not walkable from here.
+ * after it is a quiet ledger that expands in place on tap, or slides open on
+ * a swipe (GH #120) — no navigation on tap. Follow-ups not yet due sit in
+ * "Plus tard", visible but not walkable from here.
  */
 import { useState } from "react";
 import { useLocation } from "react-router";
