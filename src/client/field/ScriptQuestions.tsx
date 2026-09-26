@@ -53,7 +53,6 @@ function QuestionControl({
               value={option.value}
               checked={value === (option.value === "true")}
               onSelect={(next) => onChange(next === "true")}
-              variant="choice"
               className="justify-center"
             >
               {option.label}
@@ -73,7 +72,6 @@ function QuestionControl({
               value={option}
               checked={value === option}
               onSelect={(next: string) => onChange(next)}
-              variant="choice"
             >
               {option}
             </FieldRadioOption>
@@ -135,7 +133,6 @@ function QuestionControl({
               value={String(rating)}
               checked={value === rating}
               onSelect={(next) => onChange(Number(next))}
-              variant="choice"
               className="justify-center"
             >
               {String(rating)}

@@ -1176,18 +1176,52 @@ be tapped again (INVARIANT 5).
 ### Adding a place
 
 ```
-│  Nom      [                    ] │
+│  Nom                             │
+│  [ Le nom sur la devanture     ] │
+│  Indiquez le nom de l'établis…   │  after « Ajouter » with Nom empty
 │                                  │
 │  Type                            │
-│  [ Restaurant ] [ Restauration ] │  six targets, wrapping
-│  [ Café ] [ Bar ] [ Food truck ] │
-│  [ Autre ]                       │
+│  [ Restaurant ] [ Restauration ] │  2 columns, 6 choice tiles
+│  [ Café       ] [ Bar          ] │
+│  [ Food truck ] [ Autre        ] │
 │                                  │
 │  Position                        │
-│  50,8467  4,3525     Actualiser  │  or « Utiliser ma position »
-│                                  │
-│  [          Ajouter          ]   │
+│  ┌─────────────────────────────┐ │
+│  │ (o) 50,8466 · 4,3528        │ │  « Utiliser ma position »
+│  │               [Actualiser]  │ │  until there is a reading
+│  └─────────────────────────────┘ │
+│  Adresse (facultatif)            │
+│  [                             ] │
+│  Téléphone (facultatif)          │
+│  [                             ] │
+│  [          Ajouter           ]  │  sticky, above the tab bar
 ```
+
+**Type is six choice tiles in two columns.** They are DESIGN.md's Choice
+controls (field) over native radios (ADR-0015), so arrow keys move the pick
+and the group announces as one control. Restaurant is checked on open; only
+the checked tile is gold.
+
+**Position is a card, not a map.** The agent is often offline here, and a map
+without tiles would show nothing the coordinates don't. The card reads the
+same in both cases, makes no tile request, and costs no Leaflet on this
+screen. Coordinates use fr-FR with four decimals, about a shopfront. The
+reading shown is always the one « Ajouter » would save; while a new one is
+on its way, « Recherche de votre position… » shows under it.
+
+**The position is read on open.** field-operations.md says a field
+prospect's position defaults to where the agent stands, and Flow 4 needs it
+so the new place comes up as the nearest stop even when nobody taps anything.
+So the button reads « Utiliser ma position » only while there is no reading
+(refused, unavailable, or still locating, when it is disabled), and
+« Actualiser » once there is one. A place with no position is still added; it
+goes to the end of the round.
+
+**« Ajouter » puts the place on the round at once.** It writes one
+`outboxProspects` row and nothing else (INVARIANT 2), then returns to
+Tournée du jour with « Prospect ajouté… ». The round reads the outbox, so
+the place is a stop before any sync. A failed write stays on the form with
+the storage error, like the visit form.
 
 ### Sync is ambient, never a toast
 

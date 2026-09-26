@@ -116,15 +116,14 @@ export function FieldCheckbox({
 }
 
 /**
- * One option in a field radio group.
+ * One option in a field radio group — DESIGN.md's Choice controls (field): a
+ * `bg-card` tile with a border, no disc (the input is `sr-only`, so arrow keys
+ * and the native radio semantics still work), and a full gold fill with navy
+ * text and the `primary-edge` border when checked — `components.choice-selected`
+ * — since the fill itself is what marks the pick.
  *
- * `variant="row"` (the default) is 56px — the `--spacing-decision` token —
- * with a visible disc and a 12% gold wash, as Ajouter's type chips use it.
- * `variant="choice"` is DESIGN.md's Choice controls (field): a `bg-card`
- * tile with a border, no disc (the input is `sr-only`, so arrow keys and the
- * native radio semantics still work), and a full gold fill with navy text and
- * the `primary-edge` border when checked — `components.choice-selected` —
- * since the fill itself is what marks the pick.
+ * The old 56px row with a disc went with its last caller, Ajouter's type list
+ * (GH #127).
  */
 export function FieldRadioOption({
   name,
@@ -133,7 +132,6 @@ export function FieldRadioOption({
   onSelect,
   children,
   className,
-  variant = "row",
   ...props
 }: Omit<
   React.ComponentProps<"input">,
@@ -144,7 +142,6 @@ export function FieldRadioOption({
   checked: boolean;
   onSelect: (value: string) => void;
   children: React.ReactNode;
-  variant?: "row" | "choice";
 }) {
   return (
     <label
@@ -152,10 +149,7 @@ export function FieldRadioOption({
         "border-border flex cursor-pointer items-center gap-3 rounded-md border px-4 text-base",
         "transition-colors select-none",
         "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-[3px]",
-        variant === "row" &&
-          "min-h-decision has-[:checked]:border-primary-edge has-[:checked]:bg-primary/12",
-        variant === "choice" &&
-          "bg-card min-h-touch has-[:checked]:border-primary-edge has-[:checked]:bg-primary has-[:checked]:text-primary-foreground",
+        "bg-card min-h-touch has-[:checked]:border-primary-edge has-[:checked]:bg-primary has-[:checked]:text-primary-foreground",
         className,
       )}
     >
@@ -165,11 +159,7 @@ export function FieldRadioOption({
         value={value}
         checked={checked}
         onChange={() => onSelect(value)}
-        className={cn(
-          variant === "row" &&
-            "border-input size-5 shrink-0 appearance-none rounded-full border shadow-xs checked:border-primary-edge checked:border-[6px] transition-colors focus-visible:outline-none",
-          variant === "choice" && "sr-only",
-        )}
+        className="sr-only"
         {...props}
       />
       <span className="font-medium">{children}</span>
