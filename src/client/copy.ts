@@ -157,6 +157,21 @@ export const copy = {
         (visited <= 1 ? "prospect visité" : "prospects visités"),
       noneVisited: "Aucun prospect visité sur la période",
     },
+    /** Pipeline par statut (GH #112); row labels are STATUS_LABELS. */
+    pipeline: {
+      title: "Pipeline par statut",
+      total: (n: number) => `${formatCount(n)} ${n <= 1 ? "prospect" : "prospects"}`,
+    },
+    /** Activité par agent (GH #112). */
+    agents: {
+      title: "Activité par agent",
+      agent: "Agent",
+      visits: "Visites",
+      converted: "Convertis",
+      followUp: "À relancer",
+      openProspects: "Prospects ouverts",
+      empty: "Aucun agent pour l'instant.",
+    },
     /** Follows the delta chip: "+12,4 % vs période précédente". */
     vsPrevious: "vs période précédente",
     /** Read out while the skeletons stand in for the cards. */

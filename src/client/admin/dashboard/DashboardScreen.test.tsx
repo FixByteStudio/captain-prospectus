@@ -60,6 +60,25 @@ function answer(
       ...rate,
     },
     visitsByDay: days(period),
+    pipeline: { new: 1000, assigned: 1, follow_up: 283, converted: 50, rejected: 166 },
+    agents: [
+      {
+        email: "lea@example.com",
+        visits: period * 6,
+        converted: 3,
+        followUp: 28,
+        openProspects: 70,
+      },
+      {
+        email: "karim@example.com",
+        visits: period * 4,
+        converted: 2,
+        followUp: 26,
+        openProspects: 62,
+      },
+      // Idle: on the roster, nothing in the period.
+      { email: "admin@example.com", visits: 0, converted: 0, followUp: 0, openProspects: 0 },
+    ],
   };
 }
 
@@ -149,6 +168,77 @@ describe("DashboardScreen", () => {
     // Points, not a relative change (docs/api.md › The dashboard).
     expect(rate.getByText("+1,2 pt")).toBeTruthy();
     expect(chip(copy.dashboard.conversionRate).dataset.variant).toBe("tint-success");
+  });
+
+  it("lists the pipeline with each status's count and share (GH #112)", async () => {
+    stubFetch((period) => json(answer(period)));
+    renderScreen();
+
+    const panel = within(await findCard(copy.dashboard.pipeline.title));
+    // formatCount groups with a narrow no-break space; the normalizer folds it.
+    expect(panel.getByText("1 500 prospects")).toBeTruthy();
+    const rows = panel.getAllByRole("listitem").map((li) => li.textContent);
+    expect(rows).toEqual([
+      "Nouveau1\u202f00066,7\u00a0%",
+      "Assigné10,1\u00a0%",
+      "À relancer28318,9\u00a0%",
+      "Converti503,3\u00a0%",
+      "Refusé16611,1\u00a0%",
+    ]);
+  });
+
+  it("shows 0 % and empty bars for an empty pipeline (I/O matrix, empty)", async () => {
+    stubFetch((period) =>
+      json({
+        ...answer(period),
+        pipeline: { new: 0, assigned: 0, follow_up: 0, converted: 0, rejected: 0 },
+      }),
+    );
+    renderScreen();
+
+    const element = await findCard(copy.dashboard.pipeline.title);
+    const panel = within(element);
+    expect(panel.getByText("0 prospect")).toBeTruthy();
+    expect(panel.getAllByText("0,0 %")).toHaveLength(5);
+    for (const fill of element.querySelectorAll<HTMLElement>("li [aria-hidden] > div")) {
+      expect(fill.style.width).toBe("0%");
+    }
+  });
+
+  it("lists Activité par agent, an idle agent with zeros (GH #112)", async () => {
+    stubFetch((period) => json(answer(period)));
+    renderScreen();
+
+    const table = within(await findCard(copy.dashboard.agents.title)).getByRole("table");
+    const rows = within(table).getAllByRole("row");
+    expect(
+      within(rows[0] as HTMLElement)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      copy.dashboard.agents.agent,
+      copy.dashboard.agents.visits,
+      copy.dashboard.agents.converted,
+      copy.dashboard.agents.followUp,
+      copy.dashboard.agents.openProspects,
+    ]);
+    const cells = (row: Element) => [
+      within(row as HTMLElement).getByRole("rowheader").textContent,
+      ...within(row as HTMLElement)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent),
+    ];
+    expect(cells(rows[1] as Element)).toEqual(["Llea@example.com", "180", "3", "28", "70"]);
+    expect(cells(rows[3] as Element)).toEqual(["Aadmin@example.com", "0", "0", "0", "0"]);
+  });
+
+  it("says so when there is no agent", async () => {
+    stubFetch((period) => json({ ...answer(period), agents: [] }));
+    renderScreen();
+
+    const panel = within(await findCard(copy.dashboard.agents.title));
+    expect(panel.getByText(copy.dashboard.agents.empty)).toBeTruthy();
+    expect(panel.queryByRole("table")).toBeNull();
   });
 
   it("gives Visites dans le temps a text equivalent, one row per day (GH #110)", async () => {
