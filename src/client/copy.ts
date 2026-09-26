@@ -559,6 +559,13 @@ export const copy = {
     /** The map canvas's own accessible name (`role="application"`, same
      * pattern as MapCanvas's `aria-label`). */
     label: "Carte de la tournée du jour",
+    /** The persistent sheet's landmark name, phone only (spec-gh-122). */
+    sheetLabel: "Arrêt sélectionné",
+    /** A pin's accessible name, so it reads as a stop and not a bare number
+     * (spec-gh-122, `RoundMap`'s `onSelect` markers). */
+    pinLabel: (n: number, name: string) => `Arrêt ${n} · ${name}`,
+    /** The tablet left pane's landmark name (`CarteList`). */
+    listLabel: "Arrêts de la tournée",
   },
 
   today: {

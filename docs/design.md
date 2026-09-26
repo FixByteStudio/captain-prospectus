@@ -931,6 +931,12 @@ rules and the same prospect data as Tournée, though each screen takes its own
 one-shot position reading (`useAgentPosition` has no shared state), so the two
 are read moments apart, not literally the same call.
 
+Below 768px the map carries a selected stop in a persistent sheet; from 768px
+the sheet is replaced by a list pane, the map's own left-hand twin
+(spec-gh-122). `CarteScreen` renders one or the other by `useIsMobile()`,
+never both — a duplicate "Visiter" link in the DOM is exactly the bug that
+guard exists to rule out.
+
 ```
 ┌──────────────────────────────────┐
 │ ▮ Captain Prospectus        ● 2  │
@@ -946,15 +952,51 @@ are read moments apart, not literally the same call.
 │                        [ ⌖ ]     │  44px "Me recentrer", bottom right
 │ © les contributeurs OpenStreetMap│
 ├──────────────────────────────────┤
+│▔▔▔▔▔▔▔▔▔▔▔▔ (handle) ▔▔▔▔▔▔▔▔▔▔▔▔│  the sheet: rounded top, 12px over the map
+│ (1) Curry House          350 m   │
+│     Restaurant · Rue du Midi 42  │
+│ ┌────────────┐ ┌────────────┐   │
+│ │  Y aller   │ │  Visiter   │   │
+│ └────────────┘ └────────────┘   │
+├──────────────────────────────────┤
 │  ⬤       ⬤        ⬤              │  tab bar: Tournée, Carte, Ajouter…
 └──────────────────────────────────┘
 ```
 
 **Pins carry the round's own walking order, never a second one.** Gold for the
 next stop, `card` for the rest, both `L.divIcon` so their size and colour are
-Tailwind classes rather than an image asset — no pin-tap selection yet (story
-117.5). A stop with no coordinates draws no pin, but keeps its number: the
-third pin can read "3" with no "2" on the map, because a row still shows "2".
+Tailwind classes rather than an image asset. A stop with no coordinates draws
+no pin, but keeps its number: the third pin can read "3" with no "2" on the
+map, because a row still shows "2". Every pin is keyboard-reachable and named
+"Arrêt {n} · {name}" (`copy.carte.pinLabel`); tapping or activating one selects
+that stop — the sheet or the list pane's own expanded row follows it — without
+ever repainting the pin itself: selected state changes nothing about colour,
+so gold still means only "the next stop".
+
+**The sheet is a plain panel, never shadcn `Sheet`.** `Sheet` is a Radix
+dialog: it traps focus, dims the screen and closes on any outside pointer —
+including a pin tap, the one interaction meant to update this panel rather
+than dismiss it. A persistent panel that never opens or closes is a
+`<section>`, in flow below the map rather than laid over it (a 12px negative
+margin overlaps its rounded top corners with the map above), so the
+attribution line and "Me recentrer" — drawn inside the map's own, now shorter,
+box — are never measured against the sheet's height to stay clear of it. It
+shows the selected stop's number (gold only when it is the next stop), name,
+"type · address", the "Pas encore envoyé" badge, the distance, then "Y aller"
+and "Visiter" — the same row `StopRow` and `NextStopCard` already draw, so a
+stop never reads differently on the two screens. With no due stops it shows
+"Aucun prospect à visiter…" instead, no actions. Selection is resolved every
+render — the tapped stop's id, falling back to the next stop the moment it
+disappears from the round (visited and synced away, say) — never reset by an
+effect of its own.
+
+**From 768px, a list pane replaces the sheet, the map's own left-hand twin.**
+`NextStopCard` for the next stop, then a `StopRow` per remaining stop —
+"Plus tard" is left out: a follow-up not yet due has no pin and is not
+walkable here either. Tapping a pin expands that stop's row (closing any
+other) and scrolls it into view; a tap on the next stop's pin scrolls to the
+card instead, which is always open. Tapping a row's own header toggles it
+exactly as it does on Tournée.
 
 **The path joins the stops, not the agent.** A straight segment from wherever
 the agent happens to be would look like a route, and ADR-0002 rules out a
@@ -968,10 +1010,11 @@ second line drawn by hand, which is the one way it could get laid out away.
 pan, so the only way to guarantee no request leaves the phone is to never
 create the map in the first place. A `bg-secondary` canvas and a card stand in
 instead — "Carte indisponible hors ligne. La liste reste à jour.", and "Voir
-la liste" back to Tournée — while the rest of the shell keeps working exactly
-as it does everywhere else. Position denied gets the same notice and
-"Réessayer" as Tournée, laid over the map rather than replacing it: the pins
-are still useful with no position.
+la liste" back to Tournée — while the sheet (phone) or the list (tablet) keeps
+showing the round exactly as it does online, since neither reads anything the
+map itself provides. Position denied gets the same notice and "Réessayer" as
+Tournée, laid over the map rather than replacing it: the pins are still useful
+with no position.
 
 **Re-centre asks `useAgentPosition` for a reading — up to two minutes old**
 (its `maximumAge`), **never a continuous track** (no `watchPosition`, by
@@ -979,6 +1022,12 @@ design), and pans there once it lands; without one, it fits the view back to
 the pins instead of looking like it did nothing. The control is a 44px `card`
 square — DESIGN.md's one sanctioned exception below the field's usual 48px,
 because it floats over the map rather than sitting in the thumb's normal row.
+
+**The map re-lays out on its own pane's size, not just the viewport's.** A
+phone rotating, or the sheet's height changing, resizes the map's container
+with no prop of the map's own changing at all, so a `ResizeObserver` calls
+Leaflet's `invalidateSize()` directly rather than waiting on a redraw that may
+never come.
 
 ### One decision per screen
 

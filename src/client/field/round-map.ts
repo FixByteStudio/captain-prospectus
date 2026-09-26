@@ -18,6 +18,9 @@ export type MapPin = {
   lng: number;
   /** The next stop's pin is gold; every other pin is card-coloured. */
   next: boolean;
+  /** For the pin's accessible name (spec-gh-122, `copy.carte.pinLabel`) —
+   * pins are keyboard-reachable once `RoundMap` gets an `onSelect`. */
+  name: string;
 };
 
 /**
@@ -29,7 +32,14 @@ export function mapPins(now: readonly TodayItem[]): MapPin[] {
   const pins: MapPin[] = [];
   now.forEach((item, i) => {
     if (item.lat === null || item.lng === null) return;
-    pins.push({ id: item.id, index: i + 1, lat: item.lat, lng: item.lng, next: i === 0 });
+    pins.push({
+      id: item.id,
+      index: i + 1,
+      lat: item.lat,
+      lng: item.lng,
+      next: i === 0,
+      name: item.name,
+    });
   });
   return pins;
 }

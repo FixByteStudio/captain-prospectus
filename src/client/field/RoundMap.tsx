@@ -91,6 +91,7 @@ export function RoundMap({
   path,
   position,
   recentre,
+  onSelect,
 }: {
   pins: readonly MapPin[];
   path: readonly [number, number][];
@@ -98,6 +99,13 @@ export function RoundMap({
   /** Asks the caller for a fresh reading (`useAgentPosition`'s own `refresh`,
    * passed through by `CarteScreen`). */
   recentre: () => void;
+  /**
+   * Selects a stop by id (spec-gh-122): when set, every marker becomes
+   * tappable and keyboard-reachable, named `copy.carte.pinLabel`. Left
+   * `undefined`, markers stay decorative and inert — the admin round view
+   * (epic-117 context) reuses this component with no selection of its own.
+   */
+  onSelect?: (id: string) => void;
 }) {
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<L.Map | null>(null);
@@ -120,7 +128,16 @@ export function RoundMap({
    * coordinates, a position arriving — until the agent's own hand moves the
    * map; after that, only an explicit re-centre tap moves it again. */
   const lastFitKey = useRef<string | null>(null);
+  /** The points behind `lastFitKey`, so a resize (which changes nothing about
+   * the round) can refit the same view rather than leaving the map centred on
+   * whatever it showed before its container's own size changed. */
+  const lastFitPoints = useRef<[number, number][]>([]);
   const userMoved = useRef(false);
+  /** The last drawn pins/path/position/selectability, so a re-render that
+   * changes nothing about what's drawn (`useRound` gives `pins`/`path` a new
+   * array identity on every render) skips `clearLayers()` — which would
+   * otherwise drop keyboard focus off the pin an agent just activated. */
+  const lastDrawnKey = useRef<string | null>(null);
 
   // The latest pins and position, read from the re-centre timeout below
   // without making that effect re-subscribe on every redraw.
@@ -130,6 +147,15 @@ export function RoundMap({
     latestPins.current = pins;
     latestPosition.current = position;
   });
+
+  /** Every `fitToPoints` call goes through this, so `lastFitPoints` always
+   * matches what the map was last deliberately shown — read by a resize below
+   * to refit the same view rather than just resizing around a stale one. */
+  const applyFit = (instance: L.Map, points: [number, number][]) => {
+    lastFitPoints.current = points;
+    programmaticMove.current = true;
+    fitToPoints(instance, points);
+  };
 
   useEffect(() => {
     const element = container.current;
@@ -166,13 +192,34 @@ export function RoundMap({
     markers.current = L.layerGroup().addTo(instance);
     map.current = instance;
 
+    // The pane's own size changes under this component with no prop of its
+    // own changing at all — a phone rotating, or `CarteScreen` swapping the
+    // sheet for the tablet list pane — and Leaflet only ever measures its
+    // container on creation or an explicit `invalidateSize()` (matrix,
+    // "Resize"). `invalidateSize()` alone leaves the map centred on whatever
+    // it showed before, so an untouched view (never hand-moved) also refits
+    // to the same points, rather than keeping a stale centre after the pane's
+    // shape changed under it. Guarded: happy-dom has no `ResizeObserver` in
+    // every version this repo has run against (`useCarteTop`'s own note).
+    let resizeObserver: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        instance.invalidateSize();
+        if (!userMoved.current) applyFit(instance, lastFitPoints.current);
+      });
+      resizeObserver.observe(element);
+    }
+
     return () => {
       if (recentreTimer.current !== null) window.clearTimeout(recentreTimer.current);
       recentreTimer.current = null;
       pendingRecentre.current = false;
       programmaticMove.current = false;
       userMoved.current = false;
+      lastDrawnKey.current = null;
       lastFitKey.current = null;
+      lastFitPoints.current = [];
+      resizeObserver?.disconnect();
       instance.remove();
       map.current = null;
       markers.current = null;
@@ -190,13 +237,44 @@ export function RoundMap({
     const layer = markers.current;
     if (!instance || !layer) return;
 
+    // `useRound` (and every mocked test render) hands this a new `pins`/`path`
+    // array identity on every render even when nothing in the round changed —
+    // redrawing anyway would `clearLayers()` the pin an agent just gave
+    // keyboard focus to, dropping it right back to the map container.
+    const drawKey = JSON.stringify({ pins, path, position, selectable: Boolean(onSelect) });
+    if (drawKey === lastDrawnKey.current) return;
+    lastDrawnKey.current = drawKey;
+
     layer.clearLayers();
     pathLine.current?.remove();
     pathLine.current = null;
 
-    // No pin-tap selection yet (story 117.5): every marker is decorative.
+    // Interactive and named only when the caller wants selection (`onSelect`,
+    // spec-gh-122). A click activates a marker either way, but Leaflet 1.9
+    // gives a `keyboard: true` marker a `tabIndex`/`role="button"` and
+    // nothing more — it never turns Enter/Space into its own `click`, so
+    // keyboard activation needs its own `keydown` listener (Leaflet forwards
+    // `keydown` from the marker's element the same way it forwards `click`).
+    // Neither pans or zooms the map, so a pin tap never itself counts as the
+    // agent's own hand on it (`movestart` below stays quiet).
     for (const pin of pins) {
-      L.marker([pin.lat, pin.lng], { icon: pinIcon(pin), interactive: false }).addTo(layer);
+      const marker = L.marker([pin.lat, pin.lng], {
+        icon: pinIcon(pin),
+        interactive: Boolean(onSelect),
+        keyboard: Boolean(onSelect),
+        title: onSelect ? copy.carte.pinLabel(pin.index, pin.name) : undefined,
+      });
+      if (onSelect) {
+        marker.on("click", () => onSelect(pin.id));
+        marker.on("keydown", (event) => {
+          const key = event.originalEvent.key;
+          if (key !== "Enter" && key !== " ") return;
+          // Space would otherwise scroll the page under the focused marker.
+          if (key === " ") event.originalEvent.preventDefault();
+          onSelect(pin.id);
+        });
+      }
+      marker.addTo(layer);
     }
     if (path.length >= 2) {
       pathLine.current = L.polyline(path as [number, number][], {
@@ -217,11 +295,10 @@ export function RoundMap({
       const key = pointsKey(points);
       if (key !== lastFitKey.current) {
         lastFitKey.current = key;
-        programmaticMove.current = true;
-        fitToPoints(instance, points);
+        applyFit(instance, points);
       }
     }
-  }, [pins, path, position]);
+  }, [pins, path, position, onSelect]);
 
   // A re-centre tap asks for a fresh reading (`handleRecentre` below); when it
   // lands here as a prop change, pan straight to it. `useAgentPosition` never
@@ -256,8 +333,7 @@ export function RoundMap({
       // pans, via the effect above.
       const instance = map.current;
       if (instance) {
-        programmaticMove.current = true;
-        fitToPoints(
+        applyFit(
           instance,
           latestPins.current.map((pin): [number, number] => [pin.lat, pin.lng]),
         );
@@ -279,8 +355,7 @@ export function RoundMap({
       if (latestPosition.current) {
         points.push([latestPosition.current.lat, latestPosition.current.lng]);
       }
-      programmaticMove.current = true;
-      fitToPoints(instance, points);
+      applyFit(instance, points);
     }, RECENTRE_TIMEOUT_MS);
   };
 
