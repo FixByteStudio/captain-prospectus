@@ -590,6 +590,12 @@ export const dashboardResponseSchema = z.object({
       openProspects: countSchema,
     }),
   ),
+  /**
+   * Relances dues: live `follow_up` prospects whose `next_visit_at` is before
+   * Brussels midnight tomorrow (`to`). A snapshot, like `openProspects`; a
+   * null `next_visit_at` is not due.
+   */
+  followUpsDue: countSchema,
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 

@@ -8,8 +8,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { copy } from "../../copy";
-import type { DashboardResponse } from "../../../shared/schemas";
+import { MemoryRouter } from "react-router";
+import { OUTCOME_LABELS, copy } from "../../copy";
+import type { AdminVisit, DashboardResponse } from "../../../shared/schemas";
+import { adminKeys } from "../queries";
 import { createAdminQueryClient } from "../query-client";
 import { DashboardScreen } from "./DashboardScreen";
 
@@ -79,6 +81,7 @@ function answer(
       // Idle: on the roster, nothing in the period.
       { email: "admin@example.com", visits: 0, converted: 0, followUp: 0, openProspects: 0 },
     ],
+    followUpsDue: 6,
   };
 }
 
@@ -89,24 +92,50 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** Answers each period with `respond`, and records what was asked. */
-function stubFetch(respond: (period: number) => Response | Promise<Response>) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const period = Number(new URL(String(input), "http://localhost").searchParams.get("period"));
-    return respond(period);
+/** The other requests on the screen (GH #113), each answered by its own function. */
+type Others = {
+  feed?: () => Response;
+  orphans?: () => Response;
+  duplicates?: () => Response;
+};
+
+/**
+ * Answers each period with `respond`, and records what was asked of the
+ * dashboard. The feed and the two queues are empty unless `others` says.
+ */
+function stubFetch(respond: (period: number) => Response | Promise<Response>, others: Others = {}) {
+  // Both arguments, so toHaveBeenCalledWith sees what apiFetch passed.
+  const fetchMock = vi.fn(async (...[input]: [RequestInfo | URL, RequestInit?]) => {
+    const url = new URL(String(input), "http://localhost");
+    return respond(Number(url.searchParams.get("period")));
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), "http://localhost").pathname;
+      if (path === "/api/admin/visits")
+        return (others.feed ?? (() => json({ visits: [], serverTime: 0 })))();
+      if (path === "/api/admin/visits/orphaned")
+        return (others.orphans ?? (() => json({ visits: [], remaining: 0 })))();
+      if (path === "/api/admin/prospects/duplicates")
+        return (others.duplicates ?? (() => json({ pairs: [], truncated: false })))();
+      return fetchMock(input, init);
+    }),
+  );
   return fetchMock;
 }
 
-function renderScreen() {
+function renderScreen(prime?: (client: ReturnType<typeof createAdminQueryClient>) => void) {
   const client = createAdminQueryClient();
   // The factory's one retry waits a second; these tests do not need it.
   client.setDefaultOptions({ queries: { retry: false, refetchOnWindowFocus: false } });
+  prime?.(client);
   render(
-    <QueryClientProvider client={client}>
-      <DashboardScreen />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <DashboardScreen />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   return client;
 }
@@ -477,7 +506,9 @@ describe("DashboardScreen", () => {
     expect(screen.getByText("300")).toBeTruthy();
     const grid = card(copy.dashboard.visits).parentElement;
     expect(grid?.getAttribute("aria-busy")).toBe("true");
-    expect(screen.getByRole("status").textContent).toBe("");
+    // The screen's own region; Dernières visites has its own, polite one.
+    const status = screen.getAllByRole("status").find((el) => !el.hasAttribute("aria-live"));
+    expect(status?.textContent).toBe("");
     expect(document.querySelector("[data-slot=skeleton]")).toBeNull();
 
     release(json(answer(7)));
@@ -523,3 +554,221 @@ async function findCard(label: string): Promise<HTMLElement> {
   await screen.findByRole("heading", { level: 3, name: label });
   return card(label);
 }
+
+/** The À traiter row whose label is `label`. */
+function todoRow(label: string): HTMLElement {
+  const row = within(card(copy.dashboard.todo.title)).getByText(label).closest<HTMLElement>("li");
+  if (!row) throw new Error(`no À traiter row ${label}`);
+  return row;
+}
+
+function visit(n: number, over: Partial<AdminVisit> = {}): AdminVisit {
+  return {
+    id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    prospectId: "11111111-1111-4111-8111-111111111111",
+    prospectName: `Prospect ${n}`,
+    agentEmail: "lea@example.com",
+    visitedAt: n * 1000,
+    receivedAt: n * 1000,
+    flyerGiven: false,
+    outcome: "interested",
+    followUpAt: null,
+    notes: null,
+    ...over,
+  };
+}
+
+describe("DashboardScreen › À traiter (GH #113)", () => {
+  it("shows the three counts, each with its way in", async () => {
+    stubFetch((period) => json(answer(period)), {
+      orphans: () => json({ visits: [{}, {}], remaining: 3 }),
+      duplicates: () => json({ pairs: [{}, {}, {}], truncated: false }),
+    });
+    renderScreen();
+    await screen.findByRole("heading", { level: 3, name: copy.dashboard.todo.title });
+
+    const t = copy.dashboard.todo;
+    expect(within(todoRow(t.followUps)).getByText("6")).toBeTruthy();
+    expect(
+      within(todoRow(t.followUps))
+        .getByRole("link", { name: t.followUpsAction })
+        .getAttribute("href"),
+    ).toBe("/admin/prospects");
+    // The page plus the rows past it: 2 + 3.
+    await waitFor(() => expect(within(todoRow(t.orphans)).getByText("5")).toBeTruthy());
+    expect(
+      within(todoRow(t.orphans)).getByRole("link", { name: t.orphansAction }).getAttribute("href"),
+    ).toBe("/admin/a-rattacher");
+    await waitFor(() => expect(within(todoRow(t.duplicates)).getByText("3 paires")).toBeTruthy());
+    expect(
+      within(todoRow(t.duplicates))
+        .getByRole("link", { name: t.duplicatesAction })
+        .getAttribute("href"),
+    ).toBe("/admin/doublons");
+  });
+
+  it("mutes every 0 and disables its button (I/O matrix, empty queues)", async () => {
+    stubFetch((period) => json({ ...answer(period), followUpsDue: 0 }));
+    renderScreen();
+    await screen.findByRole("heading", { level: 3, name: copy.dashboard.todo.title });
+
+    const t = copy.dashboard.todo;
+    await waitFor(() => expect(within(todoRow(t.duplicates)).getByText("0 paire")).toBeTruthy());
+    for (const [label, action] of [
+      [t.followUps, t.followUpsAction],
+      [t.orphans, t.orphansAction],
+      [t.duplicates, t.duplicatesAction],
+    ] as const) {
+      const row = todoRow(label);
+      expect(within(row).queryByRole("link")).toBeNull();
+      expect(within(row).getByRole("button", { name: action }).hasAttribute("disabled")).toBe(true);
+    }
+    expect(within(todoRow(t.followUps)).getByText("0").className).toContain(
+      "text-muted-foreground",
+    );
+  });
+
+  it("mutes and disables a queue whose request failed, and renders the rest (I/O matrix, queue fails)", async () => {
+    stubFetch((period) => json(answer(period)), {
+      orphans: () => json({ error: "boom" }, 500),
+    });
+    renderScreen();
+    await screen.findByRole("heading", { level: 3, name: copy.dashboard.todo.title });
+
+    const t = copy.dashboard.todo;
+    await waitFor(() =>
+      expect(
+        within(todoRow(t.orphans))
+          .getByRole("button", { name: t.orphansAction })
+          .hasAttribute("disabled"),
+      ).toBe(true),
+    );
+    expect(within(todoRow(t.orphans)).getByText("—")).toBeTruthy();
+    expect(
+      within(todoRow(t.followUps)).getByRole("link", { name: t.followUpsAction }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("DashboardScreen › Dernières visites (GH #113)", () => {
+  function rows(): HTMLElement[] {
+    return within(card(copy.dashboard.recent.title)).getAllByRole("row").slice(1);
+  }
+  function announcement(): string {
+    const region = within(card(copy.dashboard.recent.title))
+      .getAllByRole("status")
+      .find((el) => el.getAttribute("aria-live") === "polite");
+    return region?.textContent ?? "";
+  }
+
+  it("shows the newest 5 of the opening page, with no wash and no announcement (I/O matrix, opening page)", async () => {
+    const page = Array.from({ length: 500 }, (_, i) => visit(i + 1));
+    stubFetch((period) => json(answer(period)), {
+      feed: () => json({ visits: page, serverTime: 0 }),
+    });
+    renderScreen();
+
+    await waitFor(() => expect(rows()).toHaveLength(5));
+    expect(rows()[0]?.textContent).toContain("Prospect 500");
+    expect(rows()[4]?.textContent).toContain("Prospect 496");
+    expect(rows().some((r) => r.hasAttribute("data-new"))).toBe(false);
+    expect(announcement()).toBe("");
+  });
+
+  it("puts a polled visit on top with a wash and one announcement (I/O matrix, new visit)", async () => {
+    let page = [visit(1), visit(2)];
+    stubFetch((period) => json(answer(period)), {
+      feed: () => json({ visits: page, serverTime: 0 }),
+    });
+    const client = renderScreen();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+
+    page = [visit(3, { outcome: "converted", flyerGiven: true })];
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
+
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const top = rows()[0];
+    expect(top?.textContent).toContain("Prospect 3");
+    expect(top?.hasAttribute("data-new")).toBe(true);
+    expect(top?.textContent).toContain(OUTCOME_LABELS.converted);
+    expect(top?.textContent).toContain(copy.visits.flyer);
+    expect(rows()[1]?.hasAttribute("data-new")).toBe(false);
+    expect(announcement()).toBe("1 nouvelle visite");
+  });
+
+  it("says so when the feed is empty (I/O matrix, no visits)", async () => {
+    stubFetch((period) => json(answer(period)));
+    renderScreen();
+    expect(
+      await within(await findCard(copy.dashboard.recent.title)).findByText(copy.visits.empty),
+    ).toBeTruthy();
+  });
+
+  it("announces only the arrivals among the rows shown", async () => {
+    let page = Array.from({ length: 5 }, (_, i) => visit(i + 10));
+    stubFetch((period) => json(answer(period)), {
+      feed: () => json({ visits: page, serverTime: 0 }),
+    });
+    const client = renderScreen();
+    await waitFor(() => expect(rows()).toHaveLength(5));
+
+    // One newer than all five, two older than all five: only one is shown.
+    page = [visit(20), visit(1), visit(2)];
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
+
+    await waitFor(() => expect(rows()[0]?.textContent).toContain("Prospect 20"));
+    expect(rows()).toHaveLength(5);
+    expect(announcement()).toBe("1 nouvelle visite");
+  });
+
+  it("treats a page cached by an earlier mount as nothing new (I/O matrix, opening page)", async () => {
+    // What Visites leaves in the shared entry: its last delta page.
+    const page = [visit(1), visit(2), visit(3)];
+    stubFetch((period) => json(answer(period)), {
+      feed: () => json({ visits: page, serverTime: 0 }),
+    });
+    renderScreen((client) =>
+      client.setQueryData(adminKeys.visitsFeed(), { visits: [visit(3)], serverTime: 0 }),
+    );
+
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(rows().some((r) => r.hasAttribute("data-new"))).toBe(false);
+    expect(announcement()).toBe("");
+  });
+
+  it("keeps its rows under the failure when a later poll fails", async () => {
+    let fail = false;
+    stubFetch((period) => json(answer(period)), {
+      feed: () =>
+        fail ? json({ error: "boom" }, 500) : json({ visits: [visit(1)], serverTime: 0 }),
+    });
+    const client = renderScreen();
+    await waitFor(() => expect(rows()).toHaveLength(1));
+
+    fail = true;
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
+
+    const recent = card(copy.dashboard.recent.title);
+    expect(await within(recent).findByText(copy.visits.loadFailed)).toBeTruthy();
+    expect(rows()).toHaveLength(1);
+  });
+
+  it("says the feed failed without touching the rest", async () => {
+    stubFetch((period) => json(answer(period)), { feed: () => json({ error: "boom" }, 500) });
+    renderScreen();
+    expect(
+      await within(await findCard(copy.dashboard.recent.title)).findByText(copy.visits.loadFailed),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("links « Tout voir » to Visites", async () => {
+    stubFetch((period) => json(answer(period)));
+    renderScreen();
+    const link = within(await findCard(copy.dashboard.recent.title)).getByRole("link", {
+      name: copy.dashboard.recent.seeAll,
+    });
+    expect(link.getAttribute("href")).toBe("/admin/visites");
+  });
+});

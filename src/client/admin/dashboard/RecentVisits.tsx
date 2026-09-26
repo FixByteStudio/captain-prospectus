@@ -1,0 +1,134 @@
+import { Link } from "react-router";
+import { Check, ChevronRight } from "lucide-react";
+import { OUTCOME_TO_STATUS } from "../../../shared/constants";
+import type { AdminVisit } from "../../../shared/schemas";
+import { OUTCOME_LABELS, copy } from "../../copy";
+import { formatDateTime } from "../../format";
+import { cn } from "../../lib/utils";
+import { Badge } from "../../ui/badge";
+import { Card } from "../../ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table";
+import { useVisitsFeed } from "../queries";
+import { STATUS_EDGE } from "../status";
+import { OUTCOME_BADGE } from "./outcome-series";
+
+/** EXPERIENCE.md › Dernières visites: the last 5 by `received_at`. */
+const SHOWN = 5;
+
+const HEAD = "text-overline text-muted-foreground h-auto px-3 py-2.5 uppercase";
+const BADGE = "text-meta rounded-sm px-2 font-medium tracking-[0.02em]";
+
+/**
+ * Dernières visites — docs/design.md › Tableau de bord, GH #113.
+ *
+ * The same feed, cache entry and 15 s poll as Visites (ADR-0010), cut to its
+ * newest rows. Only arrivals among the rows shown wash and are announced: a
+ * visit that lands sixth is not news on this screen.
+ */
+export function RecentVisits() {
+  const { visits, arrived, isPending, isError } = useVisitsFeed();
+  const t = copy.dashboard.recent;
+  const shown = visits.slice(0, SHOWN);
+  const fresh = new Set(arrived);
+  const arrivedShown = shown.filter((v) => fresh.has(v.id)).length;
+
+  return (
+    <Card className="min-w-0 gap-3 overflow-hidden pt-4.5 pb-1.5">
+      <div className="flex items-baseline justify-between gap-4 px-4.5">
+        <h3 className="text-heading">{t.title}</h3>
+        <Link
+          to="/admin/visites"
+          className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
+        >
+          {t.seeAll}
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Link>
+      </div>
+
+      {/* The wash is decoration; this is what a screen reader is told, once per poll. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {arrivedShown > 0 ? copy.visits.arrived(arrivedShown) : ""}
+      </p>
+
+      {/* As on Visites: rows already held stay, under the failure. */}
+      {isError && <p className="text-destructive px-4.5 pb-3">{copy.visits.loadFailed}</p>}
+      {!isError && shown.length === 0 && (
+        <p className="text-muted-foreground px-4.5 pb-3">
+          {isPending ? copy.visits.loading : copy.visits.empty}
+        </p>
+      )}
+
+      {shown.length > 0 && (
+        <Table>
+          <TableHeader className="bg-secondary">
+            <TableRow className="hover:bg-transparent">
+              <TableHead scope="col" className={HEAD}>
+                {t.time}
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
+                {t.prospect}
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
+                {t.outcome}
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
+                {t.flyer}
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
+                {t.agent}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {shown.map((visit) => (
+              <RecentVisitRow key={visit.id} visit={visit} isNew={fresh.has(visit.id)} />
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The row's edge is the outcome's consequence, as on Visites; the badge says
+ * the outcome itself.
+ */
+function RecentVisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean }) {
+  const t = copy.dashboard.recent;
+  return (
+    <TableRow
+      data-new={isNew || undefined}
+      className={cn(
+        // The transition stays on, so the wash fades out when the next poll
+        // clears it; app.css's reduced-motion block drops it, and the live
+        // region says it anyway.
+        "h-row transition-colors duration-700 hover:bg-transparent",
+        isNew && "bg-accent hover:bg-accent",
+      )}
+    >
+      <TableCell className={cn("tnum px-3", STATUS_EDGE[OUTCOME_TO_STATUS[visit.outcome]])}>
+        {formatDateTime(visit.receivedAt)}
+      </TableCell>
+      <TableHead scope="row" className="px-3 font-medium">
+        {visit.prospectName}
+      </TableHead>
+      <TableCell className="px-3">
+        <Badge variant="ghost" className={cn(BADGE, OUTCOME_BADGE[visit.outcome])}>
+          {OUTCOME_LABELS[visit.outcome]}
+        </Badge>
+      </TableCell>
+      <TableCell className="px-3">
+        {visit.flyerGiven ? (
+          <Badge variant="ghost" className={cn(BADGE, "bg-secondary text-foreground")}>
+            <Check aria-hidden="true" />
+            {copy.visits.flyer}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">{t.noFlyer}</span>
+        )}
+      </TableCell>
+      <TableCell className="px-3">{visit.agentEmail}</TableCell>
+    </TableRow>
+  );
+}

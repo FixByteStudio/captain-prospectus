@@ -345,7 +345,7 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   `status-new`, `status-assigned`, `warn`, `success` or `destructive`. The
   share is of the pipeline's own total; a total of 0 shows "0 prospect", 0,0 %
   and empty tracks. The bars are decorative, the text carries the figures.
-- **Activité par agent** (GH #112). A row under that, 3:2 with À traiter (story 9) at ≥ lg, as
+- **Activité par agent** (GH #112). A row under that, 3:2 with À traiter at ≥ lg, as
   in the mockup, so the five columns fit at 1280 px; full width below.
   A `Card` holding shadcn `Table`: the head row on `secondary` in
   `text-overline` — Agent, Visites, Convertis, À relancer, Prospects ouverts —
@@ -355,15 +355,49 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   `success` semibold and À relancer `warn` semibold. Rows are not links yet
   (story 10). The table scrolls sideways inside its card at 390 px. With no
   agent, the card says "Aucun agent pour l'instant."
+- **À traiter** (GH #113). The 3:2 row's right part; under the table below
+  lg. A `Card` titled in `text-heading` with three rows split by `border`
+  lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`), the
+  label with a meta line under it, the count in semibold tabular figures, and
+  a small `secondary` Button. Relances dues, "À relancer aujourd'hui ou plus
+  tôt", "Voir" to Prospects (unfiltered until story 10); Visites à
+  rattacher, "Conservées, pas encore comptées", "Rattacher" to À rattacher;
+  Doublons, "Semblent désigner le même endroit", "{n} paires", "Fusionner" to
+  Doublons. The last two counts come from the sidebar's own queries, with no
+  request of their own; Visites à rattacher counts the whole queue (the page
+  plus `remaining`). At 0 the count turns `muted-foreground` and
+  the button is disabled, not a link; so is a row whose query is loading or
+  has failed, which shows "—" rather than a guessed 0.
+- **Dernières visites** (GH #113). The last row, full width. A `Card` with
+  "Tout voir ›" to Visites on the right of its title, then shadcn `Table`:
+  Heure, Prospect, Résultat, Flyer, Agent, on a `secondary` head row in
+  `text-overline`. The five newest visits of the live feed (the same query,
+  cache entry and 15 s poll as Visites), by `received_at`. Each row's
+  leading 4px edge is the outcome's consequence, as on Visites
+  (`STATUS_EDGE`); the outcome badge says the outcome itself: À relancer and
+  Converti as their status badge, the other three in `foreground` ink on
+  their tint (`secondary` for Personne sur place) with a 4px inner edge in
+  their `outcome-*` colour, as in the mockup. "Flyer remis" is a `secondary`
+  badge with a check, and "—" when none. A visit that arrives while the
+  screen is open gets the `accent` wash until the next poll, then fades, and
+  a visually hidden polite status says "1 nouvelle visite" once per poll,
+  counting only rows shown. The opening page is not news: no wash, no
+  announcement, even when an earlier visit to Visites left a page cached. A
+  failed poll says "Impossible de charger les visites. Réessayez." under the
+  rows it keeps. It scrolls sideways
+  inside its card at 390 px. Empty: "Aucune visite reçue. Les visites
+  apparaissent ici dès qu'un agent synchronise."
 - **Loading.** Skeleton cards and panels of the same shape stand in until the first
   answer, with a visually hidden "Chargement du tableau de bord…". Switching
   period keeps the last period's cards on screen, dimmed, until the new
   figures land — never back to skeletons.
 - **Failure.** An inline destructive Alert, "Impossible de charger le tableau
   de bord.", with a "Réessayer" button that refetches, in place of the cards.
-- **Freshness.** No polling yet. Every admin mutation marks the dashboard's
-  query stale (`createAdminQueryClient`), so it refetches as soon as it is on
-  screen, whatever `staleTime` a later story sets.
+- **Freshness.** Only Dernières visites polls (15 s); the figures do not,
+  since a 15 s aggregate would spend the D1 read quota
+  ([api.md](api.md#the-dashboard)). Every admin mutation marks the
+  dashboard's query stale (`createAdminQueryClient`), so it refetches as soon
+  as it is on screen, whatever `staleTime` a later story sets.
 
 ### One toolbar slot
 

@@ -218,6 +218,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     agentVisits,
     agentOpen,
     agentConverted,
+    due,
   ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
@@ -271,6 +272,18 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .where(and(isNull(prospects.mergedInto), isNotNull(prospects.assignedTo)))
       .groupBy(prospects.assignedTo),
     agentConversions(db, { from, to }),
+    // Relances dues: "today or earlier" is before `to`, Brussels midnight
+    // tomorrow, so the day boundary stays brusselsPeriod's. A snapshot.
+    db
+      .select({ n: count() })
+      .from(prospects)
+      .where(
+        and(
+          isNull(prospects.mergedInto),
+          eq(prospects.status, "follow_up" satisfies Status),
+          lt(prospects.nextVisitAt, to),
+        ),
+      ),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -312,6 +325,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     visitsByDay: byDay,
     pipeline: pipelineOf(pipelineRows),
     agents: agentRows(assignableEmails(c.env), agentVisits, agentOpen, agentConverted),
+    followUpsDue: due[0]?.n ?? 0,
   });
 });
 

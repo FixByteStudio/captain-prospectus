@@ -11,13 +11,16 @@ import { cn } from "../../lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
-import { useDashboard } from "../queries";
+import { queueCount } from "../nav";
+import { useDashboard, useDuplicates, useOrphans } from "../queries";
 import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
 import { KpiCard, KpiCardSkeleton } from "./KpiCard";
 import { KpiSparkline } from "./KpiSparkline";
 import { OpenProspectsBar } from "./OpenProspectsBar";
 import { PipelinePanel, PipelinePanelSkeleton } from "./PipelinePanel";
+import { RecentVisits } from "./RecentVisits";
+import { TodoPanel, TodoPanelSkeleton } from "./TodoPanel";
 import { VisitsChart, VisitsChartSkeleton } from "./VisitsChart";
 
 function isPeriod(value: number): value is DashboardPeriod {
@@ -35,6 +38,12 @@ export function DashboardScreen() {
   const [period, setPeriod] = useState<DashboardPeriod>(DASHBOARD_DEFAULT_PERIOD);
   const dashboard = useDashboard(period);
   const data = dashboard.data;
+  // The sidebar's own queries: no request of its own (GH #113).
+  const duplicates = queueCount(useDuplicates(), (d) => d.pairs);
+  const orphans = useOrphans();
+  const orphanCount = orphans.isSuccess
+    ? orphans.data.visits.length + orphans.data.remaining
+    : undefined;
 
   return (
     <section className="flex flex-col gap-6">
@@ -162,7 +171,7 @@ export function DashboardScreen() {
       )}
 
       {(data || !dashboard.isError) && (
-        // Activité par agent and À traiter (story 9) at 3:2, as in the mockup.
+        // Activité par agent and À traiter at 3:2, as in the mockup.
         <div
           aria-busy={dashboard.isFetching}
           className={cn("grid gap-6 lg:grid-cols-5", dashboard.isPlaceholderData && "opacity-60")}
@@ -170,8 +179,23 @@ export function DashboardScreen() {
           <div className="min-w-0 lg:col-span-3">
             {data ? <AgentActivityTable agents={data.agents} /> : <AgentActivityTableSkeleton />}
           </div>
+          <div className="min-w-0 lg:col-span-2">
+            {data ? (
+              <TodoPanel
+                followUpsDue={data.followUpsDue}
+                orphans={orphanCount}
+                duplicates={duplicates}
+              />
+            ) : (
+              <TodoPanelSkeleton />
+            )}
+          </div>
         </div>
       )}
+
+      {/* Its own feed and poll, so neither the period nor a failed dashboard
+          touches it. */}
+      <RecentVisits />
     </section>
   );
 }

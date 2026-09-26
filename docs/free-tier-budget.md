@@ -51,6 +51,23 @@ Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pa
   zod validation, dedupe-key normalisation and crypto are not. This is why the CSV batch is capped
   at 250 rows per request ([ingestion](domains/ingestion.md)) and why the Access JWKS is cached in
   module scope rather than refetched per request.
+- **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
+  runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
+  prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
+  Nothing else local can say: workerd's inspector samples a request only a few times, and the
+  workerd process's CPU also holds the local SQLite. On a Ryzen 9 7900, 200 warm requests a period:
+  0.42–0.53 ms median and 3.2 ms worst, at 7, 30 and 90 days. **A cold isolate's first request is
+  the thin case**, and the script times and gates it too: 7.9–8.2 ms over three runs (9.9 ms seen
+  once), about 4 ms of it the one-time compile any first route pays, the rest the dashboard's own
+  code compiled on first use. Re-measure when a statement or a figure is added, and read local
+  hardware as an estimate.
+- **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements, the
+  largest with 11 bound parameters. Every range read on `visits` — Visites and its previous period,
+  Visites dans le temps, Convertis and the rate, the Convertis series, the agents' visits and
+  Convertis — is a `SEARCH visits USING INDEX visits_visited_idx (visited_at>? AND visited_at<?)`
+  (a covering index for Visites), with each joined prospect found by primary key. Prospects
+  ouverts and Relances dues search `prospects_status_idx`; the pipeline and the agents'
+  assignments search `prospects_merged_idx`.
 - **D1 free-tier limits are hard-enforced since 2026-09-01.** Past the daily row read/write limit,
   queries fail until midnight UTC with `Your account has exceeded D1's free tier daily row read
   limit` (or `…row write limit`). The sync route must translate that into a clear "retry later"

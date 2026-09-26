@@ -789,3 +789,61 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
     },
   );
 });
+
+describe("À traiter › Relances dues (GH #113)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A live follow_up prospect by default, due at `nextVisitAt`. */
+  async function seedDue(
+    nextVisitAt: number | null,
+    status: Status = "follow_up",
+    mergedInto: string | null = null,
+  ): Promise<void> {
+    const id = await seedProspect(status, mergedInto);
+    await getDb(env.DB).update(prospects).set({ nextVisitAt }).where(eq(prospects.id, id));
+  }
+
+  it.each(DASHBOARD_PERIODS)(
+    "counts due today and overdue, not tomorrow, at period %i (I/O matrix, due today/tomorrow/overdue)",
+    async (period) => {
+      const { to } = brusselsPeriod(Date.now(), 1);
+      await seedDue(to - 1); // due today
+      await seedDue(to - 40 * DAY_MS); // overdue, before any period
+      await seedDue(to); // due tomorrow
+
+      expect((await dashboard(`?period=${period}`)).followUpsDue).toBe(2);
+    },
+  );
+
+  it("counts neither a merged, another status nor a null date (I/O matrix, not due)", async () => {
+    const { to } = brusselsPeriod(Date.now(), 1);
+    const survivor = await seedProspect("follow_up");
+    await seedDue(to - 1, "follow_up", survivor);
+    await seedDue(to - 1, "assigned");
+    await seedDue(to - 1, "converted");
+    await seedDue(null);
+
+    expect((await dashboard()).followUpsDue).toBe(0);
+  });
+
+  it.each([
+    // [now, last due instant, first not-due instant] — Brussels midnight
+    // tomorrow, which UTC's midnight would put on the wrong side.
+    ["2026-03-29T21:30:00.000Z", "2026-03-29T21:59:59.999Z", "2026-03-29T22:00:00.000Z"], // 23:30, spring DST day
+    ["2026-03-29T22:30:00.000Z", "2026-03-30T21:59:59.999Z", "2026-03-30T22:00:00.000Z"], // 00:30 the day after
+    ["2026-10-25T22:30:00.000Z", "2026-10-25T22:59:59.999Z", "2026-10-25T23:00:00.000Z"], // 23:30, autumn DST day
+    ["2026-10-25T23:30:00.000Z", "2026-10-26T22:59:59.999Z", "2026-10-26T23:00:00.000Z"], // 00:30 the day after
+  ])(
+    "at %s, today ends at Brussels midnight (I/O matrix, Brussels boundary)",
+    async (now, lastDue, firstNotDue) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.parse(now));
+      await seedDue(Date.parse(lastDue));
+      await seedDue(Date.parse(firstNotDue));
+
+      expect((await dashboard()).followUpsDue).toBe(1);
+    },
+  );
+});

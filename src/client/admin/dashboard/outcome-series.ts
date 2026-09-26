@@ -39,3 +39,21 @@ export const SERIES_INK: Record<Outcome, { light: string; dark: string; classNam
   follow_up: ON_CARD,
   converted: ON_CARD,
 };
+
+/**
+ * Dernières visites' outcome badge — docs/design.md › Tableau de bord. As in
+ * key-a1-dashboard.html: follow_up and converted read as their status badge;
+ * the three outcomes with no status colour of their own take ink on a tint
+ * plus a 4px edge in the outcome's colour, so the colour is never the only
+ * thing that separates them (the label is).
+ */
+export const OUTCOME_BADGE: Record<Outcome, string> = {
+  no_contact:
+    "bg-secondary text-foreground shadow-[inset_4px_0_0_0_var(--color-outcome-no-contact)]",
+  interested:
+    "bg-tint-outcome-interested text-foreground shadow-[inset_4px_0_0_0_var(--color-outcome-interested)]",
+  not_interested:
+    "bg-tint-outcome-not-interested text-foreground shadow-[inset_4px_0_0_0_var(--color-outcome-not-interested)]",
+  follow_up: "bg-tint-warn text-warn",
+  converted: "bg-tint-success text-success",
+};

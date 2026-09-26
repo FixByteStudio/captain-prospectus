@@ -263,6 +263,13 @@ export function useVisitsFeed() {
   const held = useRef<AdminVisit[]>([]);
   const [visits, setVisits] = useState<AdminVisit[]>([]);
   const [arrived, setArrived] = useState<string[]>([]);
+  /**
+   * Answers older than this mount are skipped. The cache entry is shared by
+   * Visites and Tableau de bord and outlives both, so on a return it holds the
+   * last *delta* page; seeding from it would turn the `since=0` refetch into
+   * a wash and an announcement for every visit (GH #113).
+   */
+  const [mountedAt] = useState(() => Date.now());
 
   const query = useQuery({
     queryKey: adminKeys.visitsFeed(),
@@ -272,8 +279,10 @@ export function useVisitsFeed() {
   });
 
   const page = query.data;
+  const answeredAt = query.dataUpdatedAt;
+  const fresh = page !== undefined && answeredAt >= mountedAt;
   useEffect(() => {
-    if (!page) return;
+    if (!page || !fresh) return;
 
     /**
      * Folded here rather than inside a `setVisits` updater, with the list
@@ -295,9 +304,17 @@ export function useVisitsFeed() {
     // rather than skipped for good.
     since.current = nextSince(merged);
     setVisits(merged);
-  }, [page]);
+    // `answeredAt` too: a refetch whose answer is unchanged keeps `page`'s
+    // reference (structural sharing) but may be this mount's first.
+  }, [page, fresh, answeredAt]);
 
-  return { visits, arrived, isPending: query.isPending, isError: query.isError };
+  return {
+    visits,
+    arrived,
+    // Still pending while only an older mount's answer is cached.
+    isPending: query.isPending || (!fresh && !query.isError),
+    isError: query.isError,
+  };
 }
 
 export function usePatchProspect() {

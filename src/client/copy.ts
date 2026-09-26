@@ -172,6 +172,32 @@ export const copy = {
       openProspects: "Prospects ouverts",
       empty: "Aucun agent pour l'instant.",
     },
+    /** À traiter (GH #113): three queues, each with its count and a way in. */
+    todo: {
+      title: "À traiter",
+      followUps: "Relances dues",
+      followUpsMeta: "À relancer aujourd'hui ou plus tôt",
+      followUpsAction: "Voir",
+      orphans: "Visites à rattacher",
+      orphansMeta: "Conservées, pas encore comptées",
+      orphansAction: "Rattacher",
+      duplicates: "Doublons",
+      duplicatesMeta: "Semblent désigner le même endroit",
+      duplicatesAction: "Fusionner",
+      pairs: (n: number) => `${formatCount(n)} ${n <= 1 ? "paire" : "paires"}`,
+    },
+    /** Dernières visites (GH #113); the rest of its copy is `visits`'. */
+    recent: {
+      title: "Dernières visites",
+      seeAll: "Tout voir",
+      time: "Heure",
+      prospect: "Prospect",
+      outcome: "Résultat",
+      flyer: "Flyer",
+      agent: "Agent",
+      /** A visit without a flyer: nothing to say, but the cell is not empty. */
+      noFlyer: "—",
+    },
     /** Follows the delta chip: "+12,4 % vs période précédente". */
     vsPrevious: "vs période précédente",
     /** Read out while the skeletons stand in for the cards. */

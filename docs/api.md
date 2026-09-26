@@ -21,7 +21,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 ## Admin
 | Route | Purpose |
 |---|---|
-| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}]}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
+| `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
 | `GET /api/admin/prospects?status=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
@@ -185,6 +185,21 @@ figures to the same response, additively.
   `OPEN_STATUSES` prospects assigned to them now, snapshots like
   `openProspects`; an unassigned prospect is in no row. Each figure is one
   grouped statement.
+- **Relances dues** (`followUpsDue`, GH #113): live `follow_up` prospects
+  whose `next_visit_at` is before `to`, Brussels midnight tomorrow — due today
+  or overdue, however long ago. A null `next_visit_at` is not due. A snapshot
+  like `openProspects`, so it ignores the period. One count on
+  `prospects_status_idx`. À traiter's other two counts are not in this
+  response: they are the queues' own endpoints, `visits.length + remaining`
+  on `GET /api/admin/visits/orphaned` and `pairs.length` on
+  `GET /api/admin/prospects/duplicates`.
+- **Cost** (as of GH #113). Ten statements run in parallel; the largest binds
+  11 parameters (INVARIANT 7), and every range read on `visits` uses
+  `visits_visited_idx`. The plans and the Worker's CPU per request are in
+  [free-tier-budget](free-tier-budget.md#watch-outs); re-check both with
+  `scripts/measure-dashboard-cpu.mjs` when a figure is added. The screen does not poll
+  this endpoint: each call reads several thousand rows on the seed, so every
+  15 s from one open tab would spend the D1 daily read quota within hours.
 
 ## The repair queue
 
