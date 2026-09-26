@@ -8,6 +8,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { ApiError, apiFetch } from "../api";
 import { copy } from "../copy";
 import { IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
+import { dueBeforeSchema, emailSchema, sourceSchema, statusListSchema } from "../../shared/schemas";
 import { arrivedIds, mergeVisits, nextSince } from "./visits/feed";
 import { batched } from "./import/csv";
 import type {
@@ -32,8 +33,10 @@ import type {
 import type { DashboardPeriod, Source, Status } from "../../shared/constants";
 
 export type ProspectFilters = {
-  status?: Status;
-  /** The literal "none" means unassigned, which the API expresses as a filter absence. */
+  /** Any of these. The API reads them comma-separated (docs/api.md). */
+  status?: Status[];
+  /** `next_visit_at < dueBefore`, epoch ms — Relances dues' own boundary. */
+  dueBefore?: number;
   assignedTo?: string;
   source?: Source;
 };
@@ -67,13 +70,42 @@ export function useDashboard(period: DashboardPeriod) {
   });
 }
 
-function toQueryString(filters: ProspectFilters): string {
+/**
+ * The one spelling of Prospects' filters, shared by the API request, the
+ * screen's own URL and the dashboard's links — so a link and the list it opens
+ * can never parse two formats.
+ */
+export function toQueryString(filters: ProspectFilters): string {
   const params = new URLSearchParams();
-  if (filters.status) params.set("status", filters.status);
+  if (filters.status?.length) params.set("status", filters.status.join(","));
+  if (filters.dueBefore !== undefined) params.set("dueBefore", String(filters.dueBefore));
   if (filters.assignedTo) params.set("assignedTo", filters.assignedTo);
   if (filters.source) params.set("source", filters.source);
   const query = params.toString();
   return query ? `?${query}` : "";
+}
+
+/** Where Prospects opens with these filters. */
+export function prospectsHref(filters: ProspectFilters): string {
+  return `/admin/prospects${toQueryString(filters)}`;
+}
+
+/**
+ * The inverse of `toQueryString`, through the API's own schemas. A value the
+ * API would 400 on is dropped rather than thrown: a hand-edited URL should show
+ * the list, less that filter, not an error screen.
+ */
+export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
+  const filters: ProspectFilters = {};
+  const status = statusListSchema.safeParse(params.get("status") ?? undefined);
+  if (status.success) filters.status = status.data;
+  const dueBefore = dueBeforeSchema.safeParse(params.get("dueBefore") ?? undefined);
+  if (dueBefore.success) filters.dueBefore = dueBefore.data;
+  const assignedTo = emailSchema.safeParse(params.get("assignedTo") ?? undefined);
+  if (assignedTo.success) filters.assignedTo = assignedTo.data;
+  const source = sourceSchema.safeParse(params.get("source") ?? undefined);
+  if (source.success) filters.source = source.data;
+  return filters;
 }
 
 export function useProspects(filters: ProspectFilters) {

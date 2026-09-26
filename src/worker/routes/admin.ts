@@ -546,13 +546,16 @@ async function conversionCounts(
 /* ---------------------------------------------------------------- prospects */
 
 adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c) => {
-  const { status, assignedTo, source, limit, offset } = c.req.valid("query");
+  const { status, dueBefore, assignedTo, source, limit, offset } = c.req.valid("query");
   const db = getDb(c.env.DB);
 
   const filters = [
     // A merged prospect is not a row the admin manages any more.
     isNull(prospects.mergedInto),
-    status ? eq(prospects.status, status) : undefined,
+    status ? inArray(prospects.status, status) : undefined,
+    // Relances dues' definition (the dashboard's followUpsDue): a null
+    // next_visit_at compares as unknown in SQL, so it is never due.
+    dueBefore !== undefined ? lt(prospects.nextVisitAt, dueBefore) : undefined,
     assignedTo ? eq(prospects.assignedTo, assignedTo) : undefined,
     source ? eq(prospects.source, source) : undefined,
   ].filter((f) => f !== undefined);

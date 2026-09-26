@@ -847,3 +847,33 @@ describe("À traiter › Relances dues (GH #113)", () => {
     },
   );
 });
+
+describe("Prospects' filtered totals match the figures they link from (GH #114)", () => {
+  async function total(query: string): Promise<number> {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { total: number }).total;
+  }
+
+  it("totals openProspects and followUpsDue on the same rows", async () => {
+    const { to } = brusselsPeriod(Date.now(), 1);
+    const due = async (nextVisitAt: number | null, mergedInto: string | null = null) => {
+      const id = await seedProspect("follow_up", mergedInto);
+      await getDb(env.DB).update(prospects).set({ nextVisitAt }).where(eq(prospects.id, id));
+      return id;
+    };
+    const survivor = await due(to - 1); // due
+    await due(to); // not yet due
+    await due(null); // undated
+    await due(to - 1, survivor); // merged
+    await seedProspect("new");
+    await seedProspect("assigned");
+    await seedProspect("converted");
+    await seedProspect("assigned", survivor); // merged, not open
+
+    const body = await dashboard();
+    expect(await total("status=new,assigned,follow_up")).toBe(body.openProspects);
+    expect(await total(`status=follow_up&dueBefore=${body.to}`)).toBe(body.followUpsDue);
+    expect(body.followUpsDue).toBe(1);
+  });
+});

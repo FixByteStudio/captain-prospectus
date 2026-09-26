@@ -198,6 +198,8 @@ export const copy = {
       /** A visit without a flyer: nothing to say, but the cell is not empty. */
       noFlyer: "—",
     },
+    /** A KPI card's name as a link (GH #114): its label and figure, not the chip. */
+    openList: (label: string, value: string) => `${label}\u00a0: ${value}. Voir la liste`,
     /** Follows the delta chip: "+12,4 % vs période précédente". */
     vsPrevious: "vs période précédente",
     /** Read out while the skeletons stand in for the cards. */
@@ -223,6 +225,13 @@ export const copy = {
       anyStatus: "Tous les statuts",
       anyAgent: "Tous les agents",
       anySource: "Toutes les sources",
+      /** A chip for a URL filter the Statut select cannot show (GH #114). */
+      severalStatuses: (labels: string[]) => `Statut\u00a0: ${labels.join(", ")}`,
+      /** `next_visit_at` strictly before that instant, named by its Brussels day. */
+      dueBefore: (date: string) => `Relance avant le ${date}`,
+      remove: (label: string) => `Retirer le filtre « ${label} »`,
+      /** The Statut select's text while the URL holds several statuses. */
+      someStatuses: "Plusieurs statuts",
     },
 
     columns: {

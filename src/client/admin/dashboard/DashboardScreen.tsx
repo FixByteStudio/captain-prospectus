@@ -3,6 +3,7 @@ import { BadgeCheck, Building, MapPin, Percent } from "lucide-react";
 import {
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
+  OPEN_STATUSES,
   type DashboardPeriod,
 } from "../../../shared/constants";
 import { copy } from "../../copy";
@@ -12,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
 import { queueCount } from "../nav";
-import { useDashboard, useDuplicates, useOrphans } from "../queries";
+import { prospectsHref, useDashboard, useDuplicates, useOrphans } from "../queries";
 import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
 import { KpiCard, KpiCardSkeleton } from "./KpiCard";
@@ -117,12 +118,16 @@ export function DashboardScreen() {
                 label={copy.dashboard.openProspects}
                 icon={Building}
                 value={formatCount(data.openProspects)}
+                to={prospectsHref({ status: [...OPEN_STATUSES] })}
                 footer={<OpenProspectsBar split={data.openProspectsByStatus} />}
               />
               <KpiCard
                 label={copy.dashboard.visits}
                 icon={MapPin}
                 value={formatCount(data.visits.value)}
+                // Unfiltered: the feed has no date range yet, so its count is
+                // not this figure (docs/design.md › Tableau de bord).
+                to="/admin/visites"
                 delta={data.visits.delta}
                 footer={<KpiSparkline byDay={data.visits.byDay} delta={data.visits.delta} />}
               />
@@ -130,6 +135,9 @@ export function DashboardScreen() {
                 label={copy.dashboard.converted}
                 icon={BadgeCheck}
                 value={formatCount(data.converted.value)}
+                // Every prospect converted now, not those converted in the
+                // period; the counts may differ (docs/design.md).
+                to={prospectsHref({ status: ["converted"] })}
                 delta={data.converted.delta}
                 footer={<KpiSparkline byDay={data.converted.byDay} delta={data.converted.delta} />}
               />
@@ -183,6 +191,11 @@ export function DashboardScreen() {
             {data ? (
               <TodoPanel
                 followUpsDue={data.followUpsDue}
+                // The instant the Worker counted followUpsDue before —
+                // brusselsPeriod(now, period).to — so Voir's list totals it.
+                // Not recomputed here: render must stay pure, and a stale
+                // answer read after midnight would disagree with its figure.
+                dueBefore={data.to}
                 orphans={orphanCount}
                 duplicates={duplicates}
               />
