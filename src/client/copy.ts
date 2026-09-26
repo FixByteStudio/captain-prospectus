@@ -645,7 +645,8 @@ export const copy = {
     optional: "facultatif",
     position: "Position",
     useMyPosition: "Utiliser ma position",
-    positionSet: (lat: string, lng: string) => `${lat}  ${lng}`,
+    /** Both already `formatCoordinate`d: "50,8466 · 4,3528". */
+    positionSet: (lat: string, lng: string) => `${lat} · ${lng}`,
     positionNone: "Aucune position enregistrée",
     positionRefresh: "Actualiser",
     save: "Ajouter",

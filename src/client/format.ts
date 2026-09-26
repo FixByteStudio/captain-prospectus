@@ -54,6 +54,20 @@ const tenth = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
 
+/** Four decimals is about 10 m, a shopfront — enough to find the door. */
+const coordinate = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 4,
+});
+
+/** One latitude or longitude: "50,8466". */
+export function formatCoordinate(n: number): string {
+  // A value that rounds to zero from below prints "-0,0000". Not
+  // `signDisplay: "negative"`: older Safari throws on it, and this formatter is
+  // built at module load.
+  return coordinate.format(n).replace(/^-(?=0,0000$)/, "");
+}
+
 /** A KPI figure: "1 284". */
 export function formatCount(n: number): string {
   return count.format(n);
