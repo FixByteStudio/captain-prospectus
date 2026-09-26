@@ -33,9 +33,8 @@ import { ScriptQuestions, questionDomId } from "./ScriptQuestions";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { apiFetch } from "../api";
-import { copy, OUTCOME_LABELS, TYPE_LABELS } from "../copy";
+import { copy, TYPE_LABELS } from "../copy";
 import { cn } from "../lib/utils";
-import { formatDate } from "../format";
 import { OUTCOMES, type Outcome } from "../../shared/constants";
 import { visitHistoryResponseSchema } from "../../shared/schemas";
 import { answerableQuestions } from "../../shared/answers";
@@ -46,6 +45,9 @@ import { useAgentPosition } from "./useAgentPosition";
 import { useRegisterDirty } from "./leave-guard";
 import { useSyncState } from "./useSync";
 import { SaveConfirmation, type SaveSummary } from "./SaveConfirmation";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { VisitHistory } from "./VisitHistory";
+import { VisitSidePane } from "./VisitSidePane";
 
 /** Ties the outcome radiogroup to its own error line (docs/design.md, "One
  * decision per screen": the message says why, the focus says where). */
@@ -56,6 +58,11 @@ export function VisitScreen() {
   const navigate = useNavigate();
   const { syncNow, identity } = useSyncState();
   const { point } = useAgentPosition();
+  // Below 768px one column; from 768px the form left and `VisitSidePane`
+  // right (spec-gh-126). Read in JS rather than `md:` classes alone, because
+  // the history moves between two slots and the pane must not mount at all
+  // on a phone — it is what loads Leaflet.
+  const isMobile = useIsMobile();
 
   /** The outbox write itself failed, so nothing is queued. */
   const [saveFailed, setSaveFailed] = useState(false);
@@ -374,7 +381,7 @@ export function VisitScreen() {
   return (
     <Form {...form}>
       <form
-        className="pb-action-bar"
+        className={isMobile ? "pb-action-bar" : "grid grid-cols-5 gap-6"}
         onSubmit={(e) =>
           void form.handleSubmit(
             (values) => {
@@ -386,206 +393,200 @@ export function VisitScreen() {
         }
         noValidate
       >
-        <header>
-          {step === "outcome" ? (
-            <BackLink />
-          ) : (
-            /* Back to step 1 with the draft intact — leaving the visit is one
+        <div className={cn(!isMobile && "col-span-3")}>
+          <header>
+            {step === "outcome" ? (
+              <BackLink />
+            ) : (
+              /* Back to step 1 with the draft intact — leaving the visit is one
                step further out, never a single stray tap (design.md). Same
                look as BackLink, since both name the place they return to. */
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground -ml-1 inline-flex min-h-touch items-center gap-2 text-sm"
-              onClick={() => setStep("outcome")}
-            >
-              <ArrowLeftIcon aria-hidden className="size-4" />
-              {copy.visit.backToOutcome}
-            </button>
-          )}
-          {/* Hidden with no questions: the one-step path must not read "1 sur 2". */}
-          {hasQuestions && <StepIndicator step={step === "outcome" ? 1 : 2} />}
-          <h2 className="mt-1 text-xl font-semibold tracking-[-0.005em]">{name ?? ""}</h2>
-          {type && <p className="text-muted-foreground text-sm">{TYPE_LABELS[type]}</p>}
-        </header>
-
-        {step === "outcome" && (
-          <>
-            <div className="border-border mt-6 border-t pt-4">
-              <FormField
-                control={form.control}
-                name="flyerGiven"
-                render={({ field }) => (
-                  <div className="border-border bg-card rounded-xl border p-4">
-                    <FieldCheckbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      hint={copy.visit.flyerHint}
-                    >
-                      {copy.visit.flyerGiven}
-                    </FieldCheckbox>
-                  </div>
-                )}
-              />
-            </div>
-
-            <div className="border-border mt-4 border-t pt-4">
-              <p className="mb-3 font-medium">{copy.visit.outcome}</p>
-              <FieldRadioGroup
-                label={copy.visit.outcome}
-                invalid={errors.outcome !== undefined}
-                aria-describedby={errors.outcome ? OUTCOME_ERROR_ID : undefined}
-                className="gap-3"
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground -ml-1 inline-flex min-h-touch items-center gap-2 text-sm"
+                onClick={() => setStep("outcome")}
               >
-                {OUTCOMES.map((option) => (
-                  <OutcomeCard
-                    key={option}
-                    outcome={option}
-                    checked={outcome === option}
-                    onSelect={(value: Outcome) => {
-                      // `withOutcome` drops a follow-up date the new outcome does
-                      // not use — see its comment for what sending one would do.
-                      const next = withOutcome(form.getValues(), value);
-                      form.setValue("outcome", next.outcome);
-                      form.setValue("followUpDate", next.followUpDate);
-                      // The date control may have just been unmounted; an error
-                      // pinned to it would block saving with nothing on screen.
-                      form.clearErrors(["outcome", "followUpDate"]);
-                    }}
-                  />
-                ))}
-              </FieldRadioGroup>
-              {errors.outcome && (
-                <p role="alert" id={OUTCOME_ERROR_ID} className="text-destructive mt-1.5 text-sm">
-                  {copy.visit.outcomeRequired}
-                </p>
-              )}
-            </div>
-
-            {/* Only for the outcome that needs it, so the form stays as short as the
-          decision allows (field-operations.md). */}
-            {outcome === "follow_up" && (
-              <FormField
-                control={form.control}
-                name="followUpDate"
-                render={({ field }) => (
-                  <FormItem className="mt-4 gap-0">
-                    <FormLabel className="text-base font-medium">{copy.visit.followUpAt}</FormLabel>
-                    <FormControl>
-                      <Input type="date" touch className="mt-1.5" {...field} />
-                    </FormControl>
-                    <FormMessage className="mt-1.5">
-                      {errors.followUpDate?.type === "invalid"
-                        ? copy.visit.followUpInvalid
-                        : copy.visit.followUpRequired}
-                    </FormMessage>
-                  </FormItem>
-                )}
-              />
+                <ArrowLeftIcon aria-hidden className="size-4" />
+                {copy.visit.backToOutcome}
+              </button>
             )}
-            {/* One screen, notes inline (docs/design.md): with no script
+            {/* Hidden with no questions: the one-step path must not read "1 sur 2". */}
+            {hasQuestions && <StepIndicator step={step === "outcome" ? 1 : 2} />}
+            <h2 className="mt-1 text-xl font-semibold tracking-[-0.005em]">{name ?? ""}</h2>
+            {type && <p className="text-muted-foreground text-sm">{TYPE_LABELS[type]}</p>}
+          </header>
+
+          {step === "outcome" && (
+            <>
+              <div className="border-border mt-6 border-t pt-4">
+                <FormField
+                  control={form.control}
+                  name="flyerGiven"
+                  render={({ field }) => (
+                    <div className="border-border bg-card rounded-xl border p-4">
+                      <FieldCheckbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        hint={copy.visit.flyerHint}
+                      >
+                        {copy.visit.flyerGiven}
+                      </FieldCheckbox>
+                    </div>
+                  )}
+                />
+              </div>
+
+              <div className="border-border mt-4 border-t pt-4">
+                <p className="mb-3 font-medium">{copy.visit.outcome}</p>
+                <FieldRadioGroup
+                  label={copy.visit.outcome}
+                  invalid={errors.outcome !== undefined}
+                  aria-describedby={errors.outcome ? OUTCOME_ERROR_ID : undefined}
+                  className="gap-3"
+                >
+                  {OUTCOMES.map((option) => (
+                    <OutcomeCard
+                      key={option}
+                      outcome={option}
+                      checked={outcome === option}
+                      onSelect={(value: Outcome) => {
+                        // `withOutcome` drops a follow-up date the new outcome does
+                        // not use — see its comment for what sending one would do.
+                        const next = withOutcome(form.getValues(), value);
+                        form.setValue("outcome", next.outcome);
+                        form.setValue("followUpDate", next.followUpDate);
+                        // The date control may have just been unmounted; an error
+                        // pinned to it would block saving with nothing on screen.
+                        form.clearErrors(["outcome", "followUpDate"]);
+                      }}
+                    />
+                  ))}
+                </FieldRadioGroup>
+                {errors.outcome && (
+                  <p role="alert" id={OUTCOME_ERROR_ID} className="text-destructive mt-1.5 text-sm">
+                    {copy.visit.outcomeRequired}
+                  </p>
+                )}
+              </div>
+
+              {/* Only for the outcome that needs it, so the form stays as short as the
+          decision allows (field-operations.md). */}
+              {outcome === "follow_up" && (
+                <FormField
+                  control={form.control}
+                  name="followUpDate"
+                  render={({ field }) => (
+                    <FormItem className="mt-4 gap-0">
+                      <FormLabel className="text-base font-medium">
+                        {copy.visit.followUpAt}
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" touch className="mt-1.5" {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1.5">
+                        {errors.followUpDate?.type === "invalid"
+                          ? copy.visit.followUpInvalid
+                          : copy.visit.followUpRequired}
+                      </FormMessage>
+                    </FormItem>
+                  )}
+                />
+              )}
+              {/* One screen, notes inline (docs/design.md): with no script
                 there is no step 2 to carry Notes, so it lives here instead —
                 once the script read has settled, so Notes never flashes here
                 and then moves to step 2 under the agent's thumb. */}
-            {script !== undefined && !hasQuestions && notesField}
-          </>
-        )}
+              {script !== undefined && !hasQuestions && notesField}
+            </>
+          )}
 
-        {step === "questions" && (
-          <>
-            {outcome === "no_contact" && (
-              /* `role="note"`: a standing hint, not an event. The Alert's own
+          {step === "questions" && (
+            <>
+              {outcome === "no_contact" && (
+                /* `role="note"`: a standing hint, not an event. The Alert's own
                  `role="alert"` would be announced as urgent on every step-2 mount,
                  and would read like the error lines under each question. */
-              <Alert role="note" className="mt-6">
-                <InfoIcon />
-                <AlertDescription className="text-base">
-                  {copy.visit.questionsOptional}
-                </AlertDescription>
-              </Alert>
-            )}
+                <Alert role="note" className="mt-6">
+                  <InfoIcon />
+                  <AlertDescription className="text-base">
+                    {copy.visit.questionsOptional}
+                  </AlertDescription>
+                </Alert>
+              )}
 
-            <div className="border-border mt-6 border-t pt-4">
-              <h3 className="font-medium">{copy.visit.questions}</h3>
-              <div className="mt-4">
-                <ScriptQuestions
-                  questions={questions}
-                  answers={answers ?? {}}
-                  errors={answerErrors}
-                  onChange={(next: Answers) =>
-                    form.setValue("answers", next, { shouldValidate: false })
-                  }
-                />
+              <div className="border-border mt-6 border-t pt-4">
+                <h3 className="font-medium">{copy.visit.questions}</h3>
+                <div className="mt-4">
+                  <ScriptQuestions
+                    questions={questions}
+                    answers={answers ?? {}}
+                    errors={answerErrors}
+                    onChange={(next: Answers) =>
+                      form.setValue("answers", next, { shouldValidate: false })
+                    }
+                  />
+                </div>
               </div>
-            </div>
 
-            {notesField}
-          </>
-        )}
+              {notesField}
+            </>
+          )}
 
-        {step === "outcome" && (
-          <section className="border-border mt-8 border-t pt-4">
-            <h3 className="text-muted-foreground text-sm font-medium">
-              {copy.visit.previousVisits}
-            </h3>
-            {history.length === 0 ? (
-              <p className="text-muted-foreground mt-2 text-sm">{copy.visit.noPreviousVisits}</p>
-            ) : (
-              <ul className="divide-border mt-2 divide-y">
-                {history.map((entry) => (
-                  <li key={entry.id} className="py-2">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <span className="text-muted-foreground text-sm">
-                        {formatDate(entry.visitedAt)}
-                      </span>
-                      <span className="text-sm font-medium">{OUTCOME_LABELS[entry.outcome]}</span>
-                    </div>
-                    {/* What the last agent wrote is the reason this section exists
-                    (field-operations.md): "ferme le lundi" is the difference
-                    between a wasted walk and a kept appointment. */}
-                    {entry.notes && (
-                      <p className="text-muted-foreground mt-1 text-sm whitespace-pre-line">
-                        {entry.notes}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
+          {/* Below 768px the history sits under step 1; from 768px it lives in
+            the side pane instead, on both steps (spec-gh-126). */}
+          {isMobile && step === "outcome" && (
+            <VisitHistory history={history} className="border-border mt-8 border-t pt-4" />
+          )}
 
-        {/* Sticky, because the outcome list is taller than a phone and the action
+          {/* Sticky, because the outcome list is taller than a phone and the action
             should not require scrolling back past it. `.above-tab-bar` sits
             it directly above the tab bar below 768px rather than under it
             (app.css); at that size the tab bar itself owns the safe-area
             inset, so this carries only its own breathing room. */}
-        <div className="above-tab-bar bg-background border-border fixed inset-x-0 border-t px-4 pt-3">
-          {/* An action keeps its name through the flow, so « Enregistrer la
+          <div
+            className={cn(
+              "above-tab-bar bg-background border-border border-t pt-3",
+              // From 768px there is no tab bar to clear, and a bar across the
+              // whole viewport would sit under the side pane too: it sticks to
+              // the bottom of the form's own column instead.
+              isMobile ? "fixed inset-x-0 px-4" : "sticky mt-6",
+            )}
+          >
+            {/* An action keeps its name through the flow, so « Enregistrer la
               visite » appears only on the screen that actually saves. */}
-          {step === "outcome" && hasQuestions ? (
-            /* `key` is load-bearing: without it React reconciles both branches
+            {step === "outcome" && hasQuestions ? (
+              /* `key` is load-bearing: without it React reconciles both branches
                to the same <button> node, and a node that has been type="submit"
                on step 2 keeps submitting when step 1 renders it as
                type="button" again — tapping « Continuer » saved the visit. */
-            <button
-              key="continue"
-              type="button"
-              className={cn(buttonVariants({ size: "touch" }), "w-full")}
-              onClick={() => void goToQuestions()}
-            >
-              {copy.visit.continue}
-            </button>
-          ) : (
-            <button
-              key="save"
-              ref={saveButtonRef}
-              type="submit"
-              className={cn(buttonVariants({ size: "touch" }), "w-full")}
-            >
-              {copy.visit.save}
-            </button>
-          )}
+              <button
+                key="continue"
+                type="button"
+                className={cn(buttonVariants({ size: "touch" }), "w-full")}
+                onClick={() => void goToQuestions()}
+              >
+                {copy.visit.continue}
+              </button>
+            ) : (
+              <button
+                key="save"
+                ref={saveButtonRef}
+                type="submit"
+                className={cn(buttonVariants({ size: "touch" }), "w-full")}
+              >
+                {copy.visit.save}
+              </button>
+            )}
+          </div>
         </div>
+
+        {!isMobile && id && (
+          <VisitSidePane
+            prospectId={id}
+            history={history}
+            className="sticky top-4 col-span-2 self-start"
+          />
+        )}
       </form>
 
       <SaveConfirmation

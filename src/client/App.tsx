@@ -63,7 +63,8 @@ const AddProspectScreen = lazy(() =>
   import("./field/AddProspectScreen").then((module) => ({ default: module.AddProspectScreen })),
 );
 /**
- * Leaflet lives in this chunk (RoundMap.tsx), not the entry one (ADR-0026):
+ * Leaflet is reached through this chunk (RoundMap.tsx, which the visit's
+ * tablet pane also loads lazily, spec-gh-126), not the entry one (ADR-0026):
  * an agent who never opens Carte should not have it block the round's first
  * paint. It is still precached regardless (spec-gh-121, VitePWA's
  * globPatterns), so "lazy" here means off the first paint, not off the
