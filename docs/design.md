@@ -299,7 +299,9 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   Across the bottom, 10px under the delta row, is a 32px row (GH #111):
   - **Visites and Convertis** get a sparkline with one point per day
     of the period (`byDay`, [api.md](api.md#the-dashboard)). It is a 2px line
-    from 0 with no axis, dot, tooltip or animation, and its colour is the
+    scaled to the period's own min and max, so its shape fills the row as in
+    the mockup, and a flat series sits at mid-height. The bars keep a zero
+    baseline. It has no axis, dot, tooltip or animation, and its colour is the
     chip's tone: `success` up, `destructive` down, `muted-foreground` flat or
     "—". A green line never sits under a red chip. It is decorative
     (`aria-hidden`), since the figure says the value.
