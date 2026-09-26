@@ -199,6 +199,24 @@ describe("DashboardScreen", () => {
     expect(chip(copy.dashboard.conversionRate).dataset.variant).toBe("tint-success");
   });
 
+  it("links three cards to their lists, named by label and figure (GH #114)", async () => {
+    stubFetch((period) => json(answer(period)));
+    renderScreen();
+    await screen.findByText("300");
+
+    const link = (label: string, value: string) =>
+      screen
+        .getByRole("link", { name: copy.dashboard.openList(label, value) })
+        .getAttribute("href");
+    expect(link(copy.dashboard.openProspects, "1\u202f284")).toBe(
+      "/admin/prospects?status=new%2Cassigned%2Cfollow_up",
+    );
+    expect(link(copy.dashboard.visits, "300")).toBe("/admin/visites");
+    expect(link(copy.dashboard.converted, "32")).toBe("/admin/prospects?status=converted");
+    // Taux de conversion has no list behind it.
+    expect(card(copy.dashboard.conversionRate).closest("a")).toBeNull();
+  });
+
   it("lists the pipeline with each status's count and share (GH #112)", async () => {
     stubFetch((period) => json(answer(period)));
     renderScreen();
@@ -504,7 +522,8 @@ describe("DashboardScreen", () => {
     await user.click(screen.getByRole("radio", { name: copy.dashboard.periods[7] }));
 
     expect(screen.getByText("300")).toBeTruthy();
-    const grid = card(copy.dashboard.visits).parentElement;
+    // The card sits in its link (GH #114); the grid is the nearest busy region.
+    const grid = card(copy.dashboard.visits).closest("[aria-busy]");
     expect(grid?.getAttribute("aria-busy")).toBe("true");
     // The screen's own region; Dernières visites has its own, polite one.
     const status = screen.getAllByRole("status").find((el) => !el.hasAttribute("aria-live"));
@@ -593,7 +612,10 @@ describe("DashboardScreen › À traiter (GH #113)", () => {
       within(todoRow(t.followUps))
         .getByRole("link", { name: t.followUpsAction })
         .getAttribute("href"),
-    ).toBe("/admin/prospects");
+    ).toBe(
+      // The answer's own `to` (1 here), so the list's total is this count (GH #114).
+      "/admin/prospects?status=follow_up&dueBefore=1",
+    );
     // The page plus the rows past it: 2 + 3.
     await waitFor(() => expect(within(todoRow(t.orphans)).getByText("5")).toBeTruthy());
     expect(

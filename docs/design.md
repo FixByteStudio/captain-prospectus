@@ -293,6 +293,14 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   period). The figure is signed, with a real minus: "+12,4 %", "−3,0 %".
   Prospects ouverts is a snapshot, so it has no delta row; an empty row of
   the same height keeps its figure level with its neighbours'.
+  Three cards are one link each to the list behind the figure (GH #114),
+  named "{label} : {figure}. Voir la liste", with the `ring` focus ring and a
+  faint `accent` wash on hover: Prospects ouverts to Prospects filtered
+  `status=new,assigned,follow_up`, whose total is the figure; Visites to
+  Visites, unfiltered, since the feed has no date range yet and its count is
+  not the period's; Convertis to Prospects `status=converted`, every prospect
+  converted now rather than those converted in the period, so the two counts
+  may differ. Taux de conversion has no list and is not a link.
   Taux de conversion's figure is a percentage with one decimal, "10,6 %", or
   "—" when nothing was visited; its chip is in points, "+1,2 pt", "−0,4 pt",
   toned by the same rounding.
@@ -352,15 +360,16 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   then one 44px row per agent. There is no users table (ADR-0006), so the
   agent cell is a 26px `secondary` circle with the email's uppercase initial,
   then the email. Numbers are right-aligned tabular figures; Convertis is
-  `success` semibold and À relancer `warn` semibold. Rows are not links yet
-  (story 10). The table scrolls sideways inside its card at 390 px. With no
+  `success` semibold and À relancer `warn` semibold. Rows are not links.
+  The table scrolls sideways inside its card at 390 px. With no
   agent, the card says "Aucun agent pour l'instant."
 - **À traiter** (GH #113). The 3:2 row's right part; under the table below
   lg. A `Card` titled in `text-heading` with three rows split by `border`
   lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`), the
   label with a meta line under it, the count in semibold tabular figures, and
   a small `secondary` Button. Relances dues, "À relancer aujourd'hui ou plus
-  tôt", "Voir" to Prospects (unfiltered until story 10); Visites à
+  tôt", "Voir" to Prospects filtered `status=follow_up&dueBefore={to}` — the
+  dashboard's own boundary, so the list totals the count; Visites à
   rattacher, "Conservées, pas encore comptées", "Rattacher" to À rattacher;
   Doublons, "Semblent désigner le même endroit", "{n} paires", "Fusionner" to
   Doublons. The last two counts come from the sidebar's own queries, with no
@@ -410,6 +419,16 @@ can I do right now".
 │ Statut ▾   Agent ▾   Source ▾                412 prospects │   nothing selected
 │ 12 sélectionnés   [Assigner à ▾]  [Désassigner]    Annuler │   selection
 ```
+
+On Prospects the filters live in the URL (GH #114), so a reload, a shared link
+or a dashboard card opens the same list; a change replaces the URL rather than
+pushing a history entry, and clears the selection. A filter the selects cannot
+show — several statuses, or a due date — stays in the slot as a `secondary`
+Badge chip ("Statut : Nouveau, Assigné, À relancer", "Relance avant le
+28 septembre 2026", a Brussels day) with a ghost × that drops just that filter;
+with several statuses the Statut select reads "Plusieurs statuts", and choosing
+"Tous les statuts" there clears them. A URL change from anywhere, Back or the
+sidebar included, empties the selection. "Effacer les filtres" clears the URL.
 
 ### The script editor
 
