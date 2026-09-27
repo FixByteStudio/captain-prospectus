@@ -63,6 +63,20 @@ describe("Prospects' URL filters (GH #114)", () => {
     expect(prospectsHref({})).toBe("/admin/prospects");
   });
 
+  it("carries `q` last, so it never disturbs an existing URL's own order (#179)", () => {
+    const filters = { status: ["new" as const], q: "bistro" };
+    const query = toQueryString(filters);
+    expect(query).toBe("?status=new&q=bistro");
+    expect(parse(query.slice(1))).toEqual(filters);
+  });
+
+  it("drops a blank or over-long `q` rather than sending it", () => {
+    expect(parse("q=")).toEqual({});
+    expect(parse("q=%20%20%20")).toEqual({});
+    expect(parse(`q=${"a".repeat(201)}`)).toEqual({});
+    expect(parse("q=bistro")).toEqual({ q: "bistro" });
+  });
+
   it("collapses duplicate statuses", () => {
     expect(parse("status=new,new")).toEqual({ status: ["new"] });
   });

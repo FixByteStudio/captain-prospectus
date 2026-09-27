@@ -9,9 +9,16 @@ import { ApiError, apiFetch } from "../api";
 import { copy } from "../copy";
 import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
-import { dueBeforeSchema, emailSchema, sourceSchema, statusListSchema } from "../../shared/schemas";
+import {
+  dueBeforeSchema,
+  emailSchema,
+  searchQuerySchema,
+  sourceSchema,
+  statusListSchema,
+} from "../../shared/schemas";
 import { arrivedIds, mergeVisits, nextSince } from "./visits/feed";
 import { batched } from "./import/csv";
+import { PAGE_SIZE } from "./pagination";
 import type {
   AdminVisit,
   AdminVisitsResponse,
@@ -40,6 +47,8 @@ export type ProspectFilters = {
   dueBefore?: number;
   assignedTo?: string;
   source?: Source;
+  /** Name substring search (G4, #176) — trimmed, 1–200 chars; blank never sent. */
+  q?: string;
 };
 
 /** One factory, so an invalidation can never miss a key by spelling it differently. */
@@ -82,6 +91,7 @@ export function toQueryString(filters: ProspectFilters): string {
   if (filters.dueBefore !== undefined) params.set("dueBefore", String(filters.dueBefore));
   if (filters.assignedTo) params.set("assignedTo", filters.assignedTo);
   if (filters.source) params.set("source", filters.source);
+  if (filters.q) params.set("q", filters.q);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -111,13 +121,29 @@ export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
   if (assignedTo.success) filters.assignedTo = assignedTo.data;
   const source = sourceSchema.safeParse(params.get("source") ?? undefined);
   if (source.success) filters.source = source.data;
+  const q = searchQuerySchema.safeParse(params.get("q") ?? undefined);
+  if (q.success) filters.q = q.data;
   return filters;
 }
 
-export function useProspects(filters: ProspectFilters) {
+/**
+ * Server-side paging (#179): the list endpoint already returns `total`, and
+ * holding 200 rows to show 25 would bill scanned rows for nothing. `page` is
+ * the last segment of the query key, after `adminKeys.prospects(filters)`, so
+ * a page change gets its own cache entry while an invalidation against the
+ * shorter `["admin", "prospects"]` prefix still reaches every page.
+ */
+export function useProspects(filters: ProspectFilters, page: number) {
   return useQuery({
-    queryKey: adminKeys.prospects(filters),
-    queryFn: () => apiFetch<ProspectsResponse>(`/api/admin/prospects${toQueryString(filters)}`),
+    queryKey: [...adminKeys.prospects(filters), page],
+    queryFn: () => {
+      const offset = (page - 1) * PAGE_SIZE;
+      const params = new URLSearchParams(toQueryString(filters).slice(1));
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(offset));
+      return apiFetch<ProspectsResponse>(`/api/admin/prospects?${params}`);
+    },
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -404,15 +430,23 @@ export function useVisitsFeed(period?: DashboardPeriod) {
  *
  * Resolves to whether the server flagged `x-truncated`, so the caller can warn
  * about the row cap without re-parsing headers itself.
+ *
+ * `failed` is the caller's own French string for a failed request — Visites'
+ * and Prospects' (#179) exports each read differently — so this helper never
+ * hardcodes one screen's copy.
  */
-export async function downloadCsv(path: string, filenameFallback: string): Promise<boolean> {
+export async function downloadCsv(
+  path: string,
+  filenameFallback: string,
+  failed: string,
+): Promise<boolean> {
   const response = await fetch(path, { redirect: "manual" });
 
   if (response.type === "opaqueredirect" || response.status === 401) {
     throw new ApiError(401, "auth", copy.errors.sessionExpired);
   }
   if (!response.ok) {
-    throw new ApiError(response.status, "error", copy.visits.export.failed);
+    throw new ApiError(response.status, "error", failed);
   }
 
   const truncated = response.headers.get("x-truncated") === "true";

@@ -8,35 +8,69 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, MemoryRouter, useLocation, useNavigate } from "react-router";
+import { EXPORT_ROWS } from "../../shared/constants";
 import { STATUS_LABELS, copy } from "../copy";
 import { formatBrusselsDate } from "../format";
 import type { Prospect } from "../../shared/schemas";
 import { createAdminQueryClient } from "./query-client";
 import { ProspectsScreen } from "./ProspectsScreen";
+import { Toaster } from "../ui/sonner";
 
-function json(body: unknown): Response {
+/** happy-dom's own `matchMedia` matches a 1024px-wide desktop by default. */
+function setMobile(mobile: boolean) {
+  return vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: mobile && query === "(width < 768px)",
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
+function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { "Content-Type": "application/json" },
   });
 }
 
 /** Records every prospects request; the roster answers with one agent. */
-function stubFetch(rows: Prospect[] = [], total = 13) {
+function stubFetch(
+  rows: Prospect[] = [],
+  total = 13,
+  options: { exportCsv?: (url: URL) => Response } = {},
+) {
   const asked: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith("/api/admin/agents")) {
+      const url = new URL(String(input), "http://admin");
+      if (url.pathname === "/api/admin/agents") {
         return json({ agents: [{ email: "lea@example.com", role: "agent" }] });
       }
-      asked.push(url);
+      if (url.pathname === "/api/admin/prospects/export.csv") {
+        asked.push(url.pathname + url.search);
+        return (options.exportCsv ?? (() => json({}, 500)))(url);
+      }
+      // Paging (#179) appends limit/offset to every list request; existing
+      // assertions here are about the filters, not the page, so they are
+      // stripped before recording what was asked. Tests that care about the
+      // page read `askedRaw` instead.
+      const stripped = new URL(url);
+      stripped.searchParams.delete("limit");
+      stripped.searchParams.delete("offset");
+      asked.push(stripped.pathname + stripped.search);
+      askedRaw.push(url.pathname + url.search);
       return json({ prospects: rows, total });
     }),
   );
   return asked;
 }
+
+/** Every prospects list request, limit/offset included — reset per test. */
+let askedRaw: string[] = [];
 
 /** Where the router is now, and two ways to leave from outside the screen. */
 function Location() {
@@ -46,6 +80,7 @@ function Location() {
     <>
       <output data-testid="location">{location.pathname + location.search}</output>
       <Link to="/admin/prospects">sidebar</Link>
+      <Link to="/admin/prospects?status=assigned">status-filter</Link>
       <button onClick={() => void navigate(-1)}>back</button>
     </>
   );
@@ -78,9 +113,11 @@ function renderAt(...entries: string[]) {
       <QueryClientProvider client={client}>
         <ProspectsScreen />
         <Location />
+        <Toaster />
       </QueryClientProvider>
     </MemoryRouter>,
   );
+  return client;
 }
 
 const location = () => screen.getByTestId("location").textContent;
@@ -88,6 +125,8 @@ const statusSelect = () => screen.getByRole("combobox", { name: copy.prospects.f
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  askedRaw = [];
 });
 
 describe("ProspectsScreen › URL filters", () => {
@@ -144,7 +183,7 @@ describe("ProspectsScreen › URL filters", () => {
   });
 
   it("clears every filter from the URL", async () => {
-    stubFetch();
+    stubFetch([], 0);
     renderAt("/admin/prospects?status=converted&dueBefore=5&source=osm");
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: copy.prospects.clearFilters }));
@@ -174,12 +213,11 @@ describe("ProspectsScreen › URL filters", () => {
   });
 
   it("replaces the history entry rather than pushing one", async () => {
-    stubFetch();
+    stubFetch([], 0);
     renderAt("/admin", "/admin/prospects?status=converted");
-    await screen.findByText(copy.prospects.count(13));
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: copy.prospects.clearFilters }));
+    await user.click(await screen.findByRole("button", { name: copy.prospects.clearFilters }));
     expect(location()).toBe("/admin/prospects");
 
     await user.click(screen.getByRole("button", { name: "back" }));
@@ -207,5 +245,390 @@ describe("ProspectsScreen › URL filters", () => {
     renderAt("/admin/prospects");
 
     expect(screen.getByRole("heading", { level: 2, name: copy.prospects.title })).toBeTruthy();
+  });
+});
+
+describe("ProspectsScreen › search (#179)", () => {
+  it("writes ?q= after the debounce and asks for it", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("searchbox", { name: copy.prospects.search.label }), "bistro");
+
+    await waitFor(() => expect(location()).toBe("/admin/prospects?q=bistro"), { timeout: 2000 });
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects?q=bistro"));
+  });
+
+  it("drops `q` from the URL and the request when the box is cleared", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects?q=bistro");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.clear(screen.getByRole("searchbox", { name: copy.prospects.search.label }));
+
+    await waitFor(() => expect(location()).toBe("/admin/prospects"), { timeout: 2000 });
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects"));
+  });
+
+  it("never sends a blank search", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects?q=bistro");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    const box = screen.getByRole("searchbox", { name: copy.prospects.search.label });
+    await user.clear(box);
+    await user.type(box, "   ");
+
+    await waitFor(() => expect(location()).toBe("/admin/prospects"), { timeout: 2000 });
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects"));
+    expect(asked.filter((url) => url.includes("q="))).toEqual(["/api/admin/prospects?q=bistro"]);
+  });
+
+  it("opens a deep link with `q` and its status filter both in the box and the request", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects?status=converted&q=L%C3%A9a");
+
+    await screen.findByText(copy.prospects.count(13));
+    const box = screen.getByRole("searchbox", {
+      name: copy.prospects.search.label,
+    }) as HTMLInputElement;
+    expect(box.value).toBe("Léa");
+    expect(asked).toEqual(["/api/admin/prospects?status=converted&q=L%C3%A9a"]);
+  });
+
+  it("coalesces a typed word into exactly one request carrying `q=`", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("searchbox", { name: copy.prospects.search.label }), "bistro");
+
+    await waitFor(() => expect(location()).toBe("/admin/prospects?q=bistro"), { timeout: 2000 });
+    expect(asked.filter((url) => url.includes("q="))).toEqual(["/api/admin/prospects?q=bistro"]);
+  });
+
+  it("keeps a select changed inside the debounce window, and still carries `q`", async () => {
+    stubFetch();
+    renderAt("/admin/prospects?source=osm");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("searchbox", { name: copy.prospects.search.label }), "b");
+    // Before the 300ms debounce fires: a select change must not be lost under
+    // it (the timer reads `latestFilters`, not the filters as they were at
+    // the keystroke).
+    await user.click(statusSelect());
+    await user.click(await screen.findByRole("option", { name: STATUS_LABELS.assigned }));
+
+    await waitFor(
+      () => expect(location()).toBe("/admin/prospects?status=assigned&source=osm&q=b"),
+      { timeout: 2000 },
+    );
+  });
+
+  it("does not undo an outside navigation that lands inside the debounce window", async () => {
+    stubFetch();
+    // Starts on a filtered URL, so the sidebar's plain "/admin/prospects" is
+    // an actual change the pending debounce write must not be able to undo.
+    renderAt("/admin/prospects?status=converted");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("searchbox", { name: copy.prospects.search.label }), "bistro");
+    // Leaves before the 300ms debounce has a chance to fire.
+    await user.click(screen.getByRole("link", { name: "sidebar" }));
+
+    expect(location()).toBe("/admin/prospects");
+    // The debounce firing late must not write "bistro" back over the nav.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(location()).toBe("/admin/prospects");
+    expect(
+      (screen.getByRole("searchbox", { name: copy.prospects.search.label }) as HTMLInputElement)
+        .value,
+    ).toBe("");
+  });
+});
+
+describe("ProspectsScreen › pagination (#179)", () => {
+  it("pages over the server's own total, disables the ends, and shows the range", async () => {
+    stubFetch(
+      Array.from({ length: 13 }, (_, i) => prospect(`p${i}`, `Prospect ${i}`)),
+      60,
+    );
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(60));
+    expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=0");
+    expect(screen.getByText(copy.prospects.range(1, 25, 60))).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: copy.prospects.pager.previous }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: copy.prospects.pager.next }));
+
+    await waitFor(() => expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=25"));
+    expect(await screen.findByText(copy.prospects.range(26, 50, 60))).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: copy.prospects.pager.next }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: copy.prospects.pager.next }));
+    await waitFor(() => expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=50"));
+    expect(await screen.findByText(copy.prospects.range(51, 60, 60))).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: copy.prospects.pager.next }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("clears the selection when the page turns", async () => {
+    stubFetch(
+      Array.from({ length: 25 }, (_, i) => prospect(`p${i}`, `Prospect ${i}`)),
+      60,
+    );
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(60));
+
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("checkbox", {
+        name: copy.prospects.selection.selectOne("Prospect 0"),
+      }),
+    );
+    expect(screen.getByText(copy.prospects.selection.count(1))).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: copy.prospects.pager.next }));
+
+    await waitFor(() => expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=25"));
+    expect(screen.queryByText(copy.prospects.selection.count(1))).toBeNull();
+  });
+
+  it("returns to page 1 and clears the selection when a filter changes on page 2", async () => {
+    stubFetch(
+      Array.from({ length: 25 }, (_, i) => prospect(`p${i}`, `Prospect ${i}`)),
+      60,
+    );
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(60));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: copy.prospects.pager.next }));
+    await waitFor(() => expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=25"));
+
+    await user.click(
+      await screen.findByRole("checkbox", {
+        name: copy.prospects.selection.selectOne("Prospect 0"),
+      }),
+    );
+    expect(screen.getByText(copy.prospects.selection.count(1))).toBeTruthy();
+
+    // A status filter picked elsewhere (a chip's cross, a dashboard link) —
+    // simulated here as a plain navigation, since the Statut select itself is
+    // hidden by the selection toolbar while something is ticked.
+    await user.click(screen.getByRole("link", { name: "status-filter" }));
+
+    await waitFor(() =>
+      expect(askedRaw.at(-1)).toBe("/api/admin/prospects?status=assigned&limit=25&offset=0"),
+    );
+    expect(screen.queryByText(copy.prospects.selection.count(1))).toBeNull();
+  });
+
+  it("clamps to the last page that still exists when a refetch shrinks the total", async () => {
+    let total = 60;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "http://admin");
+        if (url.pathname === "/api/admin/agents") return json({ agents: [] });
+        askedRaw.push(url.pathname + url.search);
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        // An out-of-range page answers empty, as the real endpoint does past
+        // its own total — a stub that always answers a row would pass this
+        // test even without a clamp.
+        const prospects = offset >= total ? [] : [prospect("p0", "Prospect 0")];
+        return json({ prospects, total });
+      }),
+    );
+    const client = renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(60));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: copy.prospects.pager.pageLabel(3) }));
+    expect(await screen.findByText(copy.prospects.range(51, 60, 60))).toBeTruthy();
+
+    // The last row of page 3 re-statused out: every mutation invalidates the
+    // prospects prefix (useInvalidateProspects), and the refetch answers 50.
+    total = 50;
+    await client.invalidateQueries({ queryKey: ["admin", "prospects"] });
+
+    expect(await screen.findByText(copy.prospects.range(26, 50, 50))).toBeTruthy();
+    expect(screen.queryByText(copy.prospects.empty)).toBeNull();
+    expect(screen.queryByText(copy.prospects.noMatchFilters)).toBeNull();
+    // The invalidated page-3 query refetches once more at its own offset
+    // (now empty, since offset ≥ the shrunk total) before the clamp moves to
+    // page 2 — but no further, straggling offset=50 request after that.
+    expect(askedRaw.filter((u) => u === "/api/admin/prospects?limit=25&offset=50")).toHaveLength(2);
+    expect(askedRaw.at(-1)).toBe("/api/admin/prospects?limit=25&offset=25");
+  });
+
+  it("shows no pager when the total fits on one page", async () => {
+    stubFetch([prospect("a", "Chez Léa")], 13);
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    expect(screen.queryByRole("navigation", { name: copy.prospects.pager.nav })).toBeNull();
+  });
+});
+
+describe("ProspectsScreen › empty states (#179)", () => {
+  it("invites a CSV import when there are no prospects at all", async () => {
+    stubFetch([], 0);
+    renderAt("/admin/prospects");
+
+    expect(await screen.findByText(copy.prospects.empty)).toBeTruthy();
+    // Two: the header's own action and the empty state's — both go to Import.
+    expect(screen.getAllByRole("link", { name: copy.prospects.importCta })).toHaveLength(2);
+  });
+
+  it("names the search when it matches nothing, and offers to clear it", async () => {
+    stubFetch([], 0);
+    renderAt("/admin/prospects?q=zzz");
+
+    expect(await screen.findByText(copy.prospects.noMatch)).toBeTruthy();
+    expect(screen.getByText(copy.prospects.noMatchSearch("zzz"))).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.prospects.clearFilters })).toBeTruthy();
+    expect(screen.queryByText(copy.prospects.empty)).toBeNull();
+  });
+
+  it("clears the search box along with the URL on « Effacer les filtres »", async () => {
+    stubFetch([], 0);
+    renderAt("/admin/prospects?q=zzz");
+    await screen.findByText(copy.prospects.noMatchSearch("zzz"));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.clearFilters }));
+
+    expect(location()).toBe("/admin/prospects");
+    expect(
+      (screen.getByRole("searchbox", { name: copy.prospects.search.label }) as HTMLInputElement)
+        .value,
+    ).toBe("");
+  });
+
+  it("says a filter matched nothing without naming a search", async () => {
+    stubFetch([], 0);
+    renderAt("/admin/prospects?status=rejected");
+
+    expect(await screen.findByText(copy.prospects.noMatchFilters)).toBeTruthy();
+  });
+});
+
+describe("ProspectsScreen › load failed (#179)", () => {
+  it("shows the shared Alert and refetches on « Réessayer »", async () => {
+    let fail = true;
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/admin/agents")) return json({ agents: [] });
+        asked.push(url);
+        return fail ? json({ error: "boom" }, 500) : json({ prospects: [], total: 4 });
+      }),
+    );
+    renderAt("/admin/prospects");
+
+    expect(await screen.findByText(copy.prospects.loadFailed)).toBeTruthy();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: copy.errors.retry }));
+
+    expect(await screen.findByText(copy.prospects.count(4))).toBeTruthy();
+    expect(asked.length).toBe(2);
+  });
+});
+
+describe("ProspectsScreen › export (#179)", () => {
+  it("exports the same filters as a CSV, and warns when the server truncated it", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prospects");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const asked = stubFetch([], 13, {
+      exportCsv: () =>
+        new Response("name\n", {
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="prospects-2026-09-27.csv"',
+            "x-truncated": "true",
+          },
+        }),
+    });
+    renderAt("/admin/prospects?status=converted");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
+    expect(await screen.findByText(copy.prospects.export.truncated(EXPORT_ROWS))).toBeTruthy();
+    expect(click).toHaveBeenCalledTimes(1);
+    const anchor = click.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe("prospects-2026-09-27.csv");
+    expect(asked).toContain("/api/admin/prospects/export.csv?status=converted");
+  });
+
+  it("exports the search along with the other filters", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prospects");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const asked = stubFetch([], 13, {
+      exportCsv: () => new Response("name\n", { headers: { "content-type": "text/csv" } }),
+    });
+    renderAt("/admin/prospects?q=bistro");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
+    await waitFor(() => expect(asked).toContain("/api/admin/prospects/export.csv?q=bistro"));
+  });
+
+  it("warns that the session expired on a 401", async () => {
+    stubFetch([], 13, { exportCsv: () => json({}, 401) });
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
+    expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+  });
+
+  it("warns that the export failed on a server error", async () => {
+    stubFetch([], 13, { exportCsv: () => json({}, 500) });
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
+    expect(await screen.findByText(copy.prospects.export.failed)).toBeTruthy();
+  });
+});
+
+describe("ProspectsScreen › below 768px (#179)", () => {
+  it("renders a list of rows instead of a table", async () => {
+    const restore = setMobile(true);
+    stubFetch([prospect("a", "Chez Léa")], 1);
+    renderAt("/admin/prospects");
+
+    await screen.findByText("Chez Léa");
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(
+      screen.getByRole("checkbox", { name: copy.prospects.selection.selectOne("Chez Léa") }),
+    ).toBeTruthy();
+    expect(screen.getByText(STATUS_LABELS.assigned)).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.prospects.row.menu("Chez Léa") })).toBeTruthy();
+    restore.mockRestore();
   });
 });

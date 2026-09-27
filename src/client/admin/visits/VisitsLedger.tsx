@@ -4,19 +4,11 @@ import { OUTCOME_TO_STATUS } from "../../../shared/constants";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "../../ui/pagination";
 import { Surface } from "../Surface";
+import { Pager } from "../Pager";
 import { STATUS_EDGE, STATUS_TEXT } from "../status";
 import type { useVisitsFeed } from "../queries";
-import { PAGE_SIZE, pageCount, pageItems, pageSlice } from "../pagination";
+import { PAGE_SIZE, pageCount, pageSlice } from "../pagination";
 
 /**
  * The ledger half of Visites — ADR-0010, docs/design.md › "The live feed".
@@ -75,59 +67,18 @@ export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> 
               ))}
             </ul>
           </Surface>
-          {total > 1 && <VisitsPager page={current} total={total} onChange={changePage} />}
+          {total > 1 && (
+            <Pager
+              page={current}
+              total={total}
+              onChange={changePage}
+              labels={copy.visits.pager}
+              className="mt-4"
+            />
+          )}
         </>
       )}
     </div>
-  );
-}
-
-function VisitsPager({
-  page,
-  total,
-  onChange,
-}: {
-  page: number;
-  total: number;
-  onChange: (page: number) => void;
-}) {
-  const t = copy.visits.pager;
-  return (
-    <Pagination aria-label={t.nav} className="mt-4">
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            label={t.previous}
-            disabled={page <= 1}
-            onClick={() => onChange(Math.max(1, page - 1))}
-          />
-        </PaginationItem>
-        {pageItems(page, total).map((item, i) =>
-          item === "ellipsis" ? (
-            <PaginationItem key={`ellipsis-${i}`}>
-              <PaginationEllipsis label={t.morePages} />
-            </PaginationItem>
-          ) : (
-            <PaginationItem key={item}>
-              <PaginationLink
-                isActive={item === page}
-                aria-label={t.pageLabel(item)}
-                onClick={() => onChange(item)}
-              >
-                {item}
-              </PaginationLink>
-            </PaginationItem>
-          ),
-        )}
-        <PaginationItem>
-          <PaginationNext
-            label={t.next}
-            disabled={page >= total}
-            onClick={() => onChange(Math.min(total, page + 1))}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
   );
 }
 

@@ -78,6 +78,7 @@ function VisitsScreenBody({
       const truncated = await downloadCsv(
         `/api/admin/visits/export.csv?from=${bounds.from}&to=${bounds.to - 1}`,
         "visites.csv",
+        copy.visits.export.failed,
       );
       if (truncated) toast.warning(copy.visits.export.truncated(EXPORT_ROWS));
     } catch (error) {
