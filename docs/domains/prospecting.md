@@ -90,7 +90,9 @@ A rename slips past the dedupe key, so the same place ends up as two prospects a
 ## Export
 
 `GET /api/admin/prospects/export.csv` hands the ledger to a spreadsheet, filtered
-exactly as the list screen filters it and excluding merged prospects like every
-other list. Timestamps become ISO-8601 and the file carries the OSM attribution
-on its last line (`docs/api.md`). There is no download button yet — the endpoint
+exactly as the list screen filters it — status, due date, assignee, source and
+name search (`q`) alike, drawn from the one filter schema the list uses so the
+two cannot diverge — and excluding merged prospects like every other list.
+Timestamps become ISO-8601 and the file carries the OSM attribution on its
+last line (`docs/api.md`). There is no download button yet — the endpoint
 ships first, the screen needs a design pass.

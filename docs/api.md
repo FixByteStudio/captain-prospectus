@@ -23,17 +23,17 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 |---|---|
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
-| `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue` |
+| `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&q=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue`. `q` is a substring of `name`, folded ASCII-only |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
 | `PATCH /api/admin/prospects/:id` | Edit fields, `assignedTo`, `status`, `nextVisitAt` → the updated prospect. A `status` set here holds until a visit made after it ([prospecting](domains/prospecting.md#prospect-lifecycle)) |
 | `POST /api/admin/prospects/assign` | Bulk `{ids[], assignedTo}` → `{assigned}`; `assignedTo: null` unassigns |
-| `GET /api/admin/prospects/export.csv?status=&assignedTo=&source=` | The ledger as CSV, same three filters as the list, merged prospects excluded. `text/csv` attachment, max 500 rows, `x-truncated: true` when capped |
+| `GET /api/admin/prospects/export.csv?status=&dueBefore=&assignedTo=&source=&q=` | The ledger as CSV, the same filters as the list — same rows, up to the cap — merged prospects excluded. `text/csv` attachment, max 500 rows, `x-truncated: true` when capped |
 | `GET /api/admin/prospects/duplicates` | `{pairs[], truncated}` — prospects that are probably the same place |
 | `POST /api/admin/prospects/merge` | `{survivorId, mergedId}` → `{survivorId, mergedId, dedupeKeyUpdated}` |
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
 | `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
 | `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
-| `GET /api/admin/visits?since=<ms>&limit=` | `{visits[], serverTime}` — visits with `received_at > since`, newest first, max 500. Each carries `prospectName` |
+| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]`; all bounds apply together. Newest first, max 500. **400** when `from > to`. Each carries `prospectName` |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, and up to 5 `candidates` ranked by distance from where the visit happened |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
 | `POST /api/admin/visits/orphaned/:id/discard` | Deletes the row for good → `{discarded}`. Idempotent. The one place a visit is deliberately lost, behind a confirmation in the UI |
@@ -74,6 +74,35 @@ prospects" while holding one page. Several statuses are one comma-separated
 key, not a repeated one: the query validator hands a plain schema a repeated
 key's last value, so `status=a&status=b` would silently mean `b`. D1's free tier bills *scanned* rows, which is
 why the page size is a cap and not just a default.
+
+`q` matches a substring of `name` with a plain `LIKE`, no `lower()` on either
+side: SQLite's `LIKE` already folds ASCII case by itself, so `?q=BISTRO`
+matches "Le Bistrot du Coin", but folds ASCII only — an accented character
+must match the row's own casing exactly, so `?q=cafe` matches neither "Café"
+nor "CAFÉ", `?q=café` matches only "Café", and `?q=CAFÉ` matches only "CAFÉ".
+Accent-insensitive search needs a stored folded column and its own index,
+which is out of scope here — an admin who types the accented name correctly
+still finds it. `q` is trimmed and 1–200 characters; shorter or longer is
+**400**. A literal `%` or `_` in `q` is escaped, so it matches itself rather
+than acting as a wildcard. `name` has no index, so a search scans the
+merge-filtered set, once for the rows and once for `total`'s `count()`;
+accepted at this project's scale, and why `q` is not offered on the 500-row
+visits feed (`docs/free-tier-budget.md`).
+
+`GET /api/admin/prospects/export.csv` takes the same filters as the list —
+including `q` — so the same query string returns the same rows on both, up to
+the export cap. It has no `limit` or `offset`: an export is not paged, it
+always exports the whole filtered set up to the cap, so a URL copied from
+page 2 of the list is not read as "page 2 of the export".
+
+`GET /api/admin/visits` filters `from`/`to` on `received_at` (when the visit
+reached the server), the same column `since` and the export use — never
+`visited_at` (INVARIANT 12): a phone can sync days late, and a range read
+against its own clock would silently drop exactly the visits worth looking at.
+`from`/`to` are inclusive at both ends; `since` stays exclusive, because it is
+a paging cursor ("give me what I haven't seen yet"), not a range boundary.
+Like `dueBefore`, `from` and `to` are non-negative integers, decimal digits
+only — `1e3` or `0x10` is **400**, not a silent 0.
 
 `GET /api/admin/prospects/duplicates` compares at most `DUPLICATES_SCAN_LIMIT`
 (5000) live prospects and returns at most `DUPLICATES_PAGE_SIZE` (100) pairs,

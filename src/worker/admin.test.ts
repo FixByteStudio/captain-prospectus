@@ -213,6 +213,134 @@ describe("GET /api/admin/prospects", () => {
     const response = await call(`/api/admin/prospects?status=${encodeURIComponent("new,')--")}`);
     expect(response.status).toBe(400);
   });
+
+  it("filters by a substring of the name", async () => {
+    await importRows([
+      { name: "Le Bistrot du Coin", lat: 50.84, lng: 4.35 },
+      { name: "Chez Marcel", lat: 50.85, lng: 4.36 },
+    ]);
+
+    expect(await names("q=bistro")).toEqual({ names: ["Le Bistrot du Coin"], total: 1 });
+  });
+
+  it("folds case, ASCII-only", async () => {
+    await importRows([{ name: "Le Bistrot du Coin", lat: 50.84, lng: 4.35 }]);
+    expect(await names("q=BISTRO")).toEqual({ names: ["Le Bistrot du Coin"], total: 1 });
+  });
+
+  it("combines q with status, totalling the set both select", async () => {
+    await onePerStatus();
+    await importRows([{ name: "assigned-bistro", lat: 50.9, lng: 4.4 }]);
+    const db = getDb(env.DB);
+    await db
+      .update(prospects)
+      .set({ status: "assigned" })
+      .where(eq(prospects.name, "assigned-bistro"));
+
+    expect(await names("q=bistro&status=assigned")).toEqual({
+      names: ["assigned-bistro"],
+      total: 1,
+    });
+  });
+
+  it("returns an empty list rather than an error when q matches nothing", async () => {
+    await importRows([{ name: "Le Bistrot du Coin", lat: 50.84, lng: 4.35 }]);
+    expect(await names("q=zzz")).toEqual({ names: [], total: 0 });
+  });
+
+  it("excludes a merged prospect from a q search, like every other list", async () => {
+    await importRows([
+      { name: "Bistrot Survivant", lat: 50.84, lng: 4.35 },
+      { name: "Bistrot Absorbe", lat: 50.85, lng: 4.36 },
+    ]);
+    const db = getDb(env.DB);
+    const rows = await db.select().from(prospects);
+    const survivor = rows.find((p) => p.name === "Bistrot Survivant");
+    const merged = rows.find((p) => p.name === "Bistrot Absorbe");
+    if (!survivor || !merged) throw new Error("the import wrote nothing");
+
+    const merge = await post("/api/admin/prospects/merge", {
+      survivorId: survivor.id,
+      mergedId: merged.id,
+    });
+    expect(merge.status).toBe(200);
+
+    expect(await names("q=bistrot")).toEqual({ names: ["Bistrot Survivant"], total: 1 });
+  });
+
+  it("rejects an empty q rather than treating it as no filter", async () => {
+    const response = await call("/api/admin/prospects?q=");
+    expect(response.status).toBe(400);
+  });
+
+  it("folds ASCII case only, so an accented character must match exactly", async () => {
+    await importRows([
+      { name: "Café du Port", lat: 50.84, lng: 4.35 },
+      { name: "CAFÉ DU MIDI", lat: 50.85, lng: 4.36 },
+    ]);
+
+    expect(await names("q=café")).toEqual({ names: ["Café du Port"], total: 1 });
+    expect(await names("q=CAFÉ")).toEqual({ names: ["CAFÉ DU MIDI"], total: 1 });
+    // Same accented letter, opposite case: neither side folds it, so no match.
+    expect(await names("q=Café DU MIDI")).toEqual({ names: [], total: 0 });
+    expect(await names("q=cafe")).toEqual({ names: [], total: 0 });
+    expect(await names("q=du")).toEqual({
+      names: ["CAFÉ DU MIDI", "Café du Port"],
+      total: 2,
+    });
+  });
+
+  it("treats % and _ in q as literal characters, not wildcards", async () => {
+    await importRows([
+      { name: "100% Bio", lat: 50.84, lng: 4.35 },
+      { name: "Snack_Bar", lat: 50.85, lng: 4.36 },
+      { name: "Ordinary Bistro", lat: 50.86, lng: 4.37 },
+    ]);
+
+    expect(await names("q=" + encodeURIComponent("100%"))).toEqual({
+      names: ["100% Bio"],
+      total: 1,
+    });
+    expect(await names("q=" + encodeURIComponent("Snack_Bar"))).toEqual({
+      names: ["Snack_Bar"],
+      total: 1,
+    });
+    // Literal, not "any single character" or "anything": each matches only
+    // the name that actually contains it.
+    expect(await names("q=" + encodeURIComponent("_"))).toEqual({
+      names: ["Snack_Bar"],
+      total: 1,
+    });
+    expect(await names("q=" + encodeURIComponent("%"))).toEqual({
+      names: ["100% Bio"],
+      total: 1,
+    });
+  });
+
+  it("treats the escape character itself as literal, not the start of an escape", async () => {
+    await importRows([
+      { name: "Chez Paul!", lat: 50.84, lng: 4.35 },
+      { name: "Chez Paulette", lat: 50.85, lng: 4.36 },
+    ]);
+
+    expect(await names("q=" + encodeURIComponent("Paul!"))).toEqual({
+      names: ["Chez Paul!"],
+      total: 1,
+    });
+  });
+
+  it("matches with q trimmed of surrounding whitespace", async () => {
+    await importRows([{ name: "Le Bistrot du Coin", lat: 50.84, lng: 4.35 }]);
+    expect(await names("q=" + encodeURIComponent("  bistro  "))).toEqual({
+      names: ["Le Bistrot du Coin"],
+      total: 1,
+    });
+  });
+
+  it("rejects a q longer than 200 characters", async () => {
+    const response = await call(`/api/admin/prospects?q=${"a".repeat(201)}`);
+    expect(response.status).toBe(400);
+  });
 });
 
 describe("POST /api/admin/prospects/batch", () => {
@@ -1023,6 +1151,52 @@ describe("GET /api/admin/visits", () => {
 
     expect((await feed("?limit=1")).visits).toHaveLength(1);
     expect((await call(`/api/admin/visits?limit=${ADMIN_VISITS_PAGE_SIZE + 1}`)).status).toBe(400);
+  });
+
+  it("keeps only visits whose received_at is within [from, to]", async () => {
+    await seedVisit("Trop tot", 1_000);
+    await seedVisit("Dans la fenetre", 2_000);
+    await seedVisit("Trop tard", 3_000);
+
+    const body = await feed("?from=1500&to=2500");
+    expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+  });
+
+  it("includes a visit whose received_at equals from or to, the range is inclusive", async () => {
+    await seedVisit("Egale a from", 1_000);
+    await seedVisit("Dans la fenetre", 1_500);
+    await seedVisit("Egale a to", 2_000);
+
+    const body = await feed("?from=1000&to=2000");
+    expect(body.visits.map((v) => v.prospectName).sort()).toEqual([
+      "Dans la fenetre",
+      "Egale a from",
+      "Egale a to",
+    ]);
+  });
+
+  it("rejects a reversed range, the same message shape as the visits export", async () => {
+    const response = await call("/api/admin/visits?from=2000&to=1000");
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe("validation");
+  });
+
+  it.each(["from=1e3", "from=0x10", "to=", "to=-1"])(
+    "rejects %s, the same strict decimal-digit rule as dueBefore",
+    async (query) => {
+      const response = await call(`/api/admin/visits?${query}`);
+      expect(response.status).toBe(400);
+    },
+  );
+
+  it("applies from/to alongside since, all three bounds together", async () => {
+    await seedVisit("Avant since", 500);
+    await seedVisit("Avant la fenetre", 1_000);
+    await seedVisit("Dans la fenetre", 2_000);
+    await seedVisit("Apres la fenetre", 4_000);
+
+    const body = await feed("?since=1000&from=1500&to=3000");
+    expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
   });
 
   it("rejects a `since` that is not a non-negative integer", async () => {

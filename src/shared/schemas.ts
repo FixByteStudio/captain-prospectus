@@ -262,12 +262,13 @@ export const statusListSchema = z.pipe(
 );
 
 /**
- * `next_visit_at < dueBefore`, the dashboard's Relances dues boundary. Epoch ms,
- * decimal digits only: coercion alone would read "", " ", "1e3" and "0x10" as
- * numbers. Capped at the largest instant a `Date` holds, so formatting it
- * cannot throw.
+ * An epoch-ms query param, decimal digits only: coercion alone would read "",
+ * " ", "1e3" and "0x10" as numbers. Capped at the largest instant a `Date`
+ * holds, so formatting it cannot throw. Shared by `dueBefore` and the visits
+ * feed/export's `from`/`to`, so all four reject the same malformed input the
+ * same way.
  */
-export const dueBeforeSchema = z.pipe(
+export const epochMsQuerySchema = z.pipe(
   z.pipe(
     z.string().check(z.regex(/^\d+$/)),
     z.transform((value) => Number(value)),
@@ -275,12 +276,34 @@ export const dueBeforeSchema = z.pipe(
   z.number().check(z.int(), z.lte(8_640_000_000_000_000)),
 );
 
-/** Query string, so every value arrives as text and has to be coerced. */
-export const prospectsQuerySchema = z.object({
+/** `next_visit_at < dueBefore`, the dashboard's Relances dues boundary. */
+export const dueBeforeSchema = epochMsQuerySchema;
+
+/**
+ * Name substring search. Trimmed and capped like `shortTextRequired`; an
+ * empty `q` is a 400, not "no filter". The fold is ASCII-only — SQLite's
+ * `LIKE` folds case by itself, with no `lower()` involved — see
+ * `nameSearchFilter` (src/worker/routes/admin.ts) for the mechanism and the
+ * wildcard-escaping it also does.
+ */
+export const searchQuerySchema = shortTextRequired;
+
+/**
+ * The filters shared by the prospects list and its export — one definition so
+ * a filter added to one is never forgotten on the other (Intent: "so the two
+ * cannot diverge"). `prospectFilters` (src/worker/routes/admin.ts) turns this
+ * into the same `SQL[]` for both routes.
+ */
+export const prospectFiltersSchema = z.object({
   status: z.optional(statusListSchema),
   dueBefore: z.optional(dueBeforeSchema),
   assignedTo: z.optional(emailSchema),
   source: z.optional(sourceSchema),
+  q: z.optional(searchQuerySchema),
+});
+
+/** Query string, so every value arrives as text and has to be coerced. */
+export const prospectsQuerySchema = z.extend(prospectFiltersSchema, {
   limit: z._default(
     z.coerce.number().check(z.int(), z.positive(), z.lte(PROSPECTS_PAGE_SIZE)),
     PROSPECTS_PAGE_SIZE,
@@ -508,13 +531,38 @@ export const adminVisitsResponseSchema = z.object({
 });
 export type AdminVisitsResponse = z.infer<typeof adminVisitsResponseSchema>;
 
-export const visitsSinceQuerySchema = z.object({
-  since: z._default(z.coerce.number().check(z.int(), z.nonnegative()), 0),
-  limit: z._default(
-    z.coerce.number().check(z.int(), z.positive(), z.lte(ADMIN_VISITS_PAGE_SIZE)),
-    ADMIN_VISITS_PAGE_SIZE,
-  ),
-});
+/**
+ * `from <= to`, or 400 with the same message and field — shared by the visits
+ * feed and its export so the rule is written once. Inclusive at both ends,
+ * unlike `since`, which stays exclusive (it is a paging cursor: "give me what
+ * I haven't seen", not a boundary of the range being asked for).
+ */
+const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
+  (v) => v.from === undefined || v.to === undefined || v.from <= v.to,
+  { error: "from must not be after to", path: ["from"] },
+);
+
+/**
+ * `from`/`to` bound `received_at` (INVARIANT 12's ordering, not `visited_at`),
+ * alongside `since`: all three apply together, so a client can both page by
+ * `since` and narrow to a range. Optional and undefined by default — omitted,
+ * neither bound applies, unlike the export's 30-day default window.
+ *
+ * `since` deliberately keeps its looser `z.coerce.number()`: it is a cursor
+ * already deployed to clients, and tightening it to `epochMsQuerySchema`
+ * would not be additive (docs/api.md › Conventions).
+ */
+export const visitsSinceQuerySchema = z
+  .object({
+    since: z._default(z.coerce.number().check(z.int(), z.nonnegative()), 0),
+    from: z.optional(epochMsQuerySchema),
+    to: z.optional(epochMsQuerySchema),
+    limit: z._default(
+      z.coerce.number().check(z.int(), z.positive(), z.lte(ADMIN_VISITS_PAGE_SIZE)),
+      ADMIN_VISITS_PAGE_SIZE,
+    ),
+  })
+  .check(reversedRangeRefine);
 
 /* ----------------------------------------------------------------- dashboard */
 
@@ -720,38 +768,27 @@ export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 /**
  * `GET /api/admin/prospects/export.csv`.
  *
- * The same three filters as the list screen, reusing its enums rather than
- * writing them again — an export that filtered differently from the screen it
- * was launched from would be a quiet lie. No `limit` or `offset`: an export is
- * not paged, it is capped, and the cap is EXPORT_ROWS.
+ * The same five filters as the list screen — `prospectFiltersSchema` itself,
+ * not a copy of its fields — so an export can never filter differently from
+ * the screen it was launched from. No `limit` or `offset`: an export is not
+ * paged, it always exports the whole filtered set up to EXPORT_ROWS, so a URL
+ * copied from page 2 of the list is not read as "page 2 of the export".
  */
-export const prospectsExportQuerySchema = z.object({
-  status: z.optional(statusSchema),
-  assignedTo: z.optional(emailSchema),
-  source: z.optional(sourceSchema),
-});
+export const prospectsExportQuerySchema = prospectFiltersSchema;
 
 /**
  * `GET /api/admin/visits/export.csv?from=&to=`.
  *
- * Both optional; omitted, the window is the last 30 days ending now. The
- * refinement is what makes a reversed range a 400 rather than an empty file
- * that looks like "no visits happened".
+ * Both optional; omitted, the window is the last 30 days ending now, unlike
+ * the feed's `from`/`to`, which stay unbounded when omitted. The reversed-range
+ * refine is `reversedRangeRefine`, shared with the feed.
  */
 export const visitsExportQuerySchema = z
   .object({
-    from: z._default(
-      z.coerce.number().check(z.int(), z.nonnegative()),
-      () => Date.now() - EXPORT_DEFAULT_WINDOW_MS,
-    ),
-    to: z._default(z.coerce.number().check(z.int(), z.nonnegative()), () => Date.now()),
+    from: z._default(epochMsQuerySchema, () => Date.now() - EXPORT_DEFAULT_WINDOW_MS),
+    to: z._default(epochMsQuerySchema, () => Date.now()),
   })
-  .check(
-    z.refine((v) => v.from <= v.to, {
-      error: "from must not be after to",
-      path: ["from"],
-    }),
-  );
+  .check(reversedRangeRefine);
 
 /* ------------------------------------------- orphaned visits (ADR-0022) */
 
