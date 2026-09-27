@@ -1,6 +1,6 @@
 ---
 id: 011
-status: ready
+status: done
 implements: docs/architecture.md#tests (the `dom` project covers "the admin top bar's controls")
 depends_on: []
 ---
