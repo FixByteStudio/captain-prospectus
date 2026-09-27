@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { BadgeCheck, Building, MapPin, Percent } from "lucide-react";
 import {
   DASHBOARD_DEFAULT_PERIOD,
-  DASHBOARD_PERIODS,
   OPEN_STATUSES,
   type DashboardPeriod,
 } from "../../../shared/constants";
@@ -11,9 +10,9 @@ import { formatCount, formatPercent, formatPoints } from "../../format";
 import { cn } from "../../lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
-import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
+import { PeriodToggle } from "../PeriodToggle";
 import { queueCount } from "../nav";
-import { prospectsHref, useDashboard, useDuplicates, useOrphans } from "../queries";
+import { prospectsHref, useDashboard, useDuplicates, useOrphans, visitsHref } from "../queries";
 import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
 import { KpiCard, KpiCardSkeleton } from "./KpiCard";
@@ -23,10 +22,6 @@ import { PipelinePanel, PipelinePanelSkeleton } from "./PipelinePanel";
 import { RecentVisits } from "./RecentVisits";
 import { TodoPanel, TodoPanelSkeleton } from "./TodoPanel";
 import { VisitsChart, VisitsChartSkeleton } from "./VisitsChart";
-
-function isPeriod(value: number): value is DashboardPeriod {
-  return (DASHBOARD_PERIODS as readonly number[]).includes(value);
-}
 
 /** One row of the grid: busy while fetching, dimmed while it shows another period's figures. */
 function PanelRow({
@@ -76,29 +71,7 @@ export function DashboardScreen() {
           <h2 className="text-title">{copy.dashboard.title}</h2>
           <p className="text-muted-foreground mt-0.5">{copy.dashboard.subtitle}</p>
         </div>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={String(period)}
-          // Radix sends "" when the chosen item is pressed again; a period is
-          // never unset, so that press does nothing.
-          onValueChange={(value) => {
-            const next = Number(value);
-            if (value !== "" && isPeriod(next)) setPeriod(next);
-          }}
-          aria-label={copy.dashboard.periodLabel}
-          className="bg-secondary rounded-lg p-0.5"
-        >
-          {DASHBOARD_PERIODS.map((p) => (
-            <ToggleGroupItem
-              key={p}
-              value={String(p)}
-              className="text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground rounded-md px-3 first:rounded-md last:rounded-md hover:bg-transparent data-[state=on]:shadow-sm"
-            >
-              {copy.dashboard.periods[p]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <PeriodToggle value={period} onChange={setPeriod} />
       </div>
 
       {/* Outside the aria-busy grid, so it is announced rather than hidden. */}
@@ -139,9 +112,9 @@ export function DashboardScreen() {
                   label={copy.dashboard.visits}
                   icon={MapPin}
                   value={formatCount(data.visits.value)}
-                  // Unfiltered: the feed has no date range yet, so its count is
-                  // not this figure (docs/design.md › Tableau de bord).
-                  to="/admin/visites"
+                  // Visites opens on the same period; its count is by
+                  // received_at and capped at 500, so it may differ (docs/design.md).
+                  to={visitsHref(period)}
                   delta={data.visits.delta}
                   footer={<KpiSparkline byDay={data.visits.byDay} delta={data.visits.delta} />}
                 />

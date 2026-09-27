@@ -297,10 +297,11 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   named "{label} : {figure}. Voir la liste", with the `ring` focus ring and a
   faint `accent` wash on hover: Prospects ouverts to Prospects filtered
   `status=new,assigned,follow_up`, whose total is the figure; Visites to
-  Visites, unfiltered, since the feed has no date range yet and its count is
-  not the period's; Convertis to Prospects `status=converted`, every prospect
-  converted now rather than those converted in the period, so the two counts
-  may differ. Taux de conversion has no list and is not a link.
+  Visites on the same period (`?period=`, GH #178), whose count is by
+  `received_at` and capped at 500, so it may differ from the figure; Convertis
+  to Prospects `status=converted`, every prospect converted now rather than
+  those converted in the period, so the two counts may differ. Taux de
+  conversion has no list and is not a link.
   Taux de conversion's figure is a percentage with one decimal, "10,6 %", or
   "—" when nothing was visited; its chip is in points, "+1,2 pt", "−0,4 pt",
   toned by the same rounding.
@@ -647,17 +648,63 @@ no status as a coloured pill. The feed is the prospect list with time as its
 spine.
 
 ```
-│ Visites                                        47 visites      │
-├────────────────────────────────────────────────────────────────┤
-│ 16:42  Le Bouchon          Intéressé      flyer  agent@…       │
-│ 16:31  Chez Marcel         Pas intéressé         agent@…       │
-│ 15:58  Pizza Vera          À relancer     flyer  agent@…       │
-│        « rappeler après 18 h »                                 │
-│ 15:12  Le Comptoir         Converti       flyer  agent@…       │
-└────────────────────────────────────────────────────────────────┘
+│ Visites            312 visites  [7 j|30 j|90 j]  [Exporter en CSV] │
+│ Les visites arrivent ici dès qu'un agent synchronise.               │
+│                                                                     │
+│ RELANCES DUES     TAUX DE          FLYERS REMIS    AGENTS EN        │
+│ SOUS 7 JOURS      CONVERSION                       TOURNÉE          │
+│ 12                10,6 %           84              2                │
+│ Avant le 4 oct.   38 convertis…    Sur la période  Aujourd'hui      │
+├─────────────────────────────────────────────────────────────────────┤
+│ 16:42  Le Bouchon          Intéressé      flyer  agent@…            │
+│ 16:31  Chez Marcel         Pas intéressé         agent@…            │
+│ 15:58  Pizza Vera          À relancer     flyer  agent@…            │
+│        « rappeler après 18 h »                                      │
+│ 15:12  Le Comptoir         Converti       flyer  agent@…            │
+├─────────────────────────────────────────────────────────────────────┤
+│              ‹ Précédent   1  2  …  13   Suivant ›                  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-Six rules this encodes:
+Since GH #178 the screen has three parts above the ledger's own six rules: a
+period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
+
+- **The selector is a 7/30/90 window, not an arbitrary range** — the same
+  `PeriodToggle` as Tableau de bord, held in the URL (`?period=`, default 30,
+  and any other value treated as 30) so a reload or the dashboard's Visites
+  card opens the same window. Changing it replaces the URL, scopes the feed's
+  request to that window's `from`/`to` (`brusselsPeriod`, sent as `to − 1`
+  because the feed's own bounds are inclusive), reseeds the cursor from
+  `since=0`, and returns to page 1 — with no wash and no arrival
+  announcement for that reseed, since refilling the ledger under a new window
+  is not news the way an actual arrival is.
+- **The strip reads the same aggregate as Tableau de bord, scoped to the same
+  period** — `GET /api/admin/dashboard?period=`, not the 500-row-capped feed:
+  Relances dues sous 7 jours (linked to Prospects `status=follow_up` at that
+  boundary), Taux de conversion (linked to Prospects `status=converted`,
+  every prospect converted now, matching the dashboard's own Convertis link),
+  Flyers remis and Agents en tournée, both plain cards. Four compact cards in
+  one row, no icon tile, no sparkline: overline label, display figure, one
+  meta line — the same shape as the dashboard's own KPI cards without their
+  icon or footer chart. A failed aggregate shows `ScreenState`'s inline Alert
+  with a retry in the strip's place; the ledger below is unaffected, since it
+  is its own feed request.
+- **The pager is client-side over the held feed**, 25 rows at a time,
+  "Précédent", page numbers with an ellipsis past a handful, "Suivant" — no
+  server paging exists on the feed and none may be added (the feed still caps
+  at `ADMIN_VISITS_PAGE_SIZE`, and past it the count itself reads "500
+  visites ou plus" rather than a number that looks exact but is not). The
+  page scrolls; the table never gets its own scroll area. An arrival while
+  paged in does not move the reader off their page.
+- **Export is a CSV of the same window** — `GET
+  /api/admin/visits/export.csv?from&to`, the button's own request rather than
+  a re-read of the held feed. Both stop at 500 rows, but each at its own cap:
+  the ledger at `ADMIN_VISITS_PAGE_SIZE`, the export at `EXPORT_ROWS`. Past its
+  cap the server answers `x-truncated: true`; the button shows a warning toast
+  naming the cap and suggesting a shorter period, the same rule Prospects'
+  export (#179) follows.
+
+Six rules the ledger itself still encodes:
 
 - **An arrival is ambient, never a toast.** Principle 8 was written for the
   field side but the logic is the same here: a visit that landed is a fact that
