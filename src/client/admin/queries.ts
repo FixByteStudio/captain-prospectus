@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch } from "../api";
 import { copy } from "../copy";
-import { IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
+import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
+import { brusselsPeriod } from "../../shared/period";
 import { dueBeforeSchema, emailSchema, sourceSchema, statusListSchema } from "../../shared/schemas";
 import { arrivedIds, mergeVisits, nextSince } from "./visits/feed";
 import { batched } from "./import/csv";
@@ -88,6 +89,11 @@ export function toQueryString(filters: ProspectFilters): string {
 /** Where Prospects opens with these filters. */
 export function prospectsHref(filters: ProspectFilters): string {
   return `/admin/prospects${toQueryString(filters)}`;
+}
+
+/** Where Visites opens for this period — the dashboard's Visites card (GH #178). */
+export function visitsHref(period: DashboardPeriod): string {
+  return `/admin/visites?period=${period}`;
 }
 
 /**
@@ -280,8 +286,17 @@ const FEED_POLL_MS = 15_000;
  * pauses the poll on a hidden tab. `refetchOnWindowFocus` is overridden to
  * true: AdminApp turns it off globally, and coming back to the tab is exactly
  * when the feed should catch up rather than wait out the interval.
+ *
+ * `period` scopes the feed to a 7/30/90-day window (GH #178): the request adds
+ * `from`/`to` from `brusselsPeriod`, sent as `to − 1` because the feed's bounds
+ * are inclusive. Dernières visites' call leaves it out and reads the unscoped
+ * cache entry; Visites reads a period-scoped one, under the same
+ * `adminKeys.visitsFeed()` prefix, so an invalidation elsewhere still reaches
+ * every period's entry. A period change is a fresh mount of this hook
+ * (`VisitsScreenBody` is keyed by `period`), so the cursor, `seeded` and
+ * `held` all start over rather than carry state across a re-seed.
  */
-export function useVisitsFeed() {
+export function useVisitsFeed(period?: DashboardPeriod) {
   const since = useRef(0);
   /**
    * Whether a first answer has landed. Without this the opening page arrives
@@ -295,17 +310,31 @@ export function useVisitsFeed() {
   const held = useRef<AdminVisit[]>([]);
   const [visits, setVisits] = useState<AdminVisit[]>([]);
   const [arrived, setArrived] = useState<string[]>([]);
+  /** The opening page filled the server's cap, so the window may hold more than we do. */
+  const [capped, setCapped] = useState(false);
   /**
-   * Answers older than this mount are skipped. The cache entry is shared by
-   * Visites and Tableau de bord and outlives both, so on a return it holds the
-   * last *delta* page; seeding from it would turn the `since=0` refetch into
-   * a wash and an announcement for every visit (GH #113).
+   * Answers older than this mount are skipped. The cache entry outlives this
+   * mount — Dernières visites' unscoped entry outlives every Visites visit,
+   * and a period-scoped one outlives a period change that later returns to
+   * it — so on a return it holds the last *delta* page; seeding from it would
+   * turn the `since=0` refetch into a wash and an announcement for every
+   * visit (GH #113).
    */
   const [mountedAt] = useState(() => Date.now());
 
   const query = useQuery({
-    queryKey: adminKeys.visitsFeed(),
-    queryFn: () => apiFetch<AdminVisitsResponse>(`/api/admin/visits?since=${since.current}`),
+    queryKey: period !== undefined ? [...adminKeys.visitsFeed(), period] : adminKeys.visitsFeed(),
+    queryFn: () => {
+      const params = new URLSearchParams({ since: String(since.current) });
+      if (period !== undefined) {
+        // Bounds recomputed every poll, not once at mount: a poll that
+        // straddles Brussels midnight must ask with that instant's own window.
+        const bounds = brusselsPeriod(Date.now(), period);
+        params.set("from", String(bounds.from));
+        params.set("to", String(bounds.to - 1));
+      }
+      return apiFetch<AdminVisitsResponse>(`/api/admin/visits?${params}`);
+    },
     refetchInterval: FEED_POLL_MS,
     refetchOnWindowFocus: true,
   });
@@ -328,14 +357,23 @@ export function useVisitsFeed() {
      * no-op, which `feed.test.ts` pins.
      */
     const merged = mergeVisits(held.current, page.visits);
+    // A scoped window's `from` moves at Brussels midnight while the tab stays
+    // open, so a row this poll would no longer ask for is trimmed out here —
+    // otherwise a visit received the day the window rolled past it would sit
+    // in the ledger for ever, since `since` only ever grows.
+    const inWindow =
+      period !== undefined
+        ? merged.filter((visit) => visit.receivedAt >= brusselsPeriod(Date.now(), period).from)
+        : merged;
     setArrived(seeded.current ? arrivedIds(held.current, page.visits) : []);
-    held.current = merged;
+    if (!seeded.current) setCapped(page.visits.length >= ADMIN_VISITS_PAGE_SIZE);
+    held.current = inWindow;
     seeded.current = true;
     // Advance from what we actually hold, never from the server clock: a visit
     // written between the query and its answer is then delivered next poll
     // rather than skipped for good.
-    since.current = nextSince(merged);
-    setVisits(merged);
+    since.current = nextSince(inWindow);
+    setVisits(inWindow);
     // `answeredAt` too: a refetch whose answer is unchanged keeps `page`'s
     // reference (structural sharing) but may be this mount's first.
   }, [page, fresh, answeredAt]);
@@ -346,7 +384,57 @@ export function useVisitsFeed() {
     // Still pending while only an older mount's answer is cached.
     isPending: query.isPending || (!fresh && !query.isError),
     isError: query.isError,
+    capped,
+    // GH #160: a poll whose text is unchanged from the last one (e.g. two
+    // arrivals in a row) still needs announcing. A consumer keys its
+    // `role="status"` element by this so React remounts it every poll rather
+    // than leave identical text in place, which some screen readers do not
+    // re-announce.
+    answeredAt,
   };
+}
+
+/**
+ * Downloads a CSV export and saves it — the visits export (GH #178, `from`/`to`
+ * inclusive) and, by the same helper, Prospects' (#179).
+ *
+ * Not `apiFetch`: that parses JSON, and this response is a file. The auth
+ * failure it recognises is the same one (ADR-0006's opaque redirect), so it is
+ * thrown as the same `ApiError` for a caller to handle identically.
+ *
+ * Resolves to whether the server flagged `x-truncated`, so the caller can warn
+ * about the row cap without re-parsing headers itself.
+ */
+export async function downloadCsv(path: string, filenameFallback: string): Promise<boolean> {
+  const response = await fetch(path, { redirect: "manual" });
+
+  if (response.type === "opaqueredirect" || response.status === 401) {
+    throw new ApiError(401, "auth", copy.errors.sessionExpired);
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, "error", copy.visits.export.failed);
+  }
+
+  const truncated = response.headers.get("x-truncated") === "true";
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? filenameFallback;
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  // Appended to the document before the click and removed after: a detached
+  // anchor's click can be silently cancelled by Safari and Firefox. Revoking
+  // the object URL on the same tick as the click can do the same to the
+  // download it just started, so that happens a tick later instead.
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+
+  return truncated;
 }
 
 export function usePatchProspect() {

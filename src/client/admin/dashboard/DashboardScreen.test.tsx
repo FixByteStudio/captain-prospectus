@@ -203,6 +203,7 @@ describe("DashboardScreen", () => {
   });
 
   it("links three cards to their lists, named by label and figure (GH #114)", async () => {
+    const user = userEvent.setup();
     stubFetch((period) => json(answer(period)));
     renderScreen();
     await screen.findByText("300");
@@ -214,10 +215,14 @@ describe("DashboardScreen", () => {
     expect(link(copy.dashboard.openProspects, "1\u202f284")).toBe(
       "/admin/prospects?status=new%2Cassigned%2Cfollow_up",
     );
-    expect(link(copy.dashboard.visits, "300")).toBe("/admin/visites");
+    expect(link(copy.dashboard.visits, "300")).toBe("/admin/visites?period=30");
     expect(link(copy.dashboard.converted, "32")).toBe("/admin/prospects?status=converted");
     // Taux de conversion has no list behind it.
     expect(card(copy.dashboard.conversionRate).closest("a")).toBeNull();
+
+    // The Visites card's link follows the selector (GH #178).
+    await user.click(screen.getByRole("radio", { name: copy.dashboard.periods[7] }));
+    await waitFor(() => expect(link(copy.dashboard.visits, "70")).toBe("/admin/visites?period=7"));
   });
 
   it("lists the pipeline with each status's count and share (GH #112)", async () => {

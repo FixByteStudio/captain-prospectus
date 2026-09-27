@@ -442,6 +442,8 @@ export const copy = {
     title: "Visites",
     lede: "Les visites arrivent ici dès qu'un agent synchronise.",
     count: (n: number) => (n === 1 ? "1 visite" : `${n} visites`),
+    /** The opening page filled the feed's cap (ADMIN_VISITS_PAGE_SIZE), so more may exist. */
+    countCapped: (n: number) => `${n} visites ou plus`,
     // An empty screen is an invitation, not a shrug (design.md).
     empty: "Aucune visite reçue. Les visites apparaissent ici dès qu'un agent synchronise.",
     loading: "Chargement des visites…",
@@ -449,6 +451,41 @@ export const copy = {
     flyer: "Flyer remis",
     /** Announced when rows arrive, for a reader that cannot see the highlight. */
     arrived: (n: number) => (n === 1 ? "1 nouvelle visite" : `${n} nouvelles visites`),
+
+    /** The strip's four compact cards (GH #178, docs/design.md › The live feed). */
+    strip: {
+      followUpsDueSoon: "Relances dues sous 7 jours",
+      followUpsDueSoonMeta: (date: string) => `Avant le ${date}`,
+      flyersGiven: "Flyers remis",
+      flyersGivenMeta: "Sur la période",
+      agentsActiveToday: "Agents en tournée",
+      agentsActiveTodayMeta: "Aujourd'hui",
+      loading: "Chargement des chiffres…",
+      loadFailed: "Impossible de charger les figures.",
+    },
+
+    /** The 25-row pager over the held feed (GH #178). */
+    pager: {
+      previous: "Précédent",
+      next: "Suivant",
+      morePages: "Plus de pages",
+      pageLabel: (page: number) => `Page ${page}`,
+      nav: "Pagination des visites",
+    },
+
+    /**
+     * The export button (GH #178) — a warning toast, not a blocking dialog,
+     * when the server flags `x-truncated`. Its own cap, `EXPORT_ROWS`, is a
+     * separate request from the ledger's, which caps at `ADMIN_VISITS_PAGE_SIZE`
+     * — the two happen to share a value today, not a constant.
+     */
+    export: {
+      button: "Exporter en CSV",
+      exporting: "Export…",
+      truncated: (cap: number) =>
+        `L'export s'arrête à ${cap} visites. Choisissez une période plus courte pour tout obtenir.`,
+      failed: "L'export a échoué. Réessayez.",
+    },
   },
 
   orphans: {
@@ -756,6 +793,8 @@ export const copy = {
     /** The one button `ScreenState`'s shared retry Alert needs; the message
      *  above it stays the screen's own `loadFailed` string. */
     retry: "Réessayer",
+    /** `downloadCsv`'s 401: Access sent the file request to its login page. */
+    sessionExpired: "Votre session a expiré. Reconnectez-vous.",
   },
 
   attribution: "© les contributeurs OpenStreetMap",

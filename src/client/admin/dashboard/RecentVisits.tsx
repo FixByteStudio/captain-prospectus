@@ -21,12 +21,14 @@ const BADGE = "text-meta rounded-sm px-2 font-medium tracking-[0.02em]";
 /**
  * Dernières visites — docs/design.md › Tableau de bord, GH #113.
  *
- * The same feed, cache entry and 15 s poll as Visites (ADR-0010), cut to its
- * newest rows. Only arrivals among the rows shown wash and are announced: a
- * visit that lands sixth is not news on this screen.
+ * The same 15 s poll as Visites (ADR-0010), through `useVisitsFeed`'s own
+ * unscoped call — Visites (GH #178) reads a period-scoped one instead, its own
+ * cache entry under the same key prefix. Cut to its newest rows; only arrivals
+ * among the rows shown wash and are announced: a visit that lands sixth is not
+ * news on this screen.
  */
 export function RecentVisits() {
-  const { visits, arrived, isPending, isError } = useVisitsFeed();
+  const { visits, arrived, isPending, isError, answeredAt } = useVisitsFeed();
   const t = copy.dashboard.recent;
   const shown = visits.slice(0, SHOWN);
   const fresh = new Set(arrived);
@@ -45,8 +47,11 @@ export function RecentVisits() {
         </Link>
       </div>
 
-      {/* The wash is decoration; this is what a screen reader is told, once per poll. */}
-      <p role="status" aria-live="polite" className="sr-only">
+      {/* The wash is decoration; this is what a screen reader is told, once per
+          poll. Keyed by the poll's own timestamp (#160): two polls in a row
+          with the same count of arrivals must still each get their own
+          announcement, which an unchanged live-region text does not always get. */}
+      <p key={answeredAt} role="status" aria-live="polite" className="sr-only">
         {arrivedShown > 0 ? copy.visits.arrived(arrivedShown) : ""}
       </p>
 
