@@ -1,10 +1,15 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
-import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
-import { RETENTION_BATCH, RETENTION_MS } from "../shared/constants";
+import { overpassCache, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import {
+  OVERPASS_CACHE_TTL_MS,
+  PLACES_CACHE_TTL_MS,
+  RETENTION_BATCH,
+  RETENTION_MS,
+} from "../shared/constants";
 import { describeSweep, runRetention } from "./retention";
 import worker from "./index";
 
@@ -78,6 +83,7 @@ beforeEach(async () => {
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
   await db.delete(scripts);
+  await db.delete(overpassCache);
 });
 
 describe("runRetention", () => {
@@ -244,5 +250,52 @@ describe("the scheduled handler", () => {
     // rows anyway, because the sweep is idempotent.
     await expect(worker.scheduled({} as ScheduledController, broken, ctx)).resolves.toBeUndefined();
     await waitOnExecutionContext(ctx);
+  });
+
+  it("evicts expired map-cache rows in the same run", async () => {
+    const db = getDb(env.DB);
+    const oldest = Math.max(OVERPASS_CACHE_TTL_MS, PLACES_CACHE_TTL_MS);
+    await db.insert(overpassCache).values([
+      { hash: "expired", body: "{}", createdAt: Date.now() - oldest - 60_000 },
+      { hash: "fresh", body: "{}", createdAt: Date.now() },
+    ]);
+
+    const ctx = createExecutionContext();
+    await worker.scheduled({} as ScheduledController, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    const left = await db.select({ hash: overpassCache.hash }).from(overpassCache);
+    expect(left.map((r) => r.hash)).toEqual(["fresh"]);
+  });
+
+  it("still logs the retention sweep when eviction fails", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Only statements on the cache table fail, so the sweep before it runs.
+    const db = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("overpass_cache")) throw new Error("cache unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const ctx = createExecutionContext();
+    await expect(
+      worker.scheduled({} as ScheduledController, { ...env, DB: db }, ctx),
+    ).resolves.toBeUndefined();
+    await waitOnExecutionContext(ctx);
+
+    expect(log.mock.calls.some(([line]) => String(line).startsWith("retention: redacted"))).toBe(
+      true,
+    );
+    expect(error).toHaveBeenCalledWith("map cache eviction failed", expect.any(String));
+    log.mockRestore();
+    error.mockRestore();
   });
 });

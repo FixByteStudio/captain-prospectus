@@ -1,6 +1,6 @@
 ---
 id: 012
-status: ready
+status: done
 implements: docs/data-model.md (overpass_cache "has no eviction path yet (issue #25)"), ADR-0008, ADR-0020, ADR-0023 (the daily cron this reuses)
 depends_on: []
 ---

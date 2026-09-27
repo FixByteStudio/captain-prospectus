@@ -84,8 +84,8 @@ erDiagram
 `overpass_cache` holds **both** map providers' raw answers (ADR-0020) and keeps the
 name of its first one. The hash is SHA-256 of a provider-specific query version plus
 the normalised shape — `v1` and a rounded polygon for Overpass, `gv1` and a rounded
-centre and radius for Google — so two providers cannot read each other's rows. It has
-no eviction path yet (issue #25); a second writer makes that slightly more pressing.
+centre and radius for Google — so two providers cannot read each other's rows. The
+daily sweep deletes rows older than the longer of the two provider TTLs (`map-cache.ts`).
 
 `source` distinguishes `osm` from `google` because the two differ in licence, in
 freshness and in `source_ref` format, and because the same restaurant found through
