@@ -5,7 +5,7 @@ import { getDb } from "./db/client";
 import { eq, sql } from "drizzle-orm";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { DASHBOARD_PERIODS, OUTCOMES, type Outcome, type Status } from "../shared/constants";
-import { DAY_MS, brusselsPeriod, periodDates } from "../shared/period";
+import { DAY_MS, brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
 import type { DashboardResponse } from "../shared/schemas";
 
 /**
@@ -19,6 +19,15 @@ import type { DashboardResponse } from "../shared/schemas";
 
 const ADMIN = "admin@example.com";
 const AGENT = "agent@example.com";
+
+/** What a Brussels wall clock shows at `epochMs`, to check a bound is midnight. */
+const wall = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Brussels",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
   const ctx = createExecutionContext();
@@ -875,5 +884,146 @@ describe("Prospects' filtered totals match the figures they link from (GH #114)"
     expect(await total("status=new,assigned,follow_up")).toBe(body.openProspects);
     expect(await total(`status=follow_up&dueBefore=${body.to}`)).toBe(body.followUpsDue);
     expect(body.followUpsDue).toBe(1);
+  });
+});
+
+describe("The Visites strip's flyers, agents and due-soon figures (GH #177)", () => {
+  /** A visit with explicit `receivedAt`/`flyerGiven`, for the pair `visitedAt` never controls alone. */
+  async function insertVisit(
+    prospectId: string,
+    visitedAt: number,
+    receivedAt: number,
+    flyerGiven = false,
+    agentEmail: string = AGENT,
+  ): Promise<void> {
+    await getDb(env.DB).insert(visits).values({
+      id: crypto.randomUUID(),
+      prospectId,
+      agentEmail,
+      visitedAt,
+      clientVisitedAt: visitedAt,
+      receivedAt,
+      flyerGiven,
+      outcome: "interested",
+      clientVersion: 1,
+    });
+  }
+
+  describe("flyersGiven", () => {
+    it("counts the period's flyer_given rows, merged included, quarantined and other periods out", async () => {
+      const { from, previousFrom } = brusselsPeriod(Date.now(), 30);
+      const survivor = await seedProspect("assigned");
+      const merged = await seedProspect("assigned", survivor);
+      await insertVisit(survivor, from, from, true);
+      await insertVisit(merged, from + 1, from + 1, true);
+      await insertVisit(survivor, from + 2, from + 2, false); // no flyer
+      await insertVisit(survivor, previousFrom, previousFrom, true); // previous period
+      await getDb(env.DB)
+        .insert(visitsOrphaned)
+        .values({
+          id: crypto.randomUUID(),
+          prospectId: crypto.randomUUID(),
+          agentEmail: AGENT,
+          visitedAt: from + 3,
+          clientVisitedAt: from + 3,
+          receivedAt: from + 3,
+          flyerGiven: true,
+          outcome: "interested",
+          clientVersion: 1,
+          reason: "unknown_prospect",
+          quarantinedAt: from + 3,
+        });
+
+      expect((await dashboard("?period=30")).flyersGiven).toBe(2);
+    });
+  });
+
+  describe("agentsActiveToday", () => {
+    it("counts distinct agents with a visit received today, not yesterday, once each", async () => {
+      // Not `to - DAY_MS`: a clock-change day is 23 h or 25 h.
+      const todayStart = brusselsMidnightDaysFromNow(Date.now(), 0);
+      const a = await seedProspect("assigned");
+      const b = await seedProspect("assigned");
+      const c = await seedProspect("assigned");
+      // A: received today, visited yesterday.
+      await insertVisit(a, todayStart - 1, todayStart + 1, false, "a@example.com");
+      // A again today: still counts once.
+      await insertVisit(a, todayStart + 10, todayStart + 10, false, "a@example.com");
+      await insertVisit(b, todayStart + 5, todayStart + 5, false, "b@example.com");
+      // C: received yesterday.
+      await insertVisit(c, todayStart - 5, todayStart - 5, false, "c@example.com");
+
+      const body = await dashboard();
+      expect(body.agentsActiveToday).toBe(2);
+      // Ignores `period`.
+      expect((await dashboard("?period=90")).agentsActiveToday).toBe(2);
+    });
+  });
+
+  describe("followUpsDueSoon", () => {
+    /** A live follow_up prospect by default, due at `nextVisitAt`. */
+    async function seedDue(
+      nextVisitAt: number | null,
+      status: Status = "follow_up",
+      mergedInto: string | null = null,
+    ): Promise<void> {
+      const id = await seedProspect(status, mergedInto);
+      await getDb(env.DB).update(prospects).set({ nextVisitAt }).where(eq(prospects.id, id));
+    }
+
+    it("counts overdue, today and day +6, not day +7 or later, not merged or another status", async () => {
+      // Midnights from period.ts, not `± n × DAY_MS`, so a clock change in
+      // the next seven days cannot move a row across the bound.
+      const today = brusselsMidnightDaysFromNow(Date.now(), 0);
+      const to = brusselsMidnightDaysFromNow(Date.now(), 1);
+      const dayPlus7 = brusselsMidnightDaysFromNow(Date.now(), 7);
+      await seedDue(today - 40 * DAY_MS); // overdue
+      await seedDue(to - 1); // today
+      await seedDue(dayPlus7 - 1); // day +6, its last instant
+      await seedDue(dayPlus7); // day +7, not due soon
+      await seedDue(null);
+      const survivor = await seedProspect("follow_up");
+      await seedDue(to - 1, "follow_up", survivor); // merged
+      await seedDue(to - 1, "assigned"); // another status
+
+      const body = await dashboard();
+      expect(body.followUpsDueSoon.value).toBe(3);
+    });
+
+    it("dueBefore's total on the prospects list matches followUpsDueSoon.value", async () => {
+      const { to } = brusselsPeriod(Date.now(), 1);
+      await seedDue(to - 40 * DAY_MS); // overdue
+      await seedDue(to - 1); // today
+      await seedDue(to - 1 + 6 * DAY_MS); // day +6
+      await seedDue(to - 1 + 7 * DAY_MS); // day +7, not due soon
+      await seedDue(null);
+      const survivor = await seedProspect("follow_up");
+      await seedDue(to - 1, "follow_up", survivor); // merged
+      await seedDue(to - 1, "assigned"); // another status
+
+      const body = await dashboard();
+      const response = await call(
+        `/api/admin/prospects?status=follow_up&dueBefore=${body.followUpsDueSoon.dueBefore}`,
+      );
+      expect(response.status).toBe(200);
+      const { total } = (await response.json()) as { total: number };
+      expect(total).toBe(body.followUpsDueSoon.value);
+      expect(total).toBe(3);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      ["2026-03-29T21:30:00.000Z"], // spring DST, near the switch
+      ["2026-10-25T22:30:00.000Z"], // autumn DST, near the switch
+    ])("dueBefore is a Brussels midnight across a clock change, at %s", async (now) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.parse(now));
+
+      const { dueBefore } = (await dashboard()).followUpsDueSoon;
+      expect(wall.format(dueBefore)).toBe("00:00:00");
+    });
   });
 });

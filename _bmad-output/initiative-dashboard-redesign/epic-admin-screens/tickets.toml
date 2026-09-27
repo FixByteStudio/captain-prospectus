@@ -1,0 +1,200 @@
+# epic-admin-screens — build order. Status never lives here.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Admin screen primitives and shared states"
+description = "Add the PageHeader and Panel primitives the six screens compose from, extend the already-adopted --text-title token to the admin headings that still spell their own, give the admin side its shared Loading skeleton, Load-failed Alert and action-toast conventions from EXPERIENCE.md's three 'Admin, every screen' rows, and land the three fixes every rebuilt screen depends on: cn() rebuilt on extendTailwindMerge so a font-size token stops being read as a colour (#136), the admin Input at 16px text-body-field (#92), and Progress forwarding value to the Radix root (#147)."
+verify = "A DOM test asserts cn(\"text-success\",\"text-meta\") keeps the colour and another asserts Progress renders a determinate value; the six admin screens render the shared skeleton and load-failed Alert; pnpm test is green and no admin screen file still spells its own heading or panel chrome."
+covers = ["CAP-3"]
+after = ["1.3", "1.9"]
+hitl = false
+risk = "low"
+references = [
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/136",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/92",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/147",
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a13_tats_syst_me_admin",
+]
+unknown = "epic-field-screens can run beside this epic and rebuilds the field files that share cn() and Input; this entry's verify is scoped to the admin screens so the two do not fight over the same assertion."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Name search, the visits date range and the export filters"
+description = "Add this epic's additive read-only params to the admin API: q= matching prospect names case-insensitively (G4), from and to on the visits feed over received_at (G5), and q, dueBefore and multi-value status on the prospects CSV export so an export always matches the filtered list on screen."
+verify = "Worker tests cover q= matching case-insensitively and binding as a parameter, from/to filtering on received_at, from > to answering 400, and the export returning the same rows as the list under every filter; docs/api.md documents all of them."
+covers = ["CAP-3"]
+after = []
+hitl = false
+risk = "low"
+references = [
+  "_bmad-output/specs/spec-dashboard-redesign/server-gaps.md",
+  "docs/api.md",
+]
+unknown = "None known."
+
+[[entry]]
+id = 3
+type = "story"
+title = "The Visites strip figures in the dashboard aggregate"
+description = "Extend GET /api/admin/dashboard additively with the flyers-given count, the distinct-agents-with-a-visit-received-today count (G6) and a seven-day follow-up window, since the existing followUpsDue is due-today-or-earlier and the strip asks for 'Relances dues sous 7 jours'; write the new row into server-gaps.md for the owner to sign, and prove the endpoint still fits its CPU budget."
+verify = "Worker tests cover all three figures; scripts/measure-dashboard-cpu.mjs still reports under 10 ms and the number is quoted in the PR; docs/api.md and server-gaps.md carry the new row."
+covers = ["CAP-3"]
+after = [2, "2.3"]
+hitl = true
+risk = "high"
+references = [
+  "_bmad-output/specs/spec-dashboard-redesign/server-gaps.md",
+  "scripts/measure-dashboard-cpu.mjs",
+]
+unknown = "G1 measured 7.9-8.2 ms of the 10 ms budget (invariant 13). Three more aggregates may not fit; if they do not, these figures need their own endpoint and this entry splits."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Visites rebuilt: ledger, KPI strip and date range"
+description = "Rebuild Visites on the new design as a ledger ordered by received_at with the quoted note line, the ambient arrival wash and no toast, add the four-card KPI strip and the 7/30/90 selector that sends the matching from/to to the feed and the same period to the aggregate, add 25-row pagination and a CSV export button, make each strip card open the list behind it, and rewrite the docs/design.md live-feed section including the sentence that says the feed has no date range."
+verify = "DOM tests pin the selector driving both the feed request and the strip, pagination, the four strip figures, each card's link target and the empty feed copy; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [1, 3]
+hitl = false
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a10_visites",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/162",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/160",
+]
+unknown = "Both CSV export endpoints cap at 500 rows and set x-truncated; this entry decides what the button does with a truncated answer and entry 5 follows it."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Prospects rebuilt: name search, pagination and CSV export"
+description = "Rebuild Prospects on the new design keeping the URL filter contract 2.10 established, add the name search into the one toolbar slot that is replaced in place by the selection actions, add 25-row pagination and a CSV export button, keep the removable chips for several statuses and dueBefore and the row menu with its side submenus, render as a list of rows below 768px, and write the docs/design.md Prospects section the file has never had while rewriting One toolbar slot."
+verify = "The existing ProspectsScreen.test.tsx stays green in what it asserts, and new DOM tests pin q= reaching the request, pagination, the export button and both empty states; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [4, "2.10"]
+hitl = false
+risk = "high"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a2_prospects",
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a3_prospects_tats_vides_recherche_infructueuse",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/136",
+]
+unknown = "This is the largest entry: 483 lines of screen plus a 204-line test, and it carries the toolbar swap, pagination, export, both empty states and the sub-768px list. If the responsive list and the export cannot land in one session, they split off rather than shrink."
+
+[[entry]]
+id = 6
+type = "story"
+title = "Import rebuilt: the CSV path"
+description = "Rebuild the Source, Fichier, Colonnes and Aperçu steps on the new design with the numbered stepper, keeping the file parsed in the browser and never uploaded, the rejected rows listed first and struck through with their reasons, the 250-row progress with its beforeunload confirmation, the Import terminé dialog and the mid-way failure Alert, fixing the fr-FR coordinates (#154) and the inline French aria-label at ImportScreen.tsx:107, and writing the docs/design.md section the CSV path has never had."
+verify = "DOM tests cover the stepper fork, a rejected-row preview, the running progress state and the result dialog; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [5]
+hitl = false
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a5_import_csv_fichier_et_colonnes",
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a6_import_csv_aper_u_et_validation",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/154",
+]
+unknown = "None of the nine import components has a DOM test today, so this entry writes the first ones and may find behaviour only the pure helpers currently pin."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Import rebuilt: the map path"
+description = "Rebuild the Zone step on the new design preserving every map-import rule docs/design.md and ADR-0020 already record: map and results side by side, the provider select above the map with a change clearing the drawing, the single toolbar slot under the map carrying the vertex count, Annuler le dernier point, Effacer and Rechercher dans la zone, unnamed places struck and excluded from the count, the already-listed rows out by default behind one checkbox that resets each search, the cached answer with its age, attribution passed to the tile layer's own option, and the Google circle gesture with its standing cost wording; fix the hand-spelled status edges (#167), the toolbar overflow below 480px (#28) and the near-invisible dark-mode shapes (#27)."
+verify = "DOM tests cover the provider switch clearing the drawing, the unnamed-place exclusion and the already-listed opt-in resetting on a new search; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [6]
+hitl = false
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a7_import_carte_zone_et_r_sultats",
+  "docs/adr/0020-google-places-as-a-second-map-provider.md",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/167",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/28",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/27",
+]
+unknown = "MapCanvas drives Leaflet imperatively, so the new design must not take ownership of the canvas away from it; how much of the step can be DOM-tested at all is unproven."
+
+[[entry]]
+id = 8
+type = "story"
+title = "Doublons rebuilt"
+description = "Rebuild Doublons on the new design with the pair reading as one unit — two stacked rows and the distance shown once — Garder on either row keeping that one and merging the other with no confirmation, secondary buttons rather than gold, the truncation Alert, the toolbar slot the One toolbar slot pattern scopes to this screen, and the healthy empty state; write the docs/design.md section it has never had."
+verify = "DOM tests cover a pair rendering as one unit, Garder merging the other side, and the empty state; the pairs count still feeds the sidebar badge and the dashboard À traiter row; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [7]
+hitl = false
+risk = "low"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a8_doublons",
+]
+unknown = "EXPERIENCE.md scopes One toolbar slot to Doublons but the screen has no filters today, so what that slot holds here is decided in this entry."
+
+[[entry]]
+id = 9
+type = "story"
+title = "À rattacher rebuilt"
+description = "Rebuild the repair queue on the new design as a forecast rather than a record: the header count and the lede saying the effect has not happened yet, the outcome edge previewing what repairing would do, both reasons sharing one dense row shape with no per-row dialog, server-proposed candidates nearest first with the distance inside each button and an explicit message when a visit has no position, Supprimer far right opening the destructive confirmation, and the healthy empty state; fix the sidebar badge that counts only the queue's first page (#159) and rewrite the docs/design.md repair-queue section."
+verify = "DOM tests cover both reason shapes, a candidate button carrying its distance, the no-position message and the discard confirmation, and a test pins the badge against a queue larger than one page; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [8]
+hitl = false
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a9_visites_rattacher",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/159",
+]
+unknown = "OrphansScreen calls useRepairOrphan once per row today; whether the rebuilt row keeps that shape is decided here."
+
+[[entry]]
+id = 10
+type = "story"
+title = "Scripts rebuilt"
+description = "Rebuild the script editor on the new design with question cards whose GripVertical is the only reorder affordance and which reorder from the keyboard through the dnd-kit KeyboardSensor, a saved key locked and unlocked only by Modifier la clé with a standing warning rather than a toast, the read-only versions rail, one primary action opening the confirmation that names the version it will create, and the spinner and disabled button until the server answers; fix the 509px width at 390px (#72) and rewrite the docs/design.md script-editor section per the cards decision."
+verify = "DOM tests cover keyboard reorder, the key lock and its standing warning, and the confirmation naming the version; pnpm test is green."
+covers = ["CAP-3", "CAP-11"]
+after = [9]
+hitl = false
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a11_scripts",
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/stitch/admin/a12_scripts_dialogue_de_confirmation",
+  "https://github.com/FixbyteStudio/captain-prospectus/issues/72",
+]
+unknown = "Neither ScriptsScreen nor QuestionRow has a DOM test today, and the seeded-once effect that stops a background refetch clobbering an edit must survive the rebuild."
+
+[[entry]]
+id = 11
+type = "story"
+title = "The six screens at 1280, 820 and 390, light and dark"
+description = "A person walks the six rebuilt screens at desktop, tablet and phone widths in both themes against their EXPERIENCE.md Component Patterns and State Patterns rows, because the DOM harness is happy-dom and evaluates neither media queries nor computed colour."
+verify = "Every pattern row is checked off per screen, per width, per theme, with an issue filed for each miss, and the epic's Done when 2 is signed off."
+covers = ["CAP-3"]
+after = [10, "2.4"]
+hitl = true
+risk = "medium"
+references = [
+  "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md",
+  "_bmad-output/initiative-dashboard-redesign/epic-shared-shell/epic-shared-shell.md",
+]
+unknown = "None known."
+
+[[entry]]
+id = 12
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup across the epic's changes, scoped when pulled from the build records and deferred review findings; no new scope."
+verify = "pnpm lint, typecheck, test, build and check:precache are green and the epic's Done when checks all pass."
+covers = ["CAP-3", "CAP-11"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+hitl = false
+risk = "low"
+references = [
+  "_bmad-output/implementation-artifacts/deferred-work.md",
+]
+unknown = "None known."

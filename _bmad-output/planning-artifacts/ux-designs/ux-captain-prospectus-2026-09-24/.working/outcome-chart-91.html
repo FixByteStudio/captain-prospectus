@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visites dans le temps — couleurs outcome (issue #91)</title>
+<style>
+/* ── Issue #91 resolution. Only the three outcome-* tokens move.
+   warn (#9A6B12 / #D98A3C) and success (#1F6F4A / #4FA97D) are shared
+   semantic tokens and stay exactly as they are.
+
+   LIGHT (card #FFFFFF)          was        now       vs card
+     outcome-no-contact          #DDE0E5 → #8A92A4    3.12
+     outcome-not-interested      #5B5F63 → #5B5F63    6.44  (unchanged)
+     outcome-interested          #4F5E81 → #2E3F63   10.46
+   DARK (card #182031)
+     outcome-no-contact-dark     #3A4356 → #7C87A0    4.52
+     outcome-not-interested-dark #8E9399 → #8E9399    5.26  (unchanged)
+     outcome-interested-dark     #98A6CD → #AEBBDB    8.47
+   Second cue: 1px card-coloured stroke between stacked segments, plus the
+   count printed in the segment when it is >= 22px tall. Label ink is fixed per
+   theme, never per series: light = navy #1B2A4A on no-contact (4.56) and card
+   #FFFFFF on the other four (4.68 worst); dark = #141C2E on all five (4.72
+   worst). #E7EAF0 on a dark series would be 1.59 on interested. */
+*{box-sizing:border-box}
+body{margin:0;padding:32px;background:#F6F7F0;color:#1B2A4A;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+h1{font-size:20px;font-weight:600;letter-spacing:-.005em;margin:0 0 4px}
+.sub{font-size:12px;font-weight:500;letter-spacing:.02em;color:#5A6478;margin:0 0 24px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+@media(max-width:900px){.pair{grid-template-columns:1fr}}
+
+.card{background:#FFFFFF;border:1px solid #D7DAE2;border-radius:12px;padding:20px}
+.dark .card{background:#182031;border-color:#2B3547}
+.dark{background:#101726;color:#E7EAF0;border-radius:12px;padding:20px}
+.card h2{font-size:16px;font-weight:600;margin:0 0 2px}
+.card .meta{font-size:12px;font-weight:500;letter-spacing:.02em;color:#5A6478;margin:0 0 16px}
+.dark .card .meta{color:#97A2B8}
+
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.legend span{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.swatch{width:12px;height:12px;border-radius:4px;border:1px solid rgba(0,0,0,.08)}
+.dark .swatch{border-color:rgba(255,255,255,.12)}
+
+.plot{display:flex;align-items:flex-end;gap:14px;height:240px;
+  border-bottom:1px solid #D7DAE2;padding-bottom:0}
+.dark .plot{border-color:#2B3547}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end}
+.seg{display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;line-height:1;
+  border-top:1px solid #FFFFFF}          /* the card-coloured separator */
+.dark .seg{border-top-color:#182031}
+.col .seg:first-child{border-top:none}
+.col .seg:last-child{border-radius:0 0 2px 2px}
+.col .seg:first-child{border-radius:2px 2px 0 0}
+.xaxis{display:flex;gap:14px;margin-top:8px}
+.xaxis div{flex:1;text-align:center;font-size:12px;font-weight:500;
+  letter-spacing:.02em;color:#5A6478}
+.dark .xaxis div{color:#97A2B8}
+
+table{border-collapse:collapse;width:100%;margin-top:28px;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #D7DAE2}
+th{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5A6478}
+td.n{font-variant-numeric:tabular-nums;text-align:right}
+.ok{color:#1F6F4A;font-weight:600}
+.chip{display:inline-block;width:14px;height:14px;border-radius:4px;
+  vertical-align:-2px;margin-right:7px;border:1px solid rgba(0,0,0,.08)}
+</style></head><body>
+
+<h1>Visites dans le temps — couleurs outcome</h1>
+<p class="sub">ISSUE #91 · CINQ SÉRIES ≥ 3:1 CONTRE LA CARTE · SÉPARATEUR 1PX + ÉTIQUETTES</p>
+
+<div class="pair">
+
+  <!-- LIGHT -->
+  <div>
+    <div class="card">
+      <h2>Visites dans le temps</h2>
+      <p class="meta">7 DERNIERS JOURS · THÈME CLAIR</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:#8A92A4"></i>Personne sur place</span>
+        <span><i class="swatch" style="background:#2E3F63"></i>Intéressé</span>
+        <span><i class="swatch" style="background:#5B5F63"></i>Pas intéressé</span>
+        <span><i class="swatch" style="background:#9A6B12"></i>À relancer</span>
+        <span><i class="swatch" style="background:#1F6F4A"></i>Converti</span>
+      </div>
+      <div class="plot" id="plotL"></div>
+      <div class="xaxis" id="axL"></div>
+    </div>
+  </div>
+
+  <!-- DARK -->
+  <div class="dark">
+    <div class="card">
+      <h2>Visites dans le temps</h2>
+      <p class="meta">7 DERNIERS JOURS · THÈME SOMBRE</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:#7C87A0"></i>Personne sur place</span>
+        <span><i class="swatch" style="background:#AEBBDB"></i>Intéressé</span>
+        <span><i class="swatch" style="background:#8E9399"></i>Pas intéressé</span>
+        <span><i class="swatch" style="background:#D98A3C"></i>À relancer</span>
+        <span><i class="swatch" style="background:#4FA97D"></i>Converti</span>
+      </div>
+      <div class="plot" id="plotD"></div>
+      <div class="xaxis" id="axD"></div>
+    </div>
+  </div>
+</div>
+
+<table>
+  <thead><tr><th>Série</th><th>Clair</th><th class="n">vs carte</th><th>Sombre</th><th class="n">vs carte</th></tr></thead>
+  <tbody>
+    <tr><td><i class="chip" style="background:#8A92A4"></i>Personne sur place</td><td>#8A92A4</td><td class="n ok">3.12</td><td>#7C87A0</td><td class="n ok">4.52</td></tr>
+    <tr><td><i class="chip" style="background:#2E3F63"></i>Intéressé</td><td>#2E3F63</td><td class="n ok">10.46</td><td>#AEBBDB</td><td class="n ok">8.47</td></tr>
+    <tr><td><i class="chip" style="background:#5B5F63"></i>Pas intéressé</td><td>#5B5F63</td><td class="n ok">6.44</td><td>#8E9399</td><td class="n ok">5.26</td></tr>
+    <tr><td><i class="chip" style="background:#9A6B12"></i>À relancer <em>(warn)</em></td><td>#9A6B12</td><td class="n ok">4.68</td><td>#D98A3C</td><td class="n ok">5.93</td></tr>
+    <tr><td><i class="chip" style="background:#1F6F4A"></i>Converti <em>(success)</em></td><td>#1F6F4A</td><td class="n ok">6.12</td><td>#4FA97D</td><td class="n ok">5.66</td></tr>
+  </tbody>
+</table>
+
+<script>
+var days=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+var data=[[4,6,3,2,1],[3,8,4,3,2],[5,5,6,2,1],[2,9,3,4,3],[6,7,5,3,2],[3,4,2,1,1],[1,3,2,1,0]];
+var L=["#8A92A4","#2E3F63","#5B5F63","#9A6B12","#1F6F4A"];
+var D=["#7C87A0","#AEBBDB","#8E9399","#D98A3C","#4FA97D"];
+var onL=["#1B2A4A","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"];
+var onD=["#141C2E","#141C2E","#141C2E","#141C2E","#141C2E"];
+var max=Math.max.apply(null,data.map(function(c){return c.reduce(function(a,b){return a+b},0)}));
+function draw(plotId,axId,cols,fg){
+  var p=document.getElementById(plotId),a=document.getElementById(axId);
+  data.forEach(function(col,i){
+    var d=document.createElement("div"); d.className="col";
+    // stack order: top -> bottom is reverse of the legend order
+    col.map(function(v,j){return {v:v,j:j}}).reverse().forEach(function(s){
+      var h=s.v/max*230;
+      var e=document.createElement("div"); e.className="seg";
+      e.style.height=h+"px"; e.style.background=cols[s.j]; e.style.color=fg[s.j];
+      e.textContent = h>=22 ? s.v : "";        // label only when the segment fits
+      d.appendChild(e);
+    });
+    p.appendChild(d);
+    var x=document.createElement("div"); x.textContent=days[i]; a.appendChild(x);
+  });
+}
+draw("plotL","axL",L,onL);
+draw("plotD","axD",D,onD);
+</script>
+</body></html>

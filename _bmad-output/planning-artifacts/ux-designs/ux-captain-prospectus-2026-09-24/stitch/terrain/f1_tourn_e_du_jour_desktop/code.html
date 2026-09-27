@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-error-container":"#93000a","tertiary":"#4f5e81","muted-dark":"#222B3D","surface-variant":"#e2e3dc","secondary-fixed":"#e0e2e7","background-light":"#F6F7F0","on-surface-variant":"#4d4635","foreground-light":"#1B2A4A","card-dark":"#182031","error-container":"#ffdad6","primary-edge-dark":"#E6C65C","primary-fixed":"#ffe08e","secondary-container":"#dde0e5","muted-light":"#E8EAEF","surface-container-highest":"#e2e3dc","sidebar-dark":"#0B1120","outline-variant":"#d1c5af","tertiary-fixed-dim":"#b7c6ee","surface-bright":"#f9faf3","muted-foreground-dark":"#97A2B8","on-primary-container":"#4b3a00","primary-container":"#c9a227","success-dark":"#4FA97D","background":"#f9faf3","primary-dark":"#D9B43C","on-tertiary-fixed-variant":"#384668","muted-foreground-light":"#5A6478","sidebar-muted-light":"#95A0B8","success-light":"#1F6F4A","inverse-on-surface":"#f0f1ea","sidebar-foreground-light":"#EEF0F4","on-primary-fixed":"#241a00","surface-container-low":"#f3f4ed","surface-container":"#edeee8","foreground-dark":"#E7EAF0","on-secondary-container":"#606367","on-secondary-fixed":"#181c20","on-primary":"#ffffff","on-tertiary-fixed":"#0a1a3a","destructive-dark":"#D2757E","primary-foreground-dark":"#141C2E","border-light":"#D7DAE2","tertiary-container":"#98a6cd","inverse-primary":"#ecc246","secondary-fixed-dim":"#c4c6cb","primary":"#755b00","border-dark":"#2B3547","inverse-surface":"#2f312d","surface-tint":"#755b00","on-error":"#ffffff","tertiary-fixed":"#d9e2ff","destructive-light":"#8C2F39","warn-dark":"#D98A3C","on-secondary":"#ffffff","surface":"#f9faf3","on-background":"#1a1c18","warn-light":"#9A6B12","on-tertiary-container":"#2d3b5c","primary-fixed-dim":"#ecc246","secondary":"#5b5f63","surface-container-lowest":"#ffffff","primary-edge-light":"#A8801A","on-surface":"#1a1c18","on-primary-fixed-variant":"#584400","on-tertiary":"#ffffff","on-secondary-fixed-variant":"#44474b","error":"#ba1a1a","surface-dim":"#d9dbd4","outline":"#7f7663","background-dark":"#101726","surface-container-high":"#e8e9e2","card-light":"#FFFFFF","sidebar-light":"#1B2A4A"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-md":"0.75rem","margin":"1.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xl":"1.5rem","space-xs":"0.25rem","space-sm":"0.5rem","space-lg":"1rem","gutter":"1rem"},"fontFamily":{"body-default":["Archivo Narrow"],"caption":["Archivo Narrow"],"headline-md":["Archivo Narrow"],"body-lg":["Archivo Narrow"],"display":["Archivo Narrow"],"label-default":["Archivo Narrow"],"headline-lg":["Archivo Narrow"]},"fontSize":{"body-default":["14px",{"lineHeight":"20px","fontWeight":"400"}],"caption":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"headline-md":["18px",{"lineHeight":"24px","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"display":["28px",{"lineHeight":"34px","letterSpacing":"-0.01em","fontWeight":"700"}],"label-default":["14px",{"lineHeight":"18px","fontWeight":"500"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-background-light font-body-default text-body-default text-foreground-light antialiased min-h-screen"><aside class="fixed left-0 top-0 h-full w-64 bg-sidebar-light z-50 flex flex-col justify-between select-none shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-14 px-space-lg flex items-center gap-space-sm bg-muted-dark/30"><img alt="Captain Prospectus Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X1t-JsUYKSxOoZIOJMWJZwobxqg2Ln-XI9Qg2J1z9hXhXRh7en5EO9BSKpBhS9JNiuHwYf76lhaDTbSaqxooOqJYFwSB413PT1UzcWq1UqCMXBDbPu-YS8UEFkwBVtyksg8d5vyy4jKC22tvNujFmWZTvpTfGjUbw9UNFzROvo9tw1TuWagKqxDo9CfBBDn69BgbIX02s-80FIN0xUmM7U6pR3zkuAElD9t9yZbiniRFbbpKRsToBKV6k"/><span class="font-headline-md text-headline-md tracking-tight text-sidebar-foreground-light">Captain Prospectus</span></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Pilotage</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded transition-colors text-on-surface-variant" data-path="tableau-de-bord" href="#"><span class="material-symbols-outlined text-[18px]">dashboard</span><span>Tableau de bord</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Prospects</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="prospects" href="#"><span class="material-symbols-outlined text-[18px]">storefront</span><span>Prospects</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="import" href="#"><span class="material-symbols-outlined text-[18px]">cloud_upload</span><span>Import</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="doublons" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">content_copy</span><span>Doublons</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-muted-dark text-sidebar-foreground-light">3</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="a-rattacher" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">link</span><span>À rattacher</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-warn-dark text-sidebar-foreground-light">2</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Terrain</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="visites" href="#"><span class="material-symbols-outlined text-[18px]">pin_drop</span><span>Visites</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="scripts" href="#"><span class="material-symbols-outlined text-[18px]">assignment</span><span>Scripts</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="tournee-du-jour" href="#"><span class="material-symbols-outlined text-[18px]">explore</span><span>Tournée du jour</span></a></nav></div></div><div class="p-space-md bg-muted-dark/40"><div class="flex items-center gap-space-sm"><div class="w-2 h-2 rounded-full bg-success-light animate-pulse"></div><div class="flex flex-col flex-1 min-w-0"><span class="font-label-default text-label-default text-sidebar-foreground-light truncate">admin@exemple.be</span><span class="font-caption text-caption text-sidebar-muted-light truncate">Synchronisé à l'instant</span></div></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-14 bg-card-light/95 backdrop-blur-md z-40 px-space-lg flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-md"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">menu_open</span></button><nav class="hidden sm:flex items-center gap-space-xs font-caption text-caption text-muted-foreground-light"><span class="hover:text-foreground-light cursor-pointer">Captain Prospectus</span><span class="material-symbols-outlined text-[14px]">chevron_right</span><span class="text-foreground-light font-semibold">Console d'administration</span></nav></div><div class="flex items-center gap-space-sm"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">search</span></button><button class="relative p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-warn-light"></span></button><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">light_mode</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="w-full pt-14 bg-background-light min-h-screen"><div class="flex flex-col w-full">
+<div class="w-full max-w-[1440px] mx-auto px-margin py-space-xl flex flex-col gap-space-xl">
+<!-- Top Bar: Navigation & Key Actions -->
+<header class="flex flex-col lg:flex-row lg:items-end justify-between gap-space-lg">
+<div class="flex flex-col gap-1">
+<nav class="flex items-center gap-1.5 font-caption text-caption text-muted-foreground-light">
+<span class="hover:text-foreground-light cursor-pointer">Captain Prospectus</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="hover:text-foreground-light cursor-pointer">Terrain</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-foreground-light font-semibold">Tournée du jour</span>
+</nav>
+<div class="flex items-baseline gap-space-md mt-1">
+<h1 class="font-display text-display text-foreground-light tracking-tight">Tournée du jour</h1>
+<span class="font-caption text-caption text-muted-foreground-light uppercase tracking-wider font-semibold">Carnet de bord</span>
+</div>
+<p class="font-body-default text-body-default text-muted-foreground-light">
+          17 arrêts assignés aujourd'hui à <span class="font-medium text-foreground-light">Léa</span> (Bruxelles Centre &amp; Marolles)
+        </p>
+</div>
+<!-- Action Cluster -->
+<div class="flex flex-wrap items-center gap-space-sm">
+<div class="relative inline-flex items-center bg-card-light rounded-lg shadow-sm px-space-md py-2 text-foreground-light">
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px] mr-2">badge</span>
+<span class="font-label-default text-label-default mr-1">Agent :</span>
+<span class="font-semibold text-foreground-light text-label-default">Léa (lea@exemple.be)</span>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px] ml-2 cursor-pointer">arrow_drop_down</span>
+</div>
+<button class="inline-flex items-center gap-space-xs bg-muted-light hover:bg-secondary-container text-foreground-light px-space-md py-2 rounded-lg font-label-default text-label-default transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">print</span>
+<span>Imprimer la feuille de route</span>
+</button>
+<button class="inline-flex items-center gap-space-xs bg-primary-container hover:bg-primary-edge-light text-primary-foreground-dark px-space-lg py-2 rounded-lg font-headline-md text-headline-md tracking-tight transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px] font-bold">alt_route</span>
+<span>Optimiser le parcours</span>
+</button>
+</div>
+</header>
+<!-- Operational State Strip & KPI Metrics -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-stretch">
+<!-- Progress Bar Ledger Panel (8 cols) -->
+<div class="lg:col-span-8 bg-card-light rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-primary-container"></div>
+<div class="flex flex-wrap items-center justify-between gap-space-md pl-2">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary-edge-light font-display text-[18px]">
+<span class="material-symbols-outlined text-[22px]">directions_walk</span>
+</div>
+<div>
+<span class="font-caption text-caption text-muted-foreground-light uppercase tracking-wider block">Progression globale</span>
+<div class="flex items-baseline gap-2">
+<span class="font-display text-display text-foreground-light tabular-nums font-bold">5</span>
+<span class="font-headline-md text-headline-md text-muted-foreground-light font-normal">/ 17 visites effectuées</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-space-xl text-right">
+<div>
+<span class="font-caption text-caption text-muted-foreground-light block">Arrêts restants</span>
+<span class="font-headline-md text-headline-md text-foreground-light tabular-nums font-semibold">12</span>
+</div>
+<div>
+<span class="font-caption text-caption text-muted-foreground-light block">Distance restante</span>
+<span class="font-headline-md text-headline-md text-foreground-light tabular-nums font-semibold">3,8 km</span>
+</div>
+<div>
+<span class="font-caption text-caption text-muted-foreground-light block">Cadence estimée</span>
+<span class="font-headline-md text-headline-md text-foreground-light tabular-nums font-semibold">14 min / stop</span>
+</div>
+</div>
+</div>
+<div class="pl-2 flex flex-col gap-1.5">
+<div class="w-full bg-muted-light rounded-full h-3 overflow-hidden flex">
+<div class="bg-primary-container h-full transition-all duration-500 rounded-full" style="width: 29.4%;"></div>
+</div>
+<div class="flex justify-between items-center font-caption text-caption text-muted-foreground-light">
+<span>Départ : Grand-Place (09:30)</span>
+<span class="font-semibold text-foreground-light tabular-nums">29% accompli</span>
+<span>Clôture estimée : Marolles (18:15)</span>
+</div>
+</div>
+</div>
+<!-- Fleet Sync Diagnostics & Status Pill (4 cols) -->
+<div class="lg:col-span-4 bg-muted-light/60 rounded-xl p-space-lg flex flex-col justify-between shadow-sm relative">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="flex h-3 w-3 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-light opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-success-light"></span>
+</span>
+<span class="font-caption text-caption text-foreground-light font-semibold uppercase tracking-wider">Télémétrie de bord</span>
+</div>
+<span class="font-caption text-caption bg-card-light px-2 py-0.5 rounded text-muted-foreground-light tabular-nums font-semibold">GPS Précision 4m</span>
+</div>
+<div class="my-2">
+<p class="font-body-default text-body-default text-foreground-light flex items-center gap-2">
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">sync</span>
+            Dernière synchro : <span class="font-semibold tabular-nums">16:15</span>
+</p>
+<div class="mt-1 flex items-center gap-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[12px] font-semibold bg-warn-dark/20 text-warn-light tabular-nums">
+              2 fiches en attente
+            </span>
+<span class="font-caption text-caption text-muted-foreground-light">sauvegardées localement</span>
+</div>
+</div>
+<div class="pt-2 flex items-center justify-between text-[11px] text-muted-foreground-light">
+<span>Batterie terminal : <strong class="text-foreground-light tabular-nums">84%</strong></span>
+<span>Réseau : <strong class="text-foreground-light">4G Proximus</strong></span>
+</div>
+</div>
+</div>
+<!-- Main Workspace (7 / 5 Grid Split) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-start">
+<!-- LEFT COLUMN: Stop Ledger & Timeline (7 / 12) -->
+<div class="lg:col-span-7 flex flex-col gap-space-xl">
+<!-- #1 Active Focus Stop -->
+<div class="bg-card-light rounded-xl shadow-md p-space-xl relative overflow-hidden flex flex-col gap-space-md">
+<div class="absolute left-0 top-0 bottom-0 w-2 bg-primary-container"></div>
+<div class="flex flex-wrap items-center justify-between gap-space-sm pl-1">
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-container text-foreground-light font-headline-md text-[13px] uppercase tracking-wider font-bold">
+<span class="w-2 h-2 rounded-full bg-foreground-light"></span>
+                Arrêt 1 — Étape active
+              </span>
+<span class="inline-flex items-center px-2.5 py-1 rounded text-caption font-semibold bg-muted-light text-foreground-light">
+                Restaurant
+              </span>
+</div>
+<div class="flex items-center gap-1 text-muted-foreground-light font-caption text-caption tabular-nums">
+<span class="material-symbols-outlined text-[16px]">navigation</span>
+<span>À 350 m de la position actuelle</span>
+</div>
+</div>
+<div class="pl-1 flex flex-col gap-1">
+<h2 class="font-display text-[24px] text-foreground-light leading-tight font-bold tracking-tight">Curry House</h2>
+<div class="flex items-center gap-2 font-body-default text-body-default text-muted-foreground-light">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="text-foreground-light font-medium">Rue du Midi 42, 1000 Bruxelles</span>
+<span>·</span>
+<span class="tabular-nums">Zone Centre-Sud</span>
+</div>
+</div>
+<!-- History card insert -->
+<div class="pl-1 bg-surface-container-low rounded-lg p-space-md flex items-start gap-space-sm text-on-surface-variant font-body-default text-body-default">
+<span class="material-symbols-outlined text-primary-edge-light text-[20px] mt-0.5">history_toggle_off</span>
+<div>
+<span class="font-semibold text-foreground-light">Historique de compte :</span>
+<p class="text-muted-foreground-light text-[13px] leading-relaxed">
+                Dernière visite il y a 6 mois · Intéressé par le pack prospectus bimensuel. Demande d'échantillons sur papier glacé recyclé.
+              </p>
+</div>
+</div>
+<!-- Actions -->
+<div class="pl-1 pt-2 flex flex-wrap items-center gap-space-sm">
+<button class="inline-flex items-center gap-2 bg-muted-light hover:bg-secondary-container text-foreground-light px-space-lg py-2.5 rounded-lg font-headline-md text-[14px] transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">near_me</span>
+<span>Itinéraire (Google Maps / OSM)</span>
+</button>
+<button class="inline-flex items-center gap-2 bg-primary-container hover:bg-primary-edge-light text-primary-foreground-dark px-space-xl py-2.5 rounded-lg font-headline-md text-[15px] font-bold tracking-tight transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[20px] font-bold">check_circle</span>
+<span>Enregistrer le passage</span>
+</button>
+<button class="p-2.5 rounded-lg bg-card-light text-muted-foreground-light hover:text-foreground-light transition-colors ml-auto shadow-sm" title="Reporter ce passage" type="button">
+<span class="material-symbols-outlined text-[20px]">schedule</span>
+</button>
+</div>
+</div>
+<!-- Ordered Ledger (Stops 2 to 6) -->
+<div class="bg-card-light rounded-xl shadow-sm overflow-hidden flex flex-col">
+<div class="px-space-lg py-space-md bg-muted-light/30 flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-foreground-light text-[18px]">format_list_numbered</span>
+<h3 class="font-headline-md text-headline-md text-foreground-light">Ordre de passage planifié</h3>
+</div>
+<span class="font-caption text-caption text-muted-foreground-light">5 prochains arrêts · 4,6 km cumulés</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="h-10 bg-surface-container-low font-caption text-caption text-muted-foreground-light uppercase tracking-wider">
+<th class="pl-space-lg pr-2 w-12 text-center">N°</th>
+<th class="px-space-md">Établissement &amp; Adresse</th>
+<th class="px-space-md">Activité</th>
+<th class="px-space-md text-right">Distance</th>
+<th class="px-space-md">Statut</th>
+<th class="pr-space-lg pl-2 text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y-0">
+<!-- Stop 2 -->
+<tr class="h-11 hover:bg-muted-light/30 transition-colors group cursor-pointer relative">
+<td class="pl-space-lg pr-2 text-center font-bold text-foreground-light tabular-nums relative">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-warn-dark"></span>
+                    2
+                  </td>
+<td class="px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-foreground-light font-body-default text-body-default">Bar des Marolles</span>
+<span class="text-muted-foreground-light text-caption">· Rue Haute 112</span>
+</div>
+</td>
+<td class="px-space-md">
+<span class="font-caption text-caption text-muted-foreground-light">Bar</span>
+</td>
+<td class="px-space-md text-right font-caption text-caption tabular-nums text-foreground-light">
+                    500 m
+                  </td>
+<td class="px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-warn-dark/15 text-warn-light">
+                      Pas encore envoyé
+                    </span>
+</td>
+<td class="pr-space-lg pl-2 text-right">
+<button class="p-1 rounded text-muted-foreground-light group-hover:text-foreground-light" title="Inspecter" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Stop 3 -->
+<tr class="h-11 hover:bg-muted-light/30 transition-colors group cursor-pointer bg-muted-light/10 relative">
+<td class="pl-space-lg pr-2 text-center font-bold text-foreground-light tabular-nums relative">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary"></span>
+                    3
+                  </td>
+<td class="px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-foreground-light font-body-default text-body-default">Chez Léa</span>
+<span class="text-muted-foreground-light text-caption">· Place Saint-Géry 3</span>
+</div>
+</td>
+<td class="px-space-md">
+<span class="font-caption text-caption text-muted-foreground-light">Restaurant</span>
+</td>
+<td class="px-space-md text-right font-caption text-caption tabular-nums text-foreground-light">
+                    680 m
+                  </td>
+<td class="px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-tertiary-container/30 text-on-tertiary-container">
+                      Assigné
+                    </span>
+</td>
+<td class="pr-space-lg pl-2 text-right">
+<button class="p-1 rounded text-muted-foreground-light group-hover:text-foreground-light" title="Inspecter" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Stop 4 -->
+<tr class="h-11 hover:bg-muted-light/30 transition-colors group cursor-pointer relative">
+<td class="pl-space-lg pr-2 text-center font-bold text-foreground-light tabular-nums relative">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-warn-light"></span>
+                    4
+                  </td>
+<td class="px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-foreground-light font-body-default text-body-default">Le Comptoir Bruxellois</span>
+<span class="text-muted-foreground-light text-caption">· Rue Dansaert 67</span>
+</div>
+</td>
+<td class="px-space-md">
+<span class="font-caption text-caption text-muted-foreground-light">Bar</span>
+</td>
+<td class="px-space-md text-right font-caption text-caption tabular-nums text-foreground-light">
+                    920 m
+                  </td>
+<td class="px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-warn-light/20 text-warn-light">
+                      À relancer
+                    </span>
+</td>
+<td class="pr-space-lg pl-2 text-right">
+<button class="p-1 rounded text-muted-foreground-light group-hover:text-foreground-light" title="Inspecter" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Stop 5 -->
+<tr class="h-11 hover:bg-muted-light/30 transition-colors group cursor-pointer bg-muted-light/10 relative">
+<td class="pl-space-lg pr-2 text-center font-bold text-foreground-light tabular-nums relative">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-success-light"></span>
+                    5
+                  </td>
+<td class="px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-foreground-light font-body-default text-body-default">Pasta Presto</span>
+<span class="text-muted-foreground-light text-caption">· Rue du Midi 44</span>
+</div>
+</td>
+<td class="px-space-md">
+<span class="font-caption text-caption text-muted-foreground-light">Restauration rapide</span>
+</td>
+<td class="px-space-md text-right font-caption text-caption tabular-nums text-foreground-light">
+                    1,1 km
+                  </td>
+<td class="px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-success-light/20 text-success-light">
+                      Nouveau
+                    </span>
+</td>
+<td class="pr-space-lg pl-2 text-right">
+<button class="p-1 rounded text-muted-foreground-light group-hover:text-foreground-light" title="Inspecter" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</td>
+</tr>
+<!-- Stop 6 -->
+<tr class="h-11 hover:bg-muted-light/30 transition-colors group cursor-pointer relative">
+<td class="pl-space-lg pr-2 text-center font-bold text-foreground-light tabular-nums relative">
+<span class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary"></span>
+                    6
+                  </td>
+<td class="px-space-md">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-foreground-light font-body-default text-body-default">Café de la Gare</span>
+<span class="text-muted-foreground-light text-caption">· Rue Haute 184</span>
+</div>
+</td>
+<td class="px-space-md">
+<span class="font-caption text-caption text-muted-foreground-light">Café</span>
+</td>
+<td class="px-space-md text-right font-caption text-caption tabular-nums text-foreground-light">
+                    1,4 km
+                  </td>
+<td class="px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-tertiary-container/30 text-on-tertiary-container">
+                      Assigné
+                    </span>
+</td>
+<td class="pr-space-lg pl-2 text-right">
+<button class="p-1 rounded text-muted-foreground-light group-hover:text-foreground-light" title="Inspecter" type="button">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-space-sm bg-surface-container-low text-center font-caption text-caption text-muted-foreground-light">
+<span>+ 11 autres arrêts sur la tournée planifiée</span>
+</div>
+</div>
+<!-- Section: Relances Différées / Plus Tard -->
+<div class="bg-card-light rounded-xl shadow-sm p-space-lg flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-muted-foreground-light text-[20px]">update</span>
+<h3 class="font-headline-md text-headline-md text-foreground-light">Plus tard (Relances différées de la zone)</h3>
+</div>
+<span class="font-caption text-caption text-muted-foreground-light uppercase tracking-wider font-semibold">Hors séquence aujourd'hui</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+<div class="p-space-md rounded-lg bg-surface-container-low flex flex-col justify-between gap-2 relative">
+<div class="flex items-start justify-between">
+<div>
+<h4 class="font-headline-md text-[15px] text-foreground-light font-bold">Sushi Sablon</h4>
+<p class="font-caption text-caption text-muted-foreground-light">Rue de Rollebeek 14</p>
+</div>
+<span class="font-caption text-caption text-muted-foreground-light tabular-nums font-semibold">1,8 km</span>
+</div>
+<div class="flex items-center justify-between pt-2">
+<span class="inline-flex items-center gap-1 font-caption text-caption text-warn-light font-medium">
+<span class="material-symbols-outlined text-[14px]">event_repeat</span>
+                  À relancer le 02/10/2026
+                </span>
+<button class="text-[12px] font-semibold text-foreground-light hover:underline" type="button">
+                  Réintégrer
+                </button>
+</div>
+</div>
+<div class="p-space-md rounded-lg bg-surface-container-low flex flex-col justify-between gap-2 relative">
+<div class="flex items-start justify-between">
+<div>
+<h4 class="font-headline-md text-[15px] text-foreground-light font-bold">L'Estaminet</h4>
+<p class="font-caption text-caption text-muted-foreground-light">Place du Jeu de Balle 8</p>
+</div>
+<span class="font-caption text-caption text-muted-foreground-light tabular-nums font-semibold">2,1 km</span>
+</div>
+<div class="flex items-center justify-between pt-2">
+<span class="inline-flex items-center gap-1 font-caption text-caption text-warn-light font-medium">
+<span class="material-symbols-outlined text-[14px]">event_repeat</span>
+                  À relancer le 05/10/2026
+                </span>
+<button class="text-[12px] font-semibold text-foreground-light hover:underline" type="button">
+                  Réintégrer
+                </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN: Map & Selected Stop Sheet (5 / 12) -->
+<div class="lg:col-span-5 flex flex-col gap-space-xl">
+<!-- Cartographic Route Map View -->
+<div class="bg-card-light rounded-xl shadow-md overflow-hidden flex flex-col">
+<div class="px-space-md py-2.5 bg-sidebar-light text-sidebar-foreground-light flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-[18px]">map</span>
+<span class="font-headline-md text-[14px] text-sidebar-foreground-light tracking-wide">Tracé piétonnier · Bruxelles Centre</span>
+</div>
+<div class="flex items-center gap-2 font-caption text-caption text-sidebar-muted-light">
+<span class="inline-block w-2 h-2 rounded-full bg-primary-container"></span> #1 Focus
+              <span class="inline-block w-2 h-2 rounded-full bg-sidebar-muted-light ml-1"></span> #2-17
+            </div>
+</div>
+<!-- Static / Interactive map simulator container -->
+<div class="relative w-full h-[360px] bg-surface-variant overflow-hidden group">
+<div class="w-full h-full bg-cover bg-center" data-alt="A clean, top-down tactical cartographic vector map of central Brussels showing city blocks, streets like Rue du Midi and Rue Haute, with an overlaid golden and navy walking route dotted with pins. Minimalist, modern cartographic style with ink aesthetic." data-location="Grand-Place, Brussels, Belgium" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCFdP4eKz9DJltVz1AjugR4wTBXKee-ozVXettB2tbp70mvg48xgAtITX1cy9XBZPVZOVvJGw_csZ1B5otOOF6WsbHBV6hN90nU3OBAcYTXO7jBSGQ_ply98y3jtjFMbmu851iwILgXUReBqxV19ImTKmIz4MSMQrE8N0xQONb0bUXdMkDO3PvvDl_JCyVBcXxGQ_HKCR9UadlV5qCh2LchAPO_3t8_ZtQD-48nOe_FqEc48Lo8DsQa');">
+</div>
+<!-- Overlay SVG Walk Route simulation and numbered pins -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+<!-- Dashed route path -->
+<path d="M 120 70 L 190 140 L 230 190 L 310 210 L 280 290 L 390 320" fill="none" stroke="#1B2A4A" stroke-dasharray="6,4" stroke-opacity="0.8" stroke-width="3"></path>
+<!-- Active connector pulse -->
+<line stroke="#C9A227" stroke-width="3" x1="120" x2="190" y1="70" y2="140"></line>
+</svg>
+<!-- Pin #1: Golden Compass Focus -->
+<div class="absolute top-[125px] left-[175px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer transform hover:scale-110 transition-transform">
+<div class="w-9 h-9 rounded-full bg-primary-container shadow-lg flex items-center justify-center text-foreground-light font-display text-[15px] font-bold">
+                1
+              </div>
+<div class="px-2 py-0.5 mt-1 rounded bg-card-light/95 backdrop-blur shadow-sm text-[11px] font-bold text-foreground-light whitespace-nowrap">
+                Curry House
+              </div>
+</div>
+<!-- Pin #2 -->
+<div class="absolute top-[180px] left-[225px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer">
+<div class="w-6 h-6 rounded-full bg-sidebar-light text-sidebar-foreground-light shadow flex items-center justify-center text-[11px] font-bold">
+                2
+              </div>
+</div>
+<!-- Pin #3 -->
+<div class="absolute top-[200px] left-[300px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer">
+<div class="w-6 h-6 rounded-full bg-sidebar-light text-sidebar-foreground-light shadow flex items-center justify-center text-[11px] font-bold">
+                3
+              </div>
+</div>
+<!-- Pin #4 -->
+<div class="absolute top-[280px] left-[270px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer">
+<div class="w-6 h-6 rounded-full bg-sidebar-light text-sidebar-foreground-light shadow flex items-center justify-center text-[11px] font-bold">
+                4
+              </div>
+</div>
+<!-- Pin #5 -->
+<div class="absolute top-[310px] left-[380px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer">
+<div class="w-6 h-6 rounded-full bg-sidebar-light text-sidebar-foreground-light shadow flex items-center justify-center text-[11px] font-bold">
+                5
+              </div>
+</div>
+<!-- Pin Start (depot) -->
+<div class="absolute top-[60px] left-[110px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+<div class="w-5 h-5 rounded-full bg-success-light text-card-light flex items-center justify-center text-[10px]">
+<span class="material-symbols-outlined text-[12px]">flag</span>
+</div>
+</div>
+<!-- Floating map controls -->
+<div class="absolute bottom-2 right-2 flex flex-col gap-1 shadow-sm">
+<button class="w-7 h-7 bg-card-light hover:bg-muted-light rounded flex items-center justify-center text-foreground-light font-bold text-sm" type="button">
+                +
+              </button>
+<button class="w-7 h-7 bg-card-light hover:bg-muted-light rounded flex items-center justify-center text-foreground-light font-bold text-sm" type="button">
+                −
+              </button>
+</div>
+<!-- Mandatory Legal attribution -->
+<div class="absolute bottom-1 left-2 text-[10px] text-muted-foreground-dark bg-card-dark/80 px-2 py-0.5 rounded backdrop-blur">
+              © les contributeurs OpenStreetMap
+            </div>
+</div>
+</div>
+<!-- Visit Preparation Dossier (Fiche détaillée étape #1) -->
+<div class="bg-card-light rounded-xl shadow-sm p-space-lg flex flex-col gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary-edge-light text-[22px]">assignment</span>
+<div>
+<h3 class="font-headline-md text-headline-md text-foreground-light">Fiche de préparation de visite</h3>
+<span class="font-caption text-caption text-muted-foreground-light">Arrêt ciblé : Curry House (#1)</span>
+</div>
+</div>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-primary-container/20 text-foreground-light">
+              Script V2 actif
+            </span>
+</div>
+<!-- Contact details card -->
+<div class="grid grid-cols-2 gap-space-sm bg-surface-container-low p-space-md rounded-lg font-caption text-caption">
+<div>
+<span class="text-muted-foreground-light uppercase tracking-wider text-[10px] block">Interlocuteur clé</span>
+<span class="font-headline-md text-[14px] text-foreground-light font-bold">M. Samir Benali</span>
+<span class="text-muted-foreground-light block">Gérant &amp; Responsable Achats</span>
+</div>
+<div>
+<span class="text-muted-foreground-light uppercase tracking-wider text-[10px] block">Coordonnées</span>
+<span class="text-foreground-light font-semibold block">+32 2 512 88 94</span>
+<span class="text-muted-foreground-light truncate block">samir@curryhouse.brussels</span>
+</div>
+</div>
+<!-- Tactical Field Notes -->
+<div class="flex flex-col gap-2">
+<span class="font-caption text-caption text-muted-foreground-light uppercase tracking-wider font-semibold">
+              Consignes &amp; Notes de terrain
+            </span>
+<div class="flex items-start gap-space-sm p-2.5 rounded-lg bg-surface-container text-foreground-light text-[13px] leading-snug">
+<span class="material-symbols-outlined text-warn-light text-[18px] shrink-0 mt-0.5">schedule</span>
+<span><strong>Créneau optimal :</strong> Préfère impérativement un passage avant le coup de feu de midi (11h00 - 11h45) ou entre 15h30 et 17h00.</span>
+</div>
+<div class="flex items-start gap-space-sm p-2.5 rounded-lg bg-surface-container text-foreground-light text-[13px] leading-snug">
+<span class="material-symbols-outlined text-primary-edge-light text-[18px] shrink-0 mt-0.5">person_pin</span>
+<span><strong>Approche recommandée :</strong> Demander directement le gérant Samir. Mentionner l'opération de promotion conjointe avec l'Office du Tourisme du Midi.</span>
+</div>
+</div>
+<!-- Linked Active Script Module -->
+<div class="p-space-md rounded-lg bg-muted-light/50 flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="font-caption text-caption font-semibold text-foreground-light uppercase tracking-wide">
+                Script de prospection lié
+              </span>
+<span class="font-caption text-caption text-muted-foreground-light">4 questions requises</span>
+</div>
+<p class="font-body-default text-body-default text-foreground-light font-medium italic">
+              "Proposition offre groupée : Distribution boîte-aux-lettres 1000 Bruxelles (Format A5 - Papier 135g)"
+            </p>
+<div class="flex items-center gap-2 pt-1">
+<span class="px-2 py-0.5 rounded text-[11px] bg-card-light text-muted-foreground-light font-medium shadow-sm">
+                Tarif : 490€ HTVA / 5000 ex.
+              </span>
+<span class="px-2 py-0.5 rounded text-[11px] bg-card-light text-muted-foreground-light font-medium shadow-sm">
+                Taux de retour estimé : 2.4%
+              </span>
+</div>
+</div>
+<!-- Bottom quick button for script execution -->
+<div class="pt-1 flex items-center justify-end">
+<button class="w-full inline-flex items-center justify-center gap-2 bg-sidebar-light hover:bg-muted-dark text-card-light py-2.5 px-space-md rounded-lg font-headline-md text-headline-md tracking-tight transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">record_voice_over</span>
+<span>Ouvrir le formulaire d'entretien en direct</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></main></div></body></html>

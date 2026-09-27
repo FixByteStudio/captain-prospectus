@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DAY_MS, brusselsPeriod, deltaOf, periodDates, periodOffsets } from "./period";
+import {
+  DAY_MS,
+  brusselsMidnightDaysFromNow,
+  brusselsPeriod,
+  deltaOf,
+  periodDates,
+  periodOffsets,
+} from "./period";
 
 const at = (iso: string) => Date.parse(iso);
 const HOUR = 60 * 60 * 1000;
@@ -179,5 +186,29 @@ describe("periodDates (GH #110)", () => {
     expect(periodDates(spring.from, 3)).toEqual(["2026-03-28", "2026-03-29", "2026-03-30"]);
     const autumn = brusselsPeriod(at("2026-10-26T12:00:00.000Z"), 3);
     expect(periodDates(autumn.from, 3)).toEqual(["2026-10-24", "2026-10-25", "2026-10-26"]);
+  });
+});
+
+/** The Brussels calendar date `YYYY-MM-DD` at `epochMs`, to check the day itself. */
+const wallDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" });
+
+describe("brusselsMidnightDaysFromNow (GH #177)", () => {
+  it("days = 0 is today's Brussels midnight, matching brusselsPeriod's own", () => {
+    const now = at("2026-01-15T12:00:00.000Z");
+    expect(brusselsMidnightDaysFromNow(now, 0)).toBe(brusselsPeriod(now, 1).from);
+  });
+
+  it("counts exactly 7 days ahead, not 6 or 8, across a spring clock change", () => {
+    const now = at("2026-03-27T12:00:00.000Z"); // three days before the switch
+    const sevenAhead = brusselsMidnightDaysFromNow(now, 7);
+    expect(wall.format(sevenAhead)).toBe("00:00:00");
+    expect(wallDate.format(sevenAhead)).toBe("2026-04-03");
+  });
+
+  it("counts exactly 7 days ahead across an autumn clock change", () => {
+    const now = at("2026-10-22T12:00:00.000Z"); // three days before the switch
+    const sevenAhead = brusselsMidnightDaysFromNow(now, 7);
+    expect(wall.format(sevenAhead)).toBe("00:00:00");
+    expect(wallDate.format(sevenAhead)).toBe("2026-10-29");
   });
 });

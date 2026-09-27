@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-error-container":"#93000a","tertiary":"#4f5e81","muted-dark":"#222B3D","surface-variant":"#e2e3dc","secondary-fixed":"#e0e2e7","background-light":"#F6F7F0","on-surface-variant":"#4d4635","foreground-light":"#1B2A4A","card-dark":"#182031","error-container":"#ffdad6","primary-edge-dark":"#E6C65C","primary-fixed":"#ffe08e","secondary-container":"#dde0e5","muted-light":"#E8EAEF","surface-container-highest":"#e2e3dc","sidebar-dark":"#0B1120","outline-variant":"#d1c5af","tertiary-fixed-dim":"#b7c6ee","surface-bright":"#f9faf3","muted-foreground-dark":"#97A2B8","on-primary-container":"#4b3a00","primary-container":"#c9a227","success-dark":"#4FA97D","background":"#f9faf3","primary-dark":"#D9B43C","on-tertiary-fixed-variant":"#384668","muted-foreground-light":"#5A6478","sidebar-muted-light":"#95A0B8","success-light":"#1F6F4A","inverse-on-surface":"#f0f1ea","sidebar-foreground-light":"#EEF0F4","on-primary-fixed":"#241a00","surface-container-low":"#f3f4ed","surface-container":"#edeee8","foreground-dark":"#E7EAF0","on-secondary-container":"#606367","on-secondary-fixed":"#181c20","on-primary":"#ffffff","on-tertiary-fixed":"#0a1a3a","destructive-dark":"#D2757E","primary-foreground-dark":"#141C2E","border-light":"#D7DAE2","tertiary-container":"#98a6cd","inverse-primary":"#ecc246","secondary-fixed-dim":"#c4c6cb","primary":"#755b00","border-dark":"#2B3547","inverse-surface":"#2f312d","surface-tint":"#755b00","on-error":"#ffffff","tertiary-fixed":"#d9e2ff","destructive-light":"#8C2F39","warn-dark":"#D98A3C","on-secondary":"#ffffff","surface":"#f9faf3","on-background":"#1a1c18","warn-light":"#9A6B12","on-tertiary-container":"#2d3b5c","primary-fixed-dim":"#ecc246","secondary":"#5b5f63","surface-container-lowest":"#ffffff","primary-edge-light":"#A8801A","on-surface":"#1a1c18","on-primary-fixed-variant":"#584400","on-tertiary":"#ffffff","on-secondary-fixed-variant":"#44474b","error":"#ba1a1a","surface-dim":"#d9dbd4","outline":"#7f7663","background-dark":"#101726","surface-container-high":"#e8e9e2","card-light":"#FFFFFF","sidebar-light":"#1B2A4A"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-md":"0.75rem","margin":"1.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xl":"1.5rem","space-xs":"0.25rem","space-sm":"0.5rem","space-lg":"1rem","gutter":"1rem"},"fontFamily":{"body-default":["Archivo Narrow"],"caption":["Archivo Narrow"],"headline-md":["Archivo Narrow"],"body-lg":["Archivo Narrow"],"display":["Archivo Narrow"],"label-default":["Archivo Narrow"],"headline-lg":["Archivo Narrow"]},"fontSize":{"body-default":["14px",{"lineHeight":"20px","fontWeight":"400"}],"caption":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"headline-md":["18px",{"lineHeight":"24px","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"display":["28px",{"lineHeight":"34px","letterSpacing":"-0.01em","fontWeight":"700"}],"label-default":["14px",{"lineHeight":"18px","fontWeight":"500"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-background-light font-body-default text-body-default text-foreground-light antialiased min-h-screen"><aside class="fixed left-0 top-0 h-full w-64 bg-sidebar-light z-50 flex flex-col justify-between select-none shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-14 px-space-lg flex items-center gap-space-sm bg-muted-dark/30"><img alt="Captain Prospectus Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X1t-JsUYKSxOoZIOJMWJZwobxqg2Ln-XI9Qg2J1z9hXhXRh7en5EO9BSKpBhS9JNiuHwYf76lhaDTbSaqxooOqJYFwSB413PT1UzcWq1UqCMXBDbPu-YS8UEFkwBVtyksg8d5vyy4jKC22tvNujFmWZTvpTfGjUbw9UNFzROvo9tw1TuWagKqxDo9CfBBDn69BgbIX02s-80FIN0xUmM7U6pR3zkuAElD9t9yZbiniRFbbpKRsToBKV6k"/><span class="font-headline-md text-headline-md tracking-tight text-sidebar-foreground-light">Captain Prospectus</span></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Pilotage</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded transition-colors text-on-surface-variant" data-path="tableau-de-bord" href="#"><span class="material-symbols-outlined text-[18px]">dashboard</span><span>Tableau de bord</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Prospects</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="prospects" href="#"><span class="material-symbols-outlined text-[18px]">storefront</span><span>Prospects</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="import" href="#"><span class="material-symbols-outlined text-[18px]">cloud_upload</span><span>Import</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="doublons" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">content_copy</span><span>Doublons</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-muted-dark text-sidebar-foreground-light">3</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="a-rattacher" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">link</span><span>À rattacher</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-warn-dark text-sidebar-foreground-light">2</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Terrain</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="visites" href="#"><span class="material-symbols-outlined text-[18px]">pin_drop</span><span>Visites</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="scripts" href="#"><span class="material-symbols-outlined text-[18px]">assignment</span><span>Scripts</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="tournee-du-jour" href="#"><span class="material-symbols-outlined text-[18px]">explore</span><span>Tournée du jour</span></a></nav></div></div><div class="p-space-md bg-muted-dark/40"><div class="flex items-center gap-space-sm"><div class="w-2 h-2 rounded-full bg-success-light animate-pulse"></div><div class="flex flex-col flex-1 min-w-0"><span class="font-label-default text-label-default text-sidebar-foreground-light truncate">admin@exemple.be</span><span class="font-caption text-caption text-sidebar-muted-light truncate">Synchronisé à l'instant</span></div></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-14 bg-card-light/95 backdrop-blur-md z-40 px-space-lg flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-md"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">menu_open</span></button><nav class="hidden sm:flex items-center gap-space-xs font-caption text-caption text-muted-foreground-light"><span class="hover:text-foreground-light cursor-pointer">Captain Prospectus</span><span class="material-symbols-outlined text-[14px]">chevron_right</span><span class="text-foreground-light font-semibold">Console d'administration</span></nav></div><div class="flex items-center gap-space-sm"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">search</span></button><button class="relative p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-warn-light"></span></button><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">light_mode</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="w-full pt-14 bg-background-light min-h-screen"><div class="flex flex-col w-full">
+<!-- Administrative Showcase Header & Interactive State Switcher -->
+<div class="px-margin pt-space-md pb-space-sm flex flex-col md:flex-row md:items-center justify-between gap-space-md bg-card-light shadow-sm">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded bg-primary-container/20 flex items-center justify-center text-primary-edge-light">
+<span class="material-symbols-outlined text-[24px]">storefront</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-caption text-caption uppercase tracking-wider text-muted-foreground-light font-semibold">Carnet de prospection</span>
+<span class="inline-block w-1 h-1 rounded-full bg-border-light"></span>
+<span class="font-caption text-caption text-primary font-semibold">Spécification A3</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-foreground-light tracking-tight">Gestion des Prospects</h1>
+</div>
+</div>
+<!-- State Switcher segmented control -->
+<div class="flex items-center gap-space-xs p-1 bg-surface-container rounded-lg">
+<button class="flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 bg-card-light text-foreground-light shadow-sm font-semibold" id="tab-btn-empty" onclick="switchState('empty')" type="button">
+<span class="material-symbols-outlined text-[16px] text-primary-edge-light">folder_off</span>
+<span>1. Base vide (Premier import)</span>
+<span class="ml-1 px-1.5 py-0.2 font-caption text-caption rounded-full bg-surface-container-high text-muted-foreground-light">0</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 text-muted-foreground-light hover:text-foreground-light font-medium" id="tab-btn-filtered" onclick="switchState('filtered')" type="button">
+<span class="material-symbols-outlined text-[16px]">filter_alt_off</span>
+<span>2. Filtres sans résultat</span>
+<span class="ml-1 px-1.5 py-0.2 font-caption text-caption rounded-full bg-warn-light/10 text-warn-light">4 filtres</span>
+</button>
+</div>
+</div>
+<!-- Main Content Stage -->
+<div class="p-margin space-y-space-lg">
+<!-- ========================================================================= -->
+<!-- STATE 1: AUCUN PROSPECT (BASE VIDE / PREMIER LANCEMENT)                  -->
+<!-- ========================================================================= -->
+<div class="space-y-space-lg" id="view-empty">
+<!-- Top Ledger Action Bar -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md bg-card-light p-space-md rounded-lg shadow-sm">
+<div class="flex items-center gap-space-sm">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-md text-headline-md text-foreground-light font-semibold">Registre foncier</span>
+<span class="font-caption text-caption text-muted-foreground-light font-medium">(0 prospect actif)</span>
+</div>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-muted-light text-muted-foreground-light">
+            Base non initialisée
+          </span>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<!-- Disabled CSV Export Button -->
+<button class="flex items-center gap-space-xs px-space-md h-10 rounded bg-muted-light/60 text-muted-foreground-light/50 font-label-default text-label-default cursor-not-allowed" disabled="" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+<span>Exporter en CSV</span>
+</button>
+<!-- Primary Gold Compass Button -->
+<button class="flex items-center gap-space-xs px-space-lg h-10 rounded bg-primary-container text-foreground-light font-label-default text-label-default font-semibold shadow-sm hover:brightness-95 active:scale-[0.99] transition-all" type="button">
+<span class="material-symbols-outlined text-[20px] text-foreground-light">upload_file</span>
+<span>Importer un CSV</span>
+</button>
+</div>
+</div>
+<!-- Inactive Filter Rail (Visual consistency of table framework) -->
+<div class="bg-card-light p-space-md rounded-lg shadow-sm opacity-60 pointer-events-none select-none">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md items-center">
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm h-10 rounded">
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">search</span>
+<span class="font-body-default text-body-default text-muted-foreground-light/60">Rechercher un établissement...</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<span class="font-body-default text-body-default text-muted-foreground-light/60">Tous les statuts</span>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<span class="font-body-default text-body-default text-muted-foreground-light/60">Tous les agents</span>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<span class="font-body-default text-body-default text-muted-foreground-light/60">Toutes les communes</span>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<!-- Empty State Card (Parchment & Brass Nautical Aesthetic) -->
+<div class="bg-card-light rounded-lg shadow-sm p-space-xl md:py-16 flex flex-col items-center justify-center text-center relative overflow-hidden">
+<!-- Subtle tactical compass line decoration -->
+<div class="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-primary-container/5 pointer-events-none"></div>
+<div class="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-muted-light/40 pointer-events-none"></div>
+<!-- Maritime Navigation Illustration / Tactile Icon -->
+<div class="relative w-20 h-20 mb-space-lg flex items-center justify-center">
+<div class="absolute inset-0 rounded-full bg-surface-container-high/60 scale-100"></div>
+<div class="w-14 h-14 rounded-full bg-card-light shadow-sm flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[32px]">explore</span>
+</div>
+<span class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary-container text-foreground-light flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[15px] font-bold">add</span>
+</span>
+</div>
+<!-- Core Invitation Typography -->
+<span class="font-caption text-caption uppercase tracking-wider text-muted-foreground-light font-semibold mb-1">
+          Feuille de route vierge
+        </span>
+<h2 class="font-display text-display text-foreground-light max-w-md tracking-tight mb-space-xs">
+          Aucun prospect.
+        </h2>
+<p class="font-body-lg text-body-lg text-muted-foreground-light max-w-lg mb-space-xl">
+          Importez un CSV pour commencer. Chargez vos fichiers de prospection territoriale ou définissez une zone géographique pour alimenter le registre.
+        </p>
+<!-- Primary & Secondary CTA Group -->
+<div class="flex flex-col sm:flex-row items-center gap-space-md w-full max-w-md justify-center">
+<button class="w-full sm:w-auto flex items-center justify-center gap-space-xs px-space-xl h-12 rounded bg-primary-container text-foreground-light font-label-default text-label-default font-semibold shadow-sm hover:brightness-95 active:scale-[0.99] transition-all" type="button">
+<span class="material-symbols-outlined text-[20px]">upload_file</span>
+<span>Importer un CSV</span>
+</button>
+<button class="w-full sm:w-auto flex items-center justify-center gap-space-xs px-space-lg h-12 rounded bg-muted-light text-foreground-light font-label-default text-label-default font-medium hover:bg-muted-light/80 transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">polyline</span>
+<span>Dessiner une zone cartographique</span>
+</button>
+</div>
+<!-- Guidance Badges / Tactical micro-details -->
+<div class="mt-space-xl pt-space-lg flex flex-wrap items-center justify-center gap-space-lg text-muted-foreground-light font-caption text-caption">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-success-light">check_circle</span>
+<span>Format supporté : CSV UTF-8 délimité</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-primary">navigation</span>
+<span>Géocodage automatique des adresses</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-tertiary">content_copy</span>
+<span>Détection instantanée des doublons de tournée</span>
+</div>
+</div>
+</div>
+<!-- Import Primer Ledger Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<div class="bg-card-light p-space-md rounded-lg shadow-sm flex items-start gap-space-md">
+<div class="p-2 rounded bg-surface-container text-foreground-light">
+<span class="material-symbols-outlined text-[20px]">table_chart</span>
+</div>
+<div class="space-y-0.5">
+<div class="font-label-default text-label-default font-semibold text-foreground-light">Gabarit d'importation</div>
+<p class="font-caption text-caption text-muted-foreground-light">Téléchargez notre canevas de colonnes avec en-têtes normalisées (Nom, Adresse, Téléphone, Activité).</p>
+</div>
+</div>
+<div class="bg-card-light p-space-md rounded-lg shadow-sm flex items-start gap-space-md">
+<div class="p-2 rounded bg-surface-container text-foreground-light">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+</div>
+<div class="space-y-0.5">
+<div class="font-label-default text-label-default font-semibold text-foreground-light">Connexion OpenStreetMap</div>
+<p class="font-caption text-caption text-muted-foreground-light">Extrayez automatiquement les commerces physiques de proximité par code postal ou quartier.</p>
+</div>
+</div>
+<div class="bg-card-light p-space-md rounded-lg shadow-sm flex items-start gap-space-md">
+<div class="p-2 rounded bg-surface-container text-foreground-light">
+<span class="material-symbols-outlined text-[20px]">rule_folder</span>
+</div>
+<div class="space-y-0.5">
+<div class="font-label-default text-label-default font-semibold text-foreground-light">Rapprochement SIRET / BCE</div>
+<p class="font-caption text-caption text-muted-foreground-light">Associez les numéros d'entreprise belges et français lors de l'intégration pour éviter les doublons.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- ========================================================================= -->
+<!-- STATE 2: FILTRES SANS RÉSULTAT (RECHERCHE INFRUCTUEUSE)                  -->
+<!-- ========================================================================= -->
+<div class="hidden space-y-space-lg" id="view-filtered">
+<!-- Top Ledger Action Bar -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md bg-card-light p-space-md rounded-lg shadow-sm">
+<div class="flex items-center gap-space-sm">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-md text-headline-md text-foreground-light font-semibold">Registre foncier</span>
+<span class="font-caption text-caption text-muted-foreground-light font-medium">(2 480 prospects indexés)</span>
+</div>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-warn-light/10 text-warn-light">
+            Vue filtrée active
+          </span>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<button class="flex items-center gap-space-xs px-space-md h-10 rounded bg-muted-light text-foreground-light font-label-default text-label-default font-semibold hover:bg-muted-light/80 transition-colors" onclick="resetFiltersDemo()" type="button">
+<span class="material-symbols-outlined text-[18px]">restart_alt</span>
+<span>Effacer les filtres</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md h-10 rounded bg-primary-container text-foreground-light font-label-default text-label-default font-semibold shadow-sm hover:brightness-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">upload_file</span>
+<span>Importer un CSV</span>
+</button>
+</div>
+</div>
+<!-- Active Filter Rail: Shows constraints that generated 0 results -->
+<div class="bg-card-light p-space-md rounded-lg shadow-sm space-y-space-sm">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md">
+<!-- Search input populated -->
+<div class="relative flex items-center bg-surface-container-low px-space-sm h-10 rounded shadow-inner">
+<span class="material-symbols-outlined text-foreground-light text-[18px]">search</span>
+<input class="w-full bg-transparent px-space-xs font-body-default text-body-default text-foreground-light focus:outline-none" id="filter-input-search" placeholder="Rechercher..." type="text" value="Boulangerie artisanale Ixelles"/>
+<button class="text-muted-foreground-light hover:text-foreground-light" onclick="clearSearchInput()" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- Status Dropdown: Selected "Converti" -->
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-success-light"></span>
+<span class="font-body-default text-body-default text-foreground-light font-medium">Statut : Converti</span>
+</div>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+<!-- Agent Dropdown: Selected "karim@exemple.be" -->
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<div class="flex items-center gap-space-xs truncate">
+<span class="material-symbols-outlined text-muted-foreground-light text-[16px]">person</span>
+<span class="font-body-default text-body-default text-foreground-light font-medium truncate">karim@exemple.be</span>
+</div>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+<!-- Source: OSM -->
+<div class="flex items-center justify-between bg-surface-container-low px-space-sm h-10 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-muted-foreground-light text-[16px]">map</span>
+<span class="font-body-default text-body-default text-foreground-light font-medium">Source : Carte (OSM)</span>
+</div>
+<span class="material-symbols-outlined text-muted-foreground-light text-[18px]">arrow_drop_down</span>
+</div>
+</div>
+<!-- Active Filter Tags Ribbon -->
+<div class="flex items-center justify-between pt-space-xs border-t-0 flex-wrap gap-space-xs">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="font-caption text-caption text-muted-foreground-light uppercase font-semibold mr-1">Filtres engagés :</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted-light text-foreground-light font-caption text-caption">
+              Texte: "Boulangerie artisanale Ixelles"
+              <span class="material-symbols-outlined text-[13px] cursor-pointer hover:text-destructive-light">close</span>
+</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted-light text-foreground-light font-caption text-caption">
+              Statut: Converti
+              <span class="material-symbols-outlined text-[13px] cursor-pointer hover:text-destructive-light">close</span>
+</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted-light text-foreground-light font-caption text-caption">
+              Agent: karim@exemple.be
+              <span class="material-symbols-outlined text-[13px] cursor-pointer hover:text-destructive-light">close</span>
+</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted-light text-foreground-light font-caption text-caption">
+              Périmètre: Ixelles (1050)
+              <span class="material-symbols-outlined text-[13px] cursor-pointer hover:text-destructive-light">close</span>
+</span>
+</div>
+<button class="text-primary hover:underline font-caption text-caption font-semibold flex items-center gap-1" onclick="resetFiltersDemo()" type="button">
+<span class="material-symbols-outlined text-[14px]">close</span>
+<span>Tout réinitialiser</span>
+</button>
+</div>
+</div>
+<!-- Ledger Table Structure showing 0 Results Empty Body -->
+<div class="bg-card-light rounded-lg shadow-sm overflow-hidden flex flex-col">
+<!-- Table Column Headers (Maintaining physical Ledger 44px rhythm) -->
+<div class="h-11 px-space-lg bg-surface-container flex items-center justify-between text-muted-foreground-light font-caption text-caption uppercase tracking-wider font-semibold select-none">
+<div class="w-1/3 flex items-center gap-space-xs">
+<span>Établissement &amp; Adresse</span>
+<span class="material-symbols-outlined text-[14px]">swap_vert</span>
+</div>
+<div class="w-1/6">Commune / Secteur</div>
+<div class="w-1/6">Agent assigné</div>
+<div class="w-1/6">Dernière visite</div>
+<div class="w-1/12 text-right">Statut</div>
+</div>
+<!-- Table Row Empty State Invitation -->
+<div class="p-space-xl md:py-20 flex flex-col items-center justify-center text-center">
+<!-- Subtle Search Radar Indicator -->
+<div class="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center text-muted-foreground-light mb-space-md">
+<span class="material-symbols-outlined text-[30px]">manage_search</span>
+</div>
+<!-- Official Copy required by Specification -->
+<div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-surface-container font-caption text-caption text-muted-foreground-light mb-space-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-warn-light"></span>
+<span class="font-tabular-nums">0 résultat trouvé dans l'index</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-foreground-light tracking-tight max-w-lg mb-space-xs">
+            Aucun prospect ne correspond à ces filtres.
+          </h2>
+<p class="font-body-default text-body-default text-muted-foreground-light max-w-md mb-space-lg">
+            Vos critères de sélection combinés (secteur, statut et agent) sont trop restrictifs pour ce jeu de données.
+          </p>
+<!-- Action buttons for instant recovery -->
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center gap-space-xs px-space-lg h-10 rounded bg-muted-light text-foreground-light font-label-default text-label-default font-semibold hover:bg-muted-light/80 transition-colors" onclick="resetFiltersDemo()" type="button">
+<span class="material-symbols-outlined text-[18px]">filter_alt_off</span>
+<span>Effacer les filtres</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md h-10 rounded bg-transparent text-primary font-label-default text-label-default font-semibold hover:bg-surface-container transition-colors" onclick="clearSearchInput()" type="button">
+<span>Élargir à toute la commune</span>
+</button>
+</div>
+</div>
+<!-- Table Footer Ledger Summary -->
+<div class="h-11 px-space-lg bg-surface-container-low flex items-center justify-between text-muted-foreground-light font-caption text-caption">
+<div class="flex items-center gap-space-xs">
+<span>Affichage : <strong class="text-foreground-light font-semibold">0</strong> sur <span class="font-tabular-nums">2 480</span> fiches</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span>Page 0 de 0</span>
+<div class="flex items-center gap-1 opacity-40 cursor-not-allowed">
+<button class="p-1 rounded hover:bg-surface-container" disabled=""><span class="material-symbols-outlined text-[16px]">chevron_left</span></button>
+<button class="p-1 rounded hover:bg-surface-container" disabled=""><span class="material-symbols-outlined text-[16px]">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Context Recovery Suggestions -->
+<div class="p-space-md bg-card-light rounded-lg shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-warn-light text-[22px]">lightbulb</span>
+<div class="text-foreground-light font-body-default text-body-default">
+<strong>Conseil de ciblage :</strong> Des commerces similaires existent sous le statut <em>"À visiter"</em> ou <em>"Nouveau"</em> sur Ixelles.
+          </div>
+</div>
+<button class="font-label-default text-label-default font-semibold text-primary hover:underline whitespace-nowrap" onclick="resetFiltersDemo()" type="button">
+          Voir les 42 prospects disponibles →
+        </button>
+</div>
+</div>
+</div>
+<!-- Interactive JavaScript Toggle Logic -->
+<script>
+    function switchState(stateName) {
+      const emptyView = document.getElementById('view-empty');
+      const filteredView = document.getElementById('view-filtered');
+      const btnEmpty = document.getElementById('tab-btn-empty');
+      const btnFiltered = document.getElementById('tab-btn-filtered');
+
+      if (stateName === 'empty') {
+        emptyView.classList.remove('hidden');
+        filteredView.classList.add('hidden');
+
+        // Style Tab Empty as Active
+        btnEmpty.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 bg-card-light text-foreground-light shadow-sm font-semibold";
+        btnFiltered.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 text-muted-foreground-light hover:text-foreground-light font-medium";
+      } else {
+        emptyView.classList.add('hidden');
+        filteredView.classList.remove('hidden');
+
+        // Style Tab Filtered as Active
+        btnFiltered.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 bg-card-light text-foreground-light shadow-sm font-semibold";
+        btnEmpty.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded font-label-default text-label-default transition-all duration-150 text-muted-foreground-light hover:text-foreground-light font-medium";
+      }
+    }
+
+    function clearSearchInput() {
+      const input = document.getElementById('filter-input-search');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    function resetFiltersDemo() {
+      // Toggle back to the clean demonstration state
+      switchState('empty');
+    }
+  </script>
+</div></main></div></body></html>

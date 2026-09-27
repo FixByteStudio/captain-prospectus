@@ -8,5 +8,4 @@ dist
 .claude/launch.json
 backup*.sql
 coverage
-_bmad-output
 _bmad/render/

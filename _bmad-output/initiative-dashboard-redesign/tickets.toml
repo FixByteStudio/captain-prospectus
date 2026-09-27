@@ -1,0 +1,35 @@
+# The epics of initiative-dashboard-redesign, in build order.
+
+[[epic]]
+id = 1
+slug = "epic-shared-shell"
+title = "Admin and field share the new shell and tokens"
+covers = ["CAP-10", "CAP-1", "CAP-5", "CAP-11"]
+
+[[epic]]
+id = 2
+slug = "epic-dashboard"
+title = "The admin opens on Tableau de bord"
+covers = ["CAP-2", "CAP-5", "CAP-10", "CAP-11"]
+after = [{ epic = 1, needs = "the admin shell and the DESIGN.md tokens" }]
+
+[[epic]]
+id = 3
+slug = "epic-admin-screens"
+title = "Every admin screen runs on the new design"
+covers = ["CAP-3", "CAP-11"]
+after = [{ epic = 1, needs = "the admin shell and tokens" }, { epic = 2, needs = "the dashboard endpoint (G1, 2.3) for the Visites KPI strip, and G3 dueBefore with the URL-driven Prospects filters (2.10)" }]
+
+[[epic]]
+id = 4
+slug = "epic-field-screens"
+title = "Agents work their round on the new field app"
+covers = ["CAP-5", "CAP-6", "CAP-7", "CAP-8", "CAP-9", "CAP-11"]
+after = [{ epic = 1, needs = "the field shell, tabs and tokens, and ADR-0026 accepted" }]
+
+[[epic]]
+id = 5
+slug = "epic-admin-round-view"
+title = "An admin sees any agent's round"
+covers = ["CAP-4", "CAP-11"]
+after = [{ epic = 4, needs = "the map, pin and stop-row components from Carte and Tournée" }]

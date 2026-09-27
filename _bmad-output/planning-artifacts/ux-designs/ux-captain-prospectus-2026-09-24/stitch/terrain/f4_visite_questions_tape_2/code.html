@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;font-family:'Archivo Narrow',sans-serif;}body{overscroll-behavior:none;background-color:#F6F7F0;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"destructive-dark": "#D2757E", "on-error-container": "#93000a", "on-error": "#ffffff", "surface-container-high": "#e8e9e2", "on-secondary": "#ffffff", "surface-container-highest": "#e2e3dc", "on-secondary-fixed": "#181c20", "border-light": "#D7DAE2", "secondary-fixed": "#e0e2e7", "on-primary-fixed-variant": "#584400", "outline-variant": "#d1c5af", "surface-container-lowest": "#ffffff", "surface-tint": "#755b00", "on-primary": "#ffffff", "tertiary-container": "#98a6cd", "foreground-light": "#1B2A4A", "success-dark": "#4FA97D", "secondary-fixed-dim": "#c4c6cb", "tertiary-fixed-dim": "#b7c6ee", "muted-foreground-dark": "#97A2B8", "surface-bright": "#f9faf3", "background-dark": "#101726", "inverse-primary": "#ecc246", "card-dark": "#182031", surface: "#f9faf3", "warn-light": "#9A6B12", "primary-dark": "#D9B43C", "on-tertiary-container": "#2d3b5c", "on-secondary-container": "#606367", "primary-foreground-dark": "#141C2E", secondary: "#5b5f63", "primary-edge-light": "#A8801A", "warn-dark": "#D98A3C", "foreground-dark": "#E7EAF0", "sidebar-foreground-light": "#EEF0F4", error: "#ba1a1a", primary: "#755b00", outline: "#7f7663", "on-surface-variant": "#4d4635", "surface-dim": "#d9dbd4", "tertiary-fixed": "#d9e2ff", "background-light": "#F6F7F0", "surface-container": "#edeee8", "sidebar-muted-light": "#95A0B8", "secondary-container": "#dde0e5", "primary-edge-dark": "#E6C65C", "primary-fixed": "#ffe08e", "on-secondary-fixed-variant": "#44474b", "success-light": "#1F6F4A", "muted-dark": "#222B3D", "on-surface": "#1a1c18", "on-primary-fixed": "#241a00", background: "#f9faf3", "primary-fixed-dim": "#ecc246", "inverse-on-surface": "#f0f1ea", tertiary: "#4f5e81", "on-tertiary-fixed-variant": "#384668", "destructive-light": "#8C2F39", "on-background": "#1a1c18", "surface-variant": "#e2e3dc", "inverse-surface": "#2f312d", "error-container": "#ffdad6", "sidebar-light": "#1B2A4A", "sidebar-dark": "#0B1120", "surface-container-low": "#f3f4ed", "border-dark": "#2B3547", "muted-light": "#E8EAEF", "on-tertiary": "#ffffff", "on-tertiary-fixed": "#0a1a3a", "muted-foreground-light": "#5A6478", "primary-container": "#c9a227", "card-light": "#FFFFFF", "on-primary-container": "#4b3a00"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {"margin-mobile": "1rem", "gutter-mobile": "0.75rem", "space-sm": "0.5rem", margin: "1.5rem", "space-lg": "1rem", "space-xl": "1.5rem", "space-md": "0.75rem", "space-xs": "0.25rem", gutter: "1rem"}, fontFamily: {"headline-md": ["Archivo Narrow"], display: ["Archivo Narrow"], "body-default": ["Archivo Narrow"], "body-lg": ["Archivo Narrow"], "label-default": ["Archivo Narrow"], caption: ["Archivo Narrow"], "headline-lg": ["Archivo Narrow"], headline: ["Archivo Narrow"], body: ["Archivo Narrow"], label: ["Archivo Narrow"]}, fontSize: {"headline-md": ["18px", {lineHeight: "24px", fontWeight: "600"}], display: ["28px", {lineHeight: "34px", letterSpacing: "-0.01em", fontWeight: "700"}], "body-default": ["14px", {lineHeight: "20px", fontWeight: "400"}], "body-lg": ["16px", {lineHeight: "24px", fontWeight: "400"}], "label-default": ["14px", {lineHeight: "18px", fontWeight: "500"}], caption: ["12px", {lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500"}], "headline-lg": ["20px", {lineHeight: "28px", letterSpacing: "-0.005em", fontWeight: "600"}]}}}};</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background-light font-body-default text-foreground-light flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-sidebar-light text-sidebar-foreground-light shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-24 flex flex-col justify-between"><div class="h-16 px-gutter-mobile flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm min-w-0"><img alt="Captain Prospectus emblem: a geometric ship's wheel surrounding a map pin navigation icon, crisp nautical minimalist line-art mark with gold accent. Brand logo. - Primary color: #c9a227
+- Font: archivoNarrow
+- Mode: light
+- Roundness: rounded-sm
+" class="h-8 w-auto object-contain flex-shrink-0" src="https://lh3.googleusercontent.com/aida/AEtjO1XI-9qiu07m2Jd4fp7jFbgLO8lfT0CyG9-61GFmqmYLewzwb2inHdmcIGv2Jl-2jfZ6Zg7Jx8yCazv98NZYwZviqlBBmfG7PCdZvZNE-ov6rCWBFrS5RKFpDeotJIzC1POhEAaVxqcDtj-usCgNWJjBPnPZG4leJda4LdoOBAJeaBQeRB6iTFGNvlyFkmqvLJmb9ELUY2FWbJZUKp-2K3sfSc5YhI5CyncJplYGT7yEwyItJlv_BTlIaOY"/><div class="flex flex-col truncate"><span class="font-headline-md text-headline-md tracking-tight text-sidebar-foreground-light truncate">Captain Prospectus</span><span class="font-caption text-caption text-sidebar-muted-light truncate leading-none">Tournée</span></div></div><div class="flex items-center gap-space-xs"><button aria-label="État de synchronisation" class="min-h-[44px] min-w-[44px] flex items-center justify-center relative"><span class="material-symbols-outlined text-sidebar-muted-light text-[22px]">sync</span><span class="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-primary-container text-foreground-light font-caption text-[11px] font-bold rounded-full flex items-center justify-center leading-none ring-2 ring-sidebar-light">2</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="h-8 px-gutter-mobile bg-sidebar-dark/60 flex items-center justify-between font-caption text-caption text-sidebar-muted-light"><div class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-warn-dark text-[14px]">cloud_upload</span><span class="truncate">2 éléments en attente d'envoi</span></div><button class="font-label-default text-caption text-primary-fixed-dim hover:text-primary-fixed underline tracking-wide uppercase">Synchroniser</button></div></div></header><main class="flex flex-col relative w-full pt-24 pb-20 bg-background-light min-h-screen"><div class="flex flex-col w-full">
+<!-- Sub-bar: Stepper & Navigation -->
+<div class="px-margin-mobile py-space-sm bg-surface-container-low flex items-center justify-between shadow-sm">
+<button aria-label="Retour au résultat de l'étape 1" class="inline-flex items-center gap-space-xs text-on-surface hover:text-primary transition-colors py-space-xs" type="button">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+<span class="font-label-default text-label-default font-semibold">Résultat</span>
+</button>
+<div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-caption text-caption font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+      Étape 2 / 2
+    </div>
+</div>
+<!-- Main Scrollable Content Area -->
+<div class="flex flex-col px-margin-mobile pt-space-md pb-28 gap-space-lg">
+<!-- Title & Status Header Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">storefront</span>
+<span class="font-caption text-caption text-secondary font-bold tracking-wide uppercase">Questionnaire Terrain</span>
+</div>
+<span class="font-caption text-caption text-primary bg-primary-fixed/60 px-space-xs py-0.5 rounded font-bold">B2B Restauration</span>
+</div>
+<h1 class="font-display text-display text-on-surface leading-tight">Curry House</h1>
+<p class="font-body-default text-body-default text-on-surface-variant">42 Rue Haute, 1000 Bruxelles · Visite n°14 du jour</p>
+</div>
+<!-- Soft Info Callout: Mode Absent -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm flex items-start gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center flex-shrink-0 text-primary">
+<span class="material-symbols-outlined text-[20px]">info</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-default text-label-default text-on-surface font-semibold">Statut : Personne sur place</span>
+<span class="font-body-default text-body-default text-on-surface-variant">Répondez uniquement aux questions dont vous avez la confirmation visible ou antérieure.</span>
+</div>
+</div>
+<!-- Questions Section -->
+<div class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px]">checklist</span>
+<span class="font-headline-md text-headline-md text-on-surface font-bold">Questions actives (4)</span>
+</div>
+<span class="font-caption text-caption text-secondary">Champs obligatoires</span>
+</div>
+<!-- Question 1: Livraison (Large 48px radio toggle) -->
+<fieldset class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-sm">
+<legend class="font-headline-md text-headline-md text-on-surface font-semibold mb-space-xs flex items-center gap-space-xs">
+<span>1. Proposez-vous la livraison ?</span>
+</legend>
+<div aria-label="Proposez-vous la livraison ?" class="grid grid-cols-2 gap-space-sm" role="radiogroup">
+<!-- Oui (Selected) -->
+<button aria-checked="true" class="h-12 rounded-lg bg-primary-container text-on-primary-container font-label-default text-label-default font-bold flex items-center justify-center gap-space-xs shadow-sm transition-all" role="radio" type="button">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Oui</span>
+</button>
+<!-- Non -->
+<button aria-checked="false" class="h-12 rounded-lg bg-surface-container-low text-on-surface-variant font-label-default text-label-default font-medium flex items-center justify-center gap-space-xs shadow-sm transition-all hover:bg-surface-container" role="radio" type="button">
+<span class="material-symbols-outlined text-[20px]">radio_button_unchecked</span>
+<span>Non</span>
+</button>
+</div>
+</fieldset>
+<!-- Question 2: Logiciel de caisse (Single Choice Touch Cards) -->
+<fieldset class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-sm">
+<legend class="font-headline-md text-headline-md text-on-surface font-semibold mb-space-xs">
+          2. Quel logiciel de caisse utilisez-vous ?
+        </legend>
+<div aria-label="Logiciel de caisse" class="flex flex-col gap-space-xs" role="radiogroup">
+<!-- Aucun -->
+<button aria-checked="false" class="h-12 px-space-md rounded-lg bg-surface-container-low text-on-surface font-label-default text-label-default flex items-center justify-between text-left transition-colors hover:bg-surface-container" role="radio" type="button">
+<span class="font-medium">Aucun</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">radio_button_unchecked</span>
+</button>
+<!-- Papier (Selected) -->
+<button aria-checked="true" class="h-12 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-default text-label-default flex items-center justify-between text-left font-bold shadow-sm transition-all" role="radio" type="button">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[20px]">receipt_long</span>
+<span>Papier / Carnet</span>
+</div>
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+<!-- Une autre application -->
+<button aria-checked="false" class="h-12 px-space-md rounded-lg bg-surface-container-low text-on-surface font-label-default text-label-default flex items-center justify-between text-left transition-colors hover:bg-surface-container" role="radio" type="button">
+<span class="font-medium">Une autre application (Lightspeed, iPad...)</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">radio_button_unchecked</span>
+</button>
+</div>
+</fieldset>
+<!-- Question 3: Nombre de couverts (Stepper Controls) -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<label class="font-headline-md text-headline-md text-on-surface font-semibold" for="couverts-input">
+            3. Combien de couverts ?
+          </label>
+<span class="font-caption text-caption text-secondary">Estimation salle</span>
+</div>
+<div class="flex items-center justify-between gap-space-md bg-surface-container-low p-space-xs rounded-lg">
+<button aria-label="Diminuer de 5 couverts" class="w-12 h-12 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center active:scale-95 transition-transform" id="btn-decrement" type="button">
+<span class="material-symbols-outlined text-[22px]">remove</span>
+</button>
+<div class="flex items-baseline justify-center gap-space-xs min-w-0">
+<input class="w-20 text-center font-display text-display bg-transparent text-on-surface focus:outline-none font-bold" id="couverts-input" max="500" min="0" step="5" type="number" value="45"/>
+<span class="font-body-default text-body-default text-secondary">places</span>
+</div>
+<button aria-label="Augmenter de 5 couverts" class="w-12 h-12 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center active:scale-95 transition-transform" id="btn-increment" type="button">
+<span class="material-symbols-outlined text-[22px]">add</span>
+</button>
+</div>
+<div class="flex justify-between items-center px-space-xs">
+<span class="font-caption text-caption text-secondary">Palier moyen quartier : 35-50</span>
+<div class="flex gap-space-xs">
+<button class="px-space-xs py-0.5 rounded bg-surface-container text-on-surface font-caption text-caption" onclick="document.getElementById('couverts-input').value=30" type="button">30</button>
+<button class="px-space-xs py-0.5 rounded bg-primary-container text-on-primary-container font-caption text-caption font-bold" onclick="document.getElementById('couverts-input').value=45" type="button">45</button>
+<button class="px-space-xs py-0.5 rounded bg-surface-container text-on-surface font-caption text-caption" onclick="document.getElementById('couverts-input').value=60" type="button">60</button>
+</div>
+</div>
+</div>
+<!-- Question 4: Accueil et réceptivité (1 to 5 touch rating segments) -->
+<fieldset class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<legend class="font-headline-md text-headline-md text-on-surface font-semibold">
+            4. Accueil et réceptivité
+          </legend>
+<span class="font-label-default text-label-default text-primary font-bold">Très bon (4/5)</span>
+</div>
+<div aria-label="Note de réceptivité de 1 à 5" class="grid grid-cols-5 gap-space-xs" role="radiogroup">
+<!-- 1: Mauvais -->
+<button aria-checked="false" class="h-12 rounded-lg bg-surface-container-low text-on-surface flex flex-col items-center justify-center transition-all hover:bg-surface-container" role="radio" type="button">
+<span class="font-label-default text-label-default font-bold">1</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">star</span>
+</button>
+<!-- 2: Passable -->
+<button aria-checked="false" class="h-12 rounded-lg bg-surface-container-low text-on-surface flex flex-col items-center justify-center transition-all hover:bg-surface-container" role="radio" type="button">
+<span class="font-label-default text-label-default font-bold">2</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">star</span>
+</button>
+<!-- 3: Neutre -->
+<button aria-checked="false" class="h-12 rounded-lg bg-surface-container-low text-on-surface flex flex-col items-center justify-center transition-all hover:bg-surface-container" role="radio" type="button">
+<span class="font-label-default text-label-default font-bold">3</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">star</span>
+</button>
+<!-- 4: Très bon (Selected) -->
+<button aria-checked="true" class="h-12 rounded-lg bg-primary-container text-on-primary-container flex flex-col items-center justify-center shadow-sm font-bold scale-105 transition-all" role="radio" type="button">
+<span class="font-label-default text-label-default font-extrabold">4</span>
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+</button>
+<!-- 5: Excellent -->
+<button aria-checked="false" class="h-12 rounded-lg bg-surface-container-low text-on-surface flex flex-col items-center justify-center transition-all hover:bg-surface-container" role="radio" type="button">
+<span class="font-label-default text-label-default font-bold">5</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">star</span>
+</button>
+</div>
+<div class="flex justify-between px-space-xs font-caption text-caption text-secondary">
+<span>Réfractaire</span>
+<span>Chaleureux</span>
+</div>
+</fieldset>
+<!-- Section: Notes et consignes -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<label class="font-headline-md text-headline-md text-on-surface font-semibold flex items-center gap-space-xs" for="agent-notes">
+<span class="material-symbols-outlined text-primary text-[18px]">edit_note</span>
+<span>Notes et consignes</span>
+</label>
+<span class="font-caption text-caption text-secondary">Synthèse prospect</span>
+</div>
+<textarea class="w-full min-h-[96px] p-space-md rounded-lg bg-surface-container-low text-on-surface font-body-lg text-body-lg placeholder:text-secondary focus:outline-none focus:bg-surface-container resize-none leading-relaxed" id="agent-notes" placeholder="Observations, coordonnées du gérant, créneau de livraison..." rows="4">« Gérant M. Benali très réceptif. Souhaite être rappelé pour tester un lot de 500 prospectus. »</textarea>
+<div class="flex items-center justify-between pt-space-xs text-secondary font-caption text-caption">
+<span class="inline-flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[14px] text-primary">mic</span>
+            Dicter note vocale
+          </span>
+<span>91 caractères</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Bottom Action Bar -->
+<div class="fixed bottom-16 left-0 right-0 z-40 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-space-sm shadow-xl">
+<div class="max-w-md mx-auto flex items-center gap-space-sm">
+<button aria-label="Mettre en attente brouillon" class="w-12 h-14 rounded-lg bg-surface-container flex items-center justify-center text-on-surface flex-shrink-0 active:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[22px]">archive</span>
+</button>
+<button class="flex-1 h-14 rounded-lg bg-primary-container text-on-primary-container font-label-default text-label-default font-bold flex items-center justify-center gap-space-sm shadow-md active:scale-[0.99] transition-transform" type="button">
+<span class="material-symbols-outlined text-[24px]">task_alt</span>
+<span>Enregistrer la visite</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  (function() {
+    const input = document.getElementById('couverts-input');
+    const btnInc = document.getElementById('btn-increment');
+    const btnDec = document.getElementById('btn-decrement');
+
+    if (input && btnInc && btnDec) {
+      btnInc.addEventListener('click', () => {
+        let val = parseInt(input.value, 10) || 0;
+        input.value = Math.min(500, val + 5);
+      });
+      btnDec.addEventListener('click', () => {
+        let val = parseInt(input.value, 10) || 0;
+        input.value = Math.max(0, val - 5);
+      });
+    }
+  })();
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-card-light/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="text-foreground-light font-semibold"><div class="flex justify-around items-center h-16 px-space-xs"><a class="flex flex-col items-center justify-center flex-1 min-h-[48px] py-1 text-muted-foreground-light transition-colors" data-path="tournee" href="#"><span class="material-symbols-outlined text-[24px]">route</span><span class="font-caption text-caption mt-0.5">Tournée</span></a><a class="flex flex-col items-center justify-center flex-1 min-h-[48px] py-1 text-muted-foreground-light transition-colors" data-path="carte" href="#"><span class="material-symbols-outlined text-[24px]">map</span><span class="font-caption text-caption mt-0.5">Carte</span></a><a class="flex flex-col items-center justify-center flex-1 min-h-[48px] py-1 text-muted-foreground-light transition-colors" data-path="nouveau-prospect" href="#"><div class="w-9 h-9 rounded-full bg-primary-container text-foreground-light flex items-center justify-center shadow-[0_1px_8px_rgba(0,0,0,0.04)] -mt-2"><span class="material-symbols-outlined text-[22px]">person_add</span></div><span class="font-caption text-caption mt-0.5">Ajouter</span></a><a class="flex flex-col items-center justify-center flex-1 min-h-[48px] py-1 text-muted-foreground-light transition-colors" data-path="tableau-de-bord" href="#"><span class="material-symbols-outlined text-[24px]">dashboard</span><span class="font-caption text-caption mt-0.5">Tableau</span></a></div></nav></body></html>

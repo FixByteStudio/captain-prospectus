@@ -676,6 +676,16 @@ export const dashboardResponseSchema = z.object({
    * null `next_visit_at` is not due.
    */
   followUpsDue: countSchema,
+  /** Flyers remis: the period's Visites with `flyer_given` (docs/api.md › The dashboard). */
+  flyersGiven: countSchema,
+  /** Agents en tournée: distinct agents with a visit received today (docs/api.md › The dashboard). */
+  agentsActiveToday: countSchema,
+  /** Relances dues sous 7 jours (docs/api.md › The dashboard). */
+  followUpsDueSoon: z.object({
+    value: countSchema,
+    /** Brussels midnight 7 days from today; `?dueBefore=` on the prospects list. */
+    dueBefore: epochMsSchema,
+  }),
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 

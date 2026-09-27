@@ -82,6 +82,9 @@ function answer(
       { email: "admin@example.com", visits: 0, converted: 0, followUp: 0, openProspects: 0 },
     ],
     followUpsDue: 6,
+    flyersGiven: period * 3,
+    agentsActiveToday: 2,
+    followUpsDueSoon: { value: 8, dueBefore: 1 },
   };
 }
 
