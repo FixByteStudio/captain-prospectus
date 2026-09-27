@@ -5,17 +5,18 @@ import { formatCount, formatPercent } from "../../format";
 import { cn } from "../../lib/utils";
 import { Card } from "../../ui/card";
 import { Skeleton } from "../../ui/skeleton";
+import { STATUS_FILL } from "./status-fill";
 
 type Pipeline = DashboardResponse["pipeline"];
 
-/** The count's ink and the bar's fill per status, as in key-a1-dashboard.html. */
-const TONE = {
-  new: { count: "text-muted-foreground", fill: "bg-status-new" },
-  assigned: { count: "text-foreground", fill: "bg-status-assigned" },
-  follow_up: { count: "text-warn", fill: "bg-warn" },
-  converted: { count: "text-success", fill: "bg-success" },
-  rejected: { count: "text-destructive", fill: "bg-destructive" },
-} as const satisfies Record<Status, { count: string; fill: string }>;
+/** The count's ink per status, as in key-a1-dashboard.html. */
+const COUNT_INK = {
+  new: "text-muted-foreground",
+  assigned: "text-foreground",
+  follow_up: "text-warn",
+  converted: "text-success",
+  rejected: "text-destructive",
+} as const satisfies Record<Status, string>;
 
 const SHELL = "min-w-0 gap-2 p-4.5";
 
@@ -43,7 +44,7 @@ export function PipelinePanel({ pipeline }: { pipeline: Pipeline }) {
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-medium">{STATUS_LABELS[status]}</span>
                 <span className="tnum">
-                  <b className={cn("font-semibold", TONE[status].count)}>
+                  <b className={cn("font-semibold", COUNT_INK[status])}>
                     {formatCount(pipeline[status])}
                   </b>
                   <span className="text-meta text-muted-foreground inline-block w-14 text-right">
@@ -56,7 +57,7 @@ export function PipelinePanel({ pipeline }: { pipeline: Pipeline }) {
                 aria-hidden="true"
               >
                 <div
-                  className={cn("h-full rounded-full", TONE[status].fill)}
+                  className={cn("h-full rounded-full", STATUS_FILL[status])}
                   style={{ width: `${share * 100}%` }}
                 />
               </div>

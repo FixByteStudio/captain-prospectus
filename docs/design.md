@@ -325,8 +325,7 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
     "—".
 - **Grid.** Cards are 4 across at ≥ lg, 2 × 2 at md and one column below,
   24px apart, in this order: Prospects ouverts, Visites, Convertis, Taux de
-  conversion. The stories that add figures add cards or panels to the same
-  grid.
+  conversion. The panels below follow in rows of the same 24px gap.
 - **Visites dans le temps** (GH #110). Under the KPIs, 2:1 with the pipeline
   at ≥ lg, full width below. A
   `Card` titled in `text-heading` holds shadcn Chart (`src/client/ui/chart.tsx`,
@@ -401,7 +400,9 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   period keeps the last period's cards on screen, dimmed, until the new
   figures land — never back to skeletons.
 - **Failure.** An inline destructive Alert, "Impossible de charger le tableau
-  de bord.", with a "Réessayer" button that refetches, in place of the cards.
+  de bord.", with a "Réessayer" button that refetches. With no figures yet it
+  stands in place of the KPI cards and the panels above Dernières visites,
+  which keeps its own feed; a failed refetch keeps the last figures under it.
 - **Freshness.** Only Dernières visites polls (15 s); the figures do not,
   since a 15 s aggregate would spend the D1 read quota
   ([api.md](api.md#the-dashboard)). Every admin mutation marks the

@@ -68,7 +68,9 @@ docs/            this documentation
 The file extension is the whole selector between `unit` and `dom`, so no test
 moves between runtimes by accident. The `dom` project stubs
 `virtual:pwa-register/react` (`test/stubs/`), since VitePWA is not in the test
-pipeline. Testing Library is dev-only and reaches no bundle.
+pipeline. Its `navigator.geolocation` refuses permission unless a test sets a
+position with `setGeolocation` (`test/geolocation.ts`), reset after every test.
+Testing Library is dev-only and reaches no bundle.
 
 ## 4. Key flows
 

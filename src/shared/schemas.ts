@@ -531,7 +531,7 @@ const rateSchema = z.number().check(z.nonnegative());
 
 /**
  * `GET /api/admin/dashboard` — every figure is computed by the Worker and
- * defined in docs/api.md › The dashboard. Later stories extend it additively.
+ * defined in docs/api.md › The dashboard. A new figure extends it additively.
  */
 export const dashboardResponseSchema = z.object({
   period: dashboardPeriodSchema,

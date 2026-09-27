@@ -26,8 +26,9 @@ type Row = {
  * À traiter — docs/design.md › Tableau de bord, GH #113.
  *
  * Relances dues comes from the dashboard; the two queues from the queries the
- * sidebar already runs, so no request of its own. A row with nothing to do, or no number yet, is muted and its button
- * disabled: a link to an empty queue is a click for nothing.
+ * sidebar already runs, so no request of its own. A row with nothing to do, or
+ * no number yet, is muted and its button disabled: a link to an empty queue is
+ * a click for nothing.
  */
 export function TodoPanel({
   followUpsDue,
