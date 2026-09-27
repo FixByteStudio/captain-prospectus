@@ -87,6 +87,19 @@ export function brusselsPeriod(now: number, days: number): Period {
 }
 
 /**
+ * The Brussels midnight `days` days after today's, today being `now`'s
+ * Brussels calendar date. `days = 0` is today's midnight (`brusselsPeriod`'s
+ * `to` minus one day, but computed the same clock-safe way — never
+ * `now + days × DAY_MS`, wrong across a clock change) — one home for a
+ * snapshot boundary that does not depend on `period` (docs/api.md › The
+ * dashboard, "Agents en tournée" / "Relances dues sous 7 jours").
+ */
+export function brusselsMidnightDaysFromNow(now: number, days: number): number {
+  const { year, month, day } = wallClock(now);
+  return brusselsMidnight(year, month, day + days);
+}
+
+/**
  * (value − previous) ÷ previous, or `null` when there is nothing to compare
  * against — "—" on screen, never an infinite or made-up percentage
  * (docs/api.md › The dashboard).

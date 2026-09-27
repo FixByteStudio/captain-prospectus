@@ -32,6 +32,9 @@ const DASHBOARD: DashboardResponse = {
     { email: "agent@example.com", visits: 386, converted: 41, followUp: 64, openProspects: 150 },
   ],
   followUpsDue: 6,
+  flyersGiven: 120,
+  agentsActiveToday: 2,
+  followUpsDueSoon: { value: 6, dueBefore: 1 },
 };
 
 function json(body: unknown): Response {

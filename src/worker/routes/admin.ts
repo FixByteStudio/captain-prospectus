@@ -48,7 +48,14 @@ import {
   csvTimestamp,
 } from "../../shared/csv";
 import { dedupeKey, normalize } from "../../shared/dedupe";
-import { DAY_MS, brusselsPeriod, deltaOf, periodDates, periodOffsets } from "../../shared/period";
+import {
+  DAY_MS,
+  brusselsMidnightDaysFromNow,
+  brusselsPeriod,
+  deltaOf,
+  periodDates,
+  periodOffsets,
+} from "../../shared/period";
 import { cellAndNeighbours, cellOf, distanceMeters } from "../../shared/geo";
 import { isProbablySamePlace } from "../../shared/similarity";
 import {
@@ -204,11 +211,16 @@ function unknownAssignee(email: string | null, env: AppEnv["Bindings"]): boolean
  */
 adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c) => {
   const { period } = c.req.valid("query");
-  const { from, to, previousFrom } = brusselsPeriod(Date.now(), period);
+  // One clock read, so every boundary below agrees on which day it is.
+  const now = Date.now();
+  const { from, to, previousFrom } = brusselsPeriod(now, period);
   const db = getDb(c.env.DB);
   // 1 for a visit in the current period, 0 for one in the previous period.
   const inCurrent = sql`(case when ${visits.visitedAt} >= ${from} then 1 else 0 end)`;
   const days = periodDays(from, to, period);
+  // Snapshots that ignore `period` (docs/api.md › The dashboard).
+  const todayStart = brusselsMidnightDaysFromNow(now, 0);
+  const dueSoonBefore = brusselsMidnightDaysFromNow(now, 7);
 
   const [
     visitCounts,
@@ -221,17 +233,23 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     agentOpen,
     agentConverted,
     due,
+    agentsToday,
   ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
      * Not filtered on `merged_into`: an absorbed prospect keeps its visits and
      * they still happened. Quarantined visits live in another table, so they
      * are out by construction. `visited_at` is already clamped (INVARIANT 12).
+     * `flyersGiven` follows `period`, same rows as `value` (GH #177).
      */
     db
       .select({
         value: sql<number>`coalesce(sum(${inCurrent}), 0)`.mapWith(Number),
         previous: sql<number>`coalesce(sum(1 - ${inCurrent}), 0)`.mapWith(Number),
+        flyersGiven:
+          sql<number>`coalesce(sum(case when ${inCurrent} = 1 and ${visits.flyerGiven} then 1 else 0 end), 0)`.mapWith(
+            Number,
+          ),
       })
       .from(visits)
       .where(and(gte(visits.visitedAt, previousFrom), lt(visits.visitedAt, to))),
@@ -276,16 +294,30 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     agentConversions(db, { from, to }),
     // Relances dues: "today or earlier" is before `to`, Brussels midnight
     // tomorrow, so the day boundary stays brusselsPeriod's. A snapshot.
+    // `dueSoonBefore` (> `to`) widens the where clause so one range read
+    // serves both `n` (< to) and "sous 7 jours" (< dueSoonBefore, overdue
+    // included), a second sum rather than a second statement (GH #177).
     db
-      .select({ n: count() })
+      .select({
+        n: sql<number>`coalesce(sum(case when ${prospects.nextVisitAt} < ${to} then 1 else 0 end), 0)`.mapWith(
+          Number,
+        ),
+        dueSoon: count(),
+      })
       .from(prospects)
       .where(
         and(
           isNull(prospects.mergedInto),
           eq(prospects.status, "follow_up" satisfies Status),
-          lt(prospects.nextVisitAt, to),
+          lt(prospects.nextVisitAt, dueSoonBefore),
         ),
       ),
+    // Agents en tournée: distinct agents with a visit received today.
+    // Served by `visits_received_idx` (G6, docs/api.md › The dashboard).
+    db
+      .select({ n: sql<number>`count(distinct ${visits.agentEmail})`.mapWith(Number) })
+      .from(visits)
+      .where(and(gte(visits.receivedAt, todayStart), lt(visits.receivedAt, to))),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -328,6 +360,9 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     pipeline: pipelineOf(pipelineRows),
     agents: agentRows(assignableEmails(c.env), agentVisits, agentOpen, agentConverted),
     followUpsDue: due[0]?.n ?? 0,
+    flyersGiven: visitCounts[0]?.flyersGiven ?? 0,
+    agentsActiveToday: agentsToday[0]?.n ?? 0,
+    followUpsDueSoon: { value: due[0]?.dueSoon ?? 0, dueBefore: dueSoonBefore },
   });
 });
 

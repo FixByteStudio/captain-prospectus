@@ -66,13 +66,22 @@ Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pa
   once), about 4 ms of it the one-time compile any first route pays, the rest the dashboard's own
   code compiled on first use. Re-measure when a statement or a figure is added, and read local
   hardware as an estimate.
-- **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements, the
+- **After GH #177** (`flyersGiven`, `agentsActiveToday`, `followUpsDueSoon`: two folded into
+  existing statements, one new, 11 in all). Measured against the pre-change build alternately on the
+  same seeded D1, 14 cold first requests each: median 8.14 ms after vs 8.15 ms before (7.80–8.62 vs
+  7.76–9.54). Warm medians 0.48–0.61 ms. No measurable change, but the cold request's run-to-run
+  noise already reaches about 9.9 ms on either build, so the headroom is under 2 ms: the next figure
+  added to G1 should be measured the same way (alternating builds, not one run) and may need its own
+  endpoint.
+- **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
+  GH #113, eleven since GH #177, the
   largest with 11 bound parameters. Every range read on `visits` — Visites and its previous period,
   Visites dans le temps, Convertis and the rate, the Convertis series, the agents' visits and
   Convertis — is a `SEARCH visits USING INDEX visits_visited_idx (visited_at>? AND visited_at<?)`
   (a covering index for Visites), with each joined prospect found by primary key. Prospects
   ouverts and Relances dues search `prospects_status_idx`; the pipeline and the agents'
-  assignments search `prospects_merged_idx`.
+  assignments search `prospects_merged_idx`. GH #177 adds one statement, `agentsActiveToday`,
+  searching `visits_received_idx (received_at>? AND received_at<?)`.
 - **D1 free-tier limits are hard-enforced since 2026-09-01.** Past the daily row read/write limit,
   queries fail until midnight UTC with `Your account has exceeded D1's free tier daily row read
   limit` (or `…row write limit`). The sync route must translate that into a clear "retry later"
