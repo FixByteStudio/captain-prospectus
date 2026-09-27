@@ -1,12 +1,16 @@
 /**
- * A page over a held, in-memory list — Visites (GH #178) and, later, Prospects
- * (#179). Pure, so both screens' DOM tests can trust one small module rather
- * than re-deriving the arithmetic.
+ * Paging shapes shared by Visites and Prospects. Pure, so both screens' DOM
+ * tests can trust one small module rather than re-deriving the arithmetic.
  *
- * There is no server paging on the live feed and none may be added
- * (docs/design.md's "The candidate list is bounded and scrolls, and the live
- * feed's is not" reasoning extends here): the feed is capped at
- * `ADMIN_VISITS_PAGE_SIZE` rows and the page turns over that held array.
+ * Visites (GH #178) pages client-side over a held, in-memory list — there is
+ * no server paging on the live feed and none may be added (docs/design.md's
+ * "The candidate list is bounded and scrolls, and the live feed's is not"
+ * reasoning extends here): the feed is capped at `ADMIN_VISITS_PAGE_SIZE` rows
+ * and the page turns over that held array (`pageSlice`).
+ *
+ * Prospects (#179) pages on the server instead: the list endpoint already has
+ * `limit`/`offset` and its own `total`, so `pageSlice` is not used there — only
+ * `PAGE_SIZE`, `pageCount` and `pageItems`, over the server's own count.
  */
 
 /** Rows per page, both screens (docs/design.md › "Pagination and export"). */

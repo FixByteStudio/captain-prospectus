@@ -32,3 +32,19 @@ export const STATUS_TEXT: Readonly<Record<Status, string>> = {
   converted: "text-success font-medium",
   rejected: "text-destructive font-medium",
 };
+
+/** The badge's shape, as `RecentVisits.tsx`'s own: `rounded-sm`, meta type. */
+export const BADGE_SHAPE = "text-meta rounded-sm px-2 font-medium tracking-[0.02em]";
+
+/**
+ * The status badge (docs/design.md › Badges): a tinted rectangle, the fill
+ * mixed at most 12 % into the card (`tint-*`). Prospects shows it beside the
+ * leading edge, so the colour never carries the status alone.
+ */
+export const STATUS_BADGE: Readonly<Record<Status, string>> = {
+  new: "bg-secondary text-muted-foreground",
+  assigned: "bg-tint-assigned text-foreground",
+  follow_up: "bg-tint-warn text-warn",
+  converted: "bg-tint-success text-success",
+  rejected: "bg-tint-destructive text-destructive",
+};

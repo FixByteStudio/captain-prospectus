@@ -412,25 +412,90 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
 
 ### One toolbar slot
 
-Above a list there is exactly one slot. It holds the filters; the moment
-anything is selected it is **replaced in place** by the actions — same position,
-same height, no floating bar, no layout shift. Its contents always answer "what
-can I do right now".
+Above a list there is exactly one slot. It holds the search box first, then the
+filters; the moment anything is selected it is **replaced in place** by the
+actions — same position, same height, no floating bar, no layout shift. Its
+contents always answer "what can I do right now". Scoped to Prospects,
+Doublons and the Visites filters; what the slot holds on Doublons, which has
+no filters today, is decided when that screen is rebuilt.
 
 ```
-│ Statut ▾   Agent ▾   Source ▾                412 prospects │   nothing selected
-│ 12 sélectionnés   [Assigner à ▾]  [Désassigner]    Annuler │   selection
+│ 🔍 Rechercher…  Statut ▾   Agent ▾   Source ▾   412 prospects │   nothing selected
+│ 12 sélectionnés   [Assigner à ▾]  [Désassigner]       Annuler │   selection
 ```
 
-On Prospects the filters live in the URL (GH #114), so a reload, a shared link
-or a dashboard card opens the same list; a change replaces the URL rather than
-pushing a history entry, and clears the selection. A filter the selects cannot
-show — several statuses, or a due date — stays in the slot as a `secondary`
-Badge chip ("Statut : Nouveau, Assigné, À relancer", "Relance avant le
+On Prospects the filters, and the search text, live in the URL (GH #114,
+`q`, #179), so a reload, a shared link or a dashboard card opens the same
+list; a change replaces the URL rather than pushing a history entry, and
+clears the selection. The search box itself holds its own text and writes the
+URL ~300ms after the last keystroke, so a fast typist does not mint a request
+per letter; an outside URL change (Effacer les filtres, Back, the sidebar)
+resets the box from the URL. A filter the selects cannot show — several
+statuses, or a due date — stays in the slot as a `secondary` Badge chip
+("Statut : Nouveau, Assigné, À relancer", "Relance avant le
 28 septembre 2026", a Brussels day) with a ghost × that drops just that filter;
 with several statuses the Statut select reads "Plusieurs statuts", and choosing
 "Tous les statuts" there clears them. A URL change from anywhere, Back or the
 sidebar included, empties the selection. "Effacer les filtres" clears the URL.
+
+### Prospects
+
+Rebuilt on the #175 primitives for GH #179: a `ScreenHeader`, a `ScreenState`
+load-failed/loading gate, and one `Surface` holding the toolbar and the rows
+together — the toolbar carries its own `border-b` instead of the two-box
+chrome a hand-spelled split panel used to need.
+
+```
+│ Prospects                              [Exporter en CSV] [Importer un CSV] │
+├──────────────────────────────────────────────────────────────────────────┤
+│ 🔍 Rechercher…  Statut ▾  Agent ▾  Source ▾            412 prospects      │
+├──────────────────────────────────────────────────────────────────────────┤
+│▎ ☐  Le Bouchon des Filles  Restaurant  12 rue…  Assigné  agent@…  24/09  ⋮│
+│  ☐  Chez Marcel            Café        3 place…  Nouveau  —      —      ⋮│
+├──────────────────────────────────────────────────────────────────────────┤
+│                            26–50 sur 60   ‹ Précédent  1  2  3  Suivant › │
+```
+
+- **Search is server-side, not a client filter.** The list endpoint already
+  reads `q` (G4, #176) and returns its own `total`; a client-side filter over
+  a page it already holds would only ever search the 25 rows on screen. The
+  request carries `q` last, after the URL's existing filters — `toQueryString`
+  is the one spelling shared by the request, the screen's own URL and the
+  dashboard's links, so it never grows two shapes.
+- **Paging is server-side, unlike Visites' client-side pager over a held
+  feed.** The endpoint already has `limit`/`offset` and a `total`, and holding
+  200 rows to show 25 would bill scanned rows for nothing. The page is
+  component state, not a URL param — the API reads `offset`, not `page`, and
+  the GH #114 URL contract this screen must not disturb never named one. A
+  filter or search change returns to page 1; a mutation that empties the
+  current page (the last row on it re-statused or reassigned out) clamps back
+  to the last page that still exists, the same render-time adjustment
+  Visites' own pager makes. The range under the table reads "26–50 sur 60"; a
+  total of 25 or fewer shows no pager at all, same as Visites.
+  The selection is keyed by the URL's query **and** the page — a page turn
+  empties it exactly as a filter change does, so a bulk assign never reaches
+  rows the new page no longer shows.
+- **Export is a CSV of the same filters** — `GET
+  /api/admin/prospects/export.csv?…&q`, the button's own request, not a
+  re-read of the held page. It caps at `EXPORT_ROWS` like Visites' own export;
+  past the cap the server answers `x-truncated: true` and the button shows a
+  warning toast naming the cap and suggesting narrower filters — the same rule
+  Visites' export (#178) set.
+- **Status is edge and badge.** Each row keeps the 4px leading edge
+  (`STATUS_EDGE`) and shows the French label as a `STATUS_BADGE`, the tinted
+  rectangle of § Badges — in the table and in the phone list alike. Colour
+  never carries the status alone: the label is always there.
+- **Below 768px the table becomes a list of rows**: checkbox, name, type and
+  agent on a second line, the status badge, the row menu. `useIsMobile()`
+  picks the layout, rather than a table that scrolls sideways or drops
+  columns silently. The row menu keeps its side submenus in both, and the
+  toolbar wraps onto two lines.
+- **Two empty states**, each an icon tile, a title, one sentence and one
+  button. No prospects at all: « Aucun prospect. Importez un CSV pour
+  commencer. » with « Importer un CSV ». Filters or a search matching nothing:
+  « Aucun prospect ne correspond à ces filtres. » with « Effacer les
+  filtres »; when a search is set, the sentence names it and says accents
+  count, since `q` folds ASCII case only ([api.md](api.md)).
 
 ### The script editor
 

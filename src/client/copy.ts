@@ -19,6 +19,14 @@ import type {
   Status,
 } from "../shared/constants";
 
+/** The 25-row pager's words, shared by Prospects and Visites; each adds its own `nav`. */
+const PAGER = {
+  previous: "Précédent",
+  next: "Suivant",
+  morePages: "Plus de pages",
+  pageLabel: (page: number) => `Page ${page}`,
+};
+
 export const copy = {
   appName: "Captain Prospectus",
 
@@ -214,9 +222,33 @@ export const copy = {
     importCta: "Importer un CSV",
     empty: "Aucun prospect. Importez un CSV pour commencer.",
     noMatch: "Aucun prospect ne correspond à ces filtres.",
+    /** Under `noMatch` when a search found nothing: names it, and says accents count (docs/api.md). */
+    noMatchSearch: (q: string) =>
+      `Aucun nom ne contient « ${q} ». Vérifiez l'orthographe et les accents, ou effacez les filtres.`,
+    /** Under `noMatch` when only filters are set. */
+    noMatchFilters: "Retirez un filtre ou effacez-les tous pour revoir la liste.",
     clearFilters: "Effacer les filtres",
     loading: "Chargement des prospects…",
     loadFailed: "Impossible de charger les prospects. Réessayez.",
+
+    /** The one toolbar slot's search box (G4, #176/#179). */
+    search: {
+      label: "Rechercher un prospect",
+      placeholder: "Rechercher par nom…",
+    },
+
+    /** The 25-row server-side pager (#179) — same shape as Visites' own. */
+    pager: { ...PAGER, nav: "Pagination des prospects" },
+    /** "26–50 sur 60" — the pager's own range, distinct from the plain count. */
+    range: (from: number, to: number, total: number) => `${from}–${to} sur ${total}`,
+
+    export: {
+      button: "Exporter en CSV",
+      exporting: "Export…",
+      truncated: (cap: number) =>
+        `L'export s'arrête à ${cap} prospects. Choisissez des filtres plus précis pour tout obtenir.`,
+      failed: "L'export a échoué. Réessayez.",
+    },
 
     filters: {
       status: "Statut",
@@ -465,13 +497,7 @@ export const copy = {
     },
 
     /** The 25-row pager over the held feed (GH #178). */
-    pager: {
-      previous: "Précédent",
-      next: "Suivant",
-      morePages: "Plus de pages",
-      pageLabel: (page: number) => `Page ${page}`,
-      nav: "Pagination des visites",
-    },
+    pager: { ...PAGER, nav: "Pagination des visites" },
 
     /**
      * The export button (GH #178) — a warning toast, not a blocking dialog,
