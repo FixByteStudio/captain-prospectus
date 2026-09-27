@@ -1,6 +1,6 @@
 ---
 id: 006
-status: ready
+status: done
 implements: ADR-0022
 depends_on: []
 ---
