@@ -4,6 +4,7 @@ import type { ImportRow } from "../../../shared/schemas";
 import { copy } from "../../copy";
 import { cn } from "../../lib/utils";
 import { useImportBatches } from "../queries";
+import { ScreenHeader } from "../ScreenHeader";
 import { ColumnsStep } from "./ColumnsStep";
 import { FileStep } from "./FileStep";
 import { MapStep, type MapProvider } from "./MapStep";
@@ -102,7 +103,7 @@ export function ImportScreen() {
 
   return (
     <section>
-      <h2 className="mb-4 text-xl font-semibold tracking-[-0.005em]">{copy.import.title}</h2>
+      <ScreenHeader className="mb-4" title={copy.import.title} />
 
       <nav className="text-muted-foreground mb-5 flex items-center gap-2.5" aria-label="Étapes">
         {steps.map((s, index) => (

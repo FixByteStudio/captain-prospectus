@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { ScreenHeader } from "./ScreenHeader";
 import { STATUS_EDGE, STATUS_TEXT } from "./status";
 import { useDiscardOrphan, useOrphans, useRepairOrphan } from "./queries";
 
@@ -48,12 +49,15 @@ export function OrphansScreen() {
 
   return (
     <section>
-      <div className="mb-1 flex items-baseline justify-between gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.005em]">{copy.orphans.title}</h2>
-        {visits.length > 0 && (
-          <span className="text-muted-foreground tnum">{copy.orphans.count(visits.length)}</span>
-        )}
-      </div>
+      <ScreenHeader
+        className="mb-1"
+        title={copy.orphans.title}
+        actions={
+          visits.length > 0 && (
+            <span className="text-muted-foreground tnum">{copy.orphans.count(visits.length)}</span>
+          )
+        }
+      />
       <p className="text-muted-foreground mb-4 text-sm">{copy.orphans.lede}</p>
 
       {isError && <p className="text-destructive">{copy.orphans.loadFailed}</p>}

@@ -753,6 +753,9 @@ export const copy = {
       "Impossible de vous identifier hors ligne. Connectez-vous une fois avec du réseau.",
     forbidden: "Vous n'avez pas accès à cette page.",
     notFound: "Page introuvable.",
+    /** The one button `ScreenState`'s shared retry Alert needs; the message
+     *  above it stays the screen's own `loadFailed` string. */
+    retry: "Réessayer",
   },
 
   attribution: "© les contributeurs OpenStreetMap",

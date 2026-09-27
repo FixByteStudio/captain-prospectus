@@ -31,6 +31,7 @@ import { ApiError } from "../../api";
 import { formatDateTime } from "../../format";
 import { scriptCreateSchema } from "../../../shared/schemas";
 import { useCreateScript, useScripts } from "../queries";
+import { ScreenHeader } from "../ScreenHeader";
 import {
   addQuestion,
   draftFromScript,
@@ -200,10 +201,12 @@ export function ScriptsScreen() {
 
   return (
     <section>
-      <header>
-        <h2 className="text-xl font-semibold tracking-[-0.005em]">{copy.scripts.title}</h2>
-        <p className="text-muted-foreground mt-1 max-w-2xl text-sm">{copy.scripts.lede}</p>
-      </header>
+      <ScreenHeader
+        title={copy.scripts.title}
+        subtitle={
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">{copy.scripts.lede}</p>
+        }
+      />
 
       <Form {...form}>
         <form
