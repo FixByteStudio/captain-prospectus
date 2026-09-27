@@ -7,6 +7,9 @@ pnpm-lock.yaml
 # Vendored agent skills (bmad). Third-party assets we do not author or reformat.
 .agents
 
+# Planning artifacts (specs, mockups) tracked for traceability, not authored to our style.
+_bmad-output
+
 # Docs are hand-formatted prose and tables; Prettier reflows them into noise.
 *.md
 

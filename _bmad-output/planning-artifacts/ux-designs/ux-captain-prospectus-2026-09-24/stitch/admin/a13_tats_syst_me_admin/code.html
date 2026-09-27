@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-error-container":"#93000a","tertiary":"#4f5e81","muted-dark":"#222B3D","surface-variant":"#e2e3dc","secondary-fixed":"#e0e2e7","background-light":"#F6F7F0","on-surface-variant":"#4d4635","foreground-light":"#1B2A4A","card-dark":"#182031","error-container":"#ffdad6","primary-edge-dark":"#E6C65C","primary-fixed":"#ffe08e","secondary-container":"#dde0e5","muted-light":"#E8EAEF","surface-container-highest":"#e2e3dc","sidebar-dark":"#0B1120","outline-variant":"#d1c5af","tertiary-fixed-dim":"#b7c6ee","surface-bright":"#f9faf3","muted-foreground-dark":"#97A2B8","on-primary-container":"#4b3a00","primary-container":"#c9a227","success-dark":"#4FA97D","background":"#f9faf3","primary-dark":"#D9B43C","on-tertiary-fixed-variant":"#384668","muted-foreground-light":"#5A6478","sidebar-muted-light":"#95A0B8","success-light":"#1F6F4A","inverse-on-surface":"#f0f1ea","sidebar-foreground-light":"#EEF0F4","on-primary-fixed":"#241a00","surface-container-low":"#f3f4ed","surface-container":"#edeee8","foreground-dark":"#E7EAF0","on-secondary-container":"#606367","on-secondary-fixed":"#181c20","on-primary":"#ffffff","on-tertiary-fixed":"#0a1a3a","destructive-dark":"#D2757E","primary-foreground-dark":"#141C2E","border-light":"#D7DAE2","tertiary-container":"#98a6cd","inverse-primary":"#ecc246","secondary-fixed-dim":"#c4c6cb","primary":"#755b00","border-dark":"#2B3547","inverse-surface":"#2f312d","surface-tint":"#755b00","on-error":"#ffffff","tertiary-fixed":"#d9e2ff","destructive-light":"#8C2F39","warn-dark":"#D98A3C","on-secondary":"#ffffff","surface":"#f9faf3","on-background":"#1a1c18","warn-light":"#9A6B12","on-tertiary-container":"#2d3b5c","primary-fixed-dim":"#ecc246","secondary":"#5b5f63","surface-container-lowest":"#ffffff","primary-edge-light":"#A8801A","on-surface":"#1a1c18","on-primary-fixed-variant":"#584400","on-tertiary":"#ffffff","on-secondary-fixed-variant":"#44474b","error":"#ba1a1a","surface-dim":"#d9dbd4","outline":"#7f7663","background-dark":"#101726","surface-container-high":"#e8e9e2","card-light":"#FFFFFF","sidebar-light":"#1B2A4A"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-md":"0.75rem","margin":"1.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xl":"1.5rem","space-xs":"0.25rem","space-sm":"0.5rem","space-lg":"1rem","gutter":"1rem"},"fontFamily":{"body-default":["Archivo Narrow"],"caption":["Archivo Narrow"],"headline-md":["Archivo Narrow"],"body-lg":["Archivo Narrow"],"display":["Archivo Narrow"],"label-default":["Archivo Narrow"],"headline-lg":["Archivo Narrow"]},"fontSize":{"body-default":["14px",{"lineHeight":"20px","fontWeight":"400"}],"caption":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"headline-md":["18px",{"lineHeight":"24px","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"display":["28px",{"lineHeight":"34px","letterSpacing":"-0.01em","fontWeight":"700"}],"label-default":["14px",{"lineHeight":"18px","fontWeight":"500"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-background-light font-body-default text-body-default text-foreground-light antialiased min-h-screen"><aside class="fixed left-0 top-0 h-full w-64 bg-sidebar-light z-50 flex flex-col justify-between select-none shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-14 px-space-lg flex items-center gap-space-sm bg-muted-dark/30"><img alt="Captain Prospectus Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X1t-JsUYKSxOoZIOJMWJZwobxqg2Ln-XI9Qg2J1z9hXhXRh7en5EO9BSKpBhS9JNiuHwYf76lhaDTbSaqxooOqJYFwSB413PT1UzcWq1UqCMXBDbPu-YS8UEFkwBVtyksg8d5vyy4jKC22tvNujFmWZTvpTfGjUbw9UNFzROvo9tw1TuWagKqxDo9CfBBDn69BgbIX02s-80FIN0xUmM7U6pR3zkuAElD9t9yZbiniRFbbpKRsToBKV6k"/><span class="font-headline-md text-headline-md tracking-tight text-sidebar-foreground-light">Captain Prospectus</span></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Pilotage</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded transition-colors text-on-surface-variant" data-path="tableau-de-bord" href="#"><span class="material-symbols-outlined text-[18px]">dashboard</span><span>Tableau de bord</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Prospects</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="prospects" href="#"><span class="material-symbols-outlined text-[18px]">storefront</span><span>Prospects</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="import" href="#"><span class="material-symbols-outlined text-[18px]">cloud_upload</span><span>Import</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="doublons" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">content_copy</span><span>Doublons</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-muted-dark text-sidebar-foreground-light">3</span></a><a class="flex items-center justify-between px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="a-rattacher" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">link</span><span>À rattacher</span></div><span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-warn-dark text-sidebar-foreground-light">2</span></a></nav></div><div class="px-space-md py-space-sm"><div class="text-[10px] tracking-wider uppercase font-semibold text-sidebar-muted-light/60 px-space-sm py-space-xs">Terrain</div><nav class="flex flex-col gap-0.5 mt-0.5" data-active-classes="bg-primary-container text-foreground-light font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="visites" href="#"><span class="material-symbols-outlined text-[18px]">pin_drop</span><span>Visites</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="scripts" href="#"><span class="material-symbols-outlined text-[18px]">assignment</span><span>Scripts</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-xs rounded text-sidebar-foreground-light/80 hover:bg-muted-dark/50 hover:text-sidebar-foreground-light transition-colors" data-path="tournee-du-jour" href="#"><span class="material-symbols-outlined text-[18px]">explore</span><span>Tournée du jour</span></a></nav></div></div><div class="p-space-md bg-muted-dark/40"><div class="flex items-center gap-space-sm"><div class="w-2 h-2 rounded-full bg-success-light animate-pulse"></div><div class="flex flex-col flex-1 min-w-0"><span class="font-label-default text-label-default text-sidebar-foreground-light truncate">admin@exemple.be</span><span class="font-caption text-caption text-sidebar-muted-light truncate">Synchronisé à l'instant</span></div></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-14 bg-card-light/95 backdrop-blur-md z-40 px-space-lg flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-md"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">menu_open</span></button><nav class="hidden sm:flex items-center gap-space-xs font-caption text-caption text-muted-foreground-light"><span class="hover:text-foreground-light cursor-pointer">Captain Prospectus</span><span class="material-symbols-outlined text-[14px]">chevron_right</span><span class="text-foreground-light font-semibold">Console d'administration</span></nav></div><div class="flex items-center gap-space-sm"><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">search</span></button><button class="relative p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-warn-light"></span></button><button class="p-1.5 rounded text-muted-foreground-light hover:bg-muted-light hover:text-foreground-light transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">light_mode</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="w-full pt-14 bg-background-light min-h-screen"><div class="flex flex-col w-full">
+<!-- Interactive Toast Layer (Simulation dock on bottom right) -->
+<div class="fixed bottom-6 right-6 z-50 flex flex-col gap-space-sm max-w-sm w-full pointer-events-none" id="toast-container">
+<div class="pointer-events-auto transform transition-all duration-300 hover:translate-x-[-4px] bg-surface-container-lowest shadow-xl rounded-lg p-space-md flex items-start gap-space-md">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-caption uppercase tracking-wider text-primary">Succès opérationnel</span>
+<span class="font-caption text-caption text-secondary">À l'instant</span>
+</div>
+<p class="font-body-default text-body-default text-on-surface mt-0.5">3 prospects assignés à <span class="font-headline-md">lea@exemple.be</span></p>
+</div>
+<button class="text-secondary hover:text-on-surface p-1" onclick="this.parentElement.remove()">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+</div>
+<!-- Header & Overline Area -->
+<div class="px-margin pt-space-lg pb-space-md bg-surface-container-lowest">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+<div>
+<div class="flex items-center gap-space-xs font-caption text-caption text-primary uppercase tracking-widest font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span>Spécifications UI • Matrice des Événements</span>
+</div>
+<h1 class="font-display text-display text-on-surface mt-space-xs">États système &amp; Composants d'interface (Admin)</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl mt-0.5">
+          Planche récapitulative des états asynchrones, alertes, bannières et notifications de l'application d'administration.
+        </p>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="bg-surface-container-high px-space-md py-space-xs rounded-full flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px]">rule</span>
+<span class="font-caption text-caption text-on-surface font-semibold">Audit v2.4.1</span>
+</div>
+<button class="bg-primary text-on-primary font-label-default text-label-default px-space-md py-space-xs rounded shadow-sm hover:opacity-95 transition-all flex items-center gap-space-xs" onclick="triggerToastDemo()">
+<span class="material-symbols-outlined text-[18px]">play_circle</span>
+<span>Déclencher Toasts</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Main System States Gallery -->
+<div class="px-margin py-space-xl max-w-7xl mx-auto flex flex-col gap-space-xl w-full">
+<!-- 1. TOP UPDATE BANNER / CRITICAL NOTIFICATION -->
+<section class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-caption text-caption uppercase tracking-wider text-secondary font-semibold">01 / Bannière de mise à jour globale</span>
+<span class="font-caption text-caption text-secondary">Priorité Haute • Non-bloquant</span>
+</div>
+<div class="relative overflow-hidden bg-surface-container-lowest rounded-xl shadow-md p-space-lg flex flex-col lg:flex-row lg:items-center justify-between gap-space-lg">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-primary-container"></div>
+<div class="flex items-start gap-space-lg">
+<div class="w-12 h-12 rounded-xl bg-primary-container/20 text-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">system_update</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-space-sm flex-wrap">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Une nouvelle version est disponible.</h2>
+<span class="font-caption text-caption px-space-sm py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-bold tracking-tight">Canal Déploiement</span>
+</div>
+<p class="font-body-default text-body-default text-on-surface-variant max-w-2xl">
+              Mise à jour 2.4.1 — Amélioration du moteur de géocodage et de synchronisation hors-ligne. Prise en compte du cadastre d'Ixelles et Etterbeek.
+            </p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm shrink-0 self-end lg:self-center">
+<button class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-default text-label-default px-space-lg py-space-sm rounded-lg transition-colors">
+            Plus tard
+          </button>
+<button class="bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-headline-md text-label-default px-space-lg py-space-sm rounded-lg shadow-sm flex items-center gap-space-xs transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[18px]">upgrade</span>
+<span>Mettre à jour</span>
+</button>
+</div>
+</div>
+</section>
+<!-- 2. LOADING SKELETONS (État de chargement asynchrone) -->
+<section class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div>
+<span class="font-caption text-caption uppercase tracking-wider text-secondary font-semibold">02 / États de chargement &amp; Squelettes d'attente</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Squelettes pulsants &amp; Chatoiement (Shimmer)</h2>
+</div>
+<div class="flex items-center gap-space-xs text-secondary font-caption text-caption">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed animate-ping"></span>
+<span>Simulation réseau 3G (450ms)</span>
+</div>
+</div>
+<!-- KPI Skeletons -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- KPI Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between">
+<div class="h-3.5 w-24 bg-surface-container-high rounded animate-pulse"></div>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<div class="h-7 w-20 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-3 w-32 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<!-- KPI Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between">
+<div class="h-3.5 w-28 bg-surface-container-high rounded animate-pulse"></div>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<div class="h-7 w-16 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-3 w-36 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<!-- KPI Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between">
+<div class="h-3.5 w-20 bg-surface-container-high rounded animate-pulse"></div>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<div class="h-7 w-24 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-3 w-28 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<!-- KPI Card 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between">
+<div class="h-3.5 w-24 bg-surface-container-high rounded animate-pulse"></div>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<div class="h-7 w-14 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-3 w-24 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+</div>
+<!-- Data Table Skeleton -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden flex flex-col">
+<!-- Table Header Skeleton -->
+<div class="bg-surface-container-low px-space-lg py-space-md flex items-center justify-between">
+<div class="h-4 w-40 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="flex items-center gap-space-sm">
+<div class="h-7 w-24 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-7 w-16 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="p-space-lg flex flex-col gap-space-md">
+<!-- Row 1 -->
+<div class="flex items-center justify-between gap-space-md py-space-xs">
+<div class="flex items-center gap-space-md flex-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high shrink-0 animate-pulse"></div>
+<div class="space-y-1.5 flex-1 max-w-xs">
+<div class="h-3.5 w-3/4 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-2.5 w-1/2 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="h-4 w-28 bg-surface-container-high rounded hidden sm:block animate-pulse"></div>
+<div class="h-5 w-20 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-4 w-12 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center justify-between gap-space-md py-space-xs bg-surface-container-low/40 rounded p-space-xs">
+<div class="flex items-center gap-space-md flex-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high shrink-0 animate-pulse"></div>
+<div class="space-y-1.5 flex-1 max-w-xs">
+<div class="h-3.5 w-2/3 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-2.5 w-1/3 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="h-4 w-32 bg-surface-container-high rounded hidden sm:block animate-pulse"></div>
+<div class="h-5 w-24 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-4 w-12 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+<!-- Row 3 -->
+<div class="flex items-center justify-between gap-space-md py-space-xs">
+<div class="flex items-center gap-space-md flex-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high shrink-0 animate-pulse"></div>
+<div class="space-y-1.5 flex-1 max-w-xs">
+<div class="h-3.5 w-4/5 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-2.5 w-2/5 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="h-4 w-24 bg-surface-container-high rounded hidden sm:block animate-pulse"></div>
+<div class="h-5 w-16 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-4 w-12 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+<!-- Row 4 -->
+<div class="flex items-center justify-between gap-space-md py-space-xs bg-surface-container-low/40 rounded p-space-xs">
+<div class="flex items-center gap-space-md flex-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high shrink-0 animate-pulse"></div>
+<div class="space-y-1.5 flex-1 max-w-xs">
+<div class="h-3.5 w-1/2 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-2.5 w-1/4 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="h-4 w-28 bg-surface-container-high rounded hidden sm:block animate-pulse"></div>
+<div class="h-5 w-20 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-4 w-12 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+<!-- Row 5 -->
+<div class="flex items-center justify-between gap-space-md py-space-xs">
+<div class="flex items-center gap-space-md flex-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-high shrink-0 animate-pulse"></div>
+<div class="space-y-1.5 flex-1 max-w-xs">
+<div class="h-3.5 w-3/5 bg-surface-container-highest rounded animate-pulse"></div>
+<div class="h-2.5 w-1/3 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+<div class="h-4 w-36 bg-surface-container-high rounded hidden sm:block animate-pulse"></div>
+<div class="h-5 w-24 bg-surface-container-high rounded-full animate-pulse"></div>
+<div class="h-4 w-12 bg-surface-container-high rounded animate-pulse"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- 3. ERROR & WARNING ALERTS (Alertes critiques et avertissements) -->
+<section class="flex flex-col gap-space-md">
+<div>
+<span class="font-caption text-caption uppercase tracking-wider text-secondary font-semibold">03 / États de rupture &amp; Signalement</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Alertes contextuelles</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg">
+<!-- Destructive Error Card -->
+<div class="bg-error-container text-on-error-container rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-on-error-container/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[24px]">cloud_off</span>
+</div>
+<div class="flex-1 space-y-1">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-md text-headline-md tracking-tight">Erreur de synchronisation réseau</h3>
+<span class="font-caption text-caption uppercase bg-on-error-container/10 px-space-xs py-0.5 rounded">Err 503</span>
+</div>
+<p class="font-body-default text-body-default opacity-90">
+                Impossible de charger les prospects. Le cluster cartographique de Bruxelles-Sud ne répond pas actuellement. Réessayez.
+              </p>
+</div>
+</div>
+<div class="flex items-center justify-end gap-space-sm pt-space-xs">
+<button class="font-label-default text-label-default px-space-md py-space-xs rounded hover:bg-on-error-container/10 transition-colors">
+              Rapport d'incident
+            </button>
+<button class="bg-error text-on-error font-headline-md text-label-default px-space-lg py-space-xs rounded shadow-sm hover:opacity-90 flex items-center gap-space-xs transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[16px]">refresh</span>
+<span>Réessayer</span>
+</button>
+</div>
+</div>
+<!-- Warning Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-primary"></div>
+<div class="flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-primary-fixed text-on-primary-fixed flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="flex-1 space-y-1">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-md text-headline-md text-on-surface">Synchronisation partielle</h3>
+<span class="font-caption text-caption uppercase bg-secondary-fixed text-on-secondary-fixed px-space-xs py-0.5 rounded font-semibold">2 conflits</span>
+</div>
+<p class="font-body-default text-body-default text-on-surface-variant">
+                Synchronisation partielle : 2 visites n'ont pas pu être affectées automatiquement. Consultez les visites à rattacher.
+              </p>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-caption text-caption text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+              Détecté il y a 8 min
+            </span>
+<a class="bg-surface-container-high hover:bg-surface-container-highest text-primary font-headline-md text-label-default px-space-md py-space-xs rounded transition-colors flex items-center gap-space-xs" href="#">
+<span>Voir les 2 visites</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+</section>
+<!-- 4. TOAST NOTIFICATIONS SHOWCASE (Vitrine statique des types de Toasts) -->
+<section class="flex flex-col gap-space-md">
+<div>
+<span class="font-caption text-caption uppercase tracking-wider text-secondary font-semibold">04 / Système Sonner &amp; Notifications Toast</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Vitrine des micro-retours utilisateur</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- Toast 1: Success -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-md flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</div>
+<div class="flex-1 min-w-0">
+<span class="font-caption text-caption text-primary uppercase font-bold tracking-wider">Affectation réussie</span>
+<p class="font-body-default text-body-default text-on-surface mt-0.5 truncate">
+                3 prospects assignés à <span class="font-semibold">lea@exemple.be</span>
+</p>
+</div>
+</div>
+<div class="flex items-center justify-between text-secondary font-caption text-caption">
+<span>Délai fermeture: 4s</span>
+<button class="hover:text-on-surface"><span class="material-symbols-outlined text-[16px]">close</span></button>
+</div>
+</div>
+<!-- Toast 2: Version Stored -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-md flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">auto_mode</span>
+</div>
+<div class="flex-1 min-w-0">
+<span class="font-caption text-caption text-tertiary uppercase font-bold tracking-wider">Scénario de vente</span>
+<p class="font-body-default text-body-default text-on-surface mt-0.5">
+                Version 3 enregistrée et activée.
+              </p>
+</div>
+</div>
+<div class="flex items-center justify-between text-secondary font-caption text-caption">
+<span>Délai fermeture: 3s</span>
+<button class="hover:text-on-surface"><span class="material-symbols-outlined text-[16px]">close</span></button>
+</div>
+</div>
+<!-- Toast 3: Error with action -->
+<div class="bg-error-container text-on-error-container p-space-md rounded-xl shadow-md flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-error text-on-error flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">priority_high</span>
+</div>
+<div class="flex-1 min-w-0">
+<span class="font-caption text-caption uppercase font-bold tracking-wider opacity-80">Échec requête</span>
+<p class="font-body-default text-body-default mt-0.5">
+                L'assignation a échoué. Réessayez.
+              </p>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-caption text-caption opacity-70">Persistant</span>
+<button class="bg-on-error-container text-error-container font-headline-md text-caption px-space-sm py-0.5 rounded shadow-sm hover:opacity-90">
+              Réessayer
+            </button>
+</div>
+</div>
+<!-- Toast 4: Info / CSV imported -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-md flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">inventory_2</span>
+</div>
+<div class="flex-1 min-w-0">
+<span class="font-caption text-caption text-secondary uppercase font-bold tracking-wider">Traitement CSV</span>
+<p class="font-body-default text-body-default text-on-surface mt-0.5 text-xs leading-snug">
+                Fichier <span class="font-semibold font-mono">prospects-ixelles.csv</span> importé avec succès (118 créés).
+              </p>
+</div>
+</div>
+<div class="flex items-center justify-between text-secondary font-caption text-caption">
+<span>Délai fermeture: 5s</span>
+<button class="hover:text-on-surface"><span class="material-symbols-outlined text-[16px]">close</span></button>
+</div>
+</div>
+</div>
+</section>
+<!-- 5. DESIGN TOKENS & SYSTEM RULES REMINDER -->
+<section class="bg-surface-container-lowest rounded-xl shadow-md p-space-xl flex flex-col gap-space-lg mb-space-xl">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div>
+<span class="font-caption text-caption uppercase tracking-wider text-primary font-semibold">05 / Spécifications Techniques &amp; Tokens</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Règles d'or &amp; Système de design</h2>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-caption text-caption px-space-sm py-0.5 rounded bg-surface-container text-on-surface-variant font-mono">Archivo Narrow • Tabular Figures</span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg">
+<!-- Gold Rules Container -->
+<div class="bg-surface-container-low rounded-lg p-space-lg flex flex-col justify-between gap-space-md">
+<div class="space-y-2">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-caption">
+              Au
+            </div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Palette Or Bruxelles</h3>
+<p class="font-body-default text-body-default text-on-surface-variant">
+              Utilisation exclusive de la dominante Or pour signifier la valeur active, le focus et les actions créatrices.
+            </p>
+</div>
+<div class="space-y-1.5 font-caption text-caption">
+<div class="flex items-center justify-between bg-surface-container-lowest p-space-xs rounded">
+<span class="text-on-surface font-semibold">Gold Principal</span>
+<span class="font-mono text-secondary">#c9a227</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest p-space-xs rounded">
+<span class="text-on-surface font-semibold">Contraste Texte</span>
+<span class="font-mono text-secondary">#1b2a4a</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest p-space-xs rounded">
+<span class="text-on-surface font-semibold">Primary Edge</span>
+<span class="font-mono text-secondary">#a8801a</span>
+</div>
+</div>
+</div>
+<!-- Elevation & Borders rules -->
+<div class="bg-surface-container-low rounded-lg p-space-lg flex flex-col justify-between gap-space-md">
+<div class="space-y-2">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-on-surface font-bold text-caption">
+              Px
+            </div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Zéro Ligne Arbitraire</h3>
+<p class="font-body-default text-body-default text-on-surface-variant">
+              Aucune bordure technique standard n'est utilisée. La séparation s'opère par élévation d'arrière-plan tactile et contrastes de surfaces.
+            </p>
+</div>
+<div class="p-space-md bg-surface-container-lowest rounded space-y-1">
+<div class="flex items-center gap-space-xs text-primary font-headline-md text-caption">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span>Conforme Directives</span>
+</div>
+<p class="font-caption text-caption text-on-surface-variant">
+              Ombrages doux, variations tonales d'off-white ledger et touches de couleurs système strictes.
+            </p>
+</div>
+</div>
+<!-- Typography & Metrics -->
+<div class="bg-surface-container-low rounded-lg p-space-lg flex flex-col justify-between gap-space-md">
+<div class="space-y-2">
+<div class="w-8 h-8 rounded bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-caption">
+              123
+            </div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Chiffres Tabulaires</h3>
+<p class="font-body-default text-body-default text-on-surface-variant">
+              Toutes les tables administratives et métriques utilisent la fonte compacte Archivo Narrow pour préserver l'alignement vertical rigoureux.
+            </p>
+</div>
+<div class="grid grid-cols-2 gap-space-xs font-mono text-caption text-center">
+<div class="bg-surface-container-lowest p-space-xs rounded">
+<span class="block text-secondary">Lat/Lng</span>
+<span class="font-bold text-on-surface">50.8466° N</span>
+</div>
+<div class="bg-surface-container-lowest p-space-xs rounded">
+<span class="block text-secondary">Rendement</span>
+<span class="font-bold text-on-surface">94.8%</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Micro-interaction JS for triggering live dynamic toasts -->
+<script>
+    function triggerToastDemo() {
+      const container = document.getElementById('toast-container');
+      const toasts = [
+        {
+          title: "Version de production",
+          message: "Cache DNS actualisé sur la zone Bruxelles-Centre.",
+          icon: "sync",
+          colorClass: "bg-primary-container text-on-primary-container"
+        },
+        {
+          title: "Avertissement Tournée",
+          message: "Véhicule #04 immobilisé pour inspection.",
+          icon: "warning",
+          colorClass: "bg-surface-container-high text-primary"
+        }
+      ];
+
+      const chosen = toasts[Math.floor(Math.random() * toasts.length)];
+      const el = document.createElement('div');
+      el.className = "pointer-events-auto transform transition-all duration-300 translate-y-4 opacity-0 bg-surface-container-lowest shadow-xl rounded-lg p-space-md flex items-start gap-space-md";
+      el.innerHTML = `
+        <div class="w-8 h-8 rounded-full ${chosen.colorClass} flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-[18px]">${chosen.icon}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <span class="font-headline-md text-caption uppercase tracking-wider text-primary">${chosen.title}</span>
+            <span class="font-caption text-caption text-secondary">Maintenant</span>
+          </div>
+          <p class="font-body-default text-body-default text-on-surface mt-0.5">${chosen.message}</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-secondary hover:text-on-surface p-1">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
+      `;
+
+      container.appendChild(el);
+      requestAnimationFrame(() => {
+        el.classList.remove('translate-y-4', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        el.classList.add('opacity-0', 'translate-x-8');
+        setTimeout(() => el.remove(), 300);
+      }, 5000);
+    }
+  </script>
+</div></main></div></body></html>
