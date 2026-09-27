@@ -212,6 +212,14 @@ export const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
  */
 export const RETENTION_BATCH = 500;
 
+/**
+ * Expired map-cache rows the daily sweep deletes per run. Once the first run
+ * clears the backlog, only a day's worth of new rows expires each day. The
+ * bound keeps an unexpected backlog within one cron's CPU and D1's daily write
+ * quota, the same as RETENTION_BATCH.
+ */
+export const MAP_CACHE_EVICT_BATCH = 500;
+
 /** Candidate duplicate pairs returned in one sweep. */
 export const DUPLICATES_PAGE_SIZE = 100;
 

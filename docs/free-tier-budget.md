@@ -83,6 +83,7 @@ Workers free plan, and one invocation against a 100,000/day request budget is no
 sweep is bounded to `RETENTION_BATCH` (500) rows written per run, which keeps it inside
 the D1 daily write quota even on the first run after a backlog — the backlog drains over a
 few days rather than in one statement.
+The same run then deletes expired map-cache rows, bounded to `MAP_CACHE_EVICT_BATCH` (500).
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
 operations a month; a weekly export of a database measured in megabytes uses one operation

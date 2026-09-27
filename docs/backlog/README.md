@@ -49,5 +49,5 @@ Start from [000-template.md](000-template.md).
 | [009](009-geolocation-fixture-for-dom-tests.md) | Let a DOM test choose the agent's position (#87) | done |
 | [010](010-offline-admin-dom-test.md) | Pin that an offline admin opens the field side (#85) | done (superseded by #115) |
 | [011](011-top-bar-secondary-handlers-dom-tests.md) | Pin the admin top bar's remaining handlers (part of #86) | ready |
-| [012](012-evict-expired-map-cache-rows.md) | Evict expired map-cache rows in the daily sweep (#25) | ready |
+| [012](012-evict-expired-map-cache-rows.md) | Evict expired map-cache rows in the daily sweep (#25) | done |
 | [013](013-sync-identity-from-cache.md) | Do not stamp or sync under an unconfirmed cached identity | needs-decision |

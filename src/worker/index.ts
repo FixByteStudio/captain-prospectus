@@ -13,6 +13,7 @@ import { MAX_REQUEST_BYTES } from "../shared/constants";
 import { requireAdmin, requireIdentity } from "./auth";
 import { getDb } from "./db/client";
 import { describeSweep, runRetention } from "./retention";
+import { describeEviction, evictMapCache } from "./map-cache";
 import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
 import { devRoutes } from "./routes/dev";
@@ -93,7 +94,8 @@ app.onError((err, c) => {
  *
  * `fetch` is the API above. `scheduled` is the daily retention sweep (ADR-0023)
  * — the one thing in this app that writes to `visits`, and the reason that
- * table's append-only rule now carries an exception.
+ * table's append-only rule now carries an exception — followed by map-cache
+ * eviction (map-cache.ts).
  *
  * It fails quietly by nature: if the cron stops firing nothing breaks and
  * nobody notices, so it logs what it did on every run and the release
@@ -113,6 +115,15 @@ export default {
           // against the D1 daily quota. Tomorrow's run picks up the same rows,
           // because the sweep is idempotent and the backlog is still there.
           console.error("retention sweep failed", err instanceof Error ? err.message : String(err));
+        }
+        // Its own try, so neither step's failure stops the other.
+        try {
+          console.log(describeEviction(await evictMapCache(getDb(env.DB), Date.now())));
+        } catch (err) {
+          console.error(
+            "map cache eviction failed",
+            err instanceof Error ? err.message : String(err),
+          );
         }
       })(),
     );
