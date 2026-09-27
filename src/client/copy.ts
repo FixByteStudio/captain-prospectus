@@ -311,6 +311,8 @@ export const copy = {
       columns: "Colonnes",
       preview: "Aperçu",
       map: "Zone",
+      label: "Étapes",
+      done: "terminée",
     },
 
     source: {
@@ -328,7 +330,7 @@ export const copy = {
       choose: "Choisir un fichier CSV",
       hint: "Le fichier est lu dans votre navigateur. Il n'est jamais envoyé ni conservé.",
       chosen: (name: string, rows: number) =>
-        rows === 1 ? `${name} — 1 ligne` : `${name} — ${rows} lignes`,
+        rows === 1 ? `${name} — 1 ligne` : `${name} — ${formatCount(rows)} lignes`,
       unreadable: "Ce fichier ne se lit pas comme un CSV. Vérifiez le format et réessayez.",
       emptyFile: "Ce fichier ne contient aucune ligne.",
       noHeaders: "Ce fichier n'a pas d'en-têtes de colonnes.",
@@ -340,6 +342,10 @@ export const copy = {
       noSample: "Vide sur la première ligne",
       required: "Le nom est obligatoire : choisissez la colonne qui le contient.",
       unmappedNote: "Une colonne non associée laisse le champ inchangé lors d'un réimport.",
+      head: {
+        field: "Champ",
+        column: "Colonne du fichier",
+      },
       fields: {
         name: "Nom",
         type: "Type",
@@ -356,15 +362,16 @@ export const copy = {
     },
 
     preview: {
-      ready: (n: number) => (n === 1 ? "1 ligne à importer" : `${n} lignes à importer`),
-      rejected: (n: number) => (n === 1 ? "1 ligne rejetée" : `${n} lignes rejetées`),
+      ready: (n: number) =>
+        n === 1 ? "1 ligne à importer" : `${formatCount(n)} lignes à importer`,
+      rejected: (n: number) => (n === 1 ? "1 ligne rejetée" : `${formatCount(n)} lignes rejetées`),
       coordinates: "Coordonnées",
       // Anything the admin should know about a line; blank when all is well.
       note: "Remarque",
       noCoordinates: "Sans coordonnées",
       line: (n: number) => `Ligne ${n}`,
       nothingToImport: "Aucune ligne valide à importer. Revenez aux colonnes.",
-      showingFirst: (n: number) => `Les ${n} premières lignes sont affichées.`,
+      showingFirst: (n: number) => `Les ${formatCount(n)} premières lignes sont affichées.`,
     },
 
     reasons: {
@@ -376,21 +383,33 @@ export const copy = {
       back: "Retour",
       toColumns: "Associer les colonnes",
       toPreview: "Voir l'aperçu",
-      start: (n: number) => (n === 1 ? "Importer 1 ligne" : `Importer ${n} lignes`),
+      start: (n: number) => (n === 1 ? "Importer 1 ligne" : `Importer ${formatCount(n)} lignes`),
       done: "Terminer",
       retry: "Réessayer",
     },
 
-    running: (done: number, total: number) => `Import en cours : ${done} / ${total}`,
+    running: (done: number, total: number) =>
+      `Import en cours : ${formatCount(done)} / ${formatCount(total)}`,
     result: {
       title: "Import terminé",
-      created: (n: number) => (n === 1 ? "1 prospect créé" : `${n} prospects créés`),
-      updated: (n: number) => (n === 1 ? "1 prospect mis à jour" : `${n} prospects mis à jour`),
-      skipped: (n: number) => (n === 1 ? "1 ligne rejetée" : `${n} lignes rejetées`),
+      created: (n: number) => (n === 1 ? "1 prospect créé" : `${formatCount(n)} prospects créés`),
+      updated: (n: number) =>
+        n === 1 ? "1 prospect mis à jour" : `${formatCount(n)} prospects mis à jour`,
+      skipped: (n: number) => (n === 1 ? "1 ligne rejetée" : `${formatCount(n)} lignes rejetées`),
       seeProspects: "Voir les prospects",
     },
     failed:
       "L'import s'est interrompu. Les lignes déjà envoyées sont enregistrées ; réimporter le même fichier est sans risque.",
+    /**
+     * The failure Alert always names how many rows already went in before the
+     * batch that failed — including zero, when the very first batch fails.
+     */
+    failedAfter: (n: number) =>
+      n === 0
+        ? "L'import s'est interrompu avant d'envoyer la moindre ligne. Réimporter le même fichier est sans risque."
+        : n === 1
+          ? "L'import s'est interrompu après 1 ligne envoyée. Réimporter le même fichier est sans risque."
+          : `L'import s'est interrompu après ${formatCount(n)} lignes envoyées. Réimporter le même fichier est sans risque.`,
   },
 
   map: {

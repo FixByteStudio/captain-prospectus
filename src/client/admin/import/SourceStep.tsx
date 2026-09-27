@@ -1,4 +1,7 @@
+import { FileSpreadsheet, Map as MapIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { copy } from "../../copy";
+import { Surface } from "../Surface";
 
 /**
  * Step one: which source — docs/domains/ingestion.md, "two sources, one
@@ -24,32 +27,51 @@ export function SourceStep({ onChoose }: { onChoose: (source: "csv" | "map") => 
   return (
     <div>
       <p className="text-muted-foreground mb-4">{copy.import.source.lede}</p>
-      <ul className="border-border bg-card divide-border max-w-2xl divide-y rounded-md border">
-        <Choice
-          label={copy.import.source.csv}
-          hint={copy.import.source.csvHint}
-          onClick={() => onChoose("csv")}
-        />
-        <Choice
-          label={copy.import.source.map}
-          hint={copy.import.source.mapHint}
-          onClick={() => onChoose("map")}
-        />
-      </ul>
+      <Surface className="max-w-2xl overflow-hidden">
+        <ul className="divide-border divide-y">
+          <Choice
+            icon={<FileSpreadsheet aria-hidden="true" />}
+            label={copy.import.source.csv}
+            hint={copy.import.source.csvHint}
+            onClick={() => onChoose("csv")}
+          />
+          <Choice
+            icon={<MapIcon aria-hidden="true" />}
+            label={copy.import.source.map}
+            hint={copy.import.source.mapHint}
+            onClick={() => onChoose("map")}
+          />
+        </ul>
+      </Surface>
     </div>
   );
 }
 
-function Choice({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
+function Choice({
+  icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
-        className="hover:bg-accent focus-visible:bg-accent flex w-full flex-col gap-0.5 px-3.5 py-3 text-left transition-colors"
+        className="hover:bg-accent focus-visible:bg-accent flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors"
       >
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground text-xs">{hint}</span>
+        <span className="bg-secondary text-foreground grid size-10 shrink-0 place-items-center rounded-lg">
+          {icon}
+        </span>
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">{label}</span>
+          <span className="text-muted-foreground text-xs">{hint}</span>
+        </span>
       </button>
     </li>
   );

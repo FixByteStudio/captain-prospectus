@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import type { ImportRow } from "../../../shared/schemas";
 import { copy } from "../../copy";
-import { cn } from "../../lib/utils";
 import { useImportBatches } from "../queries";
 import { ScreenHeader } from "../ScreenHeader";
 import { ColumnsStep } from "./ColumnsStep";
 import { FileStep } from "./FileStep";
+import { ImportStepper } from "./ImportStepper";
 import { MapStep, type MapProvider } from "./MapStep";
 import { PreviewStep } from "./PreviewStep";
 import { ResultDialog } from "./ResultDialog";
@@ -98,31 +98,27 @@ export function ImportScreen() {
     importer.start(rows);
   }
 
+  // A reload, a tab close or an outside navigation would lose every batch the
+  // Worker has not yet answered; an in-app sidebar click is a router
+  // navigation, not covered here: `useBlocker` needs a data router
+  // (docs/design.md › The CSV import).
+  useEffect(() => {
+    if (!importer.isRunning) return;
+    function guard(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [importer.isRunning]);
+
   const steps = step === "source" || fork === "csv" ? CSV_STEPS : MAP_STEPS;
-  const reachedStep = steps.findIndex((s) => s.id === step);
 
   return (
     <section>
       <ScreenHeader className="mb-4" title={copy.import.title} />
 
-      <nav className="text-muted-foreground mb-5 flex items-center gap-2.5" aria-label="Étapes">
-        {steps.map((s, index) => (
-          <span key={s.id} className="flex items-center gap-2.5">
-            {index > 0 && <span className="bg-border h-px w-6" aria-hidden="true" />}
-            <span
-              aria-current={s.id === step ? "step" : undefined}
-              className={cn(
-                s.id === step && "text-foreground font-semibold",
-                // A finished step is success-green, not the brand gold: gold text
-                // is 2.2:1 on this page (docs/design.md).
-                index < reachedStep && "text-success",
-              )}
-            >
-              {s.label}
-            </span>
-          </span>
-        ))}
-      </nav>
+      <ImportStepper steps={steps} current={step} />
 
       {step === "source" && <SourceStep onChoose={chooseSource} />}
 
@@ -158,7 +154,12 @@ export function ImportScreen() {
           progress={importer.progress}
           isRunning={importer.isRunning}
           error={importer.error}
-          onBack={() => setStep("columns")}
+          onBack={() => {
+            // Otherwise a stale failure Alert (and its old count) would still
+            // show after Retour → change columns → back to Aperçu.
+            importer.reset();
+            setStep("columns");
+          }}
           onStart={() => run(ready)}
         />
       )}

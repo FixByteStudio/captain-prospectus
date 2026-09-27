@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import { UploadIcon } from "lucide-react";
+import { FileSpreadsheet, UploadIcon } from "lucide-react";
 import { copy } from "../../copy";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Button } from "../../ui/button";
+import { Surface } from "../Surface";
 import { parseCsv } from "./csv";
 import type { ParsedCsv } from "./csv";
 
@@ -28,7 +29,11 @@ export function FileStep({ onParsed }: { onParsed: (name: string, csv: ParsedCsv
   }
 
   return (
-    <div className="border-border bg-card max-w-2xl rounded-md border p-5">
+    <Surface className="max-w-2xl p-5">
+      <span className="bg-secondary text-foreground mb-4 grid size-10 place-items-center rounded-lg">
+        <FileSpreadsheet aria-hidden="true" />
+      </span>
+
       <input
         ref={input}
         type="file"
@@ -42,10 +47,12 @@ export function FileStep({ onParsed }: { onParsed: (name: string, csv: ParsedCsv
         }}
       />
 
-      <Button onClick={() => input.current?.click()}>
-        <UploadIcon />
-        {copy.import.file.choose}
-      </Button>
+      <div>
+        <Button onClick={() => input.current?.click()}>
+          <UploadIcon />
+          {copy.import.file.choose}
+        </Button>
+      </div>
 
       <p className="text-muted-foreground mt-3 max-w-prose">{copy.import.file.hint}</p>
 
@@ -54,6 +61,6 @@ export function FileStep({ onParsed }: { onParsed: (name: string, csv: ParsedCsv
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-    </div>
+    </Surface>
   );
 }

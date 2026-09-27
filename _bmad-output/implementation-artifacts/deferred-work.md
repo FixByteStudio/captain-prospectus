@@ -209,3 +209,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-176-search-range-and-export-filters.md`
   summary: The CSV truncate-and-slice tail and the `Response` construction are written twice, once per export route, with the slice shape appearing a third time in the duplicates sweep.
   evidence: Pre-existing; #176 edited one of the two routes. `src/shared/csv.ts` already owns the serialiser and could own the cap, but not the `Response` — its header declares it a pure module with no Worker APIs (CLAUDE.md), so the response half needs a worker-side home. docs/api.md already claims "Two endpoints, one serialiser", which is true of the serialiser and not of the tail.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
+  summary: The map path's failure Alert still shows the generic `copy.import.failed` rather than naming how many rows went in, unlike the CSV path since #180.
+  evidence: `MapStep.tsx:306-309` renders `copy.import.failed` regardless of `progress.done`; MapStep is #181's surface.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
+  summary: A retry after a mid-way import failure reports the first run's created rows as « mis à jour » in the result dialog, and a non-transient server error (400/403/426) is shown as the same retryable failure.
+  evidence: `useImportBatches.start` resets its totals and re-sends every row, which the batch upsert counts as updates; `PreviewStep` never shows `importer.error`. Both pre-date #180.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
+  summary: An in-app navigation (sidebar) during a running import unmounts Import and drops the `beforeunload` guard while batches keep sending; the spine says the page can't be left without a confirmation.
+  evidence: `main.tsx` uses `BrowserRouter`; React Router's `useBlocker` needs a data router, a router change outside this story.
