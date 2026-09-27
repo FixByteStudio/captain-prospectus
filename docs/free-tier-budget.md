@@ -40,6 +40,11 @@ Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pa
   and there is no index on `lat`/`lng`, so each search scans the whole table. At 3,000 prospects and 30
   searches a day that is 90 k rows, about 2 % of the daily limit. An index on `lat` is the fix if it ever
   is not.
+- A second, similar exception: `GET /api/admin/prospects`'s `q` (GH #176) is a `%needle%` `LIKE` on `name`,
+  and there is no index on `name` — a leading wildcard would bypass one anyway, so an index would not remove
+  the scan. The list's own `WHERE` runs twice per search, once for the page of rows and once for `total`'s
+  `count()`, so a search costs that scan twice. Accepted at this project's scale (two agents, one city); it is
+  the reason `q` is not offered on the 500-row visits feed as well (INVARIANT 13).
 - **The sidebar's badges run the duplicate sweep on every admin page, not just Doublons** (GH #63):
   `AdminSidebar` calls the same `useDuplicates()` the screen does, to keep its count identical. The sweep
   reads ≤ 5,000 rows; at 3,000 prospects and about 20 admin loads a day that is roughly 60 k rows, 1.2 % of

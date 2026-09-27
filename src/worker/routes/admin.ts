@@ -8,6 +8,7 @@
 import { Hono } from "hono";
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -36,6 +37,7 @@ import {
   SCRIPTS_PAGE_SIZE,
   STATUSES,
   type Outcome,
+  type Source,
   type Status,
 } from "../../shared/constants";
 import {
@@ -551,11 +553,42 @@ async function conversionCounts(
 
 /* ---------------------------------------------------------------- prospects */
 
-adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c) => {
-  const { status, dueBefore, assignedTo, source, limit, offset } = c.req.valid("query");
-  const db = getDb(c.env.DB);
+/**
+ * `name LIKE %needle% ESCAPE '!'`, shared by the list and the export so the
+ * two cannot diverge (Intent). SQLite's `LIKE` already folds ASCII case on
+ * both sides by itself — no `lower()` needed, and none wanted: JS's
+ * `toLowerCase()` is Unicode-aware and SQLite's is not, so wrapping only one
+ * side in it made an accented needle un-findable regardless of casing
+ * (docs/api.md's limits prose).
+ *
+ * `%`, `_` and the escape character itself are all escaped, so each matches
+ * literally. That third one is not optional: with `ESCAPE '!'`, a bare `!`
+ * before a `%`, a `_` or another `!` starts an escape sequence, so a name like
+ * "Chez Paul!" would become unsearchable. Do not narrow that character class.
+ *
+ * `!` is the escape character rather than the conventional `\` because getting
+ * a lone backslash through the JS string literal and into the statement proved
+ * error-prone; `!` carries no such trap and is not a `LIKE` metacharacter.
+ */
+function nameSearchFilter(q: string) {
+  const escaped = q.replace(/[!%_]/g, (ch) => `!${ch}`);
+  return sql`${prospects.name} LIKE ${`%${escaped}%`} ESCAPE '!'`;
+}
 
-  const filters = [
+/**
+ * The `SQL[]` for `prospectFiltersSchema` (src/shared/schemas.ts), shared by
+ * the list and the export so a filter added to one is never forgotten on the
+ * other (Intent: "so the two cannot diverge").
+ */
+function prospectFilters(query: {
+  status?: Status[];
+  dueBefore?: number;
+  assignedTo?: string | null;
+  source?: Source;
+  q?: string;
+}): SQL[] {
+  const { status, dueBefore, assignedTo, source, q } = query;
+  return [
     // A merged prospect is not a row the admin manages any more.
     isNull(prospects.mergedInto),
     status ? inArray(prospects.status, status) : undefined,
@@ -564,14 +597,24 @@ adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c)
     dueBefore !== undefined ? lt(prospects.nextVisitAt, dueBefore) : undefined,
     assignedTo ? eq(prospects.assignedTo, assignedTo) : undefined,
     source ? eq(prospects.source, source) : undefined,
+    q ? nameSearchFilter(q) : undefined,
   ].filter((f) => f !== undefined);
-  const where = and(...filters);
+}
+
+adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c) => {
+  const { status, dueBefore, assignedTo, source, q, limit, offset } = c.req.valid("query");
+  const db = getDb(c.env.DB);
+
+  const where = and(...prospectFilters({ status, dueBefore, assignedTo, source, q }));
 
   const rows = await db
     .select()
     .from(prospects)
     .where(where)
-    .orderBy(desc(prospects.updatedAt))
+    // A tiebreaker: a batch import stamps one identical updated_at on every
+    // row, so without it which rows land on which page — and which survive
+    // the export's cap — would be undefined.
+    .orderBy(desc(prospects.updatedAt), asc(prospects.id))
     .limit(limit)
     .offset(offset);
 
@@ -746,14 +789,11 @@ adminRoutes.get(
   "/prospects/export.csv",
   validate("query", prospectsExportQuerySchema),
   async (c) => {
-    const { status, assignedTo, source } = c.req.valid("query");
+    const { status, dueBefore, assignedTo, source, q } = c.req.valid("query");
     const db = getDb(c.env.DB);
     const now = Date.now();
 
-    const filters = [isNull(prospects.mergedInto)];
-    if (status) filters.push(eq(prospects.status, status));
-    if (assignedTo) filters.push(eq(prospects.assignedTo, assignedTo));
-    if (source) filters.push(eq(prospects.source, source));
+    const filters = prospectFilters({ status, dueBefore, assignedTo, source, q });
 
     // One row over the cap, so "was there more?" needs no second COUNT query —
     // D1 bills rows scanned, and the answer is one row's worth of scan.
@@ -761,7 +801,9 @@ adminRoutes.get(
       .select()
       .from(prospects)
       .where(and(...filters))
-      .orderBy(desc(prospects.updatedAt))
+      // Same tiebreak as the list, and for the same reason: without it, which
+      // rows land inside the cap is undefined when many share an updated_at.
+      .orderBy(desc(prospects.updatedAt), asc(prospects.id))
       .limit(EXPORT_ROWS + 1);
 
     const truncated = rows.length > EXPORT_ROWS;
@@ -1321,8 +1363,14 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
  * between 500 rows and none.
  */
 adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) => {
-  const { since, limit } = c.req.valid("query");
+  const { since, from, to, limit } = c.req.valid("query");
   const db = getDb(c.env.DB);
+
+  const filters = [
+    since > 0 ? gt(visits.receivedAt, since) : undefined,
+    from !== undefined ? gte(visits.receivedAt, from) : undefined,
+    to !== undefined ? lte(visits.receivedAt, to) : undefined,
+  ].filter((f) => f !== undefined);
 
   /**
    * Joined to prospects for the name — and deliberately NOT filtered on
@@ -1349,7 +1397,7 @@ adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) 
     })
     .from(visits)
     .innerJoin(prospects, eq(visits.prospectId, prospects.id))
-    .where(since > 0 ? gt(visits.receivedAt, since) : undefined)
+    .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(visits.receivedAt))
     .limit(limit);
 

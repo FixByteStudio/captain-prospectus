@@ -135,6 +135,49 @@ describe("GET /api/admin/prospects/export.csv", () => {
     expect(body).not.toContain("Filtré");
   });
 
+  it("takes several statuses, comma-separated, like the list", async () => {
+    await seedProspect({ name: "Nouveau", status: "new" });
+    await seedProspect({ name: "Assigné", status: "assigned" });
+    await seedProspect({ name: "Converti", status: "converted" });
+
+    const body = await (await call("/api/admin/prospects/export.csv?status=new,assigned")).text();
+    expect(body).toContain("Nouveau");
+    expect(body).toContain("Assigné");
+    expect(body).not.toContain("Converti");
+  });
+
+  it("rejects an empty status item, like the list", async () => {
+    const response = await call("/api/admin/prospects/export.csv?status=new,");
+    expect(response.status).toBe(400);
+  });
+
+  it("filters by dueBefore, like the list", async () => {
+    const T = 1_800_000_000_000;
+    await seedProspect({ name: "En retard", status: "follow_up", nextVisitAt: T - 1 });
+    await seedProspect({ name: "Pas encore", status: "follow_up", nextVisitAt: T + 1_000 });
+
+    const body = await (
+      await call(`/api/admin/prospects/export.csv?status=follow_up&dueBefore=${T}`)
+    ).text();
+    expect(body).toContain("En retard");
+    expect(body).not.toContain("Pas encore");
+  });
+
+  it("filters by q, matching the same rows the list would", async () => {
+    await seedProspect({ name: "Le Bistrot du Coin" });
+    await seedProspect({ name: "Chez Marcel" });
+
+    const query = "q=bistro";
+    const listBody = (await (await call(`/api/admin/prospects?${query}`)).json()) as {
+      prospects: { name: string }[];
+    };
+    const exportBody = await (await call(`/api/admin/prospects/export.csv?${query}`)).text();
+
+    expect(listBody.prospects.map((p) => p.name)).toEqual(["Le Bistrot du Coin"]);
+    expect(exportBody).toContain("Le Bistrot du Coin");
+    expect(exportBody).not.toContain("Chez Marcel");
+  });
+
   it("excludes a merged prospect, like every other list", async () => {
     const survivor = await seedProspect({ name: "Survivant" });
     await seedProspect({ name: "Absorbé", mergedInto: survivor });

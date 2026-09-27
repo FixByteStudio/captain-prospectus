@@ -144,6 +144,14 @@ Response
 ### Triggers
 App start · `online` event · immediately after saving a visit · every 60 s while the app is open.
 
+## Live feed
+
+`GET /api/admin/visits?since=&from=&to=&limit=` backs the admin's live feed,
+polled every 15 s. `since` is the paging cursor — exclusive, "what's new since
+I last asked" — while `from`/`to` (GH #176) narrow it to a range, inclusive at
+both ends; all three bounds apply together. Like the export, the range reads
+**`received_at`, not `visited_at`**, for the same reason (INVARIANT 12).
+
 ## Export
 
 `GET /api/admin/visits/export.csv?from=&to=` hands visits to a spreadsheet for a
