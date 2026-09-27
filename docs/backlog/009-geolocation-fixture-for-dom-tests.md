@@ -1,6 +1,6 @@
 ---
 id: 009
-status: ready
+status: done
 implements: docs/architecture.md#tests (the `dom` project)
 depends_on: []
 ---
