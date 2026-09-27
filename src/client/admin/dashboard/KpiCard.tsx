@@ -88,10 +88,7 @@ function DeltaRow({ delta, format }: { delta: number | null; format: DeltaFormat
   const { variant, Arrow } = TONE[deltaTone(delta)];
   return (
     <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-      {/* No text-meta here: tailwind-merge reads an unknown text-* token as a
-          colour and would drop the variant's text-success. The badge's own
-          text-xs is the meta size already. */}
-      <Badge variant={variant} className="tnum rounded-sm">
+      <Badge variant={variant} className="tnum rounded-sm text-meta">
         {Arrow && <Arrow aria-hidden="true" />}
         {format(delta)}
       </Badge>

@@ -201,4 +201,11 @@ describe("ProspectsScreen › URL filters", () => {
     expect(screen.queryByText(copy.prospects.selection.count(1))).toBeNull();
     expect(statusSelect()).toBeTruthy();
   });
+
+  it("renders its title through the shared ScreenHeader, as a level-2 heading (GH #175)", () => {
+    stubFetch();
+    renderAt("/admin/prospects");
+
+    expect(screen.getByRole("heading", { level: 2, name: copy.prospects.title })).toBeTruthy();
+  });
 });

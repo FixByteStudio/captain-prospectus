@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { ScreenHeader } from "./ScreenHeader";
 import { STATUS_EDGE, STATUS_TEXT } from "./status";
 import { useDuplicates, useMerge } from "./queries";
 
@@ -42,14 +43,17 @@ export function DuplicatesScreen() {
 
   return (
     <section>
-      <div className="mb-1 flex items-baseline gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.005em]">{copy.duplicates.title}</h2>
-        {pairs.length > 0 && (
-          <span className="text-muted-foreground tnum ml-auto">
-            {copy.duplicates.count(pairs.length)}
-          </span>
-        )}
-      </div>
+      <ScreenHeader
+        className="mb-1"
+        title={copy.duplicates.title}
+        actions={
+          pairs.length > 0 && (
+            <span className="text-muted-foreground tnum">
+              {copy.duplicates.count(pairs.length)}
+            </span>
+          )
+        }
+      />
       <p className="text-muted-foreground mb-5 max-w-prose">{copy.duplicates.lede}</p>
 
       {duplicates.isPending && (
