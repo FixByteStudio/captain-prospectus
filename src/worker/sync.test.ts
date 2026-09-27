@@ -231,6 +231,22 @@ describe("POST /api/agent/sync", () => {
     expect(response.status).toBe(426);
   });
 
+  // INVARIANT 5: an old build's payload may no longer match the schema, and only
+  // the 426 tells it the outbox is fine.
+  it("answers 426, not 400, for an old build whose body also fails the schema", async () => {
+    const response = await sync({ clientVersion: 0, visits: [{ id: "not-a-uuid" }] as never });
+    expect(response.status).toBe(426);
+  });
+
+  it("answers 400, not 500, to a body that is not JSON", async () => {
+    const response = await call("/api/agent/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+    expect(response.status).toBe(400);
+  });
+
   /**
    * docs/security.md, "Malformed or oversized payloads". The body here is not
    * valid JSON at all, so a 400 or a 500 would prove the cap ran *after* the

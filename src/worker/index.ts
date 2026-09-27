@@ -30,7 +30,7 @@ const app = new Hono<AppEnv>().basePath("/api");
  * registration order, so a middleware added below the /dev mount would sit
  * *after* the dev handler in the chain and never run — and /api/dev/* is the one
  * route mounted before auth. It also has to precede the sync route's
- * requireSupportedClientVersion, which reads the body: Hono caches the request
+ * syncRequest validator, which reads the body: Hono caches the request
  * text on first read, so a cap placed after it would be checking a body that had
  * already been buffered.
  *
