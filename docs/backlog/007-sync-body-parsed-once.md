@@ -1,6 +1,6 @@
 ---
 id: 007
-status: ready
+status: done
 implements: docs/free-tier-budget.md#watch-outs (CLAUDE.md INVARIANT 13, 10 ms CPU), docs/api.md#status-codes (426 before 400)
 depends_on: []
 ---

@@ -44,7 +44,7 @@ Start from [000-template.md](000-template.md).
 | [004](004-field-bundle-budget.md) | Bring the field entry chunk back under its bundle budget | done (ADR-0017; budget superseded by ADR-0026) |
 | [005](005-outbox-identity-stamp.md) | Stamp outbox rows with the identity that wrote them (merge before #119) | done |
 | [006](006-agent-comment-cites-adr-0022.md) | Point the sync route's assignee comment at ADR-0022 (#47) | done |
-| [007](007-sync-body-parsed-once.md) | Parse the sync body once, keeping 426 ahead of validation (#31) | ready |
+| [007](007-sync-body-parsed-once.md) | Parse the sync body once, keeping 426 ahead of validation (#31) | done |
 | [008](008-d1-limit-detection-and-logs.md) | Recognise D1's daily-limit error through Drizzle, redact error logs (#37) | ready |
 | [009](009-geolocation-fixture-for-dom-tests.md) | Let a DOM test choose the agent's position (#87) | done |
 | [010](010-offline-admin-dom-test.md) | Pin that an offline admin opens the field side (#85) | done (superseded by #115) |
