@@ -109,8 +109,8 @@ Two endpoints, one serialiser (`src/shared/csv.ts`, unit-tested away from D1).
 ## The dashboard
 
 `GET /api/admin/dashboard` backs Tableau de bord at `/admin`. The Worker computes
-every figure, and this section is where each one is defined; later stories add
-figures to the same response, additively.
+every figure, and this section is where each one is defined; a new figure joins
+the same response, additively.
 
 - **Periods are Europe/Brussels calendar days.** A period of N days runs from
   Brussels midnight N − 1 days ago to Brussels midnight tomorrow, exclusive —

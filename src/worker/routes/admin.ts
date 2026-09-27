@@ -367,8 +367,17 @@ function agentRows(
   );
 }
 
+/** A prospect keyed as its survivor, so an absorbed one counts once, as the place it became. */
+const PROSPECT_KEY = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
+
 /**
- * An agent's Convertis: distinct prospects, keyed as in `conversionCounts`,
+ * The prospect's status is still the manual one: a later visit sets status and
+ * leaves status_set_at alone (the complement of visitWins in status.ts).
+ */
+const MANUAL_STATUS_IN_FORCE = sql`(${prospects.lastVisitAt} is null or ${prospects.lastVisitAt} <= ${prospects.statusSetAt})`;
+
+/**
+ * An agent's Convertis: distinct prospects, keyed by `PROSPECT_KEY`,
  * they visited with outcome `converted` in `[from, to)`. A manual conversion
  * has no visitor and is credited to nobody.
  */
@@ -377,9 +386,8 @@ async function agentConversions(
   { from, to }: { from: number; to: number },
 ): Promise<{ email: string; n: number }[]> {
   const converted = "converted" satisfies Outcome;
-  const key = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
   const rows = await db.all<{ email: string; n: number }>(sql`
-    select ${visits.agentEmail} as email, count(distinct ${key}) as n
+    select ${visits.agentEmail} as email, count(distinct ${PROSPECT_KEY}) as n
     from ${visits}
     inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
     where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
@@ -452,25 +460,24 @@ async function visitsByDay(
  */
 async function convertedByDay(db: Db, { from, to, dates, dayOf }: PeriodDays): Promise<number[]> {
   const converted = "converted" satisfies Status;
-  const key = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
   const rows = await db.all<{ day: number; n: number }>(sql`
     select ${dayOf(sql`first_at`)} as day, count(*) as n
     from (
       select prospect_key, min(at) as first_at
       from (
-        select ${key} as prospect_key, ${visits.visitedAt} as at
+        select ${PROSPECT_KEY} as prospect_key, ${visits.visitedAt} as at
         from ${visits}
         inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
         where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
           and ${visits.outcome} = ${converted}
         union all
-        select ${key}, ${prospects.statusSetAt}
+        select ${PROSPECT_KEY}, ${prospects.statusSetAt}
         from ${prospects}
         where ${prospects.status} = ${converted}
           and ${prospects.statusSetAt} >= ${from}
           and ${prospects.statusSetAt} < ${to}
           -- The manual status still in force, as in conversionCounts.
-          and (${prospects.lastVisitAt} is null or ${prospects.lastVisitAt} <= ${prospects.statusSetAt})
+          and ${MANUAL_STATUS_IN_FORCE}
       )
       group by prospect_key
     )
@@ -499,7 +506,7 @@ type ConversionCounts = {
  * (served by `visits_visited_idx`), or a prospect whose current status is a
  * manual `converted` set in that range and not since overridden by a visit
  * (served by `prospects_status_idx`).
- * Events are keyed by `coalesce(merged_into, id)`, so an absorbed prospect
+ * Events are keyed by `PROSPECT_KEY`, so an absorbed prospect
  * counts as its survivor, and `count(distinct …)` counts each place once.
  */
 async function conversionCounts(
@@ -507,7 +514,6 @@ async function conversionCounts(
   { from, to, previousFrom }: { from: number; to: number; previousFrom: number },
 ): Promise<ConversionCounts> {
   const converted = "converted" satisfies Status;
-  const key = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
   const rows = await db.all<Record<keyof ConversionCounts, number | null>>(sql`
     select
       count(distinct case when in_current = 1 and is_conversion = 1 then prospect_key end) as converted,
@@ -516,7 +522,7 @@ async function conversionCounts(
       count(distinct case when in_current = 0 and is_visit = 1 then prospect_key end) as visitedPrevious
     from (
       select
-        ${key} as prospect_key,
+        ${PROSPECT_KEY} as prospect_key,
         ${visits.visitedAt} >= ${from} as in_current,
         1 as is_visit,
         ${visits.outcome} = ${converted} as is_conversion
@@ -524,14 +530,14 @@ async function conversionCounts(
       inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
       where ${visits.visitedAt} >= ${previousFrom} and ${visits.visitedAt} < ${to}
       union all
-      select ${key}, ${prospects.statusSetAt} >= ${from}, 0, 1
+      select ${PROSPECT_KEY}, ${prospects.statusSetAt} >= ${from}, 0, 1
       from ${prospects}
       where ${prospects.status} = ${converted}
         and ${prospects.statusSetAt} >= ${previousFrom}
         and ${prospects.statusSetAt} < ${to}
         -- Still the manual status: a later visit sets status and leaves
         -- status_set_at alone (the complement of visitWins in status.ts).
-        and (${prospects.lastVisitAt} is null or ${prospects.lastVisitAt} <= ${prospects.statusSetAt})
+        and ${MANUAL_STATUS_IN_FORCE}
     )
   `);
   const row = rows[0];

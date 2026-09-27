@@ -119,3 +119,8 @@ is tied to a city — moving is changing those three places, not a migration.
   over 1,000 KiB. Headroom is **322.91 KiB**, and about 66 KiB of genuinely precached icons sit
   outside the figure Workbox prints
   ([issue #88](https://github.com/FixbyteStudio/captain-prospectus/issues/88)).
+
+  **Measured on 2026-09-27 after the dashboard epic's refactor sweep (GH #116): entry chunk
+  389.20 kB, precache 899.71 KiB across 25 entries**, unchanged by the sweep. The rise from
+  163.92 kB and 677.09 KiB came in over the dashboard redesign's epics (#104 and #117), each PR
+  quoting its own before and after. Headroom is **100.29 KiB**.
