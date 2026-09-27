@@ -145,7 +145,7 @@ agentRoutes.post(
     // ---- 2. Visits, with the collision map applied.
     const acceptedVisits: string[] = [];
     const touchedProspectIds = new Set<string>();
-    /** prospect id -> its assignee, for the status rule in step 3 (ADR-0021). */
+    /** prospect id -> its assignee, for the status rule in step 3 (ADR-0022). */
     const assigneeById = new Map<string, string | null>();
 
     if (body.visits.length > 0) {
