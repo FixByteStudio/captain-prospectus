@@ -3,6 +3,7 @@ import { OUTCOME_TO_STATUS } from "../../shared/constants";
 import { OUTCOME_LABELS, copy } from "../copy";
 import { formatDateTime } from "../format";
 import { cn } from "../lib/utils";
+import { ScreenHeader } from "./ScreenHeader";
 import { STATUS_EDGE, STATUS_TEXT } from "./status";
 import { useVisitsFeed } from "./queries";
 
@@ -24,12 +25,15 @@ export function VisitsScreen() {
 
   return (
     <section>
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.005em]">{copy.visits.title}</h2>
-        {visits.length > 0 && (
-          <span className="text-muted-foreground tnum">{copy.visits.count(visits.length)}</span>
-        )}
-      </div>
+      <ScreenHeader
+        className="mb-4"
+        title={copy.visits.title}
+        actions={
+          visits.length > 0 && (
+            <span className="text-muted-foreground tnum">{copy.visits.count(visits.length)}</span>
+          )
+        }
+      />
 
       {/* The highlight is decoration; this is what a screen reader is told. */}
       <p role="status" aria-live="polite" className="sr-only">

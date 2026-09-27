@@ -24,6 +24,7 @@ import {
 } from "../ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { ScreenHeader } from "./ScreenHeader";
 import { STATUS_EDGE, STATUS_TEXT } from "./status";
 import {
   parseProspectFilters,
@@ -171,12 +172,15 @@ export function ProspectsScreen() {
 
   return (
     <section>
-      <div className="mb-4 flex items-baseline gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.005em]">{copy.prospects.title}</h2>
-        <Button asChild className="ml-auto">
-          <Link to="/admin/import">{copy.prospects.importCta}</Link>
-        </Button>
-      </div>
+      <ScreenHeader
+        className="mb-4"
+        title={copy.prospects.title}
+        actions={
+          <Button asChild>
+            <Link to="/admin/import">{copy.prospects.importCta}</Link>
+          </Button>
+        }
+      />
 
       {/*
         One slot. It holds the filters, and the moment anything is selected it

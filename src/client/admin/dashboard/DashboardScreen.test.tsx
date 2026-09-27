@@ -461,14 +461,14 @@ describe("DashboardScreen", () => {
   });
 
   it.each([
-    [0.25, "tint-success", "lucide-arrow-up", "--success"],
-    [-0.03, "tint-destructive", "lucide-arrow-down", "--destructive"],
-    [null, "secondary", null, "--muted-foreground"],
+    [0.25, "tint-success", "lucide-arrow-up", "--success", "text-success"],
+    [-0.03, "tint-destructive", "lucide-arrow-down", "--destructive", "text-destructive"],
+    [null, "secondary", null, "--muted-foreground", "text-secondary-foreground"],
     // Rounds to 0,0 %: flat, like the chip.
-    [0.0004, "secondary", null, "--muted-foreground"],
+    [0.0004, "secondary", null, "--muted-foreground", "text-secondary-foreground"],
   ] as const)(
     "colours a delta of %s as %s, sparkline included",
-    async (delta, variant, arrow, line) => {
+    async (delta, variant, arrow, line, ink) => {
       stubFetch((period) => json(answer(period, { delta })));
       renderScreen();
       await findCard(copy.dashboard.visits);
@@ -477,6 +477,11 @@ describe("DashboardScreen", () => {
       const svg = chip().querySelector("svg");
       if (arrow === null) expect(svg).toBeNull();
       else expect(svg?.classList.contains(arrow)).toBe(true);
+      // GH #136: the variant's own colour and the badge's size token must
+      // both land in the merged className, proving cn() kept the pair
+      // rather than the variant prop alone (which class merging can't break).
+      expect(chip().className).toContain(ink);
+      expect(chip().className).toContain("text-meta");
       // The sparkline takes the chip's tone (GH #111).
       expect(card(copy.dashboard.visits).querySelector("style")?.textContent).toContain(
         `--color-value: var(${line})`,
