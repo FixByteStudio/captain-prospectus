@@ -1,9 +1,13 @@
 import type { ImportRow } from "../../../shared/schemas";
 import { TYPE_LABELS, copy } from "../../copy";
+import { formatCoordinate, formatCount } from "../../format";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { Progress } from "../../ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table";
+import { cn } from "../../lib/utils";
+import { Surface } from "../Surface";
+import { STATUS_EDGE } from "../status";
 import type { MappedRow } from "./csv";
 
 /** Enough to judge the file by; the full list is the import itself. */
@@ -41,13 +45,15 @@ export function PreviewStep({
     <div>
       <div className="mb-5 flex gap-8">
         <span>
-          <strong className="text-display tnum block font-semibold">{ready.length}</strong>
+          <strong className="text-display tnum block font-semibold">
+            {formatCount(ready.length)}
+          </strong>
           <span className="text-muted-foreground">{copy.import.preview.ready(ready.length)}</span>
         </span>
         {rejected.length > 0 && (
           <span>
             <strong className="text-display tnum text-destructive block font-semibold">
-              {rejected.length}
+              {formatCount(rejected.length)}
             </strong>
             <span className="text-muted-foreground">
               {copy.import.preview.rejected(rejected.length)}
@@ -56,7 +62,7 @@ export function PreviewStep({
         )}
       </div>
 
-      <div className="border-border bg-card overflow-hidden rounded-md border">
+      <Surface className="overflow-hidden">
         <Table className="[&_td]:h-row [&_td]:py-0">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -73,7 +79,7 @@ export function PreviewStep({
             {rejected.map((row) =>
               row.ok ? null : (
                 <TableRow key={`rejected-${row.line}`}>
-                  <TableCell className="text-muted-foreground pl-3.5 shadow-[inset_4px_0_0_0_var(--color-status-rejected)]">
+                  <TableCell className={cn("text-muted-foreground pl-3.5", STATUS_EDGE.rejected)}>
                     <span className="line-through decoration-border">
                       {row.name ?? copy.import.preview.line(row.line)}
                     </span>
@@ -88,7 +94,7 @@ export function PreviewStep({
 
             {shown.map((row, index) => (
               <TableRow key={`ready-${index}`}>
-                <TableCell className="pl-3.5 font-medium shadow-[inset_4px_0_0_0_var(--color-status-new)]">
+                <TableCell className={cn("pl-3.5 font-medium", STATUS_EDGE.new)}>
                   {row.name}
                 </TableCell>
                 <TableCell className="text-muted-foreground whitespace-nowrap">
@@ -97,7 +103,10 @@ export function PreviewStep({
                 <TableCell className="text-muted-foreground">{row.address ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground tnum text-right whitespace-nowrap">
                   {typeof row.lat === "number" && typeof row.lng === "number"
-                    ? `${row.lat.toFixed(4)} ${row.lng.toFixed(4)}`
+                    ? copy.fieldProspect.positionSet(
+                        formatCoordinate(row.lat),
+                        formatCoordinate(row.lng),
+                      )
                     : "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground whitespace-nowrap">
@@ -109,7 +118,7 @@ export function PreviewStep({
             ))}
           </TableBody>
         </Table>
-      </div>
+      </Surface>
 
       {ready.length > SHOWN && (
         <p className="text-muted-foreground mt-2 text-xs">
@@ -128,7 +137,7 @@ export function PreviewStep({
 
       {error && !isRunning && (
         <Alert variant="destructive" className="mt-5 max-w-2xl">
-          <AlertDescription>{copy.import.failed}</AlertDescription>
+          <AlertDescription>{copy.import.failedAfter(progress.done)}</AlertDescription>
         </Alert>
       )}
 

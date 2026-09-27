@@ -567,6 +567,69 @@ Five rules this encodes:
   A drag-only list here would be the same accessibility regression ADR-0015
   already refuses on the field route, just on the admin side instead.
 
+### The CSV import
+
+Rebuilt on the #175 primitives for GH #180: a `ScreenHeader`, a numbered
+`ImportStepper` shared with the map path below, and each step's own `Surface`.
+
+```
+① Source ──② Fichier ──③ Colonnes ──④ Aperçu     CSV
+① Source ──② Zone                                carte
+```
+
+- **The stepper is numbered circles, not text alone.** Done is an ink circle
+  (`bg-foreground`) with a `Check`; current is gold (`bg-primary
+  text-primary-foreground`) with its `primary-edge`; future is `secondary`.
+  Colour never carries the state alone (§ The six rules): a done
+  step also gets a visually hidden "(terminée)" after its label, and the
+  current step carries `aria-current="step"`. The `nav` is labelled from
+  `copy.import.steps.label` ("Étapes"). The map fork gets its own two-step
+  rail (Source → Zone) rather than the four-step one, since the polygon and
+  its results are one screen (below) — a three-step rail above it would
+  describe a flow that does not exist.
+- **Source** is the bordered, divided list from before (no cards — this
+  file rules them out on the admin side), each row now carrying a
+  `secondary` icon tile (`FileSpreadsheet` for the CSV choice, `Map` for the
+  area choice) so the fork reads at a glance, not just from its label.
+- **Fichier** is a `Surface` holding a file icon tile, the gold "Choisir un
+  fichier CSV" button and the hint that the file is read in the browser and
+  never sent or stored. An unreadable or empty file shows a destructive
+  Alert inline and stays on this step.
+- **Colonnes** is a `Surface` with an overline head row (Champ / Colonne du
+  fichier) above the field list, so the grid reads as a small table rather
+  than a stack of unrelated selects; the sample value from the file's first
+  row still sits under each choice. Retour is outline, "Voir l'aperçu" is
+  the one gold action, disabled until a name column is chosen.
+- **Aperçu** is a `Surface`'d table using the same `STATUS_EDGE` the
+  prospect ledger and the map path's candidate list use: `status-rejected`
+  for a struck-through row shown first with its reason, `status-new` for a
+  row that will be imported. Coordinates go through `formatCoordinate` and
+  `copy.fieldProspect.positionSet` ("50,8466 · 4,3528"), the same helper the
+  field "Add a prospect" screen uses, replacing a raw `toFixed(4)` (GH #154).
+  All counts here and in the result dialog route through `formatCount`.
+- **Running** shows a `Progress` bar and "Import en cours : {done} /
+  {total}", both in `.tnum`; Retour and the gold action disable for the
+  batches' duration. A `beforeunload` guard is registered for exactly as
+  long as `useImportBatches().isRunning` is true, so a reload, a tab close
+  or an outside navigation asks first — an in-app sidebar click is a router
+  navigation instead, which `useBlocker` would catch but needs a data
+  router; out of scope here.
+- **Done** opens the "Import terminé" result dialog: created · updated ·
+  rejected, unchanged from before. **Failed mid-way** — a batch's request
+  throws — the destructive Alert always names how many rows went in
+  (`copy.import.failedAfter`, e.g. "L'import s'est interrompu après 250
+  lignes envoyées…", or that none was sent when the first batch fails),
+  because `progress.done` already holds that count when a batch fails
+  (`useImportBatches`), and the button reads "Réessayer". Retour clears
+  that failure, so a remapped preview never shows a stale count. A retry re-sends
+  every row from the start, which is safe because the batch write is
+  idempotent (CLAUDE.md invariant 4).
+
+The `beforeunload` guard and the failure count are the two behaviours the
+UX spine's "Import running" and "failed mid-way" rows ask for that the
+first build never had; nothing about `useImportBatches`, the 250-row batch
+size or the result dialog's shape changed to add them.
+
 ### The map import
 
 The map is a **source, not a screen**. `ingestion.md` opens with "two sources,

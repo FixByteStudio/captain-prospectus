@@ -2,6 +2,7 @@ import { copy } from "../../copy";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
+import { Surface } from "../Surface";
 import { MAPPABLE_FIELDS, sampleFor } from "./csv";
 import type { ColumnMap, MappableField, ParsedCsv } from "./csv";
 
@@ -38,13 +39,21 @@ export function ColumnsStep({
   }
 
   return (
-    <div className="border-border bg-card max-w-2xl rounded-md border p-5">
+    <Surface className="max-w-2xl p-5">
       {fileName && (
         <p className="tnum text-muted-foreground mb-1">
           {copy.import.file.chosen(fileName, parsed.rows.length)}
         </p>
       )}
       <p className="text-muted-foreground mb-5 max-w-prose">{copy.import.columns.lede}</p>
+
+      <div
+        aria-hidden="true"
+        className="text-overline text-muted-foreground mb-2 hidden max-w-xl gap-x-5 uppercase sm:grid sm:grid-cols-[11rem_minmax(0,1fr)]"
+      >
+        <span>{copy.import.columns.head.field}</span>
+        <span>{copy.import.columns.head.column}</span>
+      </div>
 
       <div className="grid max-w-xl grid-cols-1 items-start gap-x-5 gap-y-3.5 sm:grid-cols-[11rem_minmax(0,1fr)]">
         {MAPPABLE_FIELDS.map((field) => {
@@ -81,7 +90,7 @@ export function ColumnsStep({
           {copy.import.actions.toPreview}
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
