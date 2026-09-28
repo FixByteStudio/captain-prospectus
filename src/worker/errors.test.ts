@@ -39,6 +39,20 @@ describe("isD1DailyLimitError", () => {
     const wrapped = new DrizzleQueryError("insert into prospects ...", [], cause);
     expect(isD1DailyLimitError(wrapped)).toBe(false);
   });
+
+  it("is false when a bound value merely contains the phrase, unrelated failure", () => {
+    // DrizzleQueryError's own message is `Failed query: <sql>\nparams: <values>`
+    // (drizzle-orm/errors.js) — a note that happens to contain the daily-limit
+    // text must not turn an unrelated failure into a false 503 (INVARIANT 5:
+    // the client must not be told to wait for a quota that was never hit).
+    const cause = new Error("D1_ERROR: UNIQUE constraint failed: prospects.dedupe_key");
+    const wrapped = new DrizzleQueryError(
+      "insert into visits (notes) values (?)",
+      ["Your account has exceeded D1's free tier daily row write limit."],
+      cause,
+    );
+    expect(isD1DailyLimitError(wrapped)).toBe(false);
+  });
 });
 
 /** A throwing app mounted on the real onError, so this needs no route in routes/admin.ts. */
