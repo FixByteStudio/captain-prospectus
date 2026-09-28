@@ -223,3 +223,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-181-import-map-rebuilt.md`
   summary: After a failed map import, switching provider or running a new search leaves the stale failure Alert and « Réessayer » against a different result set.
   evidence: `importer` lives in ImportScreen and `chooseProvider`/`runSearch` in MapStep never call `importer.reset()`; same state flow before #181.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-183-a-rattacher-rebuilt.md`
+  summary: The repair toast names the chosen prospect even when the response says `repaired:false` or a different `prospectId` (merge followed).
+  evidence: `OrphansScreen.attach` ignores the result, as it did before #183; filed as #199.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-183-a-rattacher-rebuilt.md`
+  summary: À rattacher's no-position message is inferred from empty `candidates`, which the server also returns when no live prospect has coordinates.
+  evidence: `admin.ts:1576` builds candidates only from prospects with lat/lng; filed as #197.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-183-a-rattacher-rebuilt.md`
+  summary: `OUTCOME_BADGE` lives in `dashboard/outcome-series.ts` but OrphansScreen now reads it too; move it beside `STATUS_BADGE` in `admin/status.ts`.
+  evidence: cross-folder import in `OrphansScreen.tsx`; a refactor-sweep item (174.12).

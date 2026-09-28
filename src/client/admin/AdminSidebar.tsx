@@ -15,7 +15,14 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "../ui/sidebar";
-import { NAV_GROUPS, badgeCount, isCurrent, queueCount, type NavCountSource } from "./nav";
+import {
+  NAV_GROUPS,
+  badgeCount,
+  isCurrent,
+  orphanTotal,
+  queueCount,
+  type NavCountSource,
+} from "./nav";
 import { useDuplicates, useOrphans } from "./queries";
 
 /**
@@ -28,8 +35,8 @@ function useNavCounts(): Record<NavCountSource, number | undefined> {
   const duplicates = useDuplicates();
   const orphans = useOrphans();
   return {
-    duplicates: queueCount(duplicates, (data) => data.pairs),
-    orphans: queueCount(orphans, (data) => data.visits),
+    duplicates: queueCount(duplicates, (data) => data.pairs.length),
+    orphans: queueCount(orphans, orphanTotal),
   };
 }
 

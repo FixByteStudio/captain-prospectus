@@ -8,6 +8,7 @@ import {
   MapPin,
   Store,
 } from "lucide-react";
+import type { OrphansResponse } from "../../shared/schemas";
 import { copy } from "../copy";
 
 /** Which query's result the item's badge counts (AdminSidebar reads both). */
@@ -68,14 +69,23 @@ export function badgeCount(n: number | undefined): number | null {
 }
 
 /**
- * The length of a queue query's list, or `undefined` while it is loading or has
- * failed — never a stale or guessed number (I/O matrix, GH #63).
+ * A queue query's size, or `undefined` while it is loading or has failed —
+ * never a stale or guessed number (I/O matrix, GH #63).
  */
 export function queueCount<T>(
   query: { isSuccess: boolean; data?: T },
-  list: (data: T) => readonly unknown[],
+  size: (data: T) => number,
 ): number | undefined {
-  return query.isSuccess && query.data !== undefined ? list(query.data).length : undefined;
+  return query.isSuccess && query.data !== undefined ? size(query.data) : undefined;
+}
+
+/**
+ * The whole repair queue, not the page the server sent: `remaining` counts the
+ * rows past `ORPHANS_PAGE_SIZE` (GH #159). The sidebar badge, the screen's own
+ * header and Tableau de bord's « À traiter » all read this one sum.
+ */
+export function orphanTotal(data: OrphansResponse): number {
+  return data.visits.length + data.remaining;
 }
 
 /**

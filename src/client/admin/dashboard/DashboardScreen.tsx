@@ -11,7 +11,7 @@ import { cn } from "../../lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { PeriodToggle } from "../PeriodToggle";
-import { queueCount } from "../nav";
+import { orphanTotal, queueCount } from "../nav";
 import { prospectsHref, useDashboard, useDuplicates, useOrphans, visitsHref } from "../queries";
 import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
@@ -53,11 +53,8 @@ export function DashboardScreen() {
   const dashboard = useDashboard(period);
   const data = dashboard.data;
   // The sidebar's own queries: no request of its own (GH #113).
-  const duplicates = queueCount(useDuplicates(), (d) => d.pairs);
-  const orphans = useOrphans();
-  const orphanCount = orphans.isSuccess
-    ? orphans.data.visits.length + orphans.data.remaining
-    : undefined;
+  const duplicates = queueCount(useDuplicates(), (d) => d.pairs.length);
+  const orphanCount = queueCount(useOrphans(), orphanTotal);
   // A failed refetch keeps its last figures (TanStack v5 keeps `data` on
   // error), so the panels stay under the Alert. Skeletons only when there is
   // nothing yet and nothing has failed.

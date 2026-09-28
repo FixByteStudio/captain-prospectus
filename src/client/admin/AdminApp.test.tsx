@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { copy } from "../copy";
+import { ORPHANS_PAGE_SIZE } from "../../shared/constants";
 import type { DashboardResponse } from "../../shared/schemas";
 import { AdminApp } from "./AdminApp";
 
@@ -44,7 +45,11 @@ function json(body: unknown): Response {
   });
 }
 
+/** The repair queue the stub serves; a test swaps in a longer one. */
+let orphans: { visits: unknown[]; remaining: number } = { visits: [], remaining: 0 };
+
 beforeEach(() => {
+  orphans = { visits: [], remaining: 0 };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -52,7 +57,7 @@ beforeEach(() => {
       if (url.startsWith("/api/admin/dashboard")) return json(DASHBOARD);
       if (url.startsWith("/api/admin/prospects/duplicates"))
         return json({ pairs: [], truncated: false });
-      if (url.startsWith("/api/admin/visits/orphaned")) return json({ visits: [], remaining: 0 });
+      if (url.startsWith("/api/admin/visits/orphaned")) return json(orphans);
       if (url.startsWith("/api/admin/visits?")) return json({ visits: [], serverTime: 0 });
       return new Response("{}", { status: 404 });
     }),
@@ -103,5 +108,18 @@ describe("AdminApp", () => {
     expect(screen.queryByRole("heading", { name: copy.dashboard.title })).toBeNull();
     // Still the admin frame: the sidebar is there, and nothing in it is current.
     expect(sidebarLink(copy.nav.dashboard).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("counts the whole repair queue in the sidebar badge, not its first page (#159)", async () => {
+    // A full page (ORPHANS_PAGE_SIZE) plus 50 the server only counted. The
+    // rows' contents do not matter: nothing on this path renders them.
+    orphans = { visits: Array.from({ length: ORPHANS_PAGE_SIZE }, () => ({})), remaining: 50 };
+    renderAdmin("/admin/inconnu");
+
+    const total = ORPHANS_PAGE_SIZE + 50;
+    const badged = await screen.findByRole("link", {
+      name: copy.nav.withCount(copy.nav.orphans, total),
+    });
+    expect(badged.textContent).toContain(String(total));
   });
 });

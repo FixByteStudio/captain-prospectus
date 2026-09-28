@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { OrphanedVisit } from "../../shared/schemas";
 import {
   NAV_GROUPS,
   badgeCount,
   breadcrumbFor,
   isCurrent,
   isPaletteShortcut,
+  orphanTotal,
   queueCount,
   shortcutHint,
 } from "./nav";
@@ -71,7 +73,7 @@ describe("badgeCount", () => {
 });
 
 describe("queueCount", () => {
-  const pairs = (data: { pairs: unknown[] }) => data.pairs;
+  const pairs = (data: { pairs: unknown[] }) => data.pairs.length;
 
   it("counts the list once the query has succeeded", () => {
     expect(queueCount({ isSuccess: true, data: { pairs: [1, 2, 3] } }, pairs)).toBe(3);
@@ -81,6 +83,14 @@ describe("queueCount", () => {
   it("has no count while loading or after a failure, even with stale data", () => {
     expect(queueCount({ isSuccess: false }, pairs)).toBeUndefined();
     expect(queueCount({ isSuccess: false, data: { pairs: [1] } }, pairs)).toBeUndefined();
+  });
+});
+
+describe("orphanTotal", () => {
+  it("counts the rows past the page too (GH #159)", () => {
+    const visits = Array.from({ length: 200 }, () => ({}) as OrphanedVisit);
+    expect(orphanTotal({ visits, remaining: 50 })).toBe(250);
+    expect(orphanTotal({ visits: [], remaining: 0 })).toBe(0);
   });
 });
 
