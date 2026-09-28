@@ -4,6 +4,8 @@ import { OUTCOME_TO_STATUS } from "../../../shared/constants";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
+import { Skeleton } from "../../ui/skeleton";
+import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
 import { Pager } from "../Pager";
 import { STATUS_EDGE, STATUS_TEXT } from "../status";
@@ -21,7 +23,7 @@ import { PAGE_SIZE, pageCount, pageSlice } from "../pagination";
  * again, so the opening page under the new period is not news).
  */
 export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> }) {
-  const { visits, arrived, isPending, isError, answeredAt } = feed;
+  const { visits, arrived, isPending, isError, isFetching, refetch, answeredAt } = feed;
   const [page, setPage] = useState(1);
   const top = useRef<HTMLDivElement>(null);
   const total = pageCount(visits.length, PAGE_SIZE);
@@ -50,34 +52,55 @@ export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> 
         {arrived.length > 0 ? copy.visits.arrived(arrived.length) : ""}
       </p>
 
-      {isError && <p className="text-destructive">{copy.visits.loadFailed}</p>}
-
-      {!isError && visits.length === 0 && (
-        <p className="text-muted-foreground">
-          {isPending ? copy.visits.loading : copy.visits.empty}
-        </p>
-      )}
-
-      {visits.length > 0 && (
-        <>
-          <Surface>
+      <ScreenState
+        // Nothing held yet is the only state the skeleton stands in for; a
+        // failed poll keeps the rows already held under the Alert (#208).
+        data={visits.length === 0 && isPending ? undefined : visits}
+        isPending={isPending}
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={() => void refetch()}
+        loadFailed={copy.visits.loadFailed}
+        loading={copy.visits.loading}
+        skeleton={
+          // 6–8 table rows: EXPERIENCE.md › State Patterns (#207).
+          <Surface aria-hidden="true">
             <ul className="divide-border divide-y">
-              {shown.map((visit) => (
-                <VisitRow key={visit.id} visit={visit} isNew={arrived.includes(visit.id)} />
+              {Array.from({ length: 6 }, (_, i) => (
+                <li key={i} className="px-3.5 py-2.5">
+                  <Skeleton className="h-5 w-full" />
+                </li>
               ))}
             </ul>
           </Surface>
-          {total > 1 && (
-            <Pager
-              page={current}
-              total={total}
-              onChange={changePage}
-              labels={copy.visits.pager}
-              className="mt-4"
-            />
-          )}
-        </>
-      )}
+        }
+      >
+        {() =>
+          visits.length === 0 ? (
+            // A failed first load has nothing to be empty of: the Alert says it all.
+            !isError && <p className="text-muted-foreground">{copy.visits.empty}</p>
+          ) : (
+            <>
+              <Surface>
+                <ul className="divide-border divide-y">
+                  {shown.map((visit) => (
+                    <VisitRow key={visit.id} visit={visit} isNew={arrived.includes(visit.id)} />
+                  ))}
+                </ul>
+              </Surface>
+              {total > 1 && (
+                <Pager
+                  page={current}
+                  total={total}
+                  onChange={changePage}
+                  labels={copy.visits.pager}
+                  className="mt-4"
+                />
+              )}
+            </>
+          )
+        }
+      </ScreenState>
     </div>
   );
 }

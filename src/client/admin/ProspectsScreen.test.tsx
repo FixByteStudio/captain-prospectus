@@ -529,6 +529,24 @@ describe("ProspectsScreen › empty states (#179)", () => {
   });
 });
 
+describe("ProspectsScreen › loading (#206)", () => {
+  it("shows 6–8 row skeletons while the first page is pending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).startsWith("/api/admin/agents")
+          ? json({ agents: [] })
+          : new Promise<Response>(() => {}),
+      ),
+    );
+    renderAt("/admin/prospects");
+
+    const rows = document.querySelectorAll('[aria-busy="true"] [data-slot="skeleton"]');
+    expect(rows.length).toBeGreaterThanOrEqual(6);
+    expect(rows.length).toBeLessThanOrEqual(8);
+  });
+});
+
 describe("ProspectsScreen › load failed (#179)", () => {
   it("shows the shared Alert and refetches on « Réessayer »", async () => {
     let fail = true;
