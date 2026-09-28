@@ -9,6 +9,7 @@ import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
 import { MAX_REQUEST_BYTES, SYNC_VISITS_PER_REQUEST } from "../shared/constants";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
+import { MAX_VALIDATION_ISSUES } from "./validate";
 
 /**
  * Routes against a real D1, built by the real migrations.
@@ -88,6 +89,26 @@ describe("POST /api/agent/sync", () => {
     const response = await sync({ visits: [{ id: "not-a-uuid" }] as never });
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toBe("validation");
+  });
+
+  it("caps a 400's issues at their path and code, however malformed the body (#36)", async () => {
+    const answers = Object.fromEntries(
+      Array.from({ length: 100 }, (_, i) => [`q${i}`, { nested: true }]),
+    );
+    const visit = {
+      id: crypto.randomUUID(),
+      prospectId: crypto.randomUUID(),
+      visitedAt: Date.now(),
+      flyerGiven: false,
+      outcome: "not_interested",
+      answers,
+    };
+    const response = await sync({ visits: [visit] as never });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string; issues: object[] };
+    expect(body.error).toBe("validation");
+    expect(body.issues).toHaveLength(MAX_VALIDATION_ISSUES);
+    for (const issue of body.issues) expect(Object.keys(issue).sort()).toEqual(["code", "path"]);
   });
 
   it("requires followUpAt when the outcome is follow_up", async () => {
