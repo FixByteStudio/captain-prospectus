@@ -15,12 +15,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
 import type { MeResponse } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
 import { fieldDb, getMeta, setMeta } from "./field/db";
+import { reconnectUrl } from "./field/reconnect-marker";
 import type { SyncState } from "./field/useSync";
 
 type SyncStub = Pick<SyncState, "status" | "running" | "pending">;
@@ -508,5 +510,58 @@ describe("App update prompt", () => {
     expect(assertive?.textContent).toContain(copy.sync.upgrade);
     const button = screen.getByRole("button", { name: copy.update.apply });
     expect(assertive?.contains(button)).toBe(true);
+  });
+});
+
+describe("App identity-error frame", () => {
+  /** `MemoryRouter` never reads `window.location`, so only the button does. */
+  const realLocation = Object.getOwnPropertyDescriptor(window, "location");
+
+  function stubLocation(href: string) {
+    const location = { href };
+    Object.defineProperty(window, "location", { configurable: true, value: location });
+    return location;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (realLocation) Object.defineProperty(window, "location", realLocation);
+  });
+
+  // A reload is served from precache and asks `/api/me` straight back into
+  // the same 401, so the frame must offer the marker navigation (GH #75).
+  it("sends a session revoked at startup through Access, marker and all", async () => {
+    const user = userEvent.setup();
+    stub.identityRevoked = true;
+    renderApp("/tournee");
+
+    const button = await screen.findByRole("button", { name: copy.sync.reconnect });
+    expect(screen.getByText(REVOKED_MESSAGE)).toBeTruthy();
+    const location = stubLocation("https://app.example/tournee");
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    await user.click(button);
+
+    expect(location.href).toBe(reconnectUrl("https://app.example/tournee"));
+  });
+
+  it("stays put when reconnecting with no network", async () => {
+    const user = userEvent.setup();
+    stub.identityRevoked = true;
+    renderApp("/tournee");
+
+    const button = await screen.findByRole("button", { name: copy.sync.reconnect });
+    const location = stubLocation("https://app.example/tournee");
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await user.click(button);
+
+    expect(location.href).toBe("https://app.example/tournee");
+  });
+
+  it("offers no reconnect when the phone simply has never reached the server", async () => {
+    stub.identityUnreachable = true;
+    renderApp("/tournee");
+
+    expect(await screen.findByText(copy.errors.offlineFirstRun)).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

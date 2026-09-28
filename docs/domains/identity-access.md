@@ -34,8 +34,9 @@ fall back on a 401 — that is the Worker answering that the session is no
 longer valid, which is different from being unreachable, and is exactly the
 "stolen phone" mitigation in [security.md](../security.md) (an admin removes
 the email from the Access policy; the next `/api/me` the phone manages to send
-comes back 401, not cached-and-accepted). A 401 shows the error and asks the
-agent to sign in again, same as a sync 401 always has.
+comes back 401, not cached-and-accepted). A 401 shows the error with the same
+"Se reconnecter" marker navigation as the sync strip (GH #75): a reload would
+come back from precache and straight into the same 401.
 
 **A 401 also deletes the cache, not merely declines to read it.** Refusing the
 fallback on its own would leave the mitigation one aeroplane-mode toggle wide:
