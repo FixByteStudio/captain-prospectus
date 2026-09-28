@@ -1,13 +1,19 @@
 import { toast } from "sonner";
-import type { DuplicatePair, Prospect } from "../../shared/schemas";
+import { CopyCheckIcon } from "lucide-react";
+import { Link } from "react-router";
+import type { DuplicatePair, DuplicatesResponse, Prospect } from "../../shared/schemas";
 import { STATUS_LABELS, copy } from "../copy";
 import { formatDistance } from "../format";
 import { cn } from "../lib/utils";
 import { Alert, AlertDescription } from "../ui/alert";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { Skeleton } from "../ui/skeleton";
+import { EmptyTile } from "./EmptyTile";
 import { ScreenHeader } from "./ScreenHeader";
-import { STATUS_EDGE, STATUS_TEXT } from "./status";
+import { ScreenState } from "./ScreenState";
+import { Surface } from "./Surface";
+import { BADGE_SHAPE, STATUS_BADGE, STATUS_EDGE } from "./status";
 import { useDuplicates, useMerge } from "./queries";
 
 /**
@@ -16,7 +22,8 @@ import { useDuplicates, useMerge } from "./queries";
  * The machine cannot tell a rename from a takeover, so it only ever proposes.
  * Each side shows what it carries — status, assignee, how many visits — so the
  * admin is choosing between two known things rather than guessing which one it
- * would be safe to lose.
+ * would be safe to lose. A pair reads as one list item (docs/design.md ›
+ * Doublons): two stacked rows, the distance shown once.
  */
 export function DuplicatesScreen() {
   const duplicates = useDuplicates();
@@ -35,73 +42,90 @@ export function DuplicatesScreen() {
     );
   }
 
-  if (duplicates.isError) {
-    return <p className="text-destructive">{copy.duplicates.loadFailed}</p>;
-  }
-
-  const pairs = duplicates.data?.pairs ?? [];
+  // `null` while nothing has arrived: a count of 0 under the skeleton would
+  // announce a healthy queue before the sweep has answered.
+  const toolbar = (count: number | null) => (
+    <div className="border-border flex min-h-11 flex-wrap items-center gap-2 border-b px-3">
+      {count !== null && (
+        <span className="text-muted-foreground tnum">{copy.duplicates.count(count)}</span>
+      )}
+      <Button
+        variant="secondary"
+        size="sm"
+        className="ml-auto"
+        disabled={duplicates.isFetching}
+        onClick={() => void duplicates.refetch()}
+      >
+        {duplicates.isFetching ? copy.duplicates.relaunching : copy.duplicates.relaunch}
+      </Button>
+    </div>
+  );
 
   return (
     <section>
       <ScreenHeader
-        className="mb-1"
+        className="mb-4"
         title={copy.duplicates.title}
-        actions={
-          pairs.length > 0 && (
-            <span className="text-muted-foreground tnum">
-              {copy.duplicates.count(pairs.length)}
-            </span>
-          )
-        }
+        subtitle={<p className="text-muted-foreground mt-0.5">{copy.duplicates.lede}</p>}
       />
-      <p className="text-muted-foreground mb-5 max-w-prose">{copy.duplicates.lede}</p>
 
-      {duplicates.isPending && (
-        <p className="text-muted-foreground" aria-busy="true">
-          {copy.duplicates.loading}
-        </p>
-      )}
+      <ScreenState<DuplicatesResponse>
+        data={duplicates.data}
+        isPending={duplicates.isPending}
+        isError={duplicates.isError}
+        isFetching={duplicates.isFetching}
+        onRetry={() => void duplicates.refetch()}
+        loadFailed={copy.duplicates.loadFailed}
+        loading={copy.duplicates.loading}
+        skeleton={
+          <Surface className="overflow-hidden">
+            {toolbar(null)}
+            <div className="space-y-3 p-3.5">
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+            </div>
+          </Surface>
+        }
+      >
+        {(data) => (
+          <>
+            <Surface className="overflow-hidden">
+              {toolbar(data.pairs.length)}
 
-      {!duplicates.isPending && pairs.length === 0 && (
-        <p className="text-muted-foreground">{copy.duplicates.empty}</p>
-      )}
+              {data.pairs.length === 0 ? (
+                <EmptyTile icon={<CopyCheckIcon aria-hidden="true" />}>
+                  <p className="text-foreground font-medium">{copy.duplicates.empty}</p>
+                  <p>{copy.duplicates.emptyHint}</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/admin/prospects">{copy.duplicates.emptyCta}</Link>
+                  </Button>
+                </EmptyTile>
+              ) : (
+                <ul className="divide-border divide-y">
+                  {data.pairs.map((pair) => (
+                    <Pair
+                      key={`${pair.a.id}|${pair.b.id}`}
+                      pair={pair}
+                      // A stale pair from a sweep still in flight must not be
+                      // mergeable, or a fresh answer could contradict a click
+                      // that already landed.
+                      disabled={merge.isPending || duplicates.isFetching}
+                      onKeep={keep}
+                    />
+                  ))}
+                </ul>
+              )}
+            </Surface>
 
-      {pairs.length > 0 && (
-        <>
-          <div className="border-border bg-card overflow-hidden rounded-md border">
-            <Table className="[&_td]:h-row [&_td]:py-0">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-full min-w-48 pl-3.5">
-                    {copy.duplicates.columns.name}
-                  </TableHead>
-                  <TableHead>{copy.duplicates.columns.status}</TableHead>
-                  <TableHead>{copy.duplicates.columns.agent}</TableHead>
-                  <TableHead className="text-right">{copy.duplicates.columns.visits}</TableHead>
-                  <TableHead className="text-right">{copy.duplicates.columns.distance}</TableHead>
-                  <TableHead className="w-24" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pairs.map((pair) => (
-                  <Pair
-                    key={`${pair.a.id}|${pair.b.id}`}
-                    pair={pair}
-                    disabled={merge.isPending}
-                    onKeep={keep}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {duplicates.data?.truncated && (
-            <Alert className="mt-4 max-w-2xl">
-              <AlertDescription>{copy.duplicates.truncated}</AlertDescription>
-            </Alert>
-          )}
-        </>
-      )}
+            {data.truncated && (
+              <Alert className="mt-4 max-w-2xl">
+                <AlertDescription>{copy.duplicates.truncated}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
+      </ScreenState>
     </section>
   );
 }
@@ -119,84 +143,80 @@ function Pair({
     pair.distanceM === null ? copy.duplicates.distanceUnknown : formatDistance(pair.distanceM);
 
   return (
-    <>
-      <Side
-        prospect={pair.a}
-        visits={pair.aVisits}
-        distance={distance}
-        first
-        disabled={disabled}
-        onKeep={() => onKeep(pair.a, pair.b)}
-      />
-      <Side
-        prospect={pair.b}
-        visits={pair.bVisits}
-        distance={null}
-        first={false}
-        disabled={disabled}
-        onKeep={() => onKeep(pair.b, pair.a)}
-      />
-    </>
+    <li
+      className="grid grid-cols-[minmax(0,1fr)_auto]"
+      aria-label={copy.duplicates.pairAria(pair.a.name, pair.b.name)}
+    >
+      <div>
+        <Side
+          prospect={pair.a}
+          visits={pair.aVisits}
+          disabled={disabled}
+          onKeep={() => onKeep(pair.a, pair.b)}
+        />
+        <Side
+          prospect={pair.b}
+          visits={pair.bVisits}
+          disabled={disabled}
+          onKeep={() => onKeep(pair.b, pair.a)}
+        />
+      </div>
+      <div className="tnum text-muted-foreground border-border flex items-center justify-end border-l px-3.5 text-sm whitespace-nowrap">
+        {distance}
+      </div>
+    </li>
   );
 }
 
 function Side({
   prospect,
   visits,
-  distance,
-  first,
   disabled,
   onKeep,
 }: {
   prospect: Prospect;
   visits: number;
-  distance: string | null;
-  first: boolean;
   disabled: boolean;
   onKeep: () => void;
 }) {
   return (
-    // A pair reads as one thing: only the second row carries a bottom rule, so
-    // the two sit together and the gap falls between pairs, not inside them.
-    <TableRow className={cn(first && "border-b-0")}>
-      <TableCell className={cn("pl-3.5 font-medium", STATUS_EDGE[prospect.status])}>
-        {prospect.name}
-        {prospect.address && (
-          <span className="text-muted-foreground font-normal"> · {prospect.address}</span>
-        )}
-      </TableCell>
-      <TableCell className={cn("whitespace-nowrap", STATUS_TEXT[prospect.status])}>
-        {STATUS_LABELS[prospect.status]}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {prospect.assignedTo ?? <span className="text-muted-foreground">—</span>}
-      </TableCell>
-      <TableCell className="tnum text-right">
-        {visits > 0 ? (
-          <strong className="font-semibold">{visits}</strong>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </TableCell>
-      {distance !== null && (
-        <TableCell
-          rowSpan={2}
-          className="text-muted-foreground tnum border-border border-l text-right align-middle whitespace-nowrap"
-        >
-          {distance}
-        </TableCell>
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-3 px-3.5 py-2.5",
+        STATUS_EDGE[prospect.status],
       )}
-      <TableCell>
+    >
+      <div className="min-w-0 flex-1">
+        <p className="font-medium break-words">{prospect.name}</p>
+        {prospect.address && (
+          <p className="text-muted-foreground text-xs break-words">{prospect.address}</p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge variant="ghost" className={cn(BADGE_SHAPE, STATUS_BADGE[prospect.status])}>
+          {STATUS_LABELS[prospect.status]}
+        </Badge>
+        <span className="text-muted-foreground text-xs break-words">
+          {prospect.assignedTo ?? "—"}
+        </span>
+        <span
+          className={cn(
+            "text-xs",
+            visits > 0 ? "text-foreground font-semibold" : "text-muted-foreground",
+          )}
+        >
+          {copy.duplicates.visits(visits)}
+        </span>
         <Button
+          variant="secondary"
           size="sm"
-          variant="outline"
           disabled={disabled}
           aria-label={copy.duplicates.keepAria(prospect.name)}
           onClick={onKeep}
         >
           {copy.duplicates.keep}
         </Button>
-      </TableCell>
-    </TableRow>
+      </div>
+    </div>
   );
 }

@@ -613,15 +613,18 @@ export const copy = {
     loadFailed: "Impossible de chercher les doublons. Réessayez.",
     truncated:
       "Seules les premières paires sont affichées. Fusionnez-les et relancez la recherche.",
-    count: (n: number) => (n === 1 ? "1 paire" : `${n} paires`),
+    // Same agreement as the dashboard's own `pairs`: zero takes the singular.
+    count: (n: number) => `${formatCount(n)} ${n <= 1 ? "paire" : "paires"}`,
 
-    columns: {
-      name: "Nom",
-      status: "Statut",
-      agent: "Agent",
-      visits: "Visites",
-      distance: "Distance",
-    },
+    pairAria: (a: string, b: string) => `« ${a} » et « ${b} »`,
+    visits: (n: number) =>
+      n === 0 ? "Aucune visite" : n === 1 ? "1 visite" : `${formatCount(n)} visites`,
+
+    emptyHint: "Aucune paire de prospects ne semble désigner le même endroit.",
+    emptyCta: "Voir les prospects",
+
+    relaunch: "Relancer la recherche",
+    relaunching: "Recherche en cours…",
 
     distanceUnknown: "Position inconnue",
     keep: "Garder",
