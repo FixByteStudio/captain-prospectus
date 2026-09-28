@@ -15,7 +15,7 @@ a mitigation nobody has verified is worse than one nobody claimed.
 | Malformed or oversized payloads | zod validation, array size caps, and a `MAX_REQUEST_BYTES` body cap enforced Worker-wide in `src/worker/index.ts` before anything parses the body |
 | SQL injection | Drizzle parameterised queries only; no string-built SQL |
 | XSS through imported data (names, notes) | React escaping; no `dangerouslySetInnerHTML` |
-| Stolen phone | Access session expiry; admin removes the email from the Access policy, and the next `/api/me` clears the cached round. **Only at mount**, so a resumed PWA keeps it — [#35](https://github.com/FixbyteStudio/captain-prospectus/issues/35) |
+| Stolen phone | Access session expiry; admin removes the email from the Access policy, and the next `/api/me` or sync the server refuses clears the cached round (the outbox stays) |
 | Leaked Cloudflare token | Scoped token in GitHub secrets, never in the repo |
 
 ### The body cap

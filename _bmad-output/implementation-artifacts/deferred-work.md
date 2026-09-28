@@ -255,3 +255,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-20-split-copy-by-audience.md`
   summary: `.claude/agents/pwa-engineer.md:22` and `.claude/skills/night-shift/SKILL.md:66` still send field authors to `src/client/copy.ts`; they should name `copy/field` for modules outside `admin/`.
   evidence: blind-hunter on GH #20. Agent-context files; a wrong import is still caught by `check:precache` in CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-35-clear-cache-on-sync-auth.md`
+  summary: A sync that returns `auth` and then `ok` without a remount leaves `meta.identity` deleted, so the next offline cold launch shows the first-run error instead of the field side.
+  evidence: `runSync`'s auth branch calls `clearAgentCache` (drops `meta.identity`); only App.tsx's mount-time `/api/me` writes it back, and `runSync` cannot (it knows the email, not the role). Only reachable if the Access session renews without a navigation (e.g. another tab), since "Se reconnecter" remounts; low likelihood, unverified in the field.

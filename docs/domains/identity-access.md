@@ -20,7 +20,7 @@ See [ADR-0006](../adr/0006-cloudflare-access-auth.md).
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost` or `127.0.0.1`.
 
 ## Offline and session expiry
-Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the outbox stays intact either way.
+Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
 
 **"Se reconnecter" is a marker navigation, not a reload.** The service worker serves every ordinary navigation from precache (`navigateFallback`), which never reaches Access, so a plain reload cannot re-authenticate. The button instead navigates to the current URL plus `?reconnect=1`, an entry `navigateFallbackDenylist` excludes from that fallback (`vite.config.ts`), so this one navigation goes to the network and through Access; the app strips the marker back out of the URL once it has landed (`docs/design.md` § "Sync is ambient, never a toast"). The outbox is untouched either way — INVARIANT 5.
 
@@ -45,6 +45,13 @@ the unreachable branch above and hands the revoked phone its round back. So the
 cached identity, the cached round and the cached visit history together. The
 outbox survives it — a revoked session is not the server listing those rows in
 `accepted`, and INVARIANT 5 says only that may delete them.
+
+**A refused sync clears it too.** A PWA resumed from the app switcher does not
+remount, so it never re-asks `/api/me`. `runSync` therefore calls
+`clearAgentCache` on every response it reports as `auth` — a 401, a 403 or an
+Access redirect, since an expired session and a revoked one look the same from
+the phone (GH #35). A network failure clears nothing. An agent online with an
+expired session sees an empty round until "Se reconnecter" brings it back.
 
 **The cached identity opens the field side only.** An admin identity read from
 the cache never unlocks the Tableau de bord tab or the admin routes — only a
