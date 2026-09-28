@@ -38,6 +38,8 @@ export const copy = {
   breadcrumbMore: "Plus",
   /** The breadcrumb `<nav>`'s landmark name. */
   breadcrumb: "Fil d'Ariane",
+  /** The vendored Spinner's accessible name (it ships "Loading"). */
+  spinner: "Chargement",
 
   nav: {
     dashboard: "Tableau de bord",
@@ -659,12 +661,14 @@ export const copy = {
       add: "Ajouter une question",
       remove: (label: string) => `Supprimer « ${label} »`,
       dragHandle: (label: string) => `Réordonner « ${label} »`,
+      cardAria: (n: number, label: string) => `Question ${n} : ${label}`,
       label: "Intitulé",
       labelPlaceholder: "Ex. Proposez-vous la livraison ?",
       key: "Clé",
       keyHint: "Identifie la réponse. Ne change plus une fois la version enregistrée.",
       keyLocked: "Cette clé existe déjà dans une version enregistrée.",
       unlockKey: "Modifier la clé",
+      unlockKeyAria: (key: string) => `Modifier la clé ${key}`,
       keyUnlockedWarning:
         "Les réponses déjà données sous l'ancienne clé resteront associées à celle-ci, pas à la nouvelle.",
       type: "Type de réponse",
@@ -687,7 +691,6 @@ export const copy = {
     editor: {
       saveWarning: "L'enregistrement crée une nouvelle version et l'active immédiatement.",
       save: "Enregistrer une nouvelle version",
-      saving: "Enregistrement…",
       saved: (version: number) => `Version ${version} enregistrée et activée.`,
       saveFailed: "L'enregistrement a échoué. Réessayez.",
     },

@@ -1,6 +1,6 @@
 ---
 id: 014
-status: ready
+status: done
 implements: _bmad-output/initiative-dashboard-redesign/epic-admin-screens/story-scripts-rebuilt.md (#184), EXPERIENCE.md § Component Patterns, docs/design.md#the-script-editor
 depends_on: []
 ---

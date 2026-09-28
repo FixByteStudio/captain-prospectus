@@ -546,73 +546,97 @@ together.
 
 ### The script editor
 
-The roadmap calls this "the most complex screen in the app" — a variable-length
-list of typed questions, reorderable, versioned, and read by both the admin
-composing it and (later, M3's next PR) the agent answering it. It stays a
-**ledger**, not a form wizard: one dense editor, no steps, no cards.
+Rebuilt on the #175 primitives for GH #184. The roadmap calls this "the most
+complex screen in the app": a variable-length list of typed questions,
+reorderable and versioned, read by the admin composing it and the agent
+answering it. It is one editor with no steps, and each question is a
+**card**. Epic #174 settled that against this file's earlier "no cards": the
+"no raised surface" rule is about cards around data rows, and the ledger
+screens keep it. A script question is an editable unit that moves as a unit,
+and the card is what makes it legible as a drag target
+([DESIGN.md › Script question card](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/DESIGN.md)).
 
 ```
-┌──────────────────────────────────────────────────────┬──────────────────┐
-│ Scripts                                                │                  │
-│ Le questionnaire posé à chaque visite. L'enregistrement│                  │
-│ crée une nouvelle version et l'active aussitôt…        │                  │
-├──────────────────────────────────────────────────────┤  Versions        │
-│ Nom du script   [ default                    ]         │ ┌──────────────┐│
-│                                                          │ │ Version 3    ││
-│ Questions                          [+ Ajouter une       │ │ Active       ││
-│                                        question]         │ │ 4 questions  ││
-│ ┌──────────────────────────────────────────────────┐   │ ├──────────────┤│
-│ │⠿ 1  Proposez-vous la livraison ?              [🗑]│   │ │ Version 2    ││
-│ │     Oui / non          ☐ Obligatoire               │   │ │ Inactive     ││
-│ │     clé  has_delivery                              │   │ │ 3 questions  ││
-│ ├──────────────────────────────────────────────────┤   │ └──────────────┘│
-│ │⠿ 2  Quel système de caisse utilisez-vous ?    [🗑]│   │                  │
-│ │     Choix unique       ☐ Obligatoire               │   │                  │
-│ │     Aucun · Papier · Autre        [+ Ajouter un    │   │                  │
-│ │                                       choix]        │   │                  │
-│ │     clé  pos_system 🔒  Modifier la clé            │   │                  │
-│ └──────────────────────────────────────────────────┘   │                  │
-│                                                          │                  │
-│           L'enregistrement crée une nouvelle version    │                  │
-│           et l'active immédiatement.                    │                  │
-│                    [ Enregistrer une nouvelle version ] │                  │
-└──────────────────────────────────────────────────────┴──────────────────┘
+┌───────────────────────────────────────────────────────┬──────────────────┐
+│ Scripts                                               │                  │
+│ Le questionnaire posé à chaque visite…                │  Versions        │
+├───────────────────────────────────────────────────────┤ ┌──────────────┐ │
+│ ┌───────────────────────────────────────────────────┐ │ │ Version 3    │ │
+│ │ NOM DU SCRIPT  [ default              ]           │ │ │       Active │ │
+│ └───────────────────────────────────────────────────┘ │ │ 14/09 · 4 q. │ │
+│ Questions  2 questions     [+ Ajouter une question]   │ ├──────────────┤ │
+│ ┌───────────────────────────────────────────────────┐ │ │ Version 2    │ │
+│ │⠿ 1 [ Proposez-vous la livraison ? ][Oui/non ▾] ⌧  │ │ │     Inactive │ │
+│ │░ ☑ Obligatoire  [L] Clé has_delivery  Modifier    │ │ │ 01/09 · 3 q. │ │
+│ │░ (i) Cette clé existe déjà dans une version…      │ │                  │
+│ └───────────────────────────────────────────────────┘ │ └──────────────┘ │
+│ ┌───────────────────────────────────────────────────┐ │                  │
+│ │⠿ 2 [ Quel système de caisse ? ][Choix unique ▾] ⌧ │ │                  │
+│ │    CHOIX PROPOSÉS  [Aucun  ×] [Papier ×]          │ │                  │
+│ │    + Ajouter un choix                             │ │                  │
+│ │░ ☐ Obligatoire  [L] Clé pos_system  Modifier      │ │                  │
+│ └───────────────────────────────────────────────────┘ │                  │
+│ ┌───────────────────────────────────────────────────┐ │                  │
+│ │ (i) L'enregistrement crée une nouvelle version…   │ │                  │
+│ │            [ Enregistrer une nouvelle version ]   │ │                  │
+│ └───────────────────────────────────────────────────┘ │                  │
+└───────────────────────────────────────────────────────┴──────────────────┘
 ```
 
-Five rules this encodes:
+`⌧` is the ghost `Trash2Icon` that removes the question; `×` removes one
+choice. `[L]` is the `Lock` icon and `░` the `secondary` footer.
 
-- **No card, drag handle instead of a shadow.** A question is a row in a
-  bordered, divided list — `⠿` (a `GripVerticalIcon`) is the only affordance
-  that says "reorder me", never a raised surface. Same rule as the prospect
-  table: chrome yields to content.
-- **A saved key locks.** A question copied in from the active version arrives
-  with `🔒` and a disabled key field — docs/domains/scripts.md: keys are
-  "stable, and never reused with a different meaning", and an answer already
-  recorded under `pos_system` must stay findable under that key. Unlocking is
-  one explicit click (**Modifier la clé**), never a default state, and it
-  prints a standing warning once unlocked rather than a one-time toast, since
-  the risk (silently orphaning old answers) outlives a four-second message. A
-  brand-new question's key is suggested from its label as it is typed and
-  stays editable until the admin edits it by hand.
-- **One primary action, and it gets a confirmation.** Every other admin screen
-  in this app avoids a confirmation dialog — a merge, an assignment, a status
-  change are all either reversible or additive. Saving a script is neither: it
-  silently reassigns what every agent is asked next, including mid-round, and
-  it is not append-only the way a visit is. So Save opens a dialog stating the
-  version number it is about to create and activate. The field asks the same
-  once before a visit is saved ("Saving asks once"), for the reason given
-  there.
-- **Version history is a fact, not a feature.** The list on the right shows
-  every version with its question count and Active/Inactive, in text — bold
-  and `success`-toned for active, muted for inactive — never a coloured pill
-  (same rule as the prospect ledger's status column). Nothing there is
-  clickable in this PR; restoring an old version as a starting point is not a
-  rule the domain doc states, so it is not built.
+- **The card.** Each card is a `Surface`, not `ui/card.tsx`, which belongs
+  to the dashboard. The top row holds the `GripVerticalIcon` handle, the
+  number in label weight, the label input and the type select, then a ghost
+  remove button. Choices, for single and multiple choice, sit under that row
+  in two columns from `sm`. The footer on `secondary` holds « Obligatoire »
+  and the key. The handle is the only thing that drags: the card never
+  lifts on hover, and it gets a shadow only while it is being dragged.
+- **A saved key locks.** A question copied from the active version shows
+  its key as text beside a `Lock` icon, in Archivo rather than monospace,
+  with no field to type in. docs/domains/scripts.md explains why: keys are
+  "stable, and never reused with a different meaning", and an answer
+  already recorded under `pos_system` must stay findable under that key.
+  Only a ghost **Modifier la clé** turns the key into an input and moves
+  focus to it. After that, the meta line at the bottom of the footer (an
+  `Info` icon) switches from « Cette clé existe déjà… » to the standing
+  warning that older answers stay under the old key; it is the input's
+  `FormDescription`, so a screen reader reads it with the field. The warning stays for as long as the key is unlocked and is never
+  a toast, because the risk (silently orphaning old answers) lasts longer
+  than a four-second message. A new question's key is suggested from its
+  label as the admin types, and stays editable until they edit it by hand.
+- **One primary action, and it gets a confirmation.** « Enregistrer une
+  nouvelle version » is the one gold button on the screen. Everything else
+  is outline or ghost. Every other admin screen avoids a confirmation
+  dialog, because merging, assigning and changing a status are all either
+  reversible or additive. Saving a script is neither: it silently changes
+  what every agent is asked next, including mid-round. So Save opens a
+  dialog that states the version number it is about to create and activate.
+  While the POST is in flight, the confirm button shows a `Spinner` and is
+  disabled, « Annuler » is disabled, the dialog's close button is hidden,
+  and Escape and the scrim do not close the dialog, so a second save cannot
+  start before the server answers the first. When the server answers, a
+  toast names the saved version. If the save fails, a toast says so and the
+  dialog closes with the draft intact.
+- **Version history is a fact, not a feature.** The rail is a `Surface`
+  listing every version with its date and question count. Active or
+  Inactive is text, `success` for the active version and muted for the
+  rest, and never a coloured pill. Nothing in the rail is clickable:
+  restoring an old version as a starting point is not a rule the domain doc
+  states.
 - **Reorder works from a keyboard.** `@dnd-kit`'s `KeyboardSensor` with
-  `sortableKeyboardCoordinates` is wired alongside the pointer sensor, so
-  Tab-to-the-handle-then-arrow-keys reorders a script exactly like a drag does.
-  A drag-only list here would be the same accessibility regression ADR-0015
-  already refuses on the field route, just on the admin side instead.
+  `sortableKeyboardCoordinates` sits beside the pointer sensor, so tabbing
+  to the handle, pressing Space, then the arrow keys and Space again
+  reorders exactly like a drag. `ScriptsScreen.test.tsx` covers it.
+- **Loading and refetches.** A skeleton stands in until the scripts arrive,
+  and a failed load shows `ScreenState`'s Alert with « Réessayer ». The form
+  is filled from the active version once, and again after a save, never on
+  a background refetch, so a refetch cannot overwrite an edit in progress.
+- **Phone width.** The editor grid is one column below `lg`, and every
+  column has `min-w-0`. The type select takes the full width under the
+  label until `sm`, and the key input shrinks. At 390px nothing is wider
+  than the viewport (#72).
 
 ### The CSV import
 
