@@ -1,11 +1,20 @@
 /**
- * The context half of the leave guard (GH #83).
+ * The leave guard, context half and pure half both (GH #83, widened for
+ * spec-gh-74).
  *
- * `leave-guard.test.ts` covers `shouldAsk`, the pure rule. The plumbing around
- * it — `LeaveGuardProvider`, and `useRegisterDirty`'s two effects — was
- * reachable only through JSX and so untested, as the module's own header said
- * (GH #66 review deferral). Deleting either effect body left the guard
- * permanently clean and CI green; it does not any more.
+ * `shouldAsk` used to be covered without a DOM, in `leave-guard.test.ts`. It
+ * moved here (and that file was deleted) once `leave-guard.tsx` started
+ * rendering the AlertDialog itself: the module now pulls in the vendored
+ * `@/ui/alert-dialog`, which the "unit" vitest project has neither the `@`
+ * alias nor a DOM for, so importing anything from `./leave-guard` — even just
+ * `shouldAsk` — has to happen from the "dom" project instead (`.test.tsx`,
+ * `vitest.config.ts`).
+ *
+ * The rest of the plumbing — `LeaveGuardProvider`, `useRegisterDirty`'s two
+ * effects, and `leave` — was reachable only through JSX and so untested, as
+ * the module's own header used to say (GH #66 review deferral). Deleting
+ * either effect body, or `leave`'s dirty check, left the guard permanently
+ * clean (or permanently silent) and CI green; it does not any more.
  *
  * `VisitScreen` and `AddProspectScreen` are lazy, Dexie-backed and form-heavy,
  * so the contract is tested here against a minimal component and the two real
@@ -13,10 +22,36 @@
  */
 import { readFileSync } from "node:fs";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { LeaveGuardProvider, useLeaveGuard, useRegisterDirty } from "./leave-guard";
+import { copy } from "../copy";
+import { LeaveGuardProvider, shouldAsk, useLeaveGuard, useRegisterDirty } from "./leave-guard";
+
+describe("shouldAsk", () => {
+  // I/O matrix, spec-gh-66.
+  it("asks when the form is dirty and the tap goes elsewhere", () => {
+    expect(shouldAsk({ dirty: true, to: "/tournee", current: "/tournee/abc123" })).toBe(true);
+  });
+
+  it("navigates straight away when the form is untouched", () => {
+    expect(shouldAsk({ dirty: false, to: "/tournee", current: "/tournee/nouveau" })).toBe(false);
+  });
+
+  it("never asks when the tap is already the current tab, dirty or not", () => {
+    expect(shouldAsk({ dirty: true, to: "/tournee", current: "/tournee" })).toBe(false);
+    expect(shouldAsk({ dirty: false, to: "/tournee", current: "/tournee" })).toBe(false);
+  });
+
+  it("never asks on a tab that reads as current under isCurrentTab's subtree rule", () => {
+    // Ajouter draws as current on a nested add route too (tabs.test.ts), so
+    // tapping it there must not open the dialog even though the pathname
+    // itself isn't the exact string "/tournee/nouveau".
+    expect(shouldAsk({ dirty: true, to: "/tournee/nouveau", current: "/tournee/nouveau/" })).toBe(
+      false,
+    );
+  });
+});
 
 /** Reports what `FieldTabs` would read off the context on a tab tap. */
 function GuardState() {
@@ -82,5 +117,78 @@ describe("useRegisterDirty", () => {
     // Whitespace-tolerant and blind to the variable's name: Prettier may
     // re-wrap the call and the sweep may rename `form`.
     expect(source).toMatch(/useRegisterDirty\(\s*\w+\.formState\.isDirty\s*\)/);
+  });
+});
+
+/** What the strip and the update banner call instead of navigating/updating directly (#74). */
+function LeaveButton({ proceed }: { proceed: () => void }) {
+  const { leave } = useLeaveGuard();
+  return (
+    <button type="button" onClick={() => leave(proceed)}>
+      leave
+    </button>
+  );
+}
+
+describe("leave", () => {
+  it("runs proceed at once when the form is clean", async () => {
+    const user = userEvent.setup();
+    const proceed = vi.fn();
+    render(
+      <LeaveGuardProvider>
+        <LeaveButton proceed={proceed} />
+      </LeaveGuardProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "leave" }));
+
+    expect(proceed).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("holds proceed behind the dialog when dirty, and runs it on Quitter", async () => {
+    const user = userEvent.setup();
+    const proceed = vi.fn();
+    render(
+      <LeaveGuardProvider>
+        <Form isDirty={true} />
+        <LeaveButton proceed={proceed} />
+      </LeaveGuardProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "leave" }));
+
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(proceed).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
+    expect(proceed).toHaveBeenCalledOnce();
+  });
+
+  it("never runs proceed when the dialog is cancelled", async () => {
+    const user = userEvent.setup();
+    const proceed = vi.fn();
+    render(
+      <LeaveGuardProvider>
+        <Form isDirty={true} />
+        <LeaveButton proceed={proceed} />
+      </LeaveGuardProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "leave" }));
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
+
+    expect(proceed).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("runs proceed at once outside a provider", async () => {
+    const user = userEvent.setup();
+    const proceed = vi.fn();
+    render(<LeaveButton proceed={proceed} />);
+
+    await user.click(screen.getByRole("button", { name: "leave" }));
+
+    expect(proceed).toHaveBeenCalledOnce();
   });
 });
