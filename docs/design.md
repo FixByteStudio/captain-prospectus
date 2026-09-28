@@ -417,7 +417,7 @@ filters; the moment anything is selected it is **replaced in place** by the
 actions — same position, same height, no floating bar, no layout shift. Its
 contents always answer "what can I do right now". Scoped to Prospects,
 Doublons and the Visites filters; what the slot holds on Doublons, which has
-no filters today, is decided when that screen is rebuilt.
+no filters today, is settled in § Doublons.
 
 ```
 │ 🔍 Rechercher…  Statut ▾   Agent ▾   Source ▾   412 prospects │   nothing selected
@@ -496,6 +496,53 @@ chrome a hand-spelled split panel used to need.
   « Aucun prospect ne correspond à ces filtres. » with « Effacer les
   filtres »; when a search is set, the sentence names it and says accents
   count, since `q` folds ASCII case only ([api.md](api.md)).
+
+### Doublons
+
+Rebuilt on the #175 primitives for GH #182: a `ScreenHeader`, a `ScreenState`
+load-failed/loading gate, and one `Surface` holding the toolbar and the pairs
+together.
+
+```
+│ Doublons                                                                   │
+│ Ces prospects semblent désigner le même endroit…                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│ 2 paires                                          [Relancer la recherche] │
+├──────────────────────────────────────────────────────────────────────────┤
+│▎Le Bouchon             Nouveau   —                Aucune visite [Garder] │
+│▎Le Bouchon des Filles  Assigné   lea@example.com   3 visites    [Garder] │  12 m
+├──────────────────────────────────────────────────────────────────────────┤
+│▎Chez Marcel            Nouveau   —                Aucune visite [Garder] │
+│▎Marcel                 Nouveau   —                1 visite      [Garder] │  Position inconnue
+```
+
+- **A pair is one list item, not two table rows.** Two stacked side rows share
+  a `<li>` (with an accessible name naming both prospects), and the distance
+  cell sits once beside them, spanning the pair's own height through CSS grid
+  rather than a `rowSpan` table — the shape that also serves a phone width
+  with no second layout.
+- **"Garder" is secondary, never gold**, and carries no confirmation: a merge
+  only marks the other side absorbed — each keeps its own visits
+  ([prospecting](domains/prospecting.md#prospect-lifecycle)) — so nothing a
+  visit recorded is lost. Undoing a merge is server-side only today; there is
+  no admin control for it. Both rows disable the moment a merge is in flight
+  — or while the sweep itself is refetching, since a stale pair could
+  otherwise be merged — so a second click cannot race the first.
+- **Status is edge and badge**, same as Prospects: `STATUS_EDGE` on the row,
+  the tinted `STATUS_BADGE` beside the agent and the visit count, which now
+  carries its own word ("3 visites", "Aucune visite") rather than relying on
+  a column header — the list has none.
+- **The toolbar slot never swaps here** (§ One toolbar slot): Doublons has no
+  filters and no selection, so the slot holds the pair count, left, and one
+  secondary action, right, "Relancer la recherche", disabled while the sweep
+  is fetching. It is the control the truncation Alert already points to, and
+  it is why one exists: the sweep's own `staleTime` (60 s) would otherwise
+  sit stale under a fresh import until something else happened to refetch it.
+- **The truncation Alert stays below the Surface**, unchanged in wording.
+- **The empty state is healthy, not a failure**: an icon tile
+  (`CopyCheckIcon`), « Aucun doublon détecté. », one sentence, and one
+  `outline` button to Prospects — the same shape as every other empty state
+  in the app, reusing the shared `EmptyTile` (`src/client/admin/EmptyTile.tsx`).
 
 ### The script editor
 
