@@ -287,6 +287,15 @@
 
   --radius: 0.375rem;
 
+  /* The map import's polygon/circle stroke, fill and drag handles (#27). Not
+     --color-ring or --color-primary: those invert for dark mode, but the
+     Leaflet tiles never do, so a token that follows the theme goes near-white
+     over tiles that stay light. Declared once, in light :root only — never in
+     the dark blocks below, which palette.test.ts asserts stay untouched. */
+  --map-stroke: #1b2a4a;
+  --map-fill: #c9a227;
+  --map-handle: #ffffff;
+
   color-scheme: light;
 }
 

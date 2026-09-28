@@ -638,7 +638,7 @@ first step inside **Import**, not a seventh nav item:
 
 ```
 Source → Fichier → Colonnes → Aperçu     CSV
-Source → Carte                            carte
+Source → Zone                             carte
 ```
 
 Step one asks one question, « D'où viennent les prospects ? », and the two
@@ -708,7 +708,18 @@ Eight rules this encodes, and four more for the second provider:
   screen's own language.
 - **One toolbar slot, under the map.** Same rule as §128, applied to a half
   screen: vertex count on the left as a standing fact, the search action on the
-  right. It is never a floating bar over the canvas.
+  right. It is never a floating bar over the canvas. The action group wraps
+  onto its own line rather than forcing a horizontal scroll below ~480px — the
+  slot is `flex flex-wrap`, and the actions are their own `flex flex-wrap`
+  group.
+- **The shape is drawn in colours that do not follow the theme.** The stroke,
+  fill and drag handles read `--map-stroke` / `--map-fill` / `--map-handle`,
+  declared once in the light `:root` and never redeclared for dark. The tiles
+  are OpenStreetMap's own raster images and stay light whichever theme the
+  admin chrome is in, so a shape drawn from `--color-ring`/`--color-primary`
+  (which invert for dark mode) goes near-white over tiles that never do. This
+  is the one surface in the app where a token deliberately does not follow the
+  theme.
 - **The candidate list is a ledger, not a preview table.** It reuses the leading
   edge — `status-new` for a place that will be imported, `status-rejected` for
   one that cannot be — so the panel scans the same way the prospect list does,
@@ -729,10 +740,13 @@ Eight rules this encodes, and four more for the second provider:
   the same prospects** — the source step is the accessible fork, not an
   afterthought. Making the polygon keyboard-editable is worth doing and is not
   in M4.
-- **A cached answer says so.** Overpass results are cached seven days
-  (ADR-0008); a result served from cache says « Résultat en cache » with its
-  age, because "I searched twice and got the same 47" should be explainable
-  without reading the Worker.
+- **A cached answer says so, with its age.** Overpass and Google results are
+  both cached (ADR-0008, ADR-0020); a result served from cache reads
+  « Résultat en cache, obtenu il y a N jours » (or "… il y a N heures" under a
+  day), because "I searched twice and got the same 47" should be explainable
+  without reading the Worker. The age comes from `cachedAt`, an additive and
+  optional field on the response (docs/api.md) — a cache hit that carries no
+  age still reads as a plain « Résultat en cache. ».
 - **The candidate list is bounded and scrolls, and the live feed's is not.**
   That looks like two answers to one question; it is one answer to two. Here the
   two halves have to stay aligned or the split stops working — a hundred results

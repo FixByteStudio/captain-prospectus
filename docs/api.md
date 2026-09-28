@@ -31,8 +31,8 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 | `GET /api/admin/prospects/duplicates` | `{pairs[], truncated}` — prospects that are probably the same place |
 | `POST /api/admin/prospects/merge` | `{survivorId, mergedId}` → `{survivorId, mergedId, dedupeKeyUpdated}` |
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
-| `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
-| `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
+| `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached, cachedAt?}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
+| `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached, cachedAt?}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
 | `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]`; all bounds apply together. Newest first, max 500. **400** when `from > to`. Each carries `prospectName` |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, and up to 5 `candidates` ranked by distance from where the visit happened |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
@@ -299,7 +299,10 @@ page.
 - Answers are cached in `overpass_cache` for `OVERPASS_CACHE_TTL_MS` (7 days),
   keyed by SHA-256 of the query version plus the rounded polygon. The response
   says `cached: true` when it was served from there, because an answer may be a
-  week old and the screen has to be able to say so.
+  week old and the screen has to be able to say so. `cachedAt` — epoch ms,
+  `overpass_cache.created_at` on that same hit, sent by both this route and
+  `POST /import/places` — is additive, optional, admin-only (not part of the
+  sync contract), so the screen can say how old, not only that it is cached.
 - At most `OVERPASS_CANDIDATES_LIMIT` (1000) candidates, with `truncated` set
   when the polygon held more. That is a CPU cap, not a payload one: waiting on
   Overpass is free, `JSON.parse` and tag mapping are not.

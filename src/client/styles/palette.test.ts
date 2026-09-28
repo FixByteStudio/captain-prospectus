@@ -224,12 +224,26 @@ describe("the token set", () => {
     }
   });
 
+  // The map import's canvas overlay (#27): the Leaflet tiles never follow the
+  // theme, so a stroke/fill/handle that inverted for dark mode would go
+  // near-invisible over tiles that stay light. Declared once, in light :root
+  // only, deliberately — the one exception to "every light hex reappears in
+  // dark".
+  const THEME_INVARIANT = ["--map-stroke", "--map-fill", "--map-handle"];
+
   it("declares every light hex colour again in dark", () => {
     // Otherwise a token dropped from both dark blocks would silently inherit
     // its light value.
     for (const [name, value] of Object.entries(ROOT)) {
+      if (THEME_INVARIANT.includes(name)) continue;
       if (value.startsWith("#")) expect(PINNED_DARK[name], name).toBeDefined();
     }
+  });
+
+  it("keeps the map overlay tokens out of dark (#27)", () => {
+    // Otherwise the shape would silently regain a dark-mode value that
+    // inverts it back to near-invisible over the (always light) tiles.
+    for (const name of THEME_INVARIANT) expect(PINNED_DARK[name], name).toBeUndefined();
   });
 
   it("gives both dark blocks the same declarations", () => {

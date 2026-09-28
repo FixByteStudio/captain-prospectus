@@ -770,6 +770,13 @@ export const areaSearchResponseSchema = z.object({
    * also the difference between a billable call and a free one.
    */
   cached: z.boolean(),
+  /**
+   * `overpass_cache.created_at`, in epoch ms — set by the server on every
+   * cache hit from either `POST /import/overpass` or `POST /import/places`,
+   * so the screen can say how old the answer is rather than only that it is
+   * cached. Additive and optional: absent on a live answer (docs/api.md).
+   */
+  cachedAt: z.optional(z.number()),
 });
 export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 
