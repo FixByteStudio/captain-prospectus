@@ -21,7 +21,7 @@ import { FieldTabs } from "./field/FieldTabs";
 import { LeaveGuardProvider } from "./field/leave-guard";
 import { TodayScreen } from "./field/TodayScreen";
 import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
-import { hasReconnectMarker, withoutReconnectMarker } from "./field/reconnect-marker";
+import { hasReconnectMarker, reconnectUrl, withoutReconnectMarker } from "./field/reconnect-marker";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
 import { clearAgentCache, fieldDb, getMeta, setMeta } from "./field/db";
@@ -186,8 +186,9 @@ function FieldFrame({
 /**
  * DESIGN.md's empty-state pattern (a 64px `secondary` icon tile, one line,
  * one button) reused for the field route's fallback screens: not found,
- * forbidden, and the identity error below, which passes no `action` since
- * there is nowhere useful to send an agent who cannot be identified.
+ * forbidden, and the identity error below. That one carries an action only
+ * for a revoked session ("Se reconnecter", GH #75); an agent who cannot be
+ * identified for any other reason has nowhere useful to be sent.
  */
 function FieldEmptyState({
   icon: Icon,
@@ -196,7 +197,7 @@ function FieldEmptyState({
 }: {
   icon: LucideIcon;
   message: string;
-  action?: { to: string; label: string };
+  action?: { label: string } & ({ to: string } | { onClick: () => void });
 }) {
   return (
     <div className="flex flex-col items-center gap-4 py-12 text-center">
@@ -204,11 +205,20 @@ function FieldEmptyState({
         <Icon aria-hidden className="size-7" />
       </span>
       <p className="text-heading">{message}</p>
-      {action && (
-        <Link to={action.to} className={buttonVariants({ variant: "outline", size: "touch" })}>
-          {action.label}
-        </Link>
-      )}
+      {action &&
+        ("to" in action ? (
+          <Link to={action.to} className={buttonVariants({ variant: "outline", size: "touch" })}>
+            {action.label}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className={buttonVariants({ variant: "outline", size: "touch" })}
+          >
+            {action.label}
+          </button>
+        ))}
     </div>
   );
 }
@@ -233,7 +243,7 @@ function AdminFrameFallback() {
 
 export function App() {
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; revoked: boolean } | null>(null);
   /** True when the identity came from the cache rather than from the server.
    * Not a network signal — a Worker 500 or a captive portal lands here too —
    * so it must never be read as "offline" (that conflation is the bug
@@ -251,12 +261,12 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // "Se reconnecter" (SyncStrip) navigates here with the marker so the SW's
-  // navigateFallbackDenylist sends that one request to the network; once it
-  // has landed, the marker has done its job and the visible URL should not
-  // keep advertising it. A router navigation (not `history.replaceState`
-  // directly) so it does not wipe whatever state react-router already
-  // attached to this history entry.
+  // "Se reconnecter" (SyncStrip, or the identity-error frame below) navigates
+  // here with the marker so the SW's navigateFallbackDenylist sends that one
+  // request to the network; once it has landed, the marker has done its job
+  // and the visible URL should not keep advertising it. A router navigation
+  // (not `history.replaceState` directly) so it does not wipe whatever state
+  // react-router already attached to this history entry.
   useEffect(() => {
     if (!hasReconnectMarker(location.search)) return;
     navigate(withoutReconnectMarker(`${location.pathname}${location.search}${location.hash}`), {
@@ -287,7 +297,7 @@ export function App() {
         // outbox stays: INVARIANT 5.
         if (outcome.revoked) await clearAgentCache(fieldDb);
         if (cancelled) return;
-        setError(outcome.message);
+        setError({ message: outcome.message, revoked: outcome.revoked });
         return;
       }
       // A different agent signed in on this device since the last cached
@@ -337,13 +347,25 @@ export function App() {
   }, [identityFromCache, online]);
 
   if (error) {
+    // A reload cannot get past a revoked session: the service worker answers
+    // it from precache, which asks `/api/me` again and lands right back here.
+    // The marker navigation is the one that reaches Access (reconnect-marker.ts),
+    // exactly as the sync strip's button does — and, as there, with no network
+    // it stays put rather than open the browser's offline page.
+    const reconnect = () => {
+      if (navigator.onLine) window.location.href = reconnectUrl(window.location.href);
+    };
     return (
       <>
         <Band>
           <BandBrand />
         </Band>
         <main className="px-4 pt-6 pb-page">
-          <FieldEmptyState icon={TriangleAlertIcon} message={error} />
+          <FieldEmptyState
+            icon={TriangleAlertIcon}
+            message={error.message}
+            action={error.revoked ? { label: copy.sync.reconnect, onClick: reconnect } : undefined}
+          />
         </main>
       </>
     );
