@@ -66,7 +66,7 @@ export function DuplicatesScreen() {
       <ScreenHeader
         className="mb-4"
         title={copy.duplicates.title}
-        subtitle={<p className="text-muted-foreground mt-0.5">{copy.duplicates.lede}</p>}
+        subtitle={copy.duplicates.lede}
       />
 
       <ScreenState<DuplicatesResponse>

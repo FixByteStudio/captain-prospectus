@@ -9,14 +9,13 @@ import { Badge } from "../../ui/badge";
 import { Card } from "../../ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table";
 import { useVisitsFeed } from "../queries";
-import { STATUS_EDGE } from "../status";
-import { OUTCOME_BADGE } from "./outcome-series";
+import { OUTCOME_BADGE } from "../outcome-badge";
+import { BADGE_SHAPE, STATUS_EDGE } from "../status";
 
 /** EXPERIENCE.md › Dernières visites: the last 5 by `received_at`. */
 const SHOWN = 5;
 
 const HEAD = "text-overline text-muted-foreground h-auto px-3 py-2.5 uppercase";
-const BADGE = "text-meta rounded-sm px-2 font-medium tracking-[0.02em]";
 
 /**
  * Dernières visites — docs/design.md › Tableau de bord, GH #113.
@@ -119,13 +118,13 @@ function RecentVisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean })
         {visit.prospectName}
       </TableHead>
       <TableCell className="px-3">
-        <Badge variant="ghost" className={cn(BADGE, OUTCOME_BADGE[visit.outcome])}>
+        <Badge variant="ghost" className={cn(BADGE_SHAPE, OUTCOME_BADGE[visit.outcome])}>
           {OUTCOME_LABELS[visit.outcome]}
         </Badge>
       </TableCell>
       <TableCell className="px-3">
         {visit.flyerGiven ? (
-          <Badge variant="ghost" className={cn(BADGE, "bg-secondary text-foreground")}>
+          <Badge variant="ghost" className={cn(BADGE_SHAPE, "bg-secondary text-foreground")}>
             <Check aria-hidden="true" />
             {copy.visits.flyer}
           </Badge>

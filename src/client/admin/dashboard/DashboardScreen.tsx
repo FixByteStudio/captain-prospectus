@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { PeriodToggle } from "../PeriodToggle";
 import { orphanTotal, queueCount } from "../nav";
+import { ScreenHeader } from "../ScreenHeader";
 import { prospectsHref, useDashboard, useDuplicates, useOrphans, visitsHref } from "../queries";
 import { AgentActivityTable, AgentActivityTableSkeleton } from "./AgentActivityTable";
 import { ConversionBar } from "./ConversionBar";
@@ -63,13 +64,11 @@ export function DashboardScreen() {
 
   return (
     <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-title">{copy.dashboard.title}</h2>
-          <p className="text-muted-foreground mt-0.5">{copy.dashboard.subtitle}</p>
-        </div>
-        <PeriodToggle value={period} onChange={setPeriod} />
-      </div>
+      <ScreenHeader
+        title={copy.dashboard.title}
+        subtitle={copy.dashboard.subtitle}
+        actions={<PeriodToggle value={period} onChange={setPeriod} />}
+      />
 
       {/* Outside the aria-busy grid, so it is announced rather than hidden. */}
       <p role="status" className="sr-only">

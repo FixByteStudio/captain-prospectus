@@ -94,7 +94,7 @@ function VisitsScreenBody({
     <section className="flex flex-col gap-6">
       <ScreenHeader
         title={copy.visits.title}
-        subtitle={<p className="text-muted-foreground mt-0.5">{copy.visits.lede}</p>}
+        subtitle={copy.visits.lede}
         actions={
           <div className="flex flex-wrap items-center gap-3">
             {count > 0 && (

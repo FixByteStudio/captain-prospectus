@@ -33,7 +33,7 @@ export const STATUS_TEXT: Readonly<Record<Status, string>> = {
   rejected: "text-destructive font-medium",
 };
 
-/** The badge's shape, as `RecentVisits.tsx`'s own: `rounded-sm`, meta type. */
+/** The badge's shape, shared by every ledger badge: `rounded-sm`, meta type. */
 export const BADGE_SHAPE = "text-meta rounded-sm px-2 font-medium tracking-[0.02em]";
 
 /**

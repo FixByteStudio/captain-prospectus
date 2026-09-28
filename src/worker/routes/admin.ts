@@ -810,6 +810,26 @@ adminRoutes.post("/prospects/batch", validate("json", prospectBatchSchema), asyn
 });
 
 /**
+ * Both exports fetch one row over `EXPORT_ROWS`, so "was there more?" needs no
+ * second COUNT query: D1 bills rows scanned, and the answer is one row's worth
+ * of scan (docs/api.md › CSV exports).
+ */
+function capExport<T>(rows: T[]): { page: T[]; truncated: boolean } {
+  const truncated = rows.length > EXPORT_ROWS;
+  return { page: truncated ? rows.slice(0, EXPORT_ROWS) : rows, truncated };
+}
+
+function csvResponse(body: string, prefix: string, now: number, truncated: boolean): Response {
+  return new Response(body, {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": csvDisposition(csvFilename(prefix, now)),
+      ...(truncated ? { "x-truncated": "true" } : {}),
+    },
+  });
+}
+
+/**
  * The prospect ledger as a CSV file.
  *
  * Registered **above** `/prospects/:id`, so the literal path is never read as
@@ -830,8 +850,7 @@ adminRoutes.get(
 
     const filters = prospectFilters({ status, dueBefore, assignedTo, source, q });
 
-    // One row over the cap, so "was there more?" needs no second COUNT query —
-    // D1 bills rows scanned, and the answer is one row's worth of scan.
+    // One row over the cap: see `capExport`.
     const rows = await db
       .select()
       .from(prospects)
@@ -841,8 +860,7 @@ adminRoutes.get(
       .orderBy(desc(prospects.updatedAt), asc(prospects.id))
       .limit(EXPORT_ROWS + 1);
 
-    const truncated = rows.length > EXPORT_ROWS;
-    const page = truncated ? rows.slice(0, EXPORT_ROWS) : rows;
+    const { page, truncated } = capExport(rows);
 
     // snake_case like the columns, not the wire's camelCase: the reader here is
     // a spreadsheet and whoever opens it, not the client.
@@ -880,13 +898,7 @@ adminRoutes.get(
       CSV_ATTRIBUTION,
     );
 
-    return new Response(body, {
-      headers: {
-        "content-type": "text/csv; charset=utf-8",
-        "content-disposition": csvDisposition(csvFilename("prospects", now)),
-        ...(truncated ? { "x-truncated": "true" } : {}),
-      },
-    });
+    return csvResponse(body, "prospects", now, truncated);
   },
 );
 
@@ -1484,8 +1496,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
     .orderBy(desc(visits.receivedAt))
     .limit(EXPORT_ROWS + 1);
 
-  const truncated = rows.length > EXPORT_ROWS;
-  const page = truncated ? rows.slice(0, EXPORT_ROWS) : rows;
+  const { page, truncated } = capExport(rows);
 
   const body = csvFile(
     [
@@ -1513,13 +1524,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
     CSV_ATTRIBUTION,
   );
 
-  return new Response(body, {
-    headers: {
-      "content-type": "text/csv; charset=utf-8",
-      "content-disposition": csvDisposition(csvFilename("visits", now)),
-      ...(truncated ? { "x-truncated": "true" } : {}),
-    },
-  });
+  return csvResponse(body, "visits", now, truncated);
 });
 
 /* ------------------------------------------------- orphan repairs (ADR-0022) */
@@ -1731,7 +1736,7 @@ adminRoutes.post(
  */
 adminRoutes.post(
   "/visits/orphaned/:id/discard",
-  validate("param", prospectIdParamSchema),
+  validate("param", visitIdParamSchema),
   async (c) => {
     const db = getDb(c.env.DB);
     const { id } = c.req.valid("param");

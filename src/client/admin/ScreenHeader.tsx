@@ -7,9 +7,9 @@ import { cn } from "../lib/utils";
  * action (a button, a count, a toggle group). Replaces each screen's own
  * hand-spelled `text-xl font-semibold tracking-[-0.005em]` heading.
  *
- * `subtitle` is a `ReactNode`, not a string: a caller that had its own
- * classes on that paragraph (e.g. ScriptsScreen's lede) passes its own `<p>`
- * rather than lose them to this component's default styling.
+ * A string `subtitle` renders as the muted lede every screen uses. A caller
+ * that needs its own classes on that paragraph (ScriptsScreen's `max-w-2xl`)
+ * passes its own `<p>` instead.
  */
 export function ScreenHeader({
   title,
@@ -35,7 +35,11 @@ export function ScreenHeader({
     >
       <div>
         <h2 className="text-title">{title}</h2>
-        {subtitle}
+        {typeof subtitle === "string" ? (
+          <p className="text-muted-foreground mt-0.5">{subtitle}</p>
+        ) : (
+          subtitle
+        )}
       </div>
       {actions}
     </header>

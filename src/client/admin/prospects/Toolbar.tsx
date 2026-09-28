@@ -81,7 +81,7 @@ export function Toolbar({
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={copy.prospects.search.placeholder}
               maxLength={SEARCH_MAX_LENGTH}
-              className="h-8 w-48 pl-8 md:text-base"
+              className="h-8 w-48 pl-8"
             />
           </div>
           <Filter

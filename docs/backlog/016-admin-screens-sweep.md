@@ -1,6 +1,6 @@
 ---
 id: 016
-status: ready
+status: done
 implements: _bmad-output/initiative-dashboard-redesign/epic-admin-screens/story-refactor-sweep.md (#186), _bmad-output/implementation-artifacts/deferred-work.md
 depends_on: [014, 015]
 ---
