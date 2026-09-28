@@ -15,6 +15,7 @@ import { ClockIcon, CloudUploadIcon, UserXIcon, XIcon, type LucideIcon } from "l
 import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "@/ui/button-variants";
+import { useLeaveGuard } from "./leave-guard";
 import type { PwaState } from "../pwa";
 import {
   heldBackMessage,
@@ -120,6 +121,7 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
   const view = useSyncView();
   const strip = view.strip;
   const heldBack = heldBackMessage(useSyncState().heldBack);
+  const { leave } = useLeaveGuard();
 
   const runAction = () => {
     if (!strip?.action) return;
@@ -128,14 +130,21 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
       case "navigate":
         // Reconnecting needs the network; with none, leave the agent on the
         // strip (which keeps retrying on its own) instead of sending them to
-        // the browser's offline error page.
-        if (navigator.onLine) window.location.href = effect.to;
+        // the browser's offline error page. This is a no-op check, not a
+        // guarded action, so it runs before `leave` (I/O matrix, spec-gh-74)
+        // — and again inside `proceed`, since the dialog can sit open long
+        // enough for the network to drop before "Quitter" is tapped.
+        if (navigator.onLine) {
+          leave(() => {
+            if (navigator.onLine) window.location.href = effect.to;
+          });
+        }
         return;
       case "apply-update":
-        pwa.update();
+        leave(pwa.update);
         return;
       case "reload":
-        window.location.reload();
+        leave(() => window.location.reload());
     }
   };
 

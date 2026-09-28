@@ -17,39 +17,25 @@
  * stacked, never overlapped, and neither ever hides the other's button.
  *
  * A tap that would discard a dirty form asks first instead of navigating
- * straight away (`leave-guard.ts`, #74).
+ * straight away, through the one dialog `LeaveGuardProvider` renders (#74).
  */
-import { useState, type MouseEvent } from "react";
+import { type MouseEvent } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
-import { buttonVariants } from "@/ui/button-variants";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/ui/alert-dialog";
 import { shouldAsk, useLeaveGuard } from "./leave-guard";
 import { fieldTabs, isCurrentTab, type FieldTab } from "./tabs";
 
 export function FieldTabs({ adminOnline }: { adminOnline: boolean }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { dirty } = useLeaveGuard();
+  const { dirty, leave } = useLeaveGuard();
   const tabs = fieldTabs({ adminOnline });
-
-  /** The tab a dirty form's tap is waiting on a confirm for; null closes the dialog. */
-  const [pendingTo, setPendingTo] = useState<string | null>(null);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>, tab: FieldTab) => {
     if (!shouldAsk({ dirty, to: tab.path, current: pathname })) return;
     event.preventDefault();
-    setPendingTo(tab.path);
+    leave(() => navigate(tab.path));
   };
 
   return (
@@ -132,34 +118,6 @@ export function FieldTabs({ adminOnline }: { adminOnline: boolean }) {
           })}
         </nav>
       </div>
-
-      {/* One dialog for the whole bar: only one tap can be pending at a time. */}
-      <AlertDialog
-        open={pendingTo !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingTo(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{copy.nav.leaveGuard.title}</AlertDialogTitle>
-            <AlertDialogDescription>{copy.nav.leaveGuard.body}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className={buttonVariants({ variant: "outline", size: "touch" })}>
-              {copy.nav.leaveGuard.cancel}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className={buttonVariants({ variant: "destructive", size: "touch" })}
-              onClick={() => {
-                if (pendingTo) navigate(pendingTo);
-              }}
-            >
-              {copy.nav.leaveGuard.leave}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

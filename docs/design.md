@@ -1833,6 +1833,19 @@ never navigates. A save's own `navigate("/tournee")` bypasses the guard
 entirely — it is built on the tab bar's own click handler, not on the router,
 so a save is never the thing a dialog interrupts.
 
+The same dialog guards two other buttons that also unmount an open form: the
+sync strip's "Se reconnecter" and "Mettre à jour", and the field update
+banner's "Mettre à jour" (spec-gh-74). All three run their action through
+`LeaveGuardProvider`'s `leave(proceed)` instead of navigating or reloading
+directly, so the tab bar, the strip and the banner cannot drift into asking
+differently or not asking at all. Reconnecting while offline is already a
+no-op today, so it stays silent rather than opening a dialog for an action
+that would not do anything. The 426 forced update (`applyUpdateNow`, the sync
+engine's own reaction to a server that refuses the build) is not one of the
+three — it is not a tap the agent chooses, so there is nothing to ask about.
+Outside the field route (the admin update banner) there is no provider, so
+`leave` runs its action at once, unchanged from before #74.
+
 ### Field principles
 
 These extend the five above; they do not replace them.
