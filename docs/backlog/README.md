@@ -50,7 +50,7 @@ Start from [000-template.md](000-template.md).
 | [010](010-offline-admin-dom-test.md) | Pin that an offline admin opens the field side (#85) | done (superseded by #115) |
 | [011](011-top-bar-secondary-handlers-dom-tests.md) | Pin the admin top bar's remaining handlers (part of #86) | done |
 | [012](012-evict-expired-map-cache-rows.md) | Evict expired map-cache rows in the daily sweep (#25) | done |
-| [013](013-sync-identity-from-cache.md) | Do not stamp or sync under an unconfirmed cached identity | needs-decision |
+| [013](013-sync-identity-from-cache.md) | Do not stamp or sync under an unconfirmed cached identity | ready (option A, 2026-09-28) |
 | [014](014-scripts-rebuilt.md) | Scripts rebuilt (#184) | done |
 | [015](015-six-screens-check-prep.md) | Prepare the six-screen check at 1280, 820 and 390, light and dark (#185) | done |
 | [016](016-admin-screens-sweep.md) | Sweep epic #174's admin screens (#186) | done |

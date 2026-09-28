@@ -76,7 +76,8 @@ Each is one line; its reasons live behind the link.
 - Typecheck, tests and build pass.
 - Docs updated in the same change when behaviour, API or data model changed (`docs/api.md`, `docs/data-model.md`, domain docs).
 - A decision that is hard to reverse → new ADR ([ADR-0024](docs/adr/0024-adrs-only-for-hard-to-reverse-decisions.md) sets the bar). Anything smaller → the PR description and one line in the doc that owns the rule.
-- Commit messages follow Conventional Commits (`feat(field-ops): …`).
+- Commit messages follow Conventional Commits (`feat(field-ops): …`), and every commit ends with the trailer
+  `Co-Authored-By: m0hss <dev.fixbyte@proton.me>` (beside any agent attribution line).
 
 ## Subagents and skills
 - Subagents in `.claude/agents/`: `architect`, `api-engineer`, `pwa-engineer`, `migration-guard`, `security-reviewer`, `docs-keeper`.

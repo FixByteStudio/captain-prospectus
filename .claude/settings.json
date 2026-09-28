@@ -40,7 +40,8 @@
       "Bash(npx wrangler d1 time-travel:*)",
       "Bash(pnpm deploy:*)",
       "Bash(pnpm db:migrate:remote:*)"
-    ]
+    ],
+    "ask": ["Bash(gh pr merge:*)", "Bash(gh api *pulls/*/merge*)"]
   },
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": false
