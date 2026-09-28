@@ -18,12 +18,12 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Skeleton } from "../ui/skeleton";
-import { OUTCOME_BADGE } from "./dashboard/outcome-series";
 import { EmptyTile } from "./EmptyTile";
 import { orphanTotal } from "./nav";
 import { ScreenHeader } from "./ScreenHeader";
 import { ScreenState } from "./ScreenState";
 import { Surface } from "./Surface";
+import { OUTCOME_BADGE } from "./outcome-badge";
 import { BADGE_SHAPE, STATUS_EDGE } from "./status";
 import { useDiscardOrphan, useOrphans, useRepairOrphan } from "./queries";
 
@@ -64,7 +64,7 @@ export function OrphansScreen() {
       <ScreenHeader
         className="mb-4"
         title={copy.orphans.title}
-        subtitle={<p className="text-muted-foreground mt-0.5">{copy.orphans.lede}</p>}
+        subtitle={copy.orphans.lede}
         actions={
           total > 0 && (
             <span className="text-muted-foreground tnum">{copy.orphans.count(total)}</span>

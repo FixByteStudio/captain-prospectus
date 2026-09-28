@@ -151,19 +151,23 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-116-refactor-sweep.md`
   summary: The import screens write out the status leading-edge class strings (MapStep ×3, PreviewStep ×1) instead of using `STATUS_EDGE` (GH #167).
   evidence: Found by the duplication-map lens. The sites are `src/client/admin/import/MapStep.tsx:357-360` and `PreviewStep.tsx:91`, both outside epic #104's surface. MapStep's comment says it wants the ledger's edge.
+  closed_by: GH #180 (`96cfe6456f7e0ceede5cc077657441db21c280a5`, PreviewStep) and GH #181 (`8dc5801c273319818e755ecae7264c4128d3524c`, MapStep) — both read `STATUS_EDGE` from `admin/status.ts`; GH #167 is closed. Recorded by the epic #174 sweep (GH #186).
 
 - source_spec: none
   summary: The admin `Input` still steps down to `md:text-sm` while `docs/design.md` › Type says every input on both sides is 16px `text-body-field` (GH #92).
   evidence: Split out of GH #175 at its multi-goal gate on 2026-09-27. #175 builds the admin PageHeader/Panel primitives and the shared admin states; nothing in that work needs the Input size, so bundling it would put an unrelated, separately revertable fix in the same diff (CLAUDE.md, one concern per change). The epic still owes it — the original deferral says "Adopt with the admin screens epic" — so it belongs to whichever screen story touches admin inputs first, or to the epic's refactor sweep (GH #186).
+  closed_by: GH #186 (epic #174 sweep) — `md:text-sm` dropped from the vendored `ui/input.tsx` default, and Prospects' per-site `md:text-base` override removed. Every field `Input` passes `touch`, whose classes are unchanged, so the field route renders the same.
 - source_spec: none
   summary: The vendored `Progress` never forwards `value` to the Radix root, so every bar renders indeterminate (GH #147).
   evidence: Split out of GH #175 at its multi-goal gate on 2026-09-27 for the same reason. Its real consumer is the Import CSV path's "Import en cours : {n} / {total}" progress, which is GH #180; that story cannot meet its own verify without it, so #147 should be fixed there rather than speculatively here.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-175-admin-primitives-and-states.md`
   summary: The eleven hand-spelled panel-chrome sites in the admin screens still do not use the shared `Surface` primitive.
   evidence: Split at #175's token/scope gate on 2026-09-27. Every one of those files is rebuilt later in this same epic (#178-#184), so adopting the chrome now is markup those rebuilds discard. Each screen story adopts `Surface` as it is rebuilt. `ProspectsScreen.tsx:188,291` additionally needs a split-panel variant (`rounded-t-md border-b-0` plus `rounded-b-md`) that a single-element Surface cannot express — that belongs to #179.
+  closed_by: the screen rebuilds GH #178–#184 (`9a9a3d1559375321af3bfb957a554b360dc25d9c` … `5e014de5af1ccbdeb6eab884590b7f61428c5cb8`) — every admin panel now composes `Surface`; the one `rounded-md border` left, `import/MapCanvas.tsx:175`, is the map's frame, not panel chrome. Recorded by GH #186.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-175-admin-primitives-and-states.md`
   summary: The six admin screens still each render their own loading and load-failure treatment instead of the shared `ScreenState`.
   evidence: Split at the same gate for the same reason. The current treatments are not symmetric — Prospects, Doublons and Scripts early-return and replace the screen, Orphans and Visites render inline merged with the empty state, and the import steps have no load state at all — so each rebuild converges its own screen onto `ScreenState`, whose first consumer is #178 (Visites).
+  closed_by: PARTLY — Prospects, Doublons, À rattacher, Scripts and the Visites strip converged on `ScreenState` in GH #178–#184. The Visites ledger still has its own loading line and bare failure line, filed as #207 and #208 by GH #185. Recorded by GH #186.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-175-admin-primitives-and-states.md`
   summary: The manual by-eye list of `cn()` sites whose rendering changes under the GH #136 fix was incomplete — `field/FieldTabs.tsx:119-126` and `admin/dashboard/RecentVisits.tsx:117,123` also pair a `--text-*` token with a colour through `cn()`.
   evidence: Found by the edge-case lens on the #175 review. The spec named six sites; these two make eight. Both now apply a size token that was previously merged away, so their line-height and letter-spacing shift. Added to the check list in that spec's Implementation Notes; recorded here because the visual confirmation belongs to GH #185, the epic's human pass at three widths in both themes.
@@ -179,6 +183,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-175-admin-primitives-and-states.md`
   summary: `DashboardScreen.tsx:74-89` still hand-rolls the exact markup `ScreenHeader` encodes, and is the one admin screen not migrated to it.
   evidence: Same three parts in the same order — `flex flex-wrap items-end justify-between gap-4`, an `h2.text-title` with a muted subtitle, and a right-aligned action. `ScreenHeader`'s `subtitle`/`actions` props exist because of this screen, and its `subtitle && "items-end"` branch was written for it. #175 scoped itself to the six screens that hand-spell the heading, which the dashboard does not; nothing prevents the two drifting until it adopts the component.
+  closed_by: GH #186 (epic #174 sweep) — DashboardScreen renders `ScreenHeader` with its subtitle and `PeriodToggle` as `actions`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-175-admin-primitives-and-states.md`
   summary: The KPI delta Badge is now the only badge in the app carrying `--text-meta`'s tracking (GH #136 follow-on).
   evidence: `badge.tsx:6` hardcodes `text-xs`, which the fixed `cn()` now merges away at `KpiCard.tsx:91` in favour of `text-meta`. The sizes match but the token adds letter-spacing and line-height, so this one chip differs from every other badge. Moving `text-meta` into the badge variant touches vendored `ui/` shared with the field route, so it belongs with a story that owns that surface.
@@ -191,6 +196,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-176-search-range-and-export-filters.md`
   summary: The admin visits feed caps at `ADMIN_VISITS_PAGE_SIZE` (500) and, unlike both CSV exports, sets no `x-truncated` header — so a `from`/`to` range holding more than 500 visits returns the newest 500 and looks complete.
   evidence: Found by the edge-case lens on #176's review. With `since` paging the cap was invisible because the client kept advancing a cursor; once GH #176 gives the feed an explicit window, an admin reading "30 derniers jours" can believe they see all of it. GH #178 builds Visites with its 25-row pagination and its 7/30/90 selector, so it owns the fix — either surface truncation the way the exports do, or page within the range.
+  closed_by: GH #178 (`9a9a3d1559375321af3bfb957a554b360dc25d9c`) — `useVisitsFeed` sets `capped` when a range answers a full page (`admin/queries.ts:340-413`), and Visites' count reads `copy.visits.countCapped`. Recorded by GH #186.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-176-search-range-and-export-filters.md`
   summary: The feed's new `from` is inclusive (`gte`) while its existing `since` is exclusive (`gt`), so a client paging with `from = lastSeenReceivedAt` re-reads that visit.
   evidence: Deliberate — `from`/`to` mirror the visits CSV export's inclusive window, which is the behaviour the range is meant to match — but the asymmetry is easy to trip over. Documented in docs/api.md rather than changed, since `since` is a deployed cursor and altering it would not be additive.
@@ -206,13 +212,16 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-176-search-range-and-export-filters.md`
   summary: `POST /api/admin/visits/orphaned/:id/discard` validates its param with `prospectIdParamSchema` although `visitIdParamSchema` exists for that subject, and the sibling repair route uses it.
   evidence: Found by the duplication lens' inverse pass. The two schemas are byte-identical, which is exactly what hides the mistake — the comment on them says "Same shape, different subject". No wrong behaviour today; it is a correctness-of-naming fix that would stop a future change to one subject's id rule silently applying to the other.
+  closed_by: GH #186 (epic #174 sweep) — the route validates with `visitIdParamSchema`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-176-search-range-and-export-filters.md`
   summary: The CSV truncate-and-slice tail and the `Response` construction are written twice, once per export route, with the slice shape appearing a third time in the duplicates sweep.
   evidence: Pre-existing; #176 edited one of the two routes. `src/shared/csv.ts` already owns the serialiser and could own the cap, but not the `Response` — its header declares it a pure module with no Worker APIs (CLAUDE.md), so the response half needs a worker-side home. docs/api.md already claims "Two endpoints, one serialiser", which is true of the serialiser and not of the tail.
+  closed_by: GH #186 (epic #174 sweep) — `capExport` and `csvResponse` in `src/worker/routes/admin.ts` serve both exports, and docs/api.md › CSV exports names them. The duplicates scan's slice stays apart: it caps at `DUPLICATES_SCAN_LIMIT` and answers JSON.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
   summary: The map path's failure Alert still shows the generic `copy.import.failed` rather than naming how many rows went in, unlike the CSV path since #180.
   evidence: `MapStep.tsx:306-309` renders `copy.import.failed` regardless of `progress.done`; MapStep is #181's surface.
+  closed_by: GH #181 (`8dc5801c273319818e755ecae7264c4128d3524c`) — MapStep's failure Alert reads `copy.map.failedAfter(progress.done)`. Recorded by GH #186.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
   summary: A retry after a mid-way import failure reports the first run's created rows as « mis à jour » in the result dialog, and a non-transient server error (400/403/426) is shown as the same retryable failure.
   evidence: `useImportBatches.start` resets its totals and re-sends every row, which the batch upsert counts as updates; `PreviewStep` never shows `importer.error`. Both pre-date #180.
@@ -233,3 +242,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-183-a-rattacher-rebuilt.md`
   summary: `OUTCOME_BADGE` lives in `dashboard/outcome-series.ts` but OrphansScreen now reads it too; move it beside `STATUS_BADGE` in `admin/status.ts`.
   evidence: cross-folder import in `OrphansScreen.tsx`; a refactor-sweep item (174.12).
+  closed_by: GH #186 (epic #174 sweep) — moved to `admin/outcome-badge.ts`, not `status.ts` as suggested: the field's StopRow imports `status.ts`, so it would have added 0.42 KiB to the precached entry chunk (measured). RecentVisits also dropped its copy of `BADGE_SHAPE`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-186-refactor-sweep.md`
+  summary: The vendored `Textarea` keeps shadcn's `md:text-sm`, which both field callers patch back with `text-base md:text-base` (GH #213).
+  evidence: Found by the duplication-map lens on #186. `ui/textarea.tsx:9`, patched at `field/ScriptQuestions.tsx:107` and `field/VisitScreen.tsx:249`. Pre-existing, and every consumer is on the field route, which #186 excludes. No admin screen renders a Textarea.

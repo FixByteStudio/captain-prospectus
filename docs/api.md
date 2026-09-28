@@ -116,7 +116,9 @@ that already happened is a 200 no-op (INVARIANT 4).
 
 ## CSV exports
 
-Two endpoints, one serialiser (`src/shared/csv.ts`, unit-tested away from D1).
+Two endpoints, one serialiser (`src/shared/csv.ts`, unit-tested away from D1)
+and one cap-and-respond tail (`capExport` and `csvResponse` in
+`src/worker/routes/admin.ts`).
 
 - **Timestamps are ISO-8601 UTC**, not the epoch milliseconds every other
   response uses. A spreadsheet shows epoch ms as a 13-digit number and makes the
