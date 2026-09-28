@@ -75,8 +75,8 @@ route's precache stays under the 1,000 KiB ceiling.
 - [x] `GET` / `POST /api/admin/scripts` — versioning server-side, "exactly one active script"
       enforced by a partial unique index rather than by the route alone
 - [x] Script editor (admin), versioning — shadcn `form` + `select`, `@dnd-kit` drag-and-keyboard
-      reorder over a bordered ledger list rather than `accordion` (design.md: no cards, dense
-      rows), a confirmation dialog before a save that activates a new version, and a lock on a
+      reorder over a bordered ledger list rather than `accordion` (since GH #184, one question
+      card per question: design.md), a confirmation dialog before a save that activates a new version, and a lock on a
       question's `key` once it has been saved
 - [x] Script questions in the visit form, validation — a second step after the outcome
       (design.md), one control per question type from `field-controls.tsx` rather than shadcn,

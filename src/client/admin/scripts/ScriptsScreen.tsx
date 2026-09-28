@@ -25,13 +25,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { PlusIcon } from "lucide-react";
+import { InfoIcon, PlusIcon, SaveIcon } from "lucide-react";
 import { copy } from "../../copy";
 import { ApiError } from "../../api";
 import { formatDateTime } from "../../format";
 import { scriptCreateSchema } from "../../../shared/schemas";
 import { useCreateScript, useScripts } from "../queries";
 import { ScreenHeader } from "../ScreenHeader";
+import { ScreenState } from "../ScreenState";
+import { Surface } from "../Surface";
 import {
   addQuestion,
   draftFromScript,
@@ -55,6 +57,8 @@ import {
 } from "@/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
+import { Skeleton } from "@/ui/skeleton";
+import { Spinner } from "@/ui/spinner";
 
 function failureMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -185,154 +189,195 @@ export function ScriptsScreen() {
     });
   }
 
-  if (scriptsQuery.isError) {
-    return <p className="text-destructive">{copy.scripts.loadFailed}</p>;
-  }
-
-  if (scriptsQuery.isPending) {
-    return (
-      <p className="text-muted-foreground" aria-busy="true">
-        {copy.scripts.loading}
-      </p>
-    );
-  }
-
   const nextVersion = nextVersionFor(scripts, name);
+  const saving = createScript.isPending;
 
   return (
     <section>
       <ScreenHeader
         title={copy.scripts.title}
-        subtitle={
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">{copy.scripts.lede}</p>
-        }
+        subtitle={<p className="text-muted-foreground mt-0.5 max-w-2xl">{copy.scripts.lede}</p>}
       />
 
-      <Form {...form}>
-        <form
-          className="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem]"
-          onSubmit={(e) => void form.handleSubmit(openConfirm)(e)}
-          noValidate
+      <div className="mt-6">
+        <ScreenState
+          data={scriptsQuery.data}
+          isPending={scriptsQuery.isPending}
+          isError={scriptsQuery.isError}
+          isFetching={scriptsQuery.isFetching}
+          onRetry={() => void scriptsQuery.refetch()}
+          loadFailed={copy.scripts.loadFailed}
+          loading={copy.scripts.loading}
+          skeleton={
+            <div className="space-y-3">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          }
         >
-          <div>
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <FormItem className="max-w-sm gap-1.5">
-                  <FormLabel>{copy.scripts.name}</FormLabel>
-                  <FormControl>
-                    <Input placeholder={copy.scripts.namePlaceholder} {...field} />
-                  </FormControl>
-                  <FormMessage>
-                    {fieldState.error ? copy.scripts.errors.nameRequired : undefined}
-                  </FormMessage>
-                </FormItem>
-              )}
-            />
-
-            <div className="mt-6 flex items-center justify-between">
-              <h3 className="font-medium">{copy.scripts.question.sectionTitle}</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => replace(addQuestion(questions))}
+          {() => (
+            <Form {...form}>
+              <form
+                // grid-cols-1 and min-w-0 below lg: a grid track otherwise
+                // sizes to its widest child's min-content, which is what
+                // pushed the editor to 509px at 390px (#72).
+                className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]"
+                onSubmit={(e) => void form.handleSubmit(openConfirm)(e)}
+                noValidate
               >
-                <PlusIcon /> {copy.scripts.question.add}
-              </Button>
-            </div>
-
-            <ul className="border-border bg-card mt-3 overflow-hidden rounded-md border">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={questions.map((q) => q.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {fields.map((field, index) => (
-                    // Keyed by our own stable id, not RHF's `rowId`: `replace()`
-                    // regenerates `rowId` for every row on every call, and
-                    // keying on it would remount the whole list — including
-                    // mid-drag — on every reorder, add or remove.
-                    <QuestionRow
-                      key={field.id}
-                      form={form}
-                      index={index}
-                      id={field.id}
-                      otherKeys={questions.filter((_, i) => i !== index).map((q) => q.key)}
-                      onRemove={() => replace(removeQuestion(questions, field.id))}
+                <div className="min-w-0 space-y-6">
+                  <Surface className="p-3.5">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field, fieldState }) => (
+                        <FormItem className="max-w-md gap-1.5">
+                          <FormLabel className="text-muted-foreground text-overline uppercase">
+                            {copy.scripts.name}
+                          </FormLabel>
+                          <FormControl>
+                            <Input placeholder={copy.scripts.namePlaceholder} {...field} />
+                          </FormControl>
+                          <FormMessage>
+                            {fieldState.error ? copy.scripts.errors.nameRequired : undefined}
+                          </FormMessage>
+                        </FormItem>
+                      )}
                     />
-                  ))}
-                </SortableContext>
-              </DndContext>
+                  </Surface>
 
-              {fields.length === 0 && (
-                <li className="text-muted-foreground px-3.5 py-8 text-sm">
-                  {copy.scripts.question.empty}
-                </li>
-              )}
-            </ul>
-
-            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-              <p className="text-muted-foreground text-sm">{copy.scripts.editor.saveWarning}</p>
-              <Button type="submit" disabled={createScript.isPending}>
-                {createScript.isPending ? copy.scripts.editor.saving : copy.scripts.editor.save}
-              </Button>
-            </div>
-          </div>
-
-          <aside>
-            <h3 className="font-medium">{copy.scripts.history.title}</h3>
-            {scripts.length === 0 ? (
-              <p className="text-muted-foreground mt-3 text-sm">{copy.scripts.history.empty}</p>
-            ) : (
-              <ul className="border-border bg-card divide-border mt-3 divide-y overflow-hidden rounded-md border">
-                {scripts.map((script) => (
-                  <li key={script.id} className="px-3 py-2.5">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-medium">
-                        {copy.scripts.history.version(script.version)}
-                      </span>
-                      <span
-                        className={
-                          script.isActive
-                            ? "text-success text-xs font-medium"
-                            : "text-muted-foreground text-xs"
-                        }
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="text-heading">
+                        {copy.scripts.question.sectionTitle}{" "}
+                        <span className="text-muted-foreground text-meta tnum">
+                          {copy.scripts.history.questionsCount(fields.length)}
+                        </span>
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => replace(addQuestion(questions))}
                       >
-                        {script.isActive
-                          ? copy.scripts.history.active
-                          : copy.scripts.history.inactive}
-                      </span>
+                        <PlusIcon /> {copy.scripts.question.add}
+                      </Button>
                     </div>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {formatDateTime(script.createdAt)} ·{" "}
-                      {copy.scripts.history.questionsCount(script.questions.length)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-        </form>
-      </Form>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      modifiers={[restrictToVerticalAxis]}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={questions.map((q) => q.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {fields.length > 0 && (
+                          <ul className="mt-3 space-y-3">
+                            {fields.map((field, index) => (
+                              // Keyed by our own stable id, not RHF's `rowId`: `replace()`
+                              // regenerates `rowId` for every row on every call, and
+                              // keying on it would remount the whole list — including
+                              // mid-drag — on every reorder, add or remove.
+                              <QuestionRow
+                                key={field.id}
+                                form={form}
+                                index={index}
+                                id={field.id}
+                                otherKeys={questions
+                                  .filter((_, i) => i !== index)
+                                  .map((q) => q.key)}
+                                onRemove={() => replace(removeQuestion(questions, field.id))}
+                              />
+                            ))}
+                          </ul>
+                        )}
+                      </SortableContext>
+                    </DndContext>
+
+                    {fields.length === 0 && (
+                      <Surface className="text-muted-foreground mt-3 px-3.5 py-8">
+                        {copy.scripts.question.empty}
+                      </Surface>
+                    )}
+                  </div>
+
+                  <Surface className="flex flex-wrap items-center justify-between gap-3 p-3.5">
+                    <p className="text-muted-foreground flex min-w-0 items-start gap-1.5">
+                      <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                      {copy.scripts.editor.saveWarning}
+                    </p>
+                    <Button type="submit" disabled={saving}>
+                      <SaveIcon /> {copy.scripts.editor.save}
+                    </Button>
+                  </Surface>
+                </div>
+
+                <aside className="min-w-0">
+                  <h3 className="text-heading">{copy.scripts.history.title}</h3>
+                  {scripts.length === 0 ? (
+                    <p className="text-muted-foreground mt-3">{copy.scripts.history.empty}</p>
+                  ) : (
+                    // Read-only: nothing here is clickable — restoring an old
+                    // version is not a rule docs/domains/scripts.md states.
+                    <Surface className="mt-3 overflow-hidden">
+                      <ul className="divide-border divide-y">
+                        {scripts.map((script) => (
+                          <li key={script.id} className="px-3.5 py-2.5">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-label">
+                                {copy.scripts.history.version(script.version)}
+                              </span>
+                              <span
+                                className={
+                                  script.isActive
+                                    ? "text-success text-meta"
+                                    : "text-muted-foreground text-meta font-normal"
+                                }
+                              >
+                                {script.isActive
+                                  ? copy.scripts.history.active
+                                  : copy.scripts.history.inactive}
+                              </span>
+                            </div>
+                            <p className="text-muted-foreground text-meta tnum mt-0.5 font-normal">
+                              {formatDateTime(script.createdAt)} ·{" "}
+                              {copy.scripts.history.questionsCount(script.questions.length)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </Surface>
+                  )}
+                </aside>
+              </form>
+            </Form>
+          )}
+        </ScreenState>
+      </div>
+
+      <Dialog
+        open={confirmOpen}
+        // While the POST is in flight the dialog stays: closing it would free
+        // a second save before the server answered the first.
+        onOpenChange={(open) => {
+          if (!saving) setConfirmOpen(open);
+        }}
+      >
+        <DialogContent showCloseButton={!saving}>
           <DialogHeader>
             <DialogTitle>{copy.scripts.confirm.title}</DialogTitle>
             <DialogDescription>{copy.scripts.confirm.body(nextVersion)}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+            <Button variant="outline" disabled={saving} onClick={() => setConfirmOpen(false)}>
               {copy.scripts.confirm.cancel}
             </Button>
-            <Button onClick={confirmSave} disabled={createScript.isPending}>
+            <Button onClick={confirmSave} disabled={saving}>
+              {saving && <Spinner />}
               {copy.scripts.confirm.confirm}
             </Button>
           </DialogFooter>
