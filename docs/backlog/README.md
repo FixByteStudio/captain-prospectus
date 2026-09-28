@@ -51,3 +51,6 @@ Start from [000-template.md](000-template.md).
 | [011](011-top-bar-secondary-handlers-dom-tests.md) | Pin the admin top bar's remaining handlers (part of #86) | done |
 | [012](012-evict-expired-map-cache-rows.md) | Evict expired map-cache rows in the daily sweep (#25) | done |
 | [013](013-sync-identity-from-cache.md) | Do not stamp or sync under an unconfirmed cached identity | needs-decision |
+| [014](014-scripts-rebuilt.md) | Scripts rebuilt (#184) | ready |
+| [015](015-six-screens-check-prep.md) | Prepare the six-screen check at 1280, 820 and 390, light and dark (#185) | ready |
+| [016](016-admin-screens-sweep.md) | Sweep epic #174's admin screens (#186) | ready |
