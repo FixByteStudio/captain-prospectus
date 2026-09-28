@@ -115,16 +115,17 @@ export function MapCanvas({
     for (const handle of handles.current) handle.remove();
     handles.current = [];
 
-    // Tokens, not hexes: read off the computed styles so the shape follows the
-    // theme (including dark) without a second palette here.
-    const stroke = { color: readToken("--color-ring"), weight: 2 };
-    const fill = { fillColor: readToken("--color-primary"), fillOpacity: 0.18 };
+    // Theme-invariant tokens, not --color-ring/--color-primary (#27): the
+    // tiles stay light in dark mode, so a shape that follows the theme goes
+    // near-invisible over them. --map-* is declared once, in light :root only.
+    const stroke = { color: readToken("--map-stroke"), weight: 2 };
+    const fill = { fillColor: readToken("--map-fill"), fillOpacity: 0.18 };
 
     const addHandle = (at: Vertex, index: number) => {
       const handle = L.circleMarker(at, {
         radius: 7,
-        color: readToken("--color-ring"),
-        fillColor: readToken("--color-background"),
+        color: readToken("--map-stroke"),
+        fillColor: readToken("--map-handle"),
         fillOpacity: 1,
         weight: 2,
         // Leaflet's own keyboard support does not extend to dragging a handle.

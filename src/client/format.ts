@@ -83,6 +83,13 @@ export function formatCount(n: number): string {
   return count.format(n);
 }
 
+const radiusKm = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+
+/** The map import's circle radius in km, fr-FR decimal comma: "1,5". */
+export function formatRadiusKm(km: number): string {
+  return radiusKm.format(km);
+}
+
 /** Up, down, or neither once rounded to the tenth of a percent shown. */
 export type DeltaTone = "up" | "down" | "flat";
 

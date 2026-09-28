@@ -1258,7 +1258,12 @@ adminRoutes.post("/import/overpass", validate("json", overpassImportSchema), asy
     // something to hand the admin. Fall through and ask Overpass again.
     if (mapped) {
       const candidates = await markLikelyDuplicates(db, mapped.candidates);
-      return c.json<AreaSearchResponse>({ ...mapped, candidates, cached: true });
+      return c.json<AreaSearchResponse>({
+        ...mapped,
+        candidates,
+        cached: true,
+        cachedAt: hit.createdAt,
+      });
     }
   }
 
@@ -1337,7 +1342,12 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
     // something to hand the admin. Fall through and ask Google again.
     if (mapped) {
       const candidates = await markLikelyDuplicates(db, mapped.candidates);
-      return c.json<AreaSearchResponse>({ ...mapped, candidates, cached: true });
+      return c.json<AreaSearchResponse>({
+        ...mapped,
+        candidates,
+        cached: true,
+        cachedAt: hit.createdAt,
+      });
     }
   }
 

@@ -2,12 +2,16 @@ import { useMemo, useState } from "react";
 import type { AreaCandidate, AreaSearchResponse, ImportRow } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { TYPE_LABELS, copy } from "../../copy";
+import { formatCount } from "../../format";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Button } from "../../ui/button";
 import { Checkbox } from "../../ui/checkbox";
 import { Label } from "../../ui/label";
 import { Progress } from "../../ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
+import { cn } from "../../lib/utils";
+import { Surface } from "../Surface";
+import { STATUS_EDGE } from "../status";
 import { MapCanvas } from "./MapCanvas";
 import {
   addVertex,
@@ -139,26 +143,33 @@ export function MapStep({
           </span>
         </div>
 
-        <p className="text-muted-foreground mb-2">
+        <p className="text-muted-foreground mb-1">
           {google ? copy.map.circle.lede : copy.map.lede}
         </p>
-        <MapCanvas
-          mode={google ? "circle" : "polygon"}
-          polygon={polygon}
-          circle={circle}
-          onMapClick={(point) => {
-            if (google) setCircle((current) => clickCircle(current, point));
-            else setPolygon((current) => addVertex(current, point));
-          }}
-          onHandleDrag={(index, to) => {
-            if (google)
-              setCircle((current) => (current ? moveCircleHandle(current, index, to) : current));
-            else setPolygon((current) => moveVertex(current, index, to));
-          }}
-        />
+        {/* The canvas needs a pointer; the CSV path is the stated alternative
+            (design.md › "The map import"). */}
+        <p className="text-muted-foreground mb-2 text-xs">{copy.map.pointerOnly}</p>
+        <Surface className="overflow-hidden">
+          <MapCanvas
+            mode={google ? "circle" : "polygon"}
+            polygon={polygon}
+            circle={circle}
+            onMapClick={(point) => {
+              if (google) setCircle((current) => clickCircle(current, point));
+              else setPolygon((current) => addVertex(current, point));
+            }}
+            onHandleDrag={(index, to) => {
+              if (google)
+                setCircle((current) => (current ? moveCircleHandle(current, index, to) : current));
+              else setPolygon((current) => moveVertex(current, index, to));
+            }}
+          />
+        </Surface>
 
         {/* One toolbar slot, under the map: the standing fact on the left, the
-            action on the right. Never floating over the canvas (design.md). */}
+            actions on the right — wrapping onto their own lines rather than
+            forcing a horizontal scroll below ~480px (#28). Never floating
+            over the canvas (design.md). */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground tnum">
             {google ? (
@@ -175,7 +186,7 @@ export function MapStep({
               </>
             )}
           </span>
-          <span className="ml-auto flex gap-2">
+          <span className="ml-auto flex flex-wrap justify-end gap-2">
             {/* Undoing a point is a polygon idea: a circle has two handles and
                 no history to walk back. */}
             {!google && (
@@ -207,7 +218,7 @@ export function MapStep({
         )}
       </div>
 
-      <div>
+      <Surface className="overflow-hidden p-4">
         {!search.data && !search.isPending && (
           <p className="text-muted-foreground">
             {google ? copy.map.results.idleGoogle : copy.map.results.idle}
@@ -219,7 +230,7 @@ export function MapStep({
             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-2">
               <span>
                 <strong className="text-display tnum block font-semibold">
-                  {importable.length}
+                  {formatCount(importable.length)}
                 </strong>
                 <span className="text-muted-foreground">
                   {copy.map.results.found(importable.length)}
@@ -228,7 +239,7 @@ export function MapStep({
               {likely > 0 && (
                 <span>
                   <strong className="text-display tnum text-warn block font-semibold">
-                    {likely}
+                    {formatCount(likely)}
                   </strong>
                   <span className="text-muted-foreground">{copy.map.results.likely(likely)}</span>
                 </span>
@@ -236,7 +247,7 @@ export function MapStep({
               {unnamed > 0 && (
                 <span>
                   <strong className="text-display tnum text-muted-foreground block font-semibold">
-                    {unnamed}
+                    {formatCount(unnamed)}
                   </strong>
                   <span className="text-muted-foreground">{copy.map.results.unnamed(unnamed)}</span>
                 </span>
@@ -244,7 +255,9 @@ export function MapStep({
             </div>
 
             {search.data.cached && (
-              <p className="text-muted-foreground mb-2 text-xs">{copy.map.results.cached}</p>
+              <p className="text-muted-foreground mb-2 text-xs">
+                {cachedLine(search.data.cachedAt)}
+              </p>
             )}
             {search.data.truncated && (
               <Alert className="mb-2">
@@ -265,7 +278,7 @@ export function MapStep({
             {candidates.length === 0 ? (
               <p className="text-muted-foreground">{copy.map.results.empty}</p>
             ) : (
-              <ul className="border-border bg-card divide-border max-h-[28rem] divide-y overflow-y-auto rounded-md border">
+              <ul className="border-border divide-border max-h-[28rem] divide-y overflow-y-auto border-y">
                 {candidates.map((candidate) => (
                   <CandidateRow key={candidate.sourceRef} candidate={candidate} />
                 ))}
@@ -305,7 +318,7 @@ export function MapStep({
 
         {error && !isRunning && (
           <Alert variant="destructive" className="mt-4" role="alert">
-            <AlertDescription>{copy.import.failed}</AlertDescription>
+            <AlertDescription>{copy.map.failedAfter(progress.done)}</AlertDescription>
           </Alert>
         )}
 
@@ -325,9 +338,27 @@ export function MapStep({
         {search.data && importable.length === 0 && candidates.length > 0 && (
           <p className="text-muted-foreground mt-2">{copy.map.results.nothingToImport}</p>
         )}
-      </div>
+      </Surface>
     </div>
   );
+}
+
+/**
+ * The cached line, with an age when the server sent one — `cachedAt` is
+ * additive and optional (docs/api.md), so a cache hit with no age still
+ * reads as a complete sentence rather than as a missing value.
+ *
+ * Floored, not rounded: a rounded hour count reads "moins d'une heure" up to
+ * ~1h29 and a rounded-then-divided day count reads "1 jour" at 23.6h. Both are
+ * computed independently from the age in ms, so 23h59 stays "23 heures" and
+ * never quietly promotes itself to a day.
+ */
+function cachedLine(cachedAt: number | undefined): string {
+  if (cachedAt === undefined) return copy.map.results.cached;
+  const ageMs = Math.max(0, Date.now() - cachedAt);
+  const hours = Math.floor(ageMs / (60 * 60 * 1000));
+  const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+  return copy.map.results.cachedAge(days, hours);
 }
 
 /**
@@ -354,10 +385,10 @@ function searchError(error: unknown): string {
  */
 function CandidateRow({ candidate }: { candidate: AreaCandidate }) {
   const edge = !candidate.named
-    ? "text-muted-foreground px-3 py-2 shadow-[inset_4px_0_0_0_var(--color-status-rejected)]"
+    ? cn("text-muted-foreground px-3 py-2", STATUS_EDGE.rejected)
     : candidate.likelyDuplicateOf
-      ? "px-3 py-2 shadow-[inset_4px_0_0_0_var(--color-status-follow-up)]"
-      : "px-3 py-2 shadow-[inset_4px_0_0_0_var(--color-status-new)]";
+      ? cn("px-3 py-2", STATUS_EDGE.follow_up)
+      : cn("px-3 py-2", STATUS_EDGE.new);
   return (
     <li className={edge}>
       <span className="flex items-baseline justify-between gap-2">

@@ -8,7 +8,7 @@
  * Enum labels must match the tables in docs/glossary.md. Copy style follows
  * CLAUDE.md: sentence case, active verbs, errors say what happened and what to do.
  */
-import { formatCount } from "./format";
+import { formatCount, formatRadiusKm } from "./format";
 import type {
   DashboardPeriod,
   OrphanReason,
@@ -433,12 +433,29 @@ export const copy = {
     /** Google's Nearby Search takes a circle; there is no polygon search. */
     circle: {
       lede: "Dessinez un cercle : cliquez pour placer le centre, puis pour fixer le rayon.",
-      radius: (m: number) => (m >= 1000 ? `Rayon ${(m / 1000).toFixed(1)} km` : `Rayon ${m} m`),
+      radius: (m: number) =>
+        m >= 1000 ? `Rayon ${formatRadiusKm(m / 1000)} km` : `Rayon ${formatCount(m)} m`,
       hint: "Faites glisser le centre pour déplacer le cercle, le point à droite pour le redimensionner.",
       none: "Cliquez sur la carte pour placer le centre.",
     },
 
-    vertices: (n: number) => (n === 1 ? "1 sommet" : `${n} sommets`),
+    /** The canvas needs a pointer to draw — docs/design.md › "The map import". */
+    pointerOnly:
+      "Dessiner une zone demande une souris ou un écran tactile. Sans pointeur, importez plutôt depuis un fichier CSV.",
+
+    /**
+     * The failure Alert on the map path — same three branches as
+     * `import.failedAfter`, but there is no file to reimport here, so the
+     * closing sentence names the import itself rather than a file.
+     */
+    failedAfter: (n: number) =>
+      n === 0
+        ? "L'import s'est interrompu avant d'envoyer la moindre ligne. Relancer l'import est sans risque."
+        : n === 1
+          ? "L'import s'est interrompu après 1 ligne envoyée. Relancer l'import est sans risque."
+          : `L'import s'est interrompu après ${formatCount(n)} lignes envoyées. Relancer l'import est sans risque.`,
+
+    vertices: (n: number) => (n === 1 ? "1 sommet" : `${formatCount(n)} sommets`),
     needMore: "Trois sommets au minimum.",
     full: "Nombre de sommets maximum atteint.",
     undo: "Annuler le dernier point",
@@ -458,22 +475,35 @@ export const copy = {
       // The panel before a search: an empty screen is an invitation, not a
       // void with a stray button in it (design.md).
       idle: "Dessinez une zone sur la carte, puis lancez la recherche pour voir ce qu'OpenStreetMap y connaît.",
-      found: (n: number) => (n === 1 ? "1 lieu trouvé" : `${n} lieux trouvés`),
-      unnamed: (n: number) => (n === 1 ? "1 sans nom" : `${n} sans nom`),
+      found: (n: number) => (n === 1 ? "1 lieu trouvé" : `${formatCount(n)} lieux trouvés`),
+      unnamed: (n: number) => (n === 1 ? "1 sans nom" : `${formatCount(n)} sans nom`),
       // Probably already a prospect under another source's id (ADR-0020). Left
       // out of the import unless the admin says otherwise.
       likely: (n: number) =>
-        n === 1 ? "1 semble déjà dans la liste" : `${n} semblent déjà dans la liste`,
+        n === 1 ? "1 semble déjà dans la liste" : `${formatCount(n)} semblent déjà dans la liste`,
       looksLike: (name: string) => `Semble déjà dans la liste : ${name}`,
       includeLikely: (n: number) =>
         n === 1
           ? "Importer aussi le lieu qui semble déjà dans la liste"
-          : `Importer aussi les ${n} lieux qui semblent déjà dans la liste`,
+          : `Importer aussi les ${formatCount(n)} lieux qui semblent déjà dans la liste`,
       includeLikelyHint: "Un doublon importé se fusionne ensuite depuis l'écran Doublons.",
       empty: "Aucun commerce trouvé dans cette zone. Élargissez-la et cherchez à nouveau.",
-      // The cache is up to seven days old, so the screen says so rather than
-      // letting two identical searches look like two live ones.
+      // The cache is up to seven days old, so the screen says how old rather
+      // than letting two identical searches look like two live ones.
+      // `cachedAt` is optional (docs/api.md) — absent only on an answer from
+      // before this field existed — so a cache hit with no age still reads as
+      // a complete sentence.
       cached: "Résultat en cache, actualisé sous 7 jours.",
+      cachedAge: (days: number, hours: number) =>
+        days > 0
+          ? days === 1
+            ? "Résultat en cache, obtenu il y a 1 jour."
+            : `Résultat en cache, obtenu il y a ${formatCount(days)} jours.`
+          : hours < 1
+            ? "Résultat en cache, obtenu il y a moins d'une heure."
+            : hours === 1
+              ? "Résultat en cache, obtenu il y a 1 heure."
+              : `Résultat en cache, obtenu il y a ${formatCount(hours)} heures.`,
       truncated: "Zone trop vaste : seuls les premiers résultats sont affichés. Réduisez-la.",
       // Google's own ceiling, not ours: 20 per call and no next page.
       truncatedGoogle:
@@ -484,7 +514,8 @@ export const copy = {
         "Dessinez un cercle sur la carte, puis lancez la recherche pour voir ce que Google y connaît.",
       // A place OSM has no name for cannot be imported: `name` is required.
       noName: "Sans nom",
-      start: (n: number) => (n === 1 ? "Importer 1 prospect" : `Importer ${n} prospects`),
+      start: (n: number) =>
+        n === 1 ? "Importer 1 prospect" : `Importer ${formatCount(n)} prospects`,
       nothingToImport: "Aucun lieu importable dans cette zone.",
     },
   },

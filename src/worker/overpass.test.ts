@@ -233,9 +233,20 @@ describe("POST /api/admin/import/overpass", () => {
     await search();
     expect(fetchCalls).toHaveLength(1);
 
+    // Backdated to a known value inside the TTL, so `cachedAt` can be checked
+    // against an exact number rather than merely `typeof … === "number"`,
+    // which `Date.now()` would also satisfy.
+    const db = getDb(env.DB);
+    const [row] = await db.select().from(overpassCache);
+    if (!row) throw new Error("the search cached nothing");
+    const createdAt = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    await db.update(overpassCache).set({ createdAt }).where(eq(overpassCache.hash, row.hash));
+
     const second = (await (await search()).json()) as AreaSearchResponse;
     expect(second.cached).toBe(true);
     expect(second.candidates).toHaveLength(4);
+    // The screen needs the age of the cached answer, not just that it is one.
+    expect(second.cachedAt).toBe(createdAt);
     // The whole point of ADR-0008: redrawing must not be another request.
     expect(fetchCalls).toHaveLength(1);
   });

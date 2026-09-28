@@ -59,7 +59,7 @@ Overpass and what keeps the key out of the page for Google.
 
 1. Admin draws a polygon on a Leaflet map (OSM tiles).
 2. Client sends the polygon to `POST /api/admin/import/overpass`.
-3. Worker builds the Overpass QL query, hashes the normalised polygon, returns the cached result if younger than 7 days, otherwise queries Overpass and caches.
+3. Worker builds the Overpass QL query, hashes the normalised polygon, returns the cached result if younger than 7 days, otherwise queries Overpass and caches. A cache hit returns `cachedAt` so the screen can show its age.
 4. Response is mapped to candidates and shown in the same preview as CSV.
 
 ### Query
@@ -99,8 +99,9 @@ v1 (`docs/design.md`, "The map import").
    search — that is the whole reason the two providers draw differently.
 2. Client sends `{center, radius}` to `POST /api/admin/import/places`.
 3. Worker checks the key, hashes the normalised centre and radius, returns the cached
-   result if younger than 7 days, otherwise calls Nearby Search and caches. With no key
-   it answers **503** and the screen says the provider is not configured.
+   result if younger than 7 days, otherwise calls Nearby Search and caches. A cache hit
+   returns `cachedAt` so the screen can show its age. With no key it answers **503** and
+   the screen says the provider is not configured.
 
 #### Request
 ```

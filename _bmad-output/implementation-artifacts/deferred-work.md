@@ -219,3 +219,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-180-import-csv-rebuilt.md`
   summary: An in-app navigation (sidebar) during a running import unmounts Import and drops the `beforeunload` guard while batches keep sending; the spine says the page can't be left without a confirmation.
   evidence: `main.tsx` uses `BrowserRouter`; React Router's `useBlocker` needs a data router, a router change outside this story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-181-import-map-rebuilt.md`
+  summary: After a failed map import, switching provider or running a new search leaves the stale failure Alert and « Réessayer » against a different result set.
+  evidence: `importer` lives in ImportScreen and `chooseProvider`/`runSearch` in MapStep never call `importer.reset()`; same state flow before #181.
