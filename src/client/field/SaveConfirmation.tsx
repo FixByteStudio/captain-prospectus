@@ -17,7 +17,7 @@ import { buttonVariants } from "@/ui/button-variants";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { copy, OUTCOME_LABELS } from "../copy";
+import { copy, OUTCOME_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
 import type { Outcome } from "../../shared/constants";
 

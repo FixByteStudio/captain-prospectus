@@ -38,7 +38,7 @@ Each is one line; its reasons live behind the link.
 12. **`visited_at` is clamped server-side** to `min(visited_at, received_at)` ([prospecting](docs/domains/prospecting.md#prospect-lifecycle)).
 13. **10 ms CPU per request** on Workers Free: batch imports are 250 rows, and the Access JWKS is cached in module scope ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
 14. **`assets.run_worker_first` stays `["/api/*"]`, never `true`** ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
-15. **French UI, English everything else.** Every French string lives in `src/client/copy.ts`, and components never inline one. Enum values stay English in the database ([ADR-0013](docs/adr/0013-frontend-conventions.md)).
+15. **French UI, English everything else.** Every French string lives in `src/client/copy.ts` and the `copy/` modules it re-exports; field-reachable modules import `copy/field`, and components never inline one. Enum values stay English in the database ([ADR-0013](docs/adr/0013-frontend-conventions.md)).
 
 ## Code conventions
 - TypeScript `strict`, no `any`, no non-null `!` without a comment explaining why.

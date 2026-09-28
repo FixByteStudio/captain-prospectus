@@ -11,7 +11,7 @@
  */
 import { StopNumber } from "./StopNumber";
 import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
-import { copy, TYPE_LABELS } from "../copy";
+import { copy, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
 import type { TodayItem } from "./today";
 

@@ -15,7 +15,7 @@
 import { FieldCheckbox, FieldRadioGroup, FieldRadioOption } from "@/ui/field-controls";
 import { Textarea } from "@/ui/textarea";
 import { NumberStepper } from "./NumberStepper";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import type { Answers, Question } from "../../shared/schemas";
 
 /** scripts.md: rating is an integer 1–5. */

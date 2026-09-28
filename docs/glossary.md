@@ -4,7 +4,8 @@ Use these words in code, UI and docs. One concept, one name.
 
 **Code, database values, docs and commits are English. The UI is French** ([ADR-0013](adr/0013-frontend-conventions.md)).
 The French column is the only sanctioned translation of each term; every French string in the app
-lives in `src/client/copy.ts`, so the whole UI vocabulary stays reviewable in one file.
+lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reachable modules import
+`copy/field`), so the whole UI vocabulary stays reviewable in one place.
 
 | Term | French (UI) | Meaning | Not |
 |---|---|---|---|

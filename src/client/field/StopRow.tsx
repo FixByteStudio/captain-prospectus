@@ -15,7 +15,7 @@ import { Link, useNavigate } from "react-router";
 import { CheckIcon, ClipboardCheckIcon, NavigationIcon } from "lucide-react";
 import { buttonVariants } from "@/ui/button-variants";
 import { Badge } from "@/ui/badge";
-import { copy, TYPE_LABELS } from "../copy";
+import { copy, TYPE_LABELS } from "../copy/field";
 import { formatDistance } from "../format";
 import { cn } from "../lib/utils";
 import { STATUS_EDGE } from "../admin/status";

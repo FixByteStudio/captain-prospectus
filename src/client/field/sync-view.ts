@@ -8,7 +8,7 @@
  * dot's label were the two things review found undecided and untested in the
  * component).
  */
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { reconnectUrl } from "./reconnect-marker";
 import type { SyncStatus } from "./sync";
 

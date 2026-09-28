@@ -12,7 +12,7 @@
 import { BadgeCheck, CheckIcon, Clock, DoorClosed, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../lib/utils";
-import { OUTCOME_HINTS, OUTCOME_LABELS } from "../copy";
+import { OUTCOME_HINTS, OUTCOME_LABELS } from "../copy/field";
 import type { Outcome } from "../../shared/constants";
 
 const OUTCOME_ICONS: Readonly<Record<Outcome, LucideIcon>> = {

@@ -9,7 +9,7 @@
  * walkable from Carte either (docs/design.md, "Plus tard").
  */
 import { useEffect, useRef } from "react";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { NextStopCard } from "./NextStopCard";
 import { StopRow } from "./StopRow";
 import type { TodayList } from "./today";

@@ -6,7 +6,7 @@
  */
 import type { ComponentType } from "react";
 import { LayoutGrid, Map as MapIcon, MapPinPlus, Route } from "lucide-react";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 export type FieldTab = {
   path: string;

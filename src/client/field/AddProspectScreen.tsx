@@ -27,7 +27,7 @@ import { cn } from "../lib/utils";
 import { FieldRadioGroup, FieldRadioOption } from "@/ui/field-controls";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { copy, TYPE_LABELS } from "../copy";
+import { copy, TYPE_LABELS } from "../copy/field";
 import { formatCoordinate } from "../format";
 import { PROSPECT_TYPES, type ProspectType } from "../../shared/constants";
 import { fieldProspectSchema } from "../../shared/schemas";

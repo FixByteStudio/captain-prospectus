@@ -239,6 +239,47 @@ describe("check-precache.mjs", () => {
     expect(result.stderr).toContain("globIgnores");
   });
 
+  it("exits non-zero naming the chunk and module when a precached chunk holds the admin copy", () => {
+    // GH #20: a field module importing ../copy instead of ../copy/field.
+    const root = makeFixture({
+      swBody: '{url:"assets/constants-a1.js",revision:null}',
+      viteGlobPatterns: "**/*.{js,css}",
+      files: { "assets/constants-a1.js": 1024 },
+      chunkModules: {
+        "assets/constants-a1.js": [
+          "src/client/copy/shared.ts",
+          "src/client/copy/field.ts",
+          "src/client/copy/admin.ts",
+        ],
+      },
+    });
+    roots.push(root);
+
+    const result = run(root, { ceilingKiB: 1000 });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      '"assets/constants-a1.js" holds admin-only src/client/copy/admin.ts',
+    );
+  });
+
+  it("exits non-zero naming the copy aggregator when a precached chunk holds it", () => {
+    // GH #20: copy.ts spreads the admin copy, so it must stay behind AdminApp too.
+    const root = makeFixture({
+      swBody: '{url:"assets/constants-a1.js",revision:null}',
+      viteGlobPatterns: "**/*.{js,css}",
+      files: { "assets/constants-a1.js": 1024 },
+      chunkModules: { "assets/constants-a1.js": ["src/client/copy.ts"] },
+    });
+    roots.push(root);
+
+    const result = run(root, { ceilingKiB: 1000 });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('"assets/constants-a1.js" holds admin-only src/client/copy.ts');
+    expect(result.stderr).toContain("import copy/field instead");
+  });
+
   it("reports both the ceiling and the leak in one run", () => {
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',

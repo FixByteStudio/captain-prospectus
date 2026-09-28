@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { copy } from "./copy";
+import { copy } from "./copy/field";
 import { Alert, AlertTitle } from "@/ui/alert";
 import { buttonVariants } from "@/ui/button-variants";
 import type { PwaState } from "./pwa";

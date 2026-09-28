@@ -13,7 +13,7 @@
  */
 import { ApiError } from "../api";
 import { meResponseSchema, type MeResponse } from "../../shared/schemas";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 export type IdentityFetchResult = { ok: true; body: unknown } | { ok: false; error: unknown };
 

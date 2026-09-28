@@ -3,7 +3,7 @@
  * card" and "Carte". One line for both screens; each caller keeps its own
  * placement (under the header on Tournée, a card over the map on Carte).
  */
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 export function PositionDenied({
   onRetry,

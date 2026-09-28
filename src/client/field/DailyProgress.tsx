@@ -4,7 +4,7 @@
  * "restants" as text. The bar itself carries the fraction.
  */
 import { Progress } from "../ui/progress";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import type { DailyProgressValue } from "./progress";
 
 export function DailyProgress({ progress }: { progress: DailyProgressValue }) {
