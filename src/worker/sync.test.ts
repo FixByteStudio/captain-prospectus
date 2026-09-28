@@ -7,7 +7,11 @@ import { chunk } from "../shared/chunk";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
-import { MAX_REQUEST_BYTES, SYNC_VISITS_PER_REQUEST } from "../shared/constants";
+import {
+  MAX_REQUEST_BYTES,
+  SCRIPT_QUESTIONS_MAX,
+  SYNC_VISITS_PER_REQUEST,
+} from "../shared/constants";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
 
@@ -109,6 +113,27 @@ describe("POST /api/agent/sync", () => {
     expect(body.error).toBe("validation");
     expect(body.issues).toHaveLength(MAX_VALIDATION_ISSUES);
     for (const issue of body.issues) expect(Object.keys(issue).sort()).toEqual(["code", "path"]);
+  });
+
+  it("caps a visit's answers at a script's question ceiling (#32)", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+    const visitWith = (count: number) => ({
+      id: crypto.randomUUID(),
+      prospectId,
+      visitedAt: Date.now(),
+      flyerGiven: false,
+      outcome: "not_interested" as const,
+      answers: Object.fromEntries(Array.from({ length: count }, (_, i) => [`q${i}`, true])),
+    });
+
+    const refused = await sync({ visits: [visitWith(SCRIPT_QUESTIONS_MAX + 1)] });
+    expect(refused.status).toBe(400);
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(0);
+
+    const accepted = await sync({ visits: [visitWith(SCRIPT_QUESTIONS_MAX)] });
+    expect(accepted.status).toBe(200);
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(1);
   });
 
   it("requires followUpAt when the outcome is follow_up", async () => {

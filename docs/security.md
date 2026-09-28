@@ -23,8 +23,8 @@ a mitigation nobody has verified is worse than one nobody claimed.
 `MAX_REQUEST_BYTES` (`src/shared/constants.ts`) is 2 MiB, about twice the largest
 request a client can legitimately build — a full sync of 100 field prospects and 200
 visits carrying maximum-length notes and a 50-question script answered is 1060 KiB.
-It exists because the array caps bound rows, not bytes: `answersSchema` does not limit
-how many answers a visit carries, so a schema-valid payload can reach 19.7 MiB.
+It exists because the array caps bound rows, not bytes: a visit may carry 50 answers
+(`SCRIPT_QUESTIONS_MAX`) of 2000 characters each, so a schema-valid payload can reach 19.7 MiB.
 
 It is enforced as the **first** middleware registered, above the `/dev` mount, because
 Hono composes handlers in registration order and `/api/dev/*` is the one route mounted
