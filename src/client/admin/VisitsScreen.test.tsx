@@ -5,7 +5,7 @@
  * _bmad-output/implementation-artifacts/spec-gh-178-visites-rebuilt.md.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
@@ -81,7 +81,7 @@ function dashboardAnswer(period: number): DashboardResponse {
 }
 
 type Stub = {
-  visits?: (url: URL) => Response;
+  visits?: (url: URL) => Response | Promise<Response>;
   dashboard?: (url: URL) => Response;
   exportCsv?: (url: URL) => Response;
 };
@@ -309,6 +309,37 @@ describe("VisitsScreen", () => {
 
     await userEvent.click(screen.getByRole("button", { name: copy.errors.retry }));
     await waitFor(() => expect(screen.getByText("84")).toBeTruthy());
+  });
+
+  it("shows 6–8 ledger-row skeletons, not a text line, before the first answer (#207)", async () => {
+    stubFetch({ visits: () => new Promise<Response>(() => {}) });
+    renderScreen();
+    await screen.findByText(copy.visits.strip.flyersGiven);
+
+    const rows = document.querySelectorAll('[aria-busy="true"] li [data-slot="skeleton"]');
+    expect(rows.length).toBeGreaterThanOrEqual(6);
+    expect(rows.length).toBeLessThanOrEqual(8);
+    expect(screen.getByText(copy.visits.loading).className).toContain("sr-only");
+  });
+
+  it("shows the ledger's load-failed Alert and refetches on « Réessayer », with no empty copy (#208)", async () => {
+    let fail = true;
+    stubFetch({
+      visits: () => (fail ? json({}, 500) : json({ visits: [visit("a", 1)], serverTime: 2 })),
+    });
+    renderScreen();
+
+    const title = await screen.findByText(copy.visits.loadFailed);
+    const alert = title.closest('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(screen.queryByText(copy.visits.empty)).toBeNull();
+
+    fail = false;
+    await userEvent.click(
+      within(alert as HTMLElement).getByRole("button", { name: copy.errors.retry }),
+    );
+    expect(await screen.findByText("Place a")).toBeTruthy();
+    expect(screen.queryByText(copy.visits.loadFailed)).toBeNull();
   });
 
   it("keeps held rows under loadFailed when a later poll fails", async () => {

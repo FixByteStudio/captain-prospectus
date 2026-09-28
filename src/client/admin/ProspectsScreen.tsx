@@ -312,10 +312,11 @@ export function ProspectsScreen() {
         skeleton={
           <Surface className="overflow-hidden">
             {toolbar}
+            {/* 6–8 table rows: EXPERIENCE.md › State Patterns (#206). */}
             <div className="space-y-3 p-3.5">
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className="h-6 w-full" />
+              ))}
             </div>
           </Surface>
         }

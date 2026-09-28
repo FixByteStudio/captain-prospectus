@@ -410,6 +410,9 @@ export function useVisitsFeed(period?: DashboardPeriod) {
     // Still pending while only an older mount's answer is cached.
     isPending: query.isPending || (!fresh && !query.isError),
     isError: query.isError,
+    // For `ScreenState`'s retry, disabled while a poll is already out.
+    isFetching: query.isFetching,
+    refetch: query.refetch,
     capped,
     // GH #160: a poll whose text is unchanged from the last one (e.g. two
     // arrivals in a row) still needs announcing. A consumer keys its
