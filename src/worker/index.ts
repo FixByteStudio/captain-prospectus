@@ -9,9 +9,11 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
+import type { ErrorHandler } from "hono";
 import { MAX_REQUEST_BYTES } from "../shared/constants";
 import { requireAdmin, requireIdentity } from "./auth";
 import { getDb } from "./db/client";
+import { isD1DailyLimitError } from "./errors";
 import { describeSweep, runRetention } from "./retention";
 import { describeEviction, evictMapCache } from "./map-cache";
 import { adminRoutes } from "./routes/admin";
@@ -67,14 +69,17 @@ app.route("/admin", adminRoutes);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 
-app.onError((err, c) => {
+/**
+ * Exported by name so `errors.test.ts` can mount it on its own Hono app
+ * without a real route (docs/backlog/008-d1-limit-detection-and-logs.md).
+ */
+export const onError: ErrorHandler<AppEnv> = (err, c) => {
   if (err instanceof HTTPException) return err.getResponse();
 
   // D1's free-tier daily limits are enforced: past them, queries fail until
   // midnight UTC. Say so plainly — an agent must know their outbox is intact
   // and that retrying later will work, not read a 500 as lost data.
-  const message = err instanceof Error ? err.message : String(err);
-  if (message.includes("free tier daily row")) {
+  if (isD1DailyLimitError(err)) {
     return c.json(
       {
         error: "quota",
@@ -85,9 +90,18 @@ app.onError((err, c) => {
     );
   }
 
-  console.error("unhandled error", message);
+  // docs/security.md#personal-data: never log a message or bound values.
+  // Drizzle's own message is `Failed query: <sql>\nparams: <values>`, which
+  // can carry visit notes or agent emails straight into Workers observability.
+  console.error("unhandled error", {
+    name: err.name,
+    cause: err.cause instanceof Error ? err.cause.name : undefined,
+    route: c.req.routePath,
+  });
   return c.json({ error: "internal", message: "Une erreur est survenue. Réessayez." }, 500);
-});
+};
+
+app.onError(onError);
 
 /**
  * Two entry points, one Worker.

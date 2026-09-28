@@ -42,6 +42,7 @@ it — a payload the server always refuses is an outbox that never drains (INVAR
   a visit is business history; where the agent was standing is not. A consequence worth
   knowing: a visit older than 90 days can no longer be checked against where it was made.
 - No third-party analytics, and the data stays in the Cloudflare account. Backups go to R2, not to a GitHub artifact (ADR-0023, [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)); the bucket is one-time setup in [deployment.md](deployment.md).
+- The Worker's unhandled-error log (`onError`, `src/worker/index.ts`) carries only error names and the route, never a message or bound values — Drizzle's own message is `Failed query: <sql>\nparams: <values>`, which can be a visit note or an agent's email (`src/worker/errors.ts`).
 
 ## Secrets
 - No secrets in `wrangler.jsonc` beyond non-sensitive vars. If a real secret is ever needed: `wrangler secret put`.
