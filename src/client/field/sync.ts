@@ -5,7 +5,7 @@
  * matter are all about not losing a visit:
  *
  *   INVARIANT 5  an outbox row is deleted only when the server lists its id in
- *                `accepted`. An auth failure or a 426 never clears anything.
+ *                `accepted`. An auth failure or a 426 never clears the outbox.
  *   INVARIANT 4  ids are client UUIDs and every insert is idempotent, so
  *                resending a payload is harmless.
  *
@@ -23,14 +23,14 @@ import {
 } from "../../shared/constants";
 import { syncResponseSchema } from "../../shared/schemas";
 import type { FieldProspect, SyncRequest, Visit } from "../../shared/schemas";
-import { type FieldDb, outboxCounts, setMeta } from "./db";
+import { clearAgentCache, type FieldDb, outboxCounts, setMeta } from "./db";
 import { type OutboxStamp, sendableBy } from "./outbox-stamp";
 
 export type SyncStatus =
   | "ok"
   /** No network. Keep everything, try again later. */
   | "offline"
-  /** Access session expired. Keep everything; the user must sign in again. */
+  /** Access session expired or revoked. Keep the outbox, drop the cached round (GH #35); sign in again. */
   | "auth"
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"
@@ -143,6 +143,12 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
   }
 
   if (response.type === "opaqueredirect" || response.status === 401 || response.status === 403) {
+    // The server refused this identity. A PWA resumed from the app switcher
+    // never remounts, so the shell's `/api/me` check cannot drop the cached
+    // round for it (GH #35); this refusal must. Expired and revoked look the
+    // same from here, and both are stolen-phone mitigations (docs/security.md).
+    // The outbox stays — clearAgentCache leaves it alone (INVARIANT 5).
+    await clearAgentCache(db);
     return { status: "auth", ...EMPTY, ...(await countPending()) };
   }
   if (response.status === 426) {

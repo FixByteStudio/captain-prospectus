@@ -20,7 +20,7 @@ import Dexie from "dexie";
 import { copy, OUTCOME_HINTS, STATUS_LABELS } from "../copy";
 import type { Prospect, Script } from "../../shared/schemas";
 import { OUTCOMES, type Outcome } from "../../shared/constants";
-import { fieldDb, setMeta } from "./db";
+import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
@@ -1256,5 +1256,26 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(
       (screen.getByRole("textbox", { name: copy.visit.notes }) as HTMLTextAreaElement).value,
     ).toBe("gérant absent");
+  });
+});
+
+describe("VisitScreen — the cached round dropped under an open form (GH #35)", () => {
+  it("keeps the form and saves the visit when a refused sync clears the prospect", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+    await user.click(outcomeRadio("interested"));
+    await user.type(screen.getByRole("textbox", { name: copy.visit.notes }), "gérant absent");
+
+    // What `runSync` does on an auth refusal: the form's own lookup comes back null.
+    await clearAgentCache(fieldDb);
+
+    await vi.waitFor(() => expect(screen.queryByText(copy.errors.notFound)).toBeNull());
+    expect(screen.getByRole("heading", { name: PROSPECT.name })).toBeTruthy();
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.prospectId).toBe(PROSPECT.id);
+    expect(visit?.notes).toBe("gérant absent");
   });
 });

@@ -340,8 +340,20 @@ export function VisitScreen() {
     [id, identity, navigate, point, script, syncNow, visitId],
   );
 
-  const name = prospect?.name ?? pendingProspect?.name;
-  const type = prospect?.type ?? pendingProspect?.type;
+  // A sync the server refuses drops the cached round (GH #35), and it can land
+  // while this form is open. Once the prospect has been shown, keep its name
+  // so the visit being typed can still be saved rather than turning into
+  // "not found" — INVARIANT 5. Adjusted during render, React's pattern for
+  // state derived from a changing value.
+  const liveName = prospect?.name ?? pendingProspect?.name;
+  const liveType = prospect?.type ?? pendingProspect?.type;
+  const [shown, setShown] = useState({ id, name: liveName, type: liveType });
+  if (liveName && (shown.id !== id || shown.name !== liveName || shown.type !== liveType)) {
+    setShown({ id, name: liveName, type: liveType });
+  }
+  const kept = shown.id === id ? shown : null;
+  const name = liveName ?? kept?.name;
+  const type = liveType ?? kept?.type;
 
   // Only a validated draft reaches `pending`, so its outcome is set.
   const summary: SaveSummary | null =

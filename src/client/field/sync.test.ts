@@ -170,6 +170,81 @@ describe("runSync — failures must never clear the outbox", () => {
   });
 });
 
+describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
+  const seedCache = async () => {
+    await db.prospects.put({
+      id: crypto.randomUUID(),
+      name: "Chez Paul",
+      type: "restaurant",
+      status: "assigned",
+      address: null,
+      phone: null,
+      website: null,
+      cuisine: null,
+      source: "osm",
+      assignedTo: AGENT,
+      lat: null,
+      lng: null,
+      lastVisitAt: null,
+      nextVisitAt: null,
+    });
+    await setMeta(db, "identity", { email: AGENT, role: "agent" });
+    await db.sentVisits.put({
+      id: crypto.randomUUID(),
+      prospectId: crypto.randomUUID(),
+      sentAt: 1_700_000_000_000,
+      writtenBy: AGENT,
+    });
+  };
+
+  const redirected = (async () => {
+    const r = new Response(null, { status: 200 });
+    Object.defineProperty(r, "type", { value: "opaqueredirect" });
+    return r;
+  }) as unknown as typeof fetch;
+
+  it.each([
+    ["a 401", failWith(401)],
+    ["a 403", failWith(403)],
+    ["an Access login redirect", redirected],
+  ])(
+    "clears the round and the cached identity on %s, and keeps the outbox",
+    async (_l, fetchFn) => {
+      // A PWA resumed from the app switcher never remounts, so this refusal is
+      // the only place a revoked phone learns to forget the round.
+      await seedCache();
+      await db.outboxVisits.add(visit());
+
+      const result = await runSync({ db, identity: AGENT, fetchFn });
+
+      expect(result.status).toBe("auth");
+      expect(await db.prospects.count()).toBe(0);
+      expect(await db.sentVisits.count()).toBe(0);
+      expect(await getMeta(db, "identity")).toBeUndefined();
+      expect(await db.outboxVisits.count()).toBe(1);
+      expect(result.remaining).toBe(1);
+    },
+  );
+
+  it.each([
+    [
+      "the network is gone",
+      (async () => {
+        throw new TypeError("Failed to fetch");
+      }) as unknown as typeof fetch,
+    ],
+    ["a server error (500)", failWith(500)],
+    ["a build too old (426)", failWith(426)],
+  ])("keeps the round when %s — not a statement about this identity", async (_l, fetchFn) => {
+    await seedCache();
+
+    await runSync({ db, identity: AGENT, fetchFn });
+
+    expect(await db.prospects.count()).toBe(1);
+    expect(await getMeta(db, "identity")).toEqual({ email: AGENT, role: "agent" });
+  });
+});
+
 describe("runSync — dedupe collisions", () => {
   it("rewrites prospectId on outbox visits before deleting anything", async () => {
     const clientProspectId = crypto.randomUUID();
