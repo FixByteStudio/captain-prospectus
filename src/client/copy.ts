@@ -570,9 +570,13 @@ export const copy = {
     // forecasts what repairing would do, and none of it has happened yet
     // (design.md, "The repair queue").
     lede: "Ces visites sont conservées, mais elles ne comptent pas encore. Rattachez chacune au bon prospect.",
-    count: (n: number) => (n === 1 ? "1 visite" : `${n} visites`),
+    // The whole queue, and worded as a wait: none of these has counted yet.
+    count: (n: number) =>
+      n === 1 ? "1 visite pas encore rattachée" : `${formatCount(n)} visites pas encore rattachées`,
     // An empty queue is the healthy state, so it reassures rather than shrugs.
-    empty: "Aucune visite à rattacher. Tout ce que les agents ont envoyé est arrivé à destination.",
+    empty: "Aucune visite à rattacher.",
+    emptyHint: "Tout ce que les agents ont envoyé est arrivé à destination.",
+    emptyCta: "Voir les visites",
     loading: "Chargement des visites à rattacher…",
     loadFailed: "Impossible de charger les visites à rattacher. Réessayez.",
     flyer: "Flyer remis",
@@ -580,20 +584,25 @@ export const copy = {
       unknown_prospect: "Prospect introuvable",
       not_assigned: "Prospect d'un autre agent",
     } as Readonly<Record<OrphanReason, string>>,
+    rowAria: (when: string, agent: string) => `Visite du ${when} par ${agent}`,
     attachTo: "Rattacher à",
-    attachHere: (name: string) => `Rattacher à ${name}`,
-    attachAria: (name: string, distance: string) => `Rattacher cette visite à ${name}, ${distance}`,
-    metres: (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`),
-    noCandidates:
-      "Cette visite n'a pas enregistré de position : aucun prospect à proposer. Choisissez-la depuis la liste des prospects ou supprimez-la.",
+    attachAria: (name: string, distance: string | null) =>
+      distance === null
+        ? `Rattacher cette visite à ${name}`
+        : `Rattacher cette visite à ${name}, à ${distance}`,
+    // No picker exists and none is proposed (design.md), so the one way out
+    // left is named rather than implied.
+    noPosition:
+      "Aucune position enregistrée pour cette visite : aucun prospect à proposer. Si elle ne peut pas être rattachée, supprimez-la.",
     attached: (name: string) => `Visite rattachée à ${name}.`,
     attachFailed: "Impossible de rattacher cette visite. Réessayez.",
     // The row count the page could not show. Non-zero means look upstream.
     overflow: (n: number) =>
       n === 1
         ? "1 visite de plus n'est pas affichée."
-        : `${n} visites de plus ne sont pas affichées.`,
+        : `${formatCount(n)} visites de plus ne sont pas affichées.`,
     discard: "Supprimer",
+    discardAria: (when: string) => `Supprimer la visite du ${when}`,
     discarded: "Visite supprimée.",
     discardFailed: "Impossible de supprimer cette visite. Réessayez.",
     confirm: {

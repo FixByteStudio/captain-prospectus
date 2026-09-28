@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import type { OrphanCandidate, OrphanedVisit } from "../../shared/schemas";
+import { Link } from "react-router";
+import { Check, CheckCheck, Trash2 } from "lucide-react";
+import type { OrphanedVisit, OrphansResponse } from "../../shared/schemas";
 import { OUTCOME_TO_STATUS } from "../../shared/constants";
 import { OUTCOME_LABELS, copy } from "../copy";
-import { formatDateTime } from "../format";
+import { formatDateTime, formatDistance } from "../format";
 import { cn } from "../lib/utils";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -14,8 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { Skeleton } from "../ui/skeleton";
+import { OUTCOME_BADGE } from "./dashboard/outcome-series";
+import { EmptyTile } from "./EmptyTile";
+import { orphanTotal } from "./nav";
 import { ScreenHeader } from "./ScreenHeader";
-import { STATUS_EDGE, STATUS_TEXT } from "./status";
+import { ScreenState } from "./ScreenState";
+import { Surface } from "./Surface";
+import { BADGE_SHAPE, STATUS_EDGE } from "./status";
 import { useDiscardOrphan, useOrphans, useRepairOrphan } from "./queries";
 
 /**
@@ -28,15 +37,18 @@ import { useDiscardOrphan, useOrphans, useRepairOrphan } from "./queries";
  *
  * The leading edge forecasts what repairing would do, using the same
  * STATUS_EDGE the live feed uses. That is the one thing here that could
- * mislead, because the outcome has *not* taken effect yet, so the lede carries
- * the correction once for every row rather than as a badge on each.
+ * mislead, because the outcome has *not* taken effect yet, so the header count
+ * and the lede carry the correction once for every row rather than as a badge
+ * on each.
  */
 export function OrphansScreen() {
-  const { data, isPending, isError } = useOrphans();
+  const orphans = useOrphans();
   const [confirming, setConfirming] = useState<OrphanedVisit | null>(null);
   const discard = useDiscardOrphan();
 
-  const visits = data?.visits ?? [];
+  // From whatever rows are on screen, kept ones under a failed refetch included:
+  // the count carries the "not yet" correction for exactly those rows.
+  const total = orphans.data ? orphanTotal(orphans.data) : 0;
 
   function confirmDiscard() {
     if (!confirming) return;
@@ -50,47 +62,86 @@ export function OrphansScreen() {
   return (
     <section>
       <ScreenHeader
-        className="mb-1"
+        className="mb-4"
         title={copy.orphans.title}
+        subtitle={<p className="text-muted-foreground mt-0.5">{copy.orphans.lede}</p>}
         actions={
-          visits.length > 0 && (
-            <span className="text-muted-foreground tnum">{copy.orphans.count(visits.length)}</span>
+          total > 0 && (
+            <span className="text-muted-foreground tnum">{copy.orphans.count(total)}</span>
           )
         }
       />
-      <p className="text-muted-foreground mb-4 text-sm">{copy.orphans.lede}</p>
 
-      {isError && <p className="text-destructive">{copy.orphans.loadFailed}</p>}
+      <ScreenState<OrphansResponse>
+        data={orphans.data}
+        isPending={orphans.isPending}
+        isError={orphans.isError}
+        isFetching={orphans.isFetching}
+        onRetry={() => void orphans.refetch()}
+        loadFailed={copy.orphans.loadFailed}
+        loading={copy.orphans.loading}
+        skeleton={
+          <Surface className="space-y-3 p-3.5">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </Surface>
+        }
+      >
+        {(data) => (
+          <>
+            <Surface className="overflow-hidden">
+              {data.visits.length === 0 ? (
+                <EmptyTile icon={<CheckCheck aria-hidden="true" />}>
+                  <p className="text-foreground font-medium">{copy.orphans.empty}</p>
+                  <p>{copy.orphans.emptyHint}</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/admin/visites">{copy.orphans.emptyCta}</Link>
+                  </Button>
+                </EmptyTile>
+              ) : (
+                <ul className="divide-border divide-y">
+                  {data.visits.map((visit) => (
+                    <OrphanRow
+                      key={visit.id}
+                      visit={visit}
+                      // The mutation's own record, not the dialog's: the row
+                      // stays locked for as long as its delete is in flight.
+                      discarding={discard.isPending && discard.variables === visit.id}
+                      onDiscard={() => setConfirming(visit)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </Surface>
 
-      {!isError && (isPending || visits.length === 0) && (
-        <p className="text-muted-foreground">
-          {isPending ? copy.orphans.loading : copy.orphans.empty}
-        </p>
-      )}
+            {/* Non-zero means something upstream is wrong, not that the page is small. */}
+            {data.remaining > 0 && (
+              <p className="text-muted-foreground mt-3 text-xs">
+                {copy.orphans.overflow(data.remaining)}
+              </p>
+            )}
+          </>
+        )}
+      </ScreenState>
 
-      {visits.length > 0 && (
-        <ul className="border-border bg-card divide-border divide-y rounded-md border">
-          {visits.map((visit) => (
-            <OrphanRow key={visit.id} visit={visit} onDiscard={() => setConfirming(visit)} />
-          ))}
-        </ul>
-      )}
-
-      {/* Non-zero means something upstream is wrong, not that the page is small. */}
-      {data && data.remaining > 0 && (
-        <p className="text-muted-foreground mt-3 text-xs">
-          {copy.orphans.overflow(data.remaining)}
-        </p>
-      )}
-
-      <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+      {/* Cannot be dismissed while the delete is in flight: closing it would
+          free the dialog for a second discard on the one shared mutation. */}
+      <Dialog
+        open={confirming !== null}
+        onOpenChange={(open) => !open && !discard.isPending && setConfirming(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{copy.orphans.confirm.title}</DialogTitle>
             <DialogDescription>{copy.orphans.confirm.body}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirming(null)}>
+            <Button
+              variant="outline"
+              disabled={discard.isPending}
+              onClick={() => setConfirming(null)}
+            >
               {copy.orphans.confirm.cancel}
             </Button>
             <Button variant="destructive" onClick={confirmDiscard} disabled={discard.isPending}>
@@ -103,79 +154,113 @@ export function OrphansScreen() {
   );
 }
 
-function OrphanRow({ visit, onDiscard }: { visit: OrphanedVisit; onDiscard: () => void }) {
-  const repair = useRepairOrphan();
-  const status = OUTCOME_TO_STATUS[visit.outcome];
+/** One place the visit could go, with the distance that argues for it. */
+type Target = { id: string; name: string; distanceM: number | null };
 
-  function attach(prospectId: string, name: string) {
+/**
+ * The two reasons ask different things — a choice between candidates, or a nod
+ * to the prospect the visit already names — but in one row shape: the same
+ * « Rattacher à » line, holding one button or several. A `not_assigned` visit
+ * whose prospect the server could not name (`prospectName: null`, e.g. merged
+ * away since) has nothing to nod to, so it gets the candidates instead.
+ */
+function targetsFor(visit: OrphanedVisit): Target[] {
+  if (visit.reason === "not_assigned" && visit.prospectName !== null) {
+    const named = visit.candidates.find((c) => c.id === visit.prospectId);
+    return [
+      { id: visit.prospectId, name: visit.prospectName, distanceM: named?.distanceM ?? null },
+    ];
+  }
+  // Server order is nearest first (orphanedVisitSchema); never re-sorted here.
+  return visit.candidates;
+}
+
+/**
+ * Its own `useRepairOrphan`, on purpose: the pending state belongs to the row,
+ * so repairing one visit leaves every other row live, and this row's
+ * « Supprimer » waits for its own repair. One screen-level mutation only
+ * tracks its latest call, so two quick repairs would clobber each other.
+ */
+function OrphanRow({
+  visit,
+  discarding,
+  onDiscard,
+}: {
+  visit: OrphanedVisit;
+  discarding: boolean;
+  onDiscard: () => void;
+}) {
+  const repair = useRepairOrphan();
+  const targets = targetsFor(visit);
+  const when = formatDateTime(visit.visitedAt);
+  const busy = repair.isPending || discarding;
+
+  function attach(target: Target) {
     repair.mutate(
-      { visitId: visit.id, prospectId },
+      { visitId: visit.id, prospectId: target.id },
       {
-        onSuccess: () => toast.success(copy.orphans.attached(name)),
+        onSuccess: () => toast.success(copy.orphans.attached(target.name)),
         onError: () => toast.error(copy.orphans.attachFailed),
       },
     );
   }
 
-  // A not_assigned visit already names its prospect, so the ask is a nod rather
-  // than a choice. An unknown_prospect one has to be pointed somewhere.
-  const namesItsProspect = visit.reason === "not_assigned" && visit.prospectName !== null;
-
   return (
-    <li className={cn("px-3.5 py-2.5", STATUS_EDGE[status])}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-muted-foreground tnum shrink-0">
-          {formatDateTime(visit.visitedAt)}
-        </span>
-        <span className={cn("shrink-0", STATUS_TEXT[status])}>{OUTCOME_LABELS[visit.outcome]}</span>
+    <li
+      aria-label={copy.orphans.rowAria(when, visit.agentEmail)}
+      className={cn("px-3.5 py-2.5", STATUS_EDGE[OUTCOME_TO_STATUS[visit.outcome]])}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-muted-foreground tnum shrink-0">{when}</span>
+        <Badge variant="ghost" className={cn(BADGE_SHAPE, OUTCOME_BADGE[visit.outcome])}>
+          {OUTCOME_LABELS[visit.outcome]}
+        </Badge>
         {visit.flyerGiven && (
-          <span className="text-muted-foreground shrink-0 text-xs">{copy.orphans.flyer}</span>
+          <Badge variant="ghost" className={cn(BADGE_SHAPE, "bg-secondary text-foreground")}>
+            <Check aria-hidden="true" />
+            {copy.orphans.flyer}
+          </Badge>
         )}
-        <span className="text-muted-foreground shrink-0 text-xs">{visit.agentEmail}</span>
-        <span className="min-w-0 flex-1" />
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {copy.orphans.reason[visit.reason]}
+        <span className="text-muted-foreground min-w-0 text-xs break-words">
+          {visit.agentEmail}
         </span>
+        <Badge variant="outline" className={cn(BADGE_SHAPE, "ml-auto")}>
+          {copy.orphans.reason[visit.reason]}
+        </Badge>
       </div>
 
-      {visit.notes && <p className="text-muted-foreground mt-1 text-xs">« {visit.notes} »</p>}
+      {visit.notes && (
+        <p className="text-muted-foreground mt-1 text-xs break-words">« {visit.notes} »</p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {namesItsProspect && visit.prospectName ? (
-          <Button
-            size="sm"
-            disabled={repair.isPending}
-            onClick={() => attach(visit.prospectId, visit.prospectName ?? "")}
-          >
-            {copy.orphans.attachHere(visit.prospectName)}
-          </Button>
-        ) : visit.candidates.length > 0 ? (
+        {targets.length > 0 ? (
           <>
             <span className="text-muted-foreground shrink-0 text-xs">{copy.orphans.attachTo}</span>
-            {visit.candidates.map((candidate) => (
-              <CandidateButton
-                key={candidate.id}
-                candidate={candidate}
-                disabled={repair.isPending}
-                onAttach={() => attach(candidate.id, candidate.name)}
+            {targets.map((target) => (
+              <TargetButton
+                key={target.id}
+                target={target}
+                disabled={busy}
+                onAttach={() => attach(target)}
               />
             ))}
           </>
         ) : (
-          <p className="text-muted-foreground min-w-0 flex-1 text-xs">
-            {copy.orphans.noCandidates}
-          </p>
+          <p className="text-muted-foreground min-w-0 flex-1 text-xs">{copy.orphans.noPosition}</p>
         )}
 
-        {/* Right of the attach controls, and away from them: a misclick here
-            cannot be undone. */}
+        {/* Far right, away from the attach buttons: a misclick here cannot be
+            undone, which the confirmation then says in words. */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="ml-auto"
+          className="text-destructive hover:text-destructive ml-auto"
+          aria-label={copy.orphans.discardAria(when)}
+          disabled={busy}
           onClick={onDiscard}
-          disabled={repair.isPending}
         >
+          <Trash2 aria-hidden="true" />
           {copy.orphans.discard}
         </Button>
       </div>
@@ -184,27 +269,32 @@ function OrphanRow({ visit, onDiscard }: { visit: OrphanedVisit; onDiscard: () =
 }
 
 /** Distance sits inside the target, because it is the reason to press it. */
-function CandidateButton({
-  candidate,
+function TargetButton({
+  target,
   disabled,
   onAttach,
 }: {
-  candidate: OrphanCandidate;
+  target: Target;
   disabled: boolean;
   onAttach: () => void;
 }) {
-  const distance = candidate.distanceM === null ? null : copy.orphans.metres(candidate.distanceM);
+  const distance = target.distanceM === null ? null : formatDistance(target.distanceM);
 
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
+      // A long name wraps inside the button rather than pushing the row past
+      // a phone's width.
+      className="h-auto min-h-8 max-w-full py-1 text-left whitespace-normal"
       disabled={disabled}
       onClick={onAttach}
-      aria-label={copy.orphans.attachAria(candidate.name, distance ?? "")}
+      aria-label={copy.orphans.attachAria(target.name, distance)}
     >
-      {candidate.name}
-      {distance && <span className="text-muted-foreground tnum ml-1.5 text-xs">· {distance}</span>}
+      <span className="min-w-0 break-words">{target.name}</span>
+      {distance && (
+        <span className="text-muted-foreground tnum shrink-0 text-xs">· {distance}</span>
+      )}
     </Button>
   );
 }
