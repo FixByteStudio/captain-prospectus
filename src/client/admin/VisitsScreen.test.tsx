@@ -423,3 +423,61 @@ describe("VisitsScreen", () => {
     expect(await screen.findByText(copy.visits.export.failed)).toBeTruthy();
   });
 });
+
+describe("VisitsScreen › live feed rows (#185)", () => {
+  it("quotes a visit's notes on a second line, and a visit without notes has none", async () => {
+    stubFetch({
+      visits: () =>
+        json({
+          visits: [{ ...visit("a", 2), notes: "Rappeler lundi" }, visit("b", 1)],
+          serverTime: 3,
+        }),
+    });
+    renderScreen();
+
+    const quoted = await screen.findByText("« Rappeler lundi »");
+    const row = quoted.closest("li");
+    expect(row?.textContent).toContain("Place a");
+    // Its own line: a direct child of the row, outside the first line that
+    // holds the name.
+    expect(quoted.parentElement).toBe(row);
+    expect(screen.getByText("Place a").parentElement?.contains(quoted)).toBe(false);
+    expect(screen.getByText("Place b").closest("li")?.textContent).not.toContain("«");
+  });
+
+  it("shows a visit to a merged prospect under the name it was made against", async () => {
+    const survivor = "11111111-1111-4111-8111-111111111111";
+    stubFetch({
+      visits: () =>
+        json({
+          visits: [
+            { ...visit("new", 2), prospectId: survivor, prospectName: "Le Bouchon des Filles" },
+            { ...visit("old", 1), prospectId: survivor, prospectName: "Le Bouchon" },
+          ],
+          serverTime: 3,
+        }),
+    });
+    renderScreen();
+
+    expect(await screen.findByText("Le Bouchon")).toBeTruthy();
+    expect(screen.getByText("Le Bouchon des Filles")).toBeTruthy();
+  });
+
+  it("announces an arrival in the live region, never as a toast", async () => {
+    let visits = [visit("a", 1)];
+    stubFetch({ visits: () => json({ visits, serverTime: 2 }) });
+    const client = renderScreen();
+    await screen.findByText("Place a");
+
+    visits = [visit("a", 1), visit("b", 3)];
+    vi.setSystemTime(NOW + 1);
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
+
+    const announced = await screen.findByText(copy.visits.arrived(1));
+    expect(announced.closest('[aria-live="polite"]')).toBe(announced);
+    await screen.findByText("Place b");
+    const toasts = Array.from(document.querySelectorAll("[data-sonner-toast]"));
+    expect(toasts.filter((t) => t.textContent?.includes(copy.visits.arrived(1)))).toHaveLength(0);
+    expect(toasts.filter((t) => t.textContent?.includes("Place b"))).toHaveLength(0);
+  });
+});
