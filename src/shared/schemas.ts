@@ -39,6 +39,7 @@ import {
   PROSPECT_TYPES,
   QUESTION_TYPES,
   ROLES,
+  SCRIPT_QUESTIONS_MAX,
   STATUSES,
   SOURCES,
   SYNC_PROSPECTS_PER_REQUEST,
@@ -129,7 +130,7 @@ export type Question = z.infer<typeof questionSchema>;
 export const scriptCreateSchema = z
   .object({
     name: shortTextRequired,
-    questions: z.array(questionSchema).check(z.minLength(1), z.maxLength(50)),
+    questions: z.array(questionSchema).check(z.minLength(1), z.maxLength(SCRIPT_QUESTIONS_MAX)),
   })
   .check((ctx) => {
     // Answers are a record keyed by `key` (`answersSchema`), so two questions
@@ -165,16 +166,25 @@ export const scriptsResponseSchema = z.object({
 });
 export type ScriptsResponse = z.infer<typeof scriptsResponseSchema>;
 
-/** Answers are keyed by question `key`; the shape is validated against the script. */
-export const answersSchema = z.record(
-  z.string().check(z.maxLength(60)),
-  z.union([
-    z.boolean(),
-    z.string().check(z.maxLength(2000)),
-    z.number(),
-    z.array(z.string().check(z.maxLength(200))).check(z.maxLength(30)),
-  ]),
-);
+/**
+ * Answers are keyed by question `key`; the shape is validated against the script.
+ * One answer per question at most, so a script's own ceiling bounds the count.
+ */
+export const answersSchema = z
+  .record(
+    z.string().check(z.maxLength(60)),
+    z.union([
+      z.boolean(),
+      z.string().check(z.maxLength(2000)),
+      z.number(),
+      z.array(z.string().check(z.maxLength(200))).check(z.maxLength(30)),
+    ]),
+  )
+  .check(
+    z.refine((answers) => Object.keys(answers).length <= SCRIPT_QUESTIONS_MAX, {
+      error: `at most ${SCRIPT_QUESTIONS_MAX} answers`,
+    }),
+  );
 export type Answers = z.infer<typeof answersSchema>;
 
 /* ------------------------------------------------------------------ prospects */

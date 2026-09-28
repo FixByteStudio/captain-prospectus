@@ -58,13 +58,13 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 Every array is bounded, because one request must stay inside the Workers Free
 10 ms CPU budget (`docs/free-tier-budget.md`). The limits live in
 `src/shared/constants.ts`: 250 import rows, 200 visits and 100 field prospects
-per sync, 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
+per sync, 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
 per list page, 1000 candidates per Overpass import. A Google import is capped at 20 by
 Google itself.
 
 Those cap **rows**. `MAX_REQUEST_BYTES` (2 MiB) caps **bytes**, Worker-wide, and is
-checked before any body is parsed — the two are not the same thing, because
-`answersSchema` does not bound how many answers a visit carries. The field client trims
+checked before any body is parsed — the two are not the same thing, because 200
+visits of 50 long answers each is schema-valid and about 20 MiB. The field client trims
 a sync batch that would exceed it rather than sending one the server must refuse; see
 `docs/security.md`.
 

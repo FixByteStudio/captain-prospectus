@@ -26,4 +26,5 @@ A script is the list of questions an agent asks during a visit.
 - `key` is `snake_case`, stable, and never reused with a different meaning.
 - Saving a script creates a **new version** and activates it; previous versions stay for historical answers.
 - Exactly **one active script** at a time in v1.
+- A script has at most **50 questions** (`SCRIPT_QUESTIONS_MAX`), so a visit carries at most 50 answers; the sync refuses more.
 - Agents receive the active script on every sync. A visit records the `script_id` it was answered with, even if a newer version arrived before it synced.

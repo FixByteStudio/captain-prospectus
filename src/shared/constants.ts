@@ -99,6 +99,13 @@ export const SYNC_PROSPECTS_PER_REQUEST = 100;
 export const ADMIN_VISITS_PAGE_SIZE = 500;
 
 /**
+ * Questions per script, and so answers per visit: a visit answers one script
+ * version, once per question (docs/domains/scripts.md). Lowering it would
+ * refuse visits already queued on a phone — INVARIANT 9.
+ */
+export const SCRIPT_QUESTIONS_MAX = 50;
+
+/**
  * Largest request body the Worker will read, in bytes.
  *
  * Measured, not guessed. The biggest request a real client can build is a full
@@ -110,9 +117,9 @@ export const ADMIN_VISITS_PAGE_SIZE = 500;
  * day's sync is well under 100 KiB.
  *
  * So the floor is 1060 KiB and this is roughly twice it. What the cap is for is
- * the other end: `answersSchema` does not bound how many answers a visit
- * carries, so a payload of 200 visits each holding 50 answers of 2000
- * characters is 19.7 MiB and still schema-valid. That is what gets refused
+ * the other end: a visit carries up to SCRIPT_QUESTIONS_MAX answers of up to
+ * 2000 characters each, so a payload of 200 visits each holding 50 of them is
+ * 19.7 MiB and still schema-valid. That is what gets refused
  * before JSON.parse ever sees it (docs/security.md, "Malformed or oversized
  * payloads").
  *
