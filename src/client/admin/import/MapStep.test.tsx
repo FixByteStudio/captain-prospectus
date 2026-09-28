@@ -275,4 +275,41 @@ describe("MapStep", () => {
     await screen.findByText(copy.import.result.title);
     expect(sizes).toEqual([250, 50, 250, 50]);
   });
+
+  it("puts the provider above the map, and under it the vertex count, undo, clear, then the gold search (#185)", async () => {
+    await goToMap();
+    await drawPolygon();
+
+    const order = [
+      screen.getByRole("combobox", { name: copy.map.provider.label }),
+      screen.getByTestId("map-canvas"),
+      screen.getByText(copy.map.vertices(3)),
+      screen.getByRole("button", { name: copy.map.undo }),
+      screen.getByRole("button", { name: copy.map.clear }),
+      screen.getByRole("button", { name: copy.map.search }),
+    ];
+    for (let i = 1; i < order.length; i++) {
+      const [before, after] = [order[i - 1], order[i]];
+      // DOCUMENT_POSITION_FOLLOWING: `after` comes later in the document.
+      expect(before?.compareDocumentPosition(after as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    }
+    // Gold is the one main action; undo and clear stay secondary.
+    expect(screen.getByRole("button", { name: copy.map.search }).dataset.variant).toBe("default");
+    expect(screen.getByRole("button", { name: copy.map.undo }).dataset.variant).toBe("ghost");
+    expect(screen.getByRole("button", { name: copy.map.clear }).dataset.variant).toBe("outline");
+  });
+
+  it("shows a failed search as a destructive Alert under the map (#185)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ error: "internal" }, 500)),
+    );
+    await goToMap();
+    await drawPolygon();
+    await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(copy.map.failed);
+    expect(screen.getByRole("button", { name: copy.map.search })).toBeTruthy();
+  });
 });

@@ -1,6 +1,6 @@
 ---
 id: 015
-status: ready
+status: done
 implements: _bmad-output/initiative-dashboard-redesign/epic-admin-screens/story-the-six-screens-at-1280-820-and-390-light-and-dark.md (#185, prep only), EXPERIENCE.md § Component Patterns, § State Patterns, § Responsive & Platform
 depends_on: [014]
 ---

@@ -632,3 +632,140 @@ describe("ProspectsScreen › below 768px (#179)", () => {
     restore.mockRestore();
   });
 });
+
+describe("ProspectsScreen › selection and row actions (#185)", () => {
+  /** The list plus the assign route, which `stubFetch` would answer with a list. */
+  function stubAssign(onAssign: (body: unknown) => Response) {
+    const posted: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), "http://admin");
+        if (url.pathname === "/api/admin/agents") {
+          return json({ agents: [{ email: "lea@example.com", role: "agent" }] });
+        }
+        if (url.pathname === "/api/admin/prospects/assign") {
+          const body: unknown = JSON.parse(String(init?.body));
+          posted.push(body);
+          return onAssign(body);
+        }
+        return json({ prospects: [prospect("a", "Chez Léa")], total: 1 });
+      }),
+    );
+    return posted;
+  }
+
+  async function tick(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      await screen.findByRole("checkbox", { name: copy.prospects.selection.selectOne("Chez Léa") }),
+    );
+  }
+
+  it("replaces the filters in place with the selection's actions, and Annuler brings them back", async () => {
+    stubFetch([prospect("a", "Chez Léa")], 1);
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+    await tick(user);
+
+    expect(screen.queryByRole("searchbox", { name: copy.prospects.search.label })).toBeNull();
+    for (const filter of [
+      copy.prospects.filters.status,
+      copy.prospects.filters.agent,
+      copy.prospects.filters.source,
+    ]) {
+      expect(screen.queryByRole("combobox", { name: filter })).toBeNull();
+    }
+    expect(screen.getByText(copy.prospects.selection.count(1))).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: copy.prospects.selection.assignTo })).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.prospects.selection.assign })).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.prospects.selection.unassign })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: copy.prospects.selection.cancel }));
+
+    expect(screen.getByRole("searchbox", { name: copy.prospects.search.label })).toBeTruthy();
+    expect(statusSelect()).toBeTruthy();
+    expect(screen.queryByText(copy.prospects.selection.count(1))).toBeNull();
+    const box = screen.getByRole("checkbox", {
+      name: copy.prospects.selection.selectOne("Chez Léa"),
+    });
+    expect(box.getAttribute("aria-checked") ?? String((box as HTMLInputElement).checked)).toBe(
+      "false",
+    );
+  });
+
+  it("offers Assigner à, Retirer l'assignation and Changer le statut in the row menu", async () => {
+    stubFetch([{ ...prospect("a", "Chez Léa"), assignedTo: "lea@example.com" }], 1);
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", { name: copy.prospects.row.menu("Chez Léa") }),
+    );
+
+    const menu = await screen.findByRole("menu");
+    const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(items).toEqual([
+      copy.prospects.row.assignTo,
+      copy.prospects.row.unassign,
+      copy.prospects.row.changeStatus,
+    ]);
+  });
+
+  it("leaves Retirer l'assignation out of the row menu of an unassigned prospect", async () => {
+    stubFetch([prospect("a", "Chez Léa")], 1);
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", { name: copy.prospects.row.menu("Chez Léa") }),
+    );
+
+    const menu = await screen.findByRole("menu");
+    expect(menu.textContent).not.toContain(copy.prospects.row.unassign);
+    expect(menu.textContent).toContain(copy.prospects.row.assignTo);
+  });
+
+  it("toasts what the admin did when the selection is assigned", async () => {
+    const posted = stubAssign(() => json({ assigned: 1 }));
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+    await tick(user);
+
+    await user.click(screen.getByRole("combobox", { name: copy.prospects.selection.assignTo }));
+    await user.click(await screen.findByRole("option", { name: "lea@example.com" }));
+    await user.click(screen.getByRole("button", { name: copy.prospects.selection.assign }));
+
+    expect(await screen.findByText(copy.prospects.assigned(1))).toBeTruthy();
+    expect(posted).toEqual([{ ids: ["a"], assignedTo: "lea@example.com" }]);
+  });
+
+  it("toasts the failure when the assignment is refused, and keeps the selection to retry", async () => {
+    const posted = stubAssign(() => json({ error: "internal" }, 500));
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+    await tick(user);
+
+    await user.click(screen.getByRole("combobox", { name: copy.prospects.selection.assignTo }));
+    await user.click(await screen.findByRole("option", { name: "lea@example.com" }));
+    await user.click(screen.getByRole("button", { name: copy.prospects.selection.assign }));
+
+    expect(await screen.findByText(copy.prospects.assignFailed)).toBeTruthy();
+    expect(posted).toEqual([{ ids: ["a"], assignedTo: "lea@example.com" }]);
+    expect(screen.getByText(copy.prospects.selection.count(1))).toBeTruthy();
+  });
+
+  it("toasts the unassignment and hands the slot back to the filters", async () => {
+    const posted = stubAssign(() => json({ assigned: 1 }));
+    renderAt("/admin/prospects");
+    const user = userEvent.setup();
+    await tick(user);
+
+    await user.click(screen.getByRole("button", { name: copy.prospects.selection.unassign }));
+
+    expect(await screen.findByText(copy.prospects.unassigned(1))).toBeTruthy();
+    expect(posted).toEqual([{ ids: ["a"], assignedTo: null }]);
+    await waitFor(() => expect(statusSelect()).toBeTruthy());
+  });
+});
