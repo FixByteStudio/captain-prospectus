@@ -1,6 +1,6 @@
 ---
 id: 008
-status: ready
+status: done
 implements: docs/api.md#status-codes (503 when D1's daily limit is hit), docs/security.md#personal-data
 depends_on: []
 ---
