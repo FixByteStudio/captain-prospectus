@@ -1,6 +1,6 @@
 # API
 
-Base path `/api`. JSON in, JSON out. Every route requires a verified Access identity. Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`.
+Base path `/api`. JSON in, JSON out. Every route requires a verified Access identity. Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
 
 ## Common
 | Route | Role | Purpose |
