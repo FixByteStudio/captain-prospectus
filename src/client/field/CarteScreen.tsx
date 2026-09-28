@@ -17,7 +17,7 @@ import { Link } from "react-router";
 import { MapIcon, RouteIcon } from "lucide-react";
 import { buttonVariants } from "@/ui/button-variants";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { useOnline } from "../hooks/use-online";
 import { CarteList } from "./CarteList";

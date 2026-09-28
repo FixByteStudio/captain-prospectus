@@ -12,7 +12,7 @@
  * it returns.
  */
 import { ClockIcon, CloudUploadIcon, UserXIcon, XIcon, type LucideIcon } from "lucide-react";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "@/ui/button-variants";
 import type { PwaState } from "../pwa";

@@ -247,3 +247,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-186-refactor-sweep.md`
   summary: The vendored `Textarea` keeps shadcn's `md:text-sm`, which both field callers patch back with `text-base md:text-base` (GH #213).
   evidence: Found by the duplication-map lens on #186. `ui/textarea.tsx:9`, patched at `field/ScriptQuestions.tsx:107` and `field/VisitScreen.tsx:249`. Pre-existing, and every consumer is on the field route, which #186 excludes. No admin screen renders a Textarea.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-20-split-copy-by-audience.md`
+  summary: CLAUDE.md invariant 15, ADR-0013 and the glossary say "field-reachable modules import `copy/field`" while `copy/field.ts` and the GH #20 intent say "every module outside `src/client/admin/`"; pick one wording.
+  evidence: blind-hunter on GH #20. The fix edits CLAUDE.md, an agent-context file, so it is left to the owner.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-20-split-copy-by-audience.md`
+  summary: `.claude/agents/pwa-engineer.md:22` and `.claude/skills/night-shift/SKILL.md:66` still send field authors to `src/client/copy.ts`; they should name `copy/field` for modules outside `admin/`.
+  evidence: blind-hunter on GH #20. Agent-context files; a wrong import is still caught by `check:precache` in CI.

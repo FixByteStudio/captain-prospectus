@@ -33,7 +33,7 @@ import { ScriptQuestions, questionDomId } from "./ScriptQuestions";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { apiFetch } from "../api";
-import { copy, TYPE_LABELS } from "../copy";
+import { copy, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
 import { OUTCOMES, type Outcome } from "../../shared/constants";
 import { visitHistoryResponseSchema } from "../../shared/schemas";

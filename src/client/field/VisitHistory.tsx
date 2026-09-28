@@ -5,7 +5,7 @@
  * phone, in `VisitSidePane` from 768px. Never both, so the list is never
  * rendered twice.
  */
-import { copy, OUTCOME_LABELS } from "../copy";
+import { copy, OUTCOME_LABELS } from "../copy/field";
 import { formatDate } from "../format";
 import type { VisitHistoryEntry } from "../../shared/schemas";
 

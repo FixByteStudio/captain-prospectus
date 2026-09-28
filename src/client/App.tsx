@@ -12,7 +12,7 @@ import {
 import { LockIcon, MapPinOffIcon, TriangleAlertIcon, type LucideIcon } from "lucide-react";
 import { apiFetch } from "./api";
 import { Band, BandBrand, UpdatePrompt } from "./Band";
-import { copy } from "./copy";
+import { copy } from "./copy/field";
 import { initials } from "./format";
 import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";

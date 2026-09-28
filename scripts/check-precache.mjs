@@ -8,7 +8,8 @@
  * `dist/client/sw.js`, sums the same bytes, and exits non-zero instead of
  * leaving the number for review to catch.
  *
- * It also fails when a precached chunk holds an admin-only package (GH #95),
+ * It also fails when a precached chunk holds an admin-only package (GH #95)
+ * or admin-only source module such as the admin copy (GH #20),
  * read from the chunk-module map `vite.config.ts` writes beside dist/client:
  * a leak like that would otherwise pass silently until it crossed the ceiling.
  *
@@ -46,7 +47,8 @@ const DIST_CLIENT = join(ROOT, "dist", "client");
 const SW_PATH = join(DIST_CLIENT, "sw.js");
 const MAP_PATH = join(ROOT, "dist", "client-chunk-modules.json");
 
-// Packages only the admin side imports. Leaflet, Radix and sonner are left out
+// Packages and source modules (as `src/client/...` paths) only the admin side
+// imports. Leaflet, Radix and sonner are left out
 // on purpose: the field shares them (ADR-0026) or may. Recharts' chart-only
 // dependencies are listed too, so a chunk split that moves them out of
 // AdminApp without Recharts itself still fails (GH #110); its generic ones
@@ -62,6 +64,9 @@ const ADMIN_ONLY = [
   "decimal.js-light",
   "papaparse",
   "@dnd-kit/*",
+  // Admin French strings: field-reachable modules import copy/field.ts instead (GH #20).
+  "src/client/copy/admin.ts",
+  "src/client/copy.ts",
 ];
 const isAdminOnly = (name) =>
   ADMIN_ONLY.some((p) => (p.endsWith("/*") ? name.startsWith(p.slice(0, -1)) : name === p));
@@ -219,7 +224,7 @@ for (const { url, path } of entries.filter((e) => e.path.endsWith(".js"))) {
   const leaked = modules.filter((name) => typeof name === "string" && isAdminOnly(name));
   if (leaked.length > 0) {
     console.error(
-      `check:precache — precached "${url}" holds admin-only ${leaked.join(", ")}. Move the import behind the lazy AdminApp import. Only a chunk that is admin-only as a whole belongs in globIgnores in vite.config.ts (ADR-0019); ignoring a shared chunk like index-*.js breaks the field route offline.`,
+      `check:precache — precached "${url}" holds admin-only ${leaked.join(", ")}. Move the import behind the lazy AdminApp import; for a copy module, import copy/field instead. Only a chunk that is admin-only as a whole belongs in globIgnores in vite.config.ts (ADR-0019); ignoring a shared chunk like index-*.js breaks the field route offline.`,
     );
     failed = true;
   }

@@ -8,7 +8,7 @@
  */
 import { ArrowLeftIcon } from "lucide-react";
 import { Link } from "react-router";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 /** Shared with step 2's « Résultat » button, which must look the same (design.md). */
 export const BACK_LINK_CLASS =

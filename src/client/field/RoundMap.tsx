@@ -18,7 +18,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { LocateFixedIcon } from "lucide-react";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { Button } from "@/ui/button";
 import { DEFAULT_CENTER, DEFAULT_ZOOM } from "../admin/import/map";
 import type { Point } from "../../shared/geo";

@@ -5,7 +5,7 @@
  * match it. Renders on both steps, and only when the visit actually has one
  * (GH #123).
  */
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 export function StepIndicator({ step }: { step: 1 | 2 }) {
   // Step 1 is always Résultat, step 2 always Questions — the visit form has

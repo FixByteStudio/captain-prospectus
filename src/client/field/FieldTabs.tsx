@@ -21,7 +21,7 @@
  */
 import { useState, type MouseEvent } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "@/ui/button-variants";
 import {

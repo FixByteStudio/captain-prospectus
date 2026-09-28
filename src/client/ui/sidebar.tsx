@@ -2,7 +2,7 @@ import * as React from "react";
 import { PanelLeftIcon } from "lucide-react";
 import * as SlotPrimitive from "radix-ui/slot";
 import { cn } from "@/lib/utils";
-import { copy } from "@/copy";
+import { copy } from "@/copy/field";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/ui/button";
 import { Separator } from "@/ui/separator";

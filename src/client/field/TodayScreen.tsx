@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { useLiveQuery } from "dexie-react-hooks";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 import { formatDate } from "../format";
 import { cn } from "../lib/utils";
 import { brusselsPeriod } from "../../shared/period";

@@ -16,10 +16,12 @@ type and touch-target variables; one CSS file per component, imported by that co
 framework, no CSS-in-JS, no build step beyond Vite's.
 
 **2. The UI speaks French. Everything else is English.** Code identifiers, database values, API
-field names, docs, commits and the glossary stay English. Every French string lives in one file,
-`src/client/copy.ts`. Enum values (`follow_up`, `no_contact`…) are stored in English and translated
-at render, using the tables in [glossary.md](../glossary.md). `<html lang="fr">`, the PWA manifest
-and all date/number formatting use `fr-FR` via `Intl`.
+field names, docs, commits and the glossary stay English. Every French string lives in
+`src/client/copy.ts` and the `copy/` modules it re-exports; field-reachable modules import
+`copy/field` so admin strings stay out of the field precache (GH #20). Enum values (`follow_up`,
+`no_contact`…) are stored in English and translated at render, using the tables in
+[glossary.md](../glossary.md). `<html lang="fr">`, the PWA manifest and all date/number formatting
+use `fr-FR` via `Intl`.
 
 **3. TanStack Query on the admin side only.** The admin screens are online-only request/response with
 15 s polling ([ADR-0010](0010-live-feed-by-polling.md)), which is what the library is for. The field
@@ -37,7 +39,7 @@ how visits get lost.
 | TanStack Query everywhere, including the field client | Two sources of truth on the phone, contradicting ADR-0007 |
 
 ## Consequences
-- Adding a second language later means replacing `copy.ts` with a lookup, not touching components.
-- The French/English seam is enforced by review: a French string outside `copy.ts` is a bug.
+- Adding a second language later means replacing `copy.ts` and its `copy/` modules with a lookup, not touching components.
+- The French/English seam is enforced by review: a French string outside `copy.ts` and its `copy/` modules is a bug.
 - No design system. If the UI grows past ~15 screens, revisit this ADR rather than accreting CSS.
 - `tokens.css` is the one place to change spacing or colours; components must not hardcode values.

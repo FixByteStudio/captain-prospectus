@@ -10,7 +10,7 @@
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { buttonVariants } from "@/ui/button-variants";
 import { Input } from "@/ui/input";
-import { copy } from "../copy";
+import { copy } from "../copy/field";
 
 export function NumberStepper({
   id,
