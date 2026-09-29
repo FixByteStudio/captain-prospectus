@@ -421,6 +421,16 @@ describe("VisitScreen — step 1", () => {
     expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
   });
 
+  it("offline with a visited prospect and nothing cached, says the history will come back, not a first visit (#140)", async () => {
+    asPhone();
+    await fieldDb.prospects.update(PROSPECT.id, { lastVisitAt: 1_700_000_000_000 });
+    await renderVisit({ expectContinue: false });
+
+    expect(await screen.findByText(copy.visit.historyOffline)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.noPreviousVisits)).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
   it("keeps the outcome, flyer and date intact when Résultat is tapped from step 2", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
@@ -1240,6 +1250,14 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(
       within(screen.getByRole("complementary")).getByText(copy.visit.noPreviousVisits),
     ).toBeTruthy();
+  });
+
+  it("says the history will come back, in the pane, for a visited prospect with nothing cached (#140)", async () => {
+    await fieldDb.prospects.update(PROSPECT.id, { lastVisitAt: 1_700_000_000_000 });
+    await renderVisit({ expectContinue: false });
+    const pane = screen.getByRole("complementary");
+    expect(await within(pane).findByText(copy.visit.historyOffline)).toBeTruthy();
+    expect(within(pane).queryByText(copy.visit.noPreviousVisits)).toBeNull();
   });
 
   it("saves from the tablet layout: one outbox row with the answers and scriptId (#142)", async () => {

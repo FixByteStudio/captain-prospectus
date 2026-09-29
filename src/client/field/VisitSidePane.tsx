@@ -65,17 +65,19 @@ function VisitMap({ prospectId }: { prospectId: string }) {
 export function VisitSidePane({
   prospectId,
   history,
+  lastVisitAt,
   className,
 }: {
   prospectId: string;
   history: readonly VisitHistoryEntry[];
+  lastVisitAt: number | null;
   className?: string;
 }) {
   const online = useOnline();
   const headingId = useId();
   return (
     <aside className={className} aria-labelledby={headingId}>
-      <VisitHistory history={history} headingId={headingId} />
+      <VisitHistory history={history} lastVisitAt={lastVisitAt} headingId={headingId} />
       {online && <VisitMap prospectId={prospectId} />}
     </aside>
   );

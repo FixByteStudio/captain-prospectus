@@ -547,7 +547,11 @@ export function VisitScreen() {
           {/* Below 768px the history sits under step 1; from 768px it lives in
             the side pane instead, on both steps (spec-gh-126). */}
           {isMobile && step === "outcome" && (
-            <VisitHistory history={history} className="border-border mt-8 border-t pt-4" />
+            <VisitHistory
+              history={history}
+              lastVisitAt={prospect?.lastVisitAt ?? null}
+              className="border-border mt-8 border-t pt-4"
+            />
           )}
 
           {/* Sticky, because the outcome list is taller than a phone and the action
@@ -596,6 +600,7 @@ export function VisitScreen() {
           <VisitSidePane
             prospectId={id}
             history={history}
+            lastVisitAt={prospect?.lastVisitAt ?? null}
             className="sticky top-4 col-span-2 self-start"
           />
         )}
