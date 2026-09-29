@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { copy } from "../copy";
+import { useOnline } from "../hooks/use-online";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 
@@ -35,7 +36,12 @@ export function ScreenState<T>({
   skeleton: ReactNode;
   children: (data: T) => ReactNode;
 }) {
-  const busy = data == null && isPending;
+  // GH #209 (GH #85): the admin offline banner already says data is stale;
+  // a second Alert per panel would repeat it, so it stands down offline too
+  // — including a first load that already failed, which the skeleton stands
+  // in for rather than rendering nothing at all.
+  const online = useOnline();
+  const busy = data == null && (isPending || !online);
   return (
     <>
       {/* Outside the aria-busy container, so it is announced rather than
@@ -50,7 +56,7 @@ export function ScreenState<T>({
         <div aria-busy="true">{skeleton}</div>
       ) : (
         <>
-          {isError && (
+          {isError && online && (
             <Alert variant="destructive" className="mb-4">
               <AlertTitle>{loadFailed}</AlertTitle>
               <AlertDescription>

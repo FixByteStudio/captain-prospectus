@@ -272,3 +272,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-147-progress-value.md`
   summary: The MapStep and PreviewStep import progress bars have no accessible name (GH #231).
   evidence: Radix does not name the progressbar root, and both call sites pass no aria-label (MapStep.tsx:312, PreviewStep.tsx:131). DailyProgress and ConversionBar each set one.
+
+- source_spec: none
+  summary: The blocking admin « Votre session a expiré » dialog (EXPERIENCE.md State Patterns, Session expired · Admin) is not built (GH #209, story 2 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own.
+
+- source_spec: none
+  summary: The admin « Hors ligne. Cette page a besoin du réseau… » page after an offline reload (EXPERIENCE.md State Patterns, Offline, after a reload) is not built (GH #209, story 3 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-admin-offline-banner.md`
+  summary: A network drop while the lazy admin chunk is still loading should show the offline sentence with « Réessayer » (EXPERIENCE.md State Patterns, Offline · Admin, last sentence).
+  evidence: The fallback lives in `App.tsx` (entry chunk), so its string belongs in `copy/field`, not `copy/admin.ts`; grouped with GH #209 story 3, which renders in the same entry-chunk frame.

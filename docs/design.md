@@ -259,6 +259,18 @@ opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a real
 anchor to `/cdn-cgi/access/logout` rather than a router link — see
 [identity-access.md](domains/identity-access.md) for why.
 
+`AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
+two mutually exclusive things (GH #209): the update prompt when a build
+waits, or — while `useOnline()` reports offline — a full-width `Alert`
+reading "Hors ligne. Les données affichées ne changent plus et se
+rafraîchiront au retour du réseau.", gone as soon as the browser reports back
+online. Offline wins the slot, since a build cannot be fetched offline. Each
+screen's own load-failed Alert (`ScreenState`, `DashboardScreen`) stands down
+for the same reason while offline, and panels keep whatever data they last
+held rather than each repeating the banner's sentence. The banner sits in an
+always-mounted `aria-live="polite"` region, so it is announced when it appears,
+and when it goes the region reads out a hidden "Connexion rétablie."
+
 Safe-area insets go on `.safe-top` (the band) and `.safe-bottom` (the field's
 bottommost fixed element — the tab bar below 768px, GH #66), never on `body`,
 so the band stays flush with the top of a notched phone and the tab bar stays

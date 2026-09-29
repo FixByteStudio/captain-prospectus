@@ -14,6 +14,14 @@ const PAGER = {
 };
 
 export const adminCopy = {
+  /** The admin shell's offline banner (GH #209, EXPERIENCE.md § State Patterns). */
+  offline: {
+    banner:
+      "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau.",
+    /** Read out, never shown, when the banner goes (EXPERIENCE.md § Accessibility). */
+    reconnected: "Connexion rétablie.",
+  },
+
   /** The top bar's search button and its inert CommandDialog (GH #64). */
   search: {
     // Reused verbatim as the ≥768px button's text and, below 768px, as the

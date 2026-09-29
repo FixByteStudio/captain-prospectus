@@ -6,7 +6,8 @@
  * counts on every admin path, and the dashboard for its figures.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import { onlineManager } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { copy } from "../copy";
 import { ORPHANS_PAGE_SIZE } from "../../shared/constants";
@@ -121,5 +122,69 @@ describe("AdminApp", () => {
       name: copy.nav.withCount(copy.nav.orphans, total),
     });
     expect(badged.textContent).toContain(String(total));
+  });
+
+  // GH #209 (part of GH #85's untested offline-admin wiring): one full-width
+  // banner takes the update prompt's slot while offline, and goes as soon as
+  // the browser reports back online.
+  describe("offline banner", () => {
+    afterEach(() => {
+      // DOM tests drive `useOnline` and TanStack's `onlineManager` alike by
+      // dispatching window events; reset both for the next test.
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+        onlineManager.setOnline(true);
+      });
+    });
+
+    it("shows the offline banner and displaces the update prompt, gone once back online", async () => {
+      render(
+        <MemoryRouter initialEntries={["/admin"]}>
+          <Routes>
+            <Route
+              path="/admin/*"
+              element={
+                <AdminApp
+                  email="admin@example.com"
+                  updatePrompt={<p data-testid="update-prompt">maj</p>}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await screen.findByText("278");
+      expect(screen.getByTestId("update-prompt")).toBeTruthy();
+      // The live region exists before the banner ever lands in it, so a
+      // screen reader announces the sentence arriving rather than missing
+      // an element that showed up already filled (EXPERIENCE.md:216).
+      const live = document.querySelector('[data-slot="offline-region"]');
+      expect(live).toBeTruthy();
+
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+
+      expect(screen.getByText(copy.offline.banner)).toBeTruthy();
+      expect(live?.getAttribute("aria-live")).toBe("polite");
+      expect(live?.textContent).not.toContain(copy.offline.reconnected);
+      expect(live?.contains(screen.getByText(copy.offline.banner))).toBe(true);
+      expect(screen.queryByTestId("update-prompt")).toBeNull();
+
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      expect(screen.queryByText(copy.offline.banner)).toBeNull();
+      expect(screen.getByTestId("update-prompt")).toBeTruthy();
+      // Announced once when it goes, too (EXPERIENCE.md:216).
+      expect(live?.textContent).toBe(copy.offline.reconnected);
+    });
+
+    it("announces nothing on first load while online", async () => {
+      renderAdmin("/admin");
+      await screen.findByText("278");
+      expect(document.querySelector('[data-slot="offline-region"]')?.textContent).toBe("");
+    });
   });
 });
