@@ -57,8 +57,9 @@ export function RecentVisits() {
       </p>
 
       {/* As on Visites (#224): a skeleton until the first rows, then the
-          shared Alert with « Réessayer » above any rows already held. No
-          `loading` region: the screen's own already says it is loading. */}
+          shared Alert with « Réessayer » above any rows already held. Its own
+          `loading`, since the screen's region only speaks for the dashboard's
+          query, and this feed can still be out after that has answered. */}
       <div className="px-4.5 empty:hidden">
         <ScreenState
           data={shown.length === 0 && isPending ? undefined : shown}
@@ -67,6 +68,7 @@ export function RecentVisits() {
           isFetching={isFetching}
           onRetry={() => void refetch()}
           loadFailed={copy.visits.loadFailed}
+          loading={copy.visits.loading}
           skeleton={
             <ul aria-hidden="true" className="pb-3">
               {Array.from({ length: SHOWN }, (_, i) => (
