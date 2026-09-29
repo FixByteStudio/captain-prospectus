@@ -6,9 +6,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { VitePWA } from "vite-plugin-pwa";
-import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout";
-import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker";
-import { chunkModuleName } from "./scripts/chunk-module-name";
+import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout.ts";
+import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker.ts";
+import { chunkModuleName } from "./scripts/chunk-module-name.ts";
 
 const REPO_ROOT = fileURLToPath(new URL(".", import.meta.url));
 
