@@ -262,3 +262,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-206-admin-loading-states.md`
   summary: Admin screens show a load-failed Alert while offline, where EXPERIENCE.md asks them to keep their values under an offline banner.
   evidence: No admin offline banner exists in `src/client`; the gap is app-wide. GH #209.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-140-visit-history-offline.md`
+  summary: Online, when the history fetch fails (403 after reassignment, 5xx, bad body), a visited prospect with nothing cached reads « …au retour du réseau. », which blames a network the device has.
+  evidence: `VisitScreen.tsx` swallows every fetch failure, and `VisitHistory` picks the empty state from `lastVisitAt` alone. Before #140 the same case said « Première visite », which was worse. A correct message needs the fetch state (pending / failed / done) passed down, plus a new copy string.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-140-visit-history-offline.md`
+  summary: The visit form renders the history's empty state before Dexie answers, because `useLiveQuery` defaults `history` to `[]` and `prospect` to undefined, so a prospect with cached history flashes an empty-state line first.
+  evidence: The `useLiveQuery` defaults in `VisitScreen.tsx`. The flash predates #140 (it said « Première visite »). The admin side fixed the same class of flash in #222/#223; the field side needs a "not loaded yet" state that renders no empty line.

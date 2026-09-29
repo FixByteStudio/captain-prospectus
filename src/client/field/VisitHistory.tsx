@@ -11,21 +11,29 @@ import type { VisitHistoryEntry } from "../../shared/schemas";
 
 export function VisitHistory({
   history,
+  lastVisitAt,
   className,
   headingId,
 }: {
   history: readonly VisitHistoryEntry[];
+  /** The cached prospect's `lastVisitAt`; null for a first visit. */
+  lastVisitAt: number | null;
   className?: string;
   /** Names `VisitSidePane`'s landmark after this heading. */
   headingId?: string;
 }) {
+  // An empty cache for a prospect the server says was visited means this
+  // device never fetched its history (offline since the round was pulled),
+  // not a first visit: saying « Première visite » there would hide the notes
+  // this section exists for (field-operations.md).
+  const empty = lastVisitAt === null ? copy.visit.noPreviousVisits : copy.visit.historyOffline;
   return (
     <section className={className}>
       <h3 id={headingId} className="text-muted-foreground text-sm font-medium">
         {copy.visit.previousVisits}
       </h3>
       {history.length === 0 ? (
-        <p className="text-muted-foreground mt-2 text-sm">{copy.visit.noPreviousVisits}</p>
+        <p className="text-muted-foreground mt-2 text-sm">{empty}</p>
       ) : (
         <ul className="divide-border mt-2 divide-y">
           {history.map((entry) => (
