@@ -5,9 +5,9 @@
  * per test, so no answer leaks between them.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import type { AdminVisit, DashboardResponse } from "../../../shared/schemas";
@@ -559,6 +559,32 @@ describe("DashboardScreen", () => {
     expect(alert.textContent).toContain(copy.dashboard.loadFailed);
     expect(screen.getByText("300")).toBeTruthy();
     expect(within(card(copy.dashboard.openProspects)).getByText("1 284")).toBeTruthy();
+  });
+
+  // GH #209 (GH #85): offline, the shell's banner says the figures are stale,
+  // so the screen's own Alert stands down and the figures stay.
+  it("drops the load-failed Alert while offline and keeps the figures", async () => {
+    let fail = false;
+    stubFetch((period) => (fail ? json({ error: "error" }, 500) : json(answer(period))));
+    const client = renderScreen();
+    await screen.findByText("300");
+
+    fail = true;
+    await client.refetchQueries();
+    expect(await screen.findByText(copy.dashboard.loadFailed)).toBeTruthy();
+
+    try {
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+      expect(screen.queryByText(copy.dashboard.loadFailed)).toBeNull();
+      expect(screen.getByText("300")).toBeTruthy();
+    } finally {
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+        onlineManager.setOnline(true);
+      });
+    }
   });
 
   it("offers « Réessayer » when loading fails, and it refetches (I/O matrix, load fails)", async () => {

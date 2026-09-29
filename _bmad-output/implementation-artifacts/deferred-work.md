@@ -276,3 +276,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-161-agent-activity-overflow.md`
   summary: Check Activité par agent's lg truncation (`lg:w-full lg:max-w-0 lg:min-w-40` on a th) in Firefox and Safari at 1024 and 1280 px.
   evidence: maybe-false, would be medium. Measured in Chromium only. If an engine ignores min-width on a table cell, the agent column collapses to its initial between 1024 and ~1210 px. Opening the dashboard at 1024 in Firefox and WebKit would prove it.
+
+- source_spec: none
+  summary: The blocking admin « Votre session a expiré » dialog (EXPERIENCE.md State Patterns, Session expired · Admin) is not built (GH #209, story 2 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own.
+
+- source_spec: none
+  summary: The admin « Hors ligne. Cette page a besoin du réseau… » page after an offline reload (EXPERIENCE.md State Patterns, Offline, after a reload) is not built (GH #209, story 3 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own. Decision (owner, 2026-09-29): the page renders in the field band from the entry chunk, so its strings go in `copy/field`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-admin-offline-banner.md`
+  summary: A network drop while the lazy admin chunk is still loading should show the offline sentence with « Réessayer » (EXPERIENCE.md State Patterns, Offline · Admin, last sentence).
+  evidence: The fallback lives in `App.tsx` (entry chunk), so its string belongs in `copy/field`, not `copy/admin.ts`; grouped with GH #209 story 3, which renders in the same entry-chunk frame. Decision (owner, 2026-09-29): its strings go in `copy/field`.
