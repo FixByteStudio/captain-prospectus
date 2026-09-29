@@ -49,15 +49,23 @@ export function AgentActivityTable({ agents }: { agents: Agent[] }) {
           <TableBody>
             {agents.map((a) => (
               <TableRow key={a.email} className="h-row hover:bg-transparent">
-                <TableHead scope="row" className="pr-2 pl-3 font-normal">
-                  <span className="inline-flex items-center gap-2.5">
+                {/* At lg the email takes what the figures leave and truncates, so the five
+                    columns fit the 3:2 card at 1280 px; the floor keeps it readable where
+                    the card is narrower and scrolls. Below lg it shows whole (GH #161). */}
+                <TableHead
+                  scope="row"
+                  className="pr-2 pl-3 font-normal lg:w-full lg:max-w-0 lg:min-w-40"
+                >
+                  <span className="flex items-center gap-2.5">
                     <span
-                      className="bg-secondary grid size-6.5 place-items-center rounded-full text-meta font-semibold"
+                      className="bg-secondary grid size-6.5 shrink-0 place-items-center rounded-full text-meta font-semibold"
                       aria-hidden="true"
                     >
                       {a.email.charAt(0).toUpperCase()}
                     </span>
-                    {a.email}
+                    <span className="lg:truncate" title={a.email}>
+                      {a.email}
+                    </span>
                   </span>
                 </TableHead>
                 <TableCell className={NUMBER}>{formatCount(a.visits)}</TableCell>
