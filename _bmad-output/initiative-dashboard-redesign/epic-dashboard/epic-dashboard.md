@@ -1,7 +1,7 @@
 ---
 tracker_id: "104"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/104"
-tracker_status: in-progress
+tracker_status: done
 type: epic
 title: "The admin opens on Tableau de bord"
 parent: initiative-dashboard-redesign
@@ -9,7 +9,7 @@ covers: [CAP-2, CAP-5, CAP-10, CAP-11]
 after: []
 assignee: ""
 risk: medium
-status: in-progress
+status: done
 ---
 
 # The admin opens on Tableau de bord
