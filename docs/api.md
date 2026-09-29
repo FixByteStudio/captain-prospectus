@@ -51,7 +51,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 | 413 | Body over `MAX_REQUEST_BYTES`, refused before it is parsed — so before the 426 check and before validation. `error: "too_large"` |
 | 426 | `clientVersion` no longer supported: update the app. Checked **before** body validation, so an old build is told to update rather than that its data is invalid |
 | 501 | Route declared but not implemented yet (see the roadmap) |
-| 503 | Either D1's daily free-tier limit (`d1_limit`) or a map provider with no key (`places_unconfigured`). Nothing was lost; the `error` code says which |
+| 503 | Either D1's daily free-tier limit (`quota`) or a map provider with no key (`places_unconfigured`). Nothing was lost; the `error` code says which |
 | 502 | A map provider failed or timed out — `overpass_failed` or `places_failed` |
 
 ## Payload caps

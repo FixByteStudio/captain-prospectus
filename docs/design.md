@@ -853,6 +853,47 @@ Four more, from ADR-0020:
   because « Google n'a pas répondu » would send the admin to refresh a page that
   will never work.
 
+#### A place that looks already listed
+
+The same restaurant can come from OpenStreetMap and from Google under two ids, and
+the dedupe key cannot see it ([ingestion](domains/ingestion.md#duplicates-across-providers)).
+The server compares every answer with the list; the panel shows what it found:
+
+```
+┌─────────────────────────────┐
+│ 3               2           │
+│ 3 lieux trouvés 2 semblent  │
+│                 déjà dans…  │
+├─────────────────────────────┤
+▌Le Bouchon        Restaurant │  ← warn edge
+▌12 rue des Bouchers          │
+▌Semble déjà dans la liste :  │
+▌Le Bouchon                   │
+│Pizza Vera   Restauration r. │  ← status-new edge
+▌Sans nom                Bar  │  ← status-rejected edge
+├─────────────────────────────┤
+│ ☐ Importer aussi les 2 lieux│
+│   qui semblent déjà dans la │
+│   liste                     │
+│   Un doublon importé se     │
+│   fusionne ensuite…         │
+│ [Retour] [Importer 1 prosp.]│
+└─────────────────────────────┘
+```
+
+- **A third kind of row, on the same edge.** `status-new` imports, `status-rejected`
+  cannot, and `warn` means "look first": the colour `follow_up` already uses for
+  "someone owes this a look". The edge never speaks alone: the row names the listed
+  prospect it looks like, so the admin can judge the match without leaving the screen.
+- **Out by default, in with one box.** The import count and the button leave the
+  flagged places out. One checkbox under the list takes them all back, and the
+  button's count follows it. It is not a checkbox per row: the list stays a ledger
+  (no checkboxes-as-chrome), and a wrong call is cheap either way. A place left out
+  can be imported by searching again, and one imported by mistake is what the
+  Doublons screen merges.
+- **The opt-in belongs to one answer.** A new search starts unchecked again. Ticking
+  the box for one area must not quietly apply to the next.
+
 ### The live feed
 
 The roadmap sketched this as shadcn `card` + `badge` + `scroll-area`. **It is a
@@ -1022,47 +1063,6 @@ Empty is the healthy state, so it reads as reassurance rather than a failure:
 the shared `EmptyTile` with « Aucune visite à rattacher. », « Tout ce que les
 agents ont envoyé est arrivé à destination. » and one `outline` button to
 Visites.
-
-#### A place that looks already listed
-
-The same restaurant can come from OpenStreetMap and from Google under two ids, and
-the dedupe key cannot see it ([ingestion](domains/ingestion.md#duplicates-across-providers)).
-The server compares every answer with the list; the panel shows what it found:
-
-```
-┌─────────────────────────────┐
-│ 3               2           │
-│ 3 lieux trouvés 2 semblent  │
-│                 déjà dans…  │
-├─────────────────────────────┤
-▌Le Bouchon        Restaurant │  ← warn edge
-▌12 rue des Bouchers          │
-▌Semble déjà dans la liste :  │
-▌Le Bouchon                   │
-│Pizza Vera   Restauration r. │  ← status-new edge
-▌Sans nom                Bar  │  ← status-rejected edge
-├─────────────────────────────┤
-│ ☐ Importer aussi les 2 lieux│
-│   qui semblent déjà dans la │
-│   liste                     │
-│   Un doublon importé se     │
-│   fusionne ensuite…         │
-│ [Retour] [Importer 1 prosp.]│
-└─────────────────────────────┘
-```
-
-- **A third kind of row, on the same edge.** `status-new` imports, `status-rejected`
-  cannot, and `warn` means "look first": the colour `follow_up` already uses for
-  "someone owes this a look". The edge never speaks alone: the row names the listed
-  prospect it looks like, so the admin can judge the match without leaving the screen.
-- **Out by default, in with one box.** The import count and the button leave the
-  flagged places out. One checkbox under the list takes them all back, and the
-  button's count follows it. It is not a checkbox per row: the list stays a ledger
-  (no checkboxes-as-chrome), and a wrong call is cheap either way. A place left out
-  can be imported by searching again, and one imported by mistake is what the
-  Doublons screen merges.
-- **The opt-in belongs to one answer.** A new search starts unchecked again. Ticking
-  the box for one area must not quietly apply to the next.
 
 ## Principles
 

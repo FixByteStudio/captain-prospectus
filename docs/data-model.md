@@ -145,13 +145,6 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `prospects(source)` | admin list filtered by source (`csv`, `osm`, `google`, `field`) |
 | `prospects(updated_at)` | admin list default order |
 | `prospects(merged_into)` | live-prospect filter, and finding what a survivor absorbed |
-
-SQLite uses one index per table reference, so a filtered *and* sorted admin list
-(`status=X` ordered by `updated_at`) filters on the index and then sorts the
-matches in memory. Composite `(status, updated_at)`-style indexes would remove
-that sort, and were deliberately not added: at the few thousand prospects this
-project plans for, the sort is negligible, and three more indexes would cost a
-write on every imported row. Revisit if the base grows by an order of magnitude.
 | `visits(prospect_id, visited_at)` | visit history on a prospect |
 | `visits(received_at)` | live feed |
 | `visits(agent_email, visited_at)` | an agent's own history |
@@ -160,6 +153,13 @@ write on every imported row. Revisit if the base grows by an order of magnitude.
 | `scripts(is_active)` unique **where `is_active = 1`** | "exactly one active script at a time" |
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
+
+SQLite uses one index per table reference, so a filtered *and* sorted admin list
+(`status=X` ordered by `updated_at`) filters on the index and then sorts the
+matches in memory. Composite `(status, updated_at)`-style indexes would remove
+that sort, and were deliberately not added: at the few thousand prospects this
+project plans for, the sort is negligible, and three more indexes would cost a
+write on every imported row. Revisit if the base grows by an order of magnitude.
 
 No index on `visits_orphaned(reason)`. An empty queue is the healthy state and the page
 is capped at 200, so filtering it is a scan over a handful of rows; an index would cost a
