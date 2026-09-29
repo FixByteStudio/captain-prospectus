@@ -738,7 +738,8 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
 
     const recent = await findCard(copy.dashboard.recent.title);
     expect(recent.querySelectorAll('[aria-busy="true"] li [data-slot="skeleton"]')).toHaveLength(5);
-    expect(within(recent).queryByText(copy.visits.loading)).toBeNull();
+    // Read out, not shown: the screen's own region speaks only for its query.
+    expect(within(recent).getByText(copy.visits.loading).className).toContain("sr-only");
     expect(within(recent).queryByText(copy.visits.empty)).toBeNull();
   });
 
