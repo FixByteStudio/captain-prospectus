@@ -3,9 +3,10 @@ import { copy } from "../copy";
 import { heldBackMessage, hidesUpdateBanner, stripEffect, syncView } from "./sync-view";
 
 /**
- * One case per row of the spec's I/O matrix (spec-gh-65) — the seven states in
+ * One case per row of the spec's I/O matrix (spec-gh-65) — the states in
  * `key-f8-sync.html`, decided in one place so `SyncDot`/`SyncStrip` never
- * branch on `status`/`running`/`pending` themselves.
+ * branch on `status`/`running`/`pending` themselves. `unconfirmed`
+ * (docs/backlog/013) is the one state added since that spec was written.
  */
 describe("syncView", () => {
   it("synced: success dot with its own name, no count, no strip", () => {
@@ -54,6 +55,20 @@ describe("syncView", () => {
       action: null,
       politeness: "polite",
     });
+  });
+
+  it("unconfirmed: warn dot + count, secondary strip, no button, polite, distinct from offline", () => {
+    const view = syncView({ status: "unconfirmed", running: false, pending: 3 });
+    expect(view.dot).toEqual({ tone: "warn", pulse: false, label: copy.sync.unconfirmed });
+    expect(view.count).toBe(3);
+    expect(view.strip).toEqual({
+      tone: "secondary",
+      message: copy.sync.unconfirmed,
+      icon: "cloud-upload",
+      action: null,
+      politeness: "polite",
+    });
+    expect(copy.sync.unconfirmed).not.toBe(copy.sync.offline);
   });
 
   it("failed: warn dot + count, secondary strip, no button, polite", () => {
@@ -142,7 +157,7 @@ describe("syncView", () => {
     expect(hidesUpdateBanner(syncView({ status: "upgrade", running: false, pending: 0 }))).toBe(
       true,
     );
-    for (const status of ["ok", "offline", "error", "auth"] as const) {
+    for (const status of ["ok", "offline", "error", "auth", "unconfirmed"] as const) {
       expect(hidesUpdateBanner(syncView({ status, running: false, pending: 3 }))).toBe(false);
     }
   });

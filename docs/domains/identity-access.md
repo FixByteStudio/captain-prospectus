@@ -80,3 +80,30 @@ outbox is never cleared this way (INVARIANT 5), and it is not sent under the new
 identity either: every outbox row is stamped with the email that wrote it, and
 `runSync` holds back rows stamped by anyone else until that agent signs in
 again (`docs/domains/field-operations.md#local-store-dexie`, backlog 005).
+
+**A cache-sourced session is unconfirmed, and syncs nothing until a live
+`/api/me` says otherwise (docs/backlog/013).** The cached email is a rendering
+convenience, not proof of who holds the Access cookie the next request will
+actually carry — if agent B signs in through Access on agent A's phone and
+that launch's `/api/me` hits a network blip or a 5xx, `resolveIdentity` falls
+back to A's cached identity (above) while the cookie is really B's. Backlog
+005 stamps every outbox row with the identity active when it was written, but
+a *cache-sourced* identity is exactly the one case that stamp cannot answer
+for. So while `identityFromCache` is true, `SyncProvider`
+(`src/client/field/useSync.tsx`) never calls `runSync`: every one of the four
+triggers re-asks `/api/me` instead (`App.tsx`'s `recheckIdentity`), and the
+band shows `"unconfirmed"` — distinct from `"offline"`, since the network may
+well be up. A row written in the meantime (`queueVisit`, the add-prospect
+write) is stamped `writtenBy` the cached email **and** `unconfirmed: true`;
+`sendableBy` never sends such a row, whoever asks. The first live `/api/me`
+that lands calls `confirmOutbox` (`src/client/field/db.ts`), which re-stamps
+every `unconfirmed` row — outbox and the `sentVisits` log alike, in one
+transaction — to the email that answer names and drops the flag, before
+`SyncProvider` is told the identity is confirmed. On a 401 the cookie cannot
+confirm anyone, so `confirmOutbox` instead re-stamps to the cached email
+before `clearAgentCache` runs, dropping only the flag: the row keeps the
+identity the agent was shown and stays held back from anyone else, same as
+backlog 005's ordinary case. **Residual:** a phone that changes hands again
+while still unconfirmed — offline from one launch to the next — re-stamps
+both sessions' queued rows to whoever `/api/me` confirms first; narrower than
+before this task, since nothing sends until a launch confirms, but not closed.

@@ -25,13 +25,21 @@ export type SyncState = {
   /** This identity's local writes still waiting for the server to list them in `accepted`. */
   pending: number;
   /**
-   * Local writes another identity made on this device. Never sent while this
-   * one is signed in (docs/backlog/005), so they are not "waiting on the
+   * Local writes another identity made on this device, or written under this
+   * one while it was still `unconfirmed` (docs/backlog/013). Never sent while
+   * this one is signed in (docs/backlog/005), so they are not "waiting on the
    * network" and are counted apart from `pending`.
    */
   heldBack: number;
   /** The email every new outbox row is stamped with (`writtenBy`). */
   identity: string;
+  /**
+   * False while `identity` came from the cache rather than a live `/api/me`
+   * (docs/backlog/013): the Access cookie the next request carries may not
+   * match it. `queueVisit` and the add-prospect write read this to stamp a
+   * row `unconfirmed`.
+   */
+  confirmed: boolean;
   lastSyncAt: number | null;
   /** Run now. Awaited by the visit form so a save is followed by a push. */
   syncNow: () => Promise<void>;
@@ -50,9 +58,17 @@ export function useSyncState(): SyncState {
 
 export function SyncProvider({
   identity,
+  confirmed,
+  recheckIdentity,
   children,
 }: {
   identity: string;
+  /** False while `identity` is cache-sourced (docs/backlog/013). */
+  confirmed: boolean;
+  /** Re-asks `/api/me`; what every trigger calls instead of `runSync` while
+   * `confirmed` is false. Owned by `App.tsx`, which is the one place that
+   * knows how to re-run the identity fetch. */
+  recheckIdentity: () => void;
   children: React.ReactNode;
 }) {
   const [status, setStatus] = useState<SyncStatus>("ok");
@@ -85,6 +101,18 @@ export function SyncProvider({
     setRunning(true);
 
     try {
+      // docs/backlog/013: a cache-sourced identity is unconfirmed, so nothing
+      // is sent under a name the Access cookie may not match. Every trigger
+      // that would otherwise call `runSync` re-asks `/api/me` instead — the
+      // heartbeat included, so a `/api/me` failure keeps retrying rather than
+      // giving up after the one re-check the online/offline transition makes.
+      if (!confirmed) {
+        recheckIdentity();
+        failures.current = nextFailureCount("unconfirmed", failures.current);
+        setStatus("unconfirmed");
+        return;
+      }
+
       let passes = 0;
       let result = await runSync({ db: fieldDb, identity });
       passes += 1;
@@ -110,7 +138,7 @@ export function SyncProvider({
       inFlight.current = false;
       setRunning(false);
     }
-  }, [identity]);
+  }, [identity, confirmed, recheckIdentity]);
 
   // Trigger 1: app start.
   useEffect(() => {
@@ -150,7 +178,9 @@ export function SyncProvider({
   }, [syncNow]);
 
   return (
-    <SyncContext value={{ status, running, pending, heldBack, identity, lastSyncAt, syncNow }}>
+    <SyncContext
+      value={{ status, running, pending, heldBack, identity, confirmed, lastSyncAt, syncNow }}
+    >
       {children}
     </SyncContext>
   );

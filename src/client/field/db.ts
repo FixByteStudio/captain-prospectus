@@ -49,9 +49,18 @@ export type MetaRow = { key: MetaKey; value: MetaValues[MetaKey] };
  * belongs to, so `dailyProgress` can exclude a stop already counted from the
  * denominator. `writtenBy` is the identity that queued it, filtered exactly
  * like the outbox side (`sendableBy`) so a shared phone's count is the
- * signed-in agent's own. Never sent: this store never touches the wire.
+ * signed-in agent's own. `unconfirmed` mirrors the outbox stamp
+ * (docs/backlog/013): set when `writtenBy` came from a cached identity, and
+ * cleared by `confirmOutbox` along with the outbox rows. Never sent: this
+ * store never touches the wire.
  */
-export type SentVisit = { id: string; prospectId: string; sentAt: number; writtenBy: string };
+export type SentVisit = {
+  id: string;
+  prospectId: string;
+  sentAt: number;
+  writtenBy: string;
+  unconfirmed?: true;
+};
 
 export class FieldDb extends Dexie {
   prospects!: Table<Prospect, string>;
@@ -175,15 +184,28 @@ function dayStart(now: number): number {
  * queued visit is exactly what INVARIANT 5 forbids. Its failure is silent —
  * `todaysSentVisits` bounds the read at both ends, so an unpruned row from a
  * previous day is already invisible.
+ *
+ * `unconfirmed` (docs/backlog/013) is set when `identity` came from the cache
+ * rather than a live `/api/me`: the outbox row and its log entry are stamped
+ * with the cached email, but marked as not yet safe to send, until
+ * `confirmOutbox` re-stamps them once a live answer says who is really
+ * signed in.
  */
-export async function queueVisit(db: FieldDb, visit: Visit, identity: string): Promise<void> {
+export async function queueVisit(
+  db: FieldDb,
+  visit: Visit,
+  identity: string,
+  unconfirmed = false,
+): Promise<void> {
+  const flag = unconfirmed ? ({ unconfirmed: true } as const) : {};
   await db.transaction("rw", db.outboxVisits, db.sentVisits, async () => {
-    await db.outboxVisits.add({ ...visit, writtenBy: identity });
+    await db.outboxVisits.add({ ...visit, writtenBy: identity, ...flag });
     await db.sentVisits.put({
       id: visit.id,
       prospectId: visit.prospectId,
       sentAt: Date.now(),
       writtenBy: identity,
+      ...flag,
     });
   });
 
@@ -252,4 +274,29 @@ export async function clearAgentCache(db: FieldDb): Promise<void> {
     db.sentVisits.clear(),
     db.meta.delete("identity" satisfies MetaKey),
   ]);
+}
+
+/**
+ * Re-stamp every `unconfirmed` outbox and log row with `email` and drop the
+ * flag, in one transaction — docs/backlog/013.
+ *
+ * Called once a live `/api/me` says who is really signed in: `email` is that
+ * answer, or (on a 401) the cached email the agent was shown, since an
+ * expired cookie cannot confirm anyone but the rows must still belong to
+ * someone rather than nobody. A row not carrying the flag — written before
+ * this session, or by an identity already confirmed — is untouched, so this
+ * never re-attributes work `runSync` has already decided is (or is not)
+ * `identity`'s to send. It never deletes a row (INVARIANT 5).
+ */
+export async function confirmOutbox(db: FieldDb, email: string): Promise<void> {
+  const confirm = (row: OutboxStamp) => {
+    if (!row.unconfirmed) return;
+    row.writtenBy = email;
+    delete row.unconfirmed;
+  };
+  await db.transaction("rw", db.outboxVisits, db.outboxProspects, db.sentVisits, async () => {
+    await db.outboxVisits.toCollection().modify(confirm);
+    await db.outboxProspects.toCollection().modify(confirm);
+    await db.sentVisits.toCollection().modify(confirm);
+  });
 }

@@ -1,6 +1,7 @@
 /**
- * The seven sync states, decided once — docs/design.md, "Sync is ambient,
- * never a toast"; `key-f8-sync.html`.
+ * The eight sync states, decided once — docs/design.md, "Sync is ambient,
+ * never a toast"; `key-f8-sync.html`. `unconfirmed` (docs/backlog/013) is the
+ * newest: a cache-sourced identity the server has not confirmed yet.
  *
  * `SyncDot` and `SyncStrip` only draw what this returns; every branch on
  * `status`/`running`/`pending` and every button's effect live here so they
@@ -76,6 +77,19 @@ const OFFLINE_STRIP: SyncStripView = {
   politeness: "polite",
 };
 
+/**
+ * docs/backlog/013: distinct from `OFFLINE_STRIP` on purpose — the network
+ * may well be up, so "hors ligne" would be the wrong story. No button: there
+ * is nothing for the agent to do but wait for the next `/api/me`.
+ */
+const UNCONFIRMED_STRIP: SyncStripView = {
+  tone: "secondary",
+  message: copy.sync.unconfirmed,
+  icon: "cloud-upload",
+  action: null,
+  politeness: "polite",
+};
+
 const FAILED_STRIP: SyncStripView = {
   tone: "secondary",
   message: copy.sync.failed,
@@ -122,6 +136,14 @@ export function syncView({ status, running, pending }: SyncViewInput): SyncView 
       dot: { tone: "warn", pulse: running, label: copy.sync.offline },
       count,
       strip: OFFLINE_STRIP,
+    };
+  }
+
+  if (status === "unconfirmed") {
+    return {
+      dot: { tone: "warn", pulse: running, label: copy.sync.unconfirmed },
+      count,
+      strip: UNCONFIRMED_STRIP,
     };
   }
 

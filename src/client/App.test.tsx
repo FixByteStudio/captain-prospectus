@@ -14,11 +14,11 @@
  * does not drag TanStack Query, sonner and PapaParse into a shell test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
-import type { MeResponse } from "../shared/schemas";
+import type { MeResponse, Visit } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
 import { fieldDb, getMeta, setMeta } from "./field/db";
@@ -28,7 +28,23 @@ import type { SyncState } from "./field/useSync";
 type SyncStub = Pick<SyncState, "status" | "running" | "pending">;
 
 const AGENT: MeResponse = { email: "agent@example.com", role: "agent" };
+const OTHER_AGENT: MeResponse = { email: "other@example.com", role: "agent" };
 const ADMIN: MeResponse = { email: "admin@example.com", role: "admin" };
+
+const visit = (over: Partial<Visit> = {}): Visit => ({
+  id: crypto.randomUUID(),
+  prospectId: crypto.randomUUID(),
+  visitedAt: 1_700_000_000_000,
+  lat: null,
+  lng: null,
+  flyerGiven: true,
+  outcome: "interested",
+  followUpAt: null,
+  notes: null,
+  scriptId: null,
+  answers: {},
+  ...over,
+});
 const QUIET: SyncStub = { status: "ok", running: false, pending: 0 };
 
 const stub = vi.hoisted(() => ({
@@ -422,6 +438,121 @@ describe("The admin tab and routes follow the network", () => {
     expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
     expect(fieldBand()).toBeTruthy();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
+  });
+});
+
+/**
+ * `SyncProvider` is mocked away in this file (its own engine has
+ * `useSync.test.tsx`), but `confirmOutbox` (docs/backlog/013) is App's own
+ * bookkeeping around the identity effect — real `fieldDb` rows, asserted
+ * directly, the same as `getMeta(fieldDb, "identity")` is above.
+ */
+describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)", () => {
+  afterEach(async () => {
+    await fieldDb.outboxVisits.clear();
+  });
+
+  it("re-stamps an unconfirmed row to whoever /api/me now names, holding an earlier confirmed row back", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queuedUnconfirmed = visit();
+      await fieldDb.outboxVisits.add({
+        ...queuedUnconfirmed,
+        writtenBy: AGENT.email,
+        unconfirmed: true,
+      });
+      // Already confirmed, from before this cache-sourced launch: must stay A's.
+      const earlier = visit();
+      await fieldDb.outboxVisits.add({ ...earlier, writtenBy: AGENT.email });
+
+      // The live answer names a different agent than the cache did.
+      stub.identityUnreachable = false;
+      stub.me = OTHER_AGENT;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      // Polls the outbox itself rather than the nav, which was already on
+      // screen before this re-check landed and so proves nothing about it.
+      await waitFor(async () => {
+        expect((await fieldDb.outboxVisits.get(queuedUnconfirmed.id))?.writtenBy).toBe(
+          OTHER_AGENT.email,
+        );
+      });
+      const restamped = await fieldDb.outboxVisits.get(queuedUnconfirmed.id);
+      expect(restamped?.unconfirmed).toBeUndefined();
+      expect(await fieldDb.outboxVisits.get(earlier.id)).toMatchObject({
+        writtenBy: AGENT.email,
+      });
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("re-stamps to the same identity when the live answer simply confirms it", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queued = visit();
+      await fieldDb.outboxVisits.add({ ...queued, writtenBy: AGENT.email, unconfirmed: true });
+
+      stub.identityUnreachable = false;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await waitFor(async () => {
+        expect((await fieldDb.outboxVisits.get(queued.id))?.unconfirmed).toBeUndefined();
+      });
+      const row = await fieldDb.outboxVisits.get(queued.id);
+      expect(row?.writtenBy).toBe(AGENT.email);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("on a 401, re-stamps to the cached email before the cache is cleared — the outbox survives", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queued = visit();
+      await fieldDb.outboxVisits.add({ ...queued, writtenBy: AGENT.email, unconfirmed: true });
+
+      // An expired cookie cannot confirm anyone, so the row stays with the
+      // identity the agent was shown rather than being left to confirm to
+      // nobody (identity-access.md).
+      stub.identityUnreachable = false;
+      stub.identityRevoked = true;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+      await screen.findByText(REVOKED_MESSAGE);
+
+      const row = await fieldDb.outboxVisits.get(queued.id);
+      expect(row?.writtenBy).toBe(AGENT.email);
+      expect(row?.unconfirmed).toBeUndefined();
+      // INVARIANT 5, same as the plain revoked case above: the outbox itself
+      // is never touched by `clearAgentCache`.
+      await expect(fieldDb.outboxVisits.count()).resolves.toBe(1);
+    } finally {
+      onlineSpy.mockRestore();
+    }
   });
 });
 

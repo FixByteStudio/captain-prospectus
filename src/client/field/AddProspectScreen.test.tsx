@@ -23,9 +23,12 @@ import { fieldDb } from "./db";
 import { AddProspectScreen } from "./AddProspectScreen";
 import { TodayScreen } from "./TodayScreen";
 
+const syncState = vi.hoisted(() => ({ confirmed: true }));
+
 vi.mock("./useSync", () => ({
   useSyncState: () => ({
     identity: "agent@example.com",
+    confirmed: syncState.confirmed,
     lastSyncAt: 1_700_000_000_000,
     syncNow: async () => {},
   }),
@@ -69,6 +72,7 @@ const typeGroup = () => screen.getByRole("radiogroup", { name: copy.fieldProspec
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  syncState.confirmed = true;
   await Promise.all([
     fieldDb.prospects.clear(),
     fieldDb.outboxProspects.clear(),
@@ -217,6 +221,26 @@ describe("AddProspectScreen", () => {
     expect(row).not.toHaveProperty("status");
     expect(row).not.toHaveProperty("source");
     expect(row).not.toHaveProperty("assignedTo");
+  });
+
+  /**
+   * docs/backlog/013: the same cache-sourced-identity stamp `VisitScreen`
+   * writes on a visit, here on the field prospect the outbox row carries.
+   */
+  it("stamps the outbox row unconfirmed while the identity is cache-sourced", async () => {
+    syncState.confirmed = false;
+    grantPosition();
+    const user = userEvent.setup();
+    renderAdd();
+    await screen.findByText("50,8466 · 4,3528");
+
+    await user.type(nameInput(), "Friterie des Minimes");
+    await user.click(addButton());
+
+    expect(await screen.findByText(copy.fieldProspect.saved)).toBeTruthy();
+    const [row] = await fieldDb.outboxProspects.toArray();
+    expect(row?.unconfirmed).toBe(true);
+    expect(row?.writtenBy).toBe("agent@example.com");
   });
 
   it("writes once on a double tap, with the button disabled while it writes", async () => {

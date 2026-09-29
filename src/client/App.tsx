@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -24,7 +24,7 @@ import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
 import { hasReconnectMarker, reconnectUrl, withoutReconnectMarker } from "./field/reconnect-marker";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
-import { clearAgentCache, fieldDb, getMeta, setMeta } from "./field/db";
+import { clearAgentCache, confirmOutbox, fieldDb, getMeta, setMeta } from "./field/db";
 import { adminAccess, resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
 
@@ -254,6 +254,30 @@ export function App() {
   const [recheck, setRecheck] = useState(0);
   const online = useOnline();
 
+  // "Latest ref" pattern: the identity effect below intentionally depends on
+  // `[recheck]` alone (see its own comment), so a closure over
+  // `identityFromCache`/`me` captured there would read the value from
+  // whenever that effect last ran, not the one current when a later
+  // `settle()` call actually resolves — which is always at least one commit
+  // later, so syncing the ref from an effect (never during render itself) is
+  // still ahead of anything that reads it.
+  const identityFromCacheRef = useRef(identityFromCache);
+  const meRef = useRef(me);
+  useEffect(() => {
+    identityFromCacheRef.current = identityFromCache;
+    meRef.current = me;
+  });
+
+  // docs/backlog/013: at most one `/api/me` in flight, so `recheckIdentity` —
+  // called from every sync trigger while unconfirmed, not just the one online
+  // transition below — cannot pile up concurrent requests and burn quota
+  // (free-tier-budget.md) on a session that is already waiting on one.
+  const identityInFlight = useRef(false);
+  const recheckIdentity = useCallback(() => {
+    if (identityInFlight.current) return;
+    setRecheck((n) => n + 1);
+  }, []);
+
   // Registers the service worker on mount, before and regardless of whether
   // `/api/me` answers. See the note on `UpdatePrompt`.
   const pwa = usePwa();
@@ -284,17 +308,29 @@ export function App() {
    */
   useEffect(() => {
     let cancelled = false;
+    identityInFlight.current = true;
 
     const settle = async (result: Parameters<typeof resolveIdentity>[0]) => {
       const cached = await getMeta(fieldDb, "identity");
       if (cancelled) return;
       const outcome = resolveIdentity(result, cached);
+      // Read before this settle changes it: whether the identity this session
+      // was showing *before* this answer landed was cache-sourced, i.e.
+      // whether anything could have been queued `unconfirmed` (docs/backlog/013).
+      const wasCacheSourced = identityFromCacheRef.current;
 
       if (outcome.kind === "error") {
-        // A 401 is the Worker revoking this identity. The cache it would
-        // otherwise be read from offline goes with it, or airplane mode hands
-        // the round straight back (docs/domains/identity-access.md). The
-        // outbox stays: INVARIANT 5.
+        // A 401 is the Worker revoking this identity. An expired cookie
+        // cannot confirm anyone, so a row queued while unconfirmed stays with
+        // the cached email the agent was shown rather than being left to
+        // confirm to nobody — run before the cache that is its only record
+        // of that email goes with `clearAgentCache`.
+        if (outcome.revoked && wasCacheSourced && meRef.current) {
+          await confirmOutbox(fieldDb, meRef.current.email);
+        }
+        // The cache it would otherwise be read from offline goes with it, or
+        // airplane mode hands the round straight back
+        // (docs/domains/identity-access.md). The outbox stays: INVARIANT 5.
         if (outcome.revoked) await clearAgentCache(fieldDb);
         if (cancelled) return;
         setError({ message: outcome.message, revoked: outcome.revoked });
@@ -309,6 +345,15 @@ export function App() {
       if (outcome.identitySwitched) {
         await clearAgentCache(fieldDb);
       }
+      // docs/backlog/013: this live answer is the first confirmation since
+      // the session opened on a cache-sourced identity, so whatever was
+      // queued as `unconfirmed` — by this agent, or (identitySwitched) by
+      // whoever held the phone before them — now has a name to belong to.
+      // Runs before `setMe`/`setIdentityFromCache` flip `confirmed` true on
+      // `SyncProvider`, so nothing can reach `runSync` still carrying the flag.
+      if (wasCacheSourced && !outcome.offline) {
+        await confirmOutbox(fieldDb, outcome.identity.email);
+      }
       setMe(outcome.identity);
       setIdentityFromCache(outcome.offline);
       // The cached copy is never treated as proof, online or offline: the
@@ -320,7 +365,10 @@ export function App() {
 
     apiFetch<unknown>("/api/me")
       .then((body) => settle({ ok: true, body }))
-      .catch((error: unknown) => settle({ ok: false, error }));
+      .catch((error: unknown) => settle({ ok: false, error }))
+      .finally(() => {
+        identityInFlight.current = false;
+      });
 
     return () => {
       cancelled = true;
@@ -342,9 +390,11 @@ export function App() {
     // read true" into one `/api/me` attempt, decoupled from the fetch
     // effect's own dependency array so that effect setting
     // `identityFromCache` cannot retrigger this one (see above).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate
-    if (identityFromCache && online) setRecheck((n) => n + 1);
-  }, [identityFromCache, online]);
+    // Routed through `recheckIdentity` (not `setRecheck` directly) so this
+    // and the heartbeat's own re-check (docs/backlog/013, `useSync.tsx`)
+    // share the one `identityInFlight` guard and cannot both start a fetch.
+    if (identityFromCache && online) recheckIdentity();
+  }, [identityFromCache, online, recheckIdentity]);
 
   if (error) {
     // A reload cannot get past a revoked session: the service worker answers
@@ -393,7 +443,11 @@ export function App() {
   const { screens, entry } = adminAccess({ role: me.role, fromCache: identityFromCache, online });
 
   return (
-    <SyncProvider identity={me.email}>
+    <SyncProvider
+      identity={me.email}
+      confirmed={!identityFromCache}
+      recheckIdentity={recheckIdentity}
+    >
       <Routes>
         {/* Not under FieldFrame: the redirect target decides which frame
             shows, so the field band must not render even for one commit. */}

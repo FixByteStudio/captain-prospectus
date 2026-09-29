@@ -24,7 +24,7 @@ const result = (over: Partial<SyncResult> = {}): SyncResult => ({
   ...over,
 });
 
-const FAILURES: readonly SyncStatus[] = ["offline", "auth", "upgrade", "error"];
+const FAILURES: readonly SyncStatus[] = ["offline", "auth", "upgrade", "error", "unconfirmed"];
 
 describe("shouldDrain", () => {
   it("goes again when a successful pass left work behind", () => {

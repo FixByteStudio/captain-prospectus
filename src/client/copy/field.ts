@@ -159,6 +159,10 @@ export const copy = {
     lastSync: (when: string) => `Dernière synchronisation : ${when}`,
     never: "Jamais synchronisé",
     offline: "Hors ligne. Vos visites sont conservées et partiront au retour du réseau.",
+    /** A cache-sourced identity, not yet confirmed by the server
+     * (docs/backlog/013) — distinct from `offline`, since the network may be
+     * up; nothing sends until `/api/me` confirms who is really signed in. */
+    unconfirmed: "Vérification de votre session. Vos visites sont conservées et partiront ensuite.",
     authExpired: "Votre session a expiré. Reconnectez-vous pour synchroniser.",
     upgrade: "Une mise à jour est nécessaire. Vos visites sont conservées.",
     failed: "La synchronisation a échoué. Nouvel essai automatique.",

@@ -26,8 +26,14 @@ import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
 import type { TodayItem } from "./today";
 
+const syncState = vi.hoisted(() => ({ confirmed: true }));
+
 vi.mock("./useSync", () => ({
-  useSyncState: () => ({ identity: "agent@example.com", syncNow: async () => {} }),
+  useSyncState: () => ({
+    identity: "agent@example.com",
+    confirmed: syncState.confirmed,
+    syncNow: async () => {},
+  }),
 }));
 
 // Offline is the default state for a field test: nothing here should depend
@@ -216,6 +222,7 @@ afterEach(async () => {
   round.refresh.mockClear();
   round.now = [];
   network.online = true;
+  syncState.confirmed = true;
   await Promise.all([
     fieldDb.prospects.clear(),
     fieldDb.outboxVisits.clear(),
@@ -704,6 +711,28 @@ describe("VisitScreen — step 2 (Questions)", () => {
     expect(loggedVisit?.id).toBe(queued?.id);
     expect(loggedVisit?.prospectId).toBe(queued?.prospectId);
     expect(loggedVisit?.writtenBy).toBe(queued?.writtenBy);
+  });
+
+  /**
+   * docs/backlog/013: while the identity is cache-sourced, the Access cookie
+   * the next request carries may not match it, so the outbox row and its
+   * daily-progress log entry are stamped `unconfirmed` — held back by
+   * `sendableBy` until a live `/api/me` re-stamps them (`confirmOutbox`).
+   */
+  it("stamps the outbox row and the log entry unconfirmed while the identity is cache-sourced", async () => {
+    syncState.confirmed = false;
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("interested"));
+    await confirmSave(user);
+
+    await screen.findByText(ROUND_MARKER);
+    const [queued] = await fieldDb.outboxVisits.toArray();
+    const [logged] = await fieldDb.sentVisits.toArray();
+    expect(queued?.unconfirmed).toBe(true);
+    expect(logged?.unconfirmed).toBe(true);
+    expect(queued?.writtenBy).toBe("agent@example.com");
   });
 });
 
