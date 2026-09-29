@@ -65,7 +65,7 @@ describe("service worker", () => {
     // own navigate/strip code, so this only asserts the two are wired
     // together rather than re-deriving the regex here.
     expect(config).toContain(
-      'import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker"',
+      'import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker.ts"',
     );
     expect(config).toMatch(/navigateFallbackDenylist:\s*\[[^\]]*RECONNECT_MARKER_PATTERN/);
   });
@@ -79,7 +79,7 @@ describe("service worker", () => {
     // so this only asserts the two are wired together rather than
     // re-deriving the regex here (same shape as the reconnect-marker test).
     expect(config).toContain(
-      'import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout"',
+      'import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout.ts"',
     );
     expect(config).toMatch(/navigateFallbackDenylist:\s*\[[^\]]*ACCESS_PATH_PATTERN/);
   });
