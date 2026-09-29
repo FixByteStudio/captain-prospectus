@@ -339,6 +339,12 @@ export function useVisitsFeed(period?: DashboardPeriod) {
   /** The opening page filled the server's cap, so the window may hold more than we do. */
   const [capped, setCapped] = useState(false);
   /**
+   * `seeded`, but as state: set in the same render as the first `visits`, so
+   * `isPending` never drops a render before the rows land — which flashed the
+   * empty copy between the skeleton and the rows (GH #223).
+   */
+  const [taken, setTaken] = useState(false);
+  /**
    * Answers older than this mount are skipped. The cache entry outlives this
    * mount — Dernières visites' unscoped entry outlives every Visites visit,
    * and a period-scoped one outlives a period change that later returns to
@@ -395,6 +401,7 @@ export function useVisitsFeed(period?: DashboardPeriod) {
     if (!seeded.current) setCapped(page.visits.length >= ADMIN_VISITS_PAGE_SIZE);
     held.current = inWindow;
     seeded.current = true;
+    setTaken(true);
     // Advance from what we actually hold, never from the server clock: a visit
     // written between the query and its answer is then delivered next poll
     // rather than skipped for good.
@@ -407,8 +414,9 @@ export function useVisitsFeed(period?: DashboardPeriod) {
   return {
     visits,
     arrived,
-    // Still pending while only an older mount's answer is cached.
-    isPending: query.isPending || (!fresh && !query.isError),
+    // Still pending while only an older mount's answer is cached, or until
+    // the effect has taken this mount's first answer in.
+    isPending: !taken && !query.isError,
     isError: query.isError,
     // For `ScreenState`'s retry, disabled while a poll is already out.
     isFetching: query.isFetching,

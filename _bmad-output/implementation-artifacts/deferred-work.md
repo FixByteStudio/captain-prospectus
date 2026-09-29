@@ -260,8 +260,5 @@
   summary: A sync that returns `auth` and then `ok` without a remount leaves `meta.identity` deleted, so the next offline cold launch shows the first-run error instead of the field side.
   evidence: `runSync`'s auth branch calls `clearAgentCache` (drops `meta.identity`); only App.tsx's mount-time `/api/me` writes it back, and `runSync` cannot (it knows the email, not the role). Only reachable if the Access session renews without a navigation (e.g. another tab), since "Se reconnecter" remounts; low likelihood, unverified in the field.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-206-admin-loading-states.md`
-  summary: The live feed can show its empty text for one render between the skeleton and the first rows.
-  evidence: `useVisitsFeed` sets `isPending` to false before its effect takes in the first answer (`src/client/admin/queries.ts:411`). It predates this change. GH #223.
-- source_spec: `_bmad-output/implementation-artifacts/spec-gh-206-admin-loading-states.md`
   summary: Admin screens show a load-failed Alert while offline, where EXPERIENCE.md asks them to keep their values under an offline banner.
   evidence: No admin offline banner exists in `src/client`; the gap is app-wide. GH #209.
