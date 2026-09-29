@@ -7,7 +7,7 @@ type: story
 title: "Prospects rebuilt: name search, pagination and CSV export"
 parent: epic-admin-screens
 covers: [CAP-3, CAP-11]
-after: [4, 2.10]
+after: [4, 2.10, 4.13]
 risk: high
 ---
 

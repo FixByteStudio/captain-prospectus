@@ -32,7 +32,7 @@ An agent walks the round, records visits and adds places offline on the new app;
 
 ## Boundaries
 
-The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Not the rest of the field shell (epic-shared-shell), not the admin round view (epic-admin-round-view), which reuses this epic's StopRow, StopNumber and map component.
+The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Entry 13 is the exception: the `interested` status reaches the admin screens and the Worker. Not the rest of the field shell (epic-shared-shell), not the admin round view (epic-admin-round-view), which reuses this epic's StopRow, StopNumber and map component.
 
 ## References
 
@@ -40,6 +40,7 @@ The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Not the 
 - spec — _bmad-output/specs/spec-dashboard-redesign/SPEC.md, CAP-6 to CAP-9; _bmad-output/specs/spec-dashboard-redesign/server-gaps.md, G8; _bmad-output/specs/spec-dashboard-redesign/screen-map.md, Field
 - design — _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-f1-tournee.html, key-f2-carte.html, key-f3-f5-visit.html; _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md, Flows 1 and 4
 - constraint — docs/adr/0026-budget-the-field-precache-not-the-entry-chunk.md
+- spec — _bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md, CAP-1 to CAP-5, for entries 13 and 14
 
 ## Notes
 
@@ -51,3 +52,8 @@ The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Not the 
 - Decision (2026-09-26): a closing hitl entry (12) has a person run Flows 1 and 4 on real devices, because epic-shared-shell closed with its browser checks unrun (user).
 - Assumption (2026-09-26): Carte's walking path is straight lines between stops, since a routing service would bill (ADR-0002); the map's dark look is open (#27).
 - High-risk check (entry 2): the sync-contract-change skill's outbox step and a test upgrading a version 2 database that holds outbox rows, outside the entry's own criteria.
+- Decision (2026-09-30): entries 13 and 14 remediate the epic-117 retro (rejected, F1 to F3) from spec-done-stop-leaves-the-round, split into server status and phone work at the owner's request; 14 needs 13 because the after-sync rule holds only once `interested` stops mapping to follow_up.
+- Decision (2026-09-30): 13 crosses this epic's Boundaries into admin and Worker code; it stays here because it exists to make Done when 1 pass (owner).
+- Decision (2026-09-30): no second refactor sweep after 13 and 14; the sweep (11) already ran, and each is a scoped remediation that runs lint, typecheck, test and build itself.
+- Decision (2026-09-30): 13 waits on 3.1 (app.css) and 3.2 (export in admin.ts), and 3.5 waits on 13 so the Prospects rebuild starts with six statuses (owner).
+- Decision (2026-09-30): #129 (12) runs after 14; Flow 1's climax is its concrete check (retro action item 5).
