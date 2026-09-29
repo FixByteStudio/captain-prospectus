@@ -371,7 +371,9 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   `text-overline` — Agent, Visites, Convertis, À relancer, Prospects ouverts —
   then one 44px row per agent. There is no users table (ADR-0006), so the
   agent cell is a 26px `secondary` circle with the email's uppercase initial,
-  then the email. Numbers are right-aligned tabular figures; Convertis is
+  then the email; at ≥ lg the email takes the width the figures leave and
+  truncates with an ellipsis, its full address in a `title`, so a long one
+  never pushes the figures out. Numbers are right-aligned tabular figures; Convertis is
   `success` semibold and À relancer `warn` semibold. Rows are not links.
   The table scrolls sideways inside its card at 390 px. With no
   agent, the card says "Aucun agent pour l'instant."
