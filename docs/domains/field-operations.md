@@ -83,10 +83,13 @@ housekeeping prune below the day boundary removes them — never in response
 to the server. "Today" is a Europe/Brussels calendar day,
 `brusselsPeriod(now, 1).from` (`src/shared/period.ts`), the same boundary the
 admin dashboard counts "Visites aujourd'hui" with, so the two can never
-disagree. Both sides of the union are filtered through `sendableBy`, exactly
-like the outbox: on a shared phone, the line is the signed-in agent's own
-progress, and an unstamped row from before Dexie v3 counts for whoever syncs
-it first.
+disagree. Both sides of the union are filtered through `writtenByOrUnstamped`
+(`src/client/field/outbox-stamp.ts`): on a shared phone, the line is the
+signed-in agent's own progress, and an unstamped row from before Dexie v3
+counts for whoever syncs it first. A row still `unconfirmed`
+(docs/backlog/013) still counts here — it is this agent's own queued visit,
+only not yet sendable, which is a narrower predicate (`sendableBy`) that only
+`runSync` needs.
 
 The today list itself is built from `prospects` **and** `outboxProspects`
 together: a field prospect the server has not accepted yet still has to be
@@ -150,6 +153,11 @@ Response
 
 ### Triggers
 App start · `online` event · immediately after saving a visit · every 60 s while the app is open.
+
+**While the identity is `unconfirmed` (docs/backlog/013), each trigger re-asks
+`/api/me` instead of syncing** — `SyncProvider` never calls `runSync` until a
+live answer confirms who is signed in. Confirmation itself then runs a sync at
+once, rather than waiting for the next trigger.
 
 ## Live feed
 

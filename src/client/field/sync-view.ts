@@ -186,8 +186,10 @@ export function syncView({ status, running, pending }: SyncViewInput): SyncView 
 
 /**
  * The line under the strip when another agent's writes sit in this outbox
- * (docs/backlog/005). Apart from the seven states on purpose: it is not a sync
- * state, and "waiting for the network" must not be read as "wrong hands".
+ * (docs/backlog/005). Apart from the eight states on purpose: it is not a sync
+ * state, and "waiting for the network" must not be read as "wrong hands". A
+ * row this identity wrote while `unconfirmed` (docs/backlog/013) is not
+ * this — it counts in `pending`, not `heldBack` (`outboxCounts`, `db.ts`).
  */
 export function heldBackMessage(heldBack: number): string | null {
   return heldBack > 0 ? copy.sync.heldBack(heldBack) : null;

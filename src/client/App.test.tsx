@@ -554,6 +554,62 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       onlineSpy.mockRestore();
     }
   });
+
+  /**
+   * The bug a first version of this confirmation gated on `identityFromCache`
+   * being true *this session* missed entirely: a row left `unconfirmed` by an
+   * earlier launch that ended (killed, network lost) before its own
+   * confirmation landed. The very next launch, even one whose first `/api/me`
+   * answers live immediately — never touching the cache-fallback branch at
+   * all — must still pick it up, or `sendableBy` refuses it for ever.
+   */
+  it("confirms a row left unconfirmed by an earlier, already-ended launch, even when this one is live from the start", async () => {
+    const queuedByAnEarlierLaunch = visit();
+    await fieldDb.outboxVisits.add({
+      ...queuedByAnEarlierLaunch,
+      writtenBy: AGENT.email,
+      unconfirmed: true,
+    });
+
+    stub.me = AGENT;
+    // Fully live, fully online: `identityFromCache` never becomes true this
+    // session, unlike every other case in this file.
+    renderApp("/tournee");
+    await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+    await waitFor(async () => {
+      expect(
+        (await fieldDb.outboxVisits.get(queuedByAnEarlierLaunch.id))?.unconfirmed,
+      ).toBeUndefined();
+    });
+    expect(await fieldDb.outboxVisits.get(queuedByAnEarlierLaunch.id)).toMatchObject({
+      writtenBy: AGENT.email,
+    });
+  });
+
+  it("on a 401 that opens the session (no cache fallback this launch either), still releases rows left unconfirmed by different earlier launches", async () => {
+    const fromA = visit();
+    const fromB = visit();
+    await fieldDb.outboxVisits.bulkAdd([
+      { ...fromA, writtenBy: AGENT.email, unconfirmed: true },
+      { ...fromB, writtenBy: OTHER_AGENT.email, unconfirmed: true },
+    ]);
+
+    stub.identityRevoked = true;
+    renderApp("/tournee");
+
+    await screen.findByText(REVOKED_MESSAGE);
+    await waitFor(async () => {
+      expect((await fieldDb.outboxVisits.get(fromA.id))?.unconfirmed).toBeUndefined();
+      expect((await fieldDb.outboxVisits.get(fromB.id))?.unconfirmed).toBeUndefined();
+    });
+    // Each row keeps its own writer — a 401 never assumes a single "current"
+    // identity to re-stamp everything to.
+    expect(await fieldDb.outboxVisits.get(fromA.id)).toMatchObject({ writtenBy: AGENT.email });
+    expect(await fieldDb.outboxVisits.get(fromB.id)).toMatchObject({
+      writtenBy: OTHER_AGENT.email,
+    });
+  });
 });
 
 describe("App band header", () => {

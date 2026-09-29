@@ -570,7 +570,7 @@ describe("runSync — unconfirmed rows", () => {
     return { sent, fetchFn };
   };
 
-  it("never sends an unconfirmed row, even to the identity that wrote it", async () => {
+  it("never sends an unconfirmed row, even to the identity that wrote it — but still counts it as remaining, not held back", async () => {
     const own = visit();
     await db.outboxVisits.add({ ...own, writtenBy: A, unconfirmed: true });
 
@@ -578,7 +578,9 @@ describe("runSync — unconfirmed rows", () => {
     const result = await runSync({ db, identity: A, fetchFn });
 
     expect(sent[0]?.visits).toEqual([]);
-    expect(result).toMatchObject({ status: "ok", remaining: 0, heldBack: 1 });
+    // It is A's own row, only not yet sendable — `remaining` (backed by
+    // `writtenByOrUnstamped`), not `heldBack` (another identity's writes).
+    expect(result).toMatchObject({ status: "ok", remaining: 1, heldBack: 0 });
     expect(await db.outboxVisits.get(own.id)).toEqual({
       ...own,
       writtenBy: A,
@@ -586,7 +588,7 @@ describe("runSync — unconfirmed rows", () => {
     });
   });
 
-  it("holds back an unconfirmed field prospect the same way", async () => {
+  it("holds back an unconfirmed field prospect from being sent, the same way", async () => {
     const prospect: FieldProspect = {
       id: crypto.randomUUID(),
       name: "Le camion",
@@ -603,7 +605,7 @@ describe("runSync — unconfirmed rows", () => {
     const result = await runSync({ db, identity: A, fetchFn });
 
     expect(sent[0]?.prospects).toEqual([]);
-    expect(result.heldBack).toBe(1);
+    expect(result).toMatchObject({ remaining: 1, heldBack: 0 });
   });
 
   it("sends it once confirmed — never carrying `unconfirmed` or `writtenBy` on the wire", async () => {

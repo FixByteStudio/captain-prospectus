@@ -11,6 +11,7 @@ import {
   getMeta,
   outboxCounts,
   queueVisit,
+  releaseUnconfirmed,
   setMeta,
   todaysSentVisits,
 } from "./db";
@@ -394,15 +395,19 @@ describe("outboxCounts", () => {
     db.close();
   });
 
-  it("counts an unconfirmed row as held back, even for the identity it is stamped with (docs/backlog/013)", async () => {
+  it("still counts an unconfirmed row as pending — it is this identity's own work, not another agent's (docs/backlog/013)", async () => {
     const db = new FieldDb(dbName());
     await db.open();
     await db.outboxVisits.bulkPut([
       { ...visit(), writtenBy: "a@example.com" },
       { ...visit(), writtenBy: "a@example.com", unconfirmed: true },
+      { ...visit(), writtenBy: "b@example.com" },
     ]);
 
-    await expect(outboxCounts(db, "a@example.com")).resolves.toEqual({ pending: 1, heldBack: 1 });
+    // Not sendable yet (sync.test.ts), but the count and the "N en attente"
+    // pill must not read it as belonging to another agent — the
+    // "unconfirmed" sync state already says why it has not gone out.
+    await expect(outboxCounts(db, "a@example.com")).resolves.toEqual({ pending: 2, heldBack: 1 });
     db.close();
   });
 });
@@ -603,6 +608,98 @@ describe("confirmOutbox", () => {
     await queueVisit(db, visit(), "a@example.com", true);
 
     await confirmOutbox(db, "a@example.com");
+
+    await expect(db.outboxVisits.count()).resolves.toBe(1);
+    await expect(db.sentVisits.count()).resolves.toBe(1);
+    db.close();
+  });
+
+  it("is a no-op when nothing is flagged, so calling it on every live /api/me costs nothing", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const plain = visit();
+    await db.outboxVisits.add({ ...plain, writtenBy: "a@example.com" });
+
+    await confirmOutbox(db, "a@example.com");
+
+    expect(await db.outboxVisits.get(plain.id)).toEqual({ ...plain, writtenBy: "a@example.com" });
+    db.close();
+  });
+});
+
+/**
+ * docs/backlog/013: an expired cookie cannot confirm anyone, so a 401 only
+ * drops the flag rather than re-stamping to a single "current" identity —
+ * there may be flagged rows from more than one cache-sourced launch.
+ */
+describe("releaseUnconfirmed", () => {
+  it("drops the flag from all three tables, keeping each row's own writtenBy", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await queueVisit(db, visit(), "a@example.com", true);
+    await db.outboxProspects.add({
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+      writtenBy: "b@example.com",
+      unconfirmed: true,
+    });
+
+    await releaseUnconfirmed(db);
+
+    const [outboxVisit] = await db.outboxVisits.toArray();
+    const [outboxProspect] = await db.outboxProspects.toArray();
+    const [logged] = await db.sentVisits.toArray();
+    expect(outboxVisit).toMatchObject({ writtenBy: "a@example.com" });
+    expect(outboxVisit).not.toHaveProperty("unconfirmed");
+    expect(outboxProspect).toMatchObject({ writtenBy: "b@example.com" });
+    expect(outboxProspect).not.toHaveProperty("unconfirmed");
+    expect(logged).not.toHaveProperty("unconfirmed");
+    db.close();
+  });
+
+  it("releases rows written under different cached identities in the same call — no single email is assumed", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await db.outboxVisits.bulkAdd([
+      { ...visit(), writtenBy: "a@example.com", unconfirmed: true },
+      { ...visit(), writtenBy: "b@example.com", unconfirmed: true },
+    ]);
+
+    await releaseUnconfirmed(db);
+
+    const rows = await db.outboxVisits.toArray();
+    expect(rows.map((r) => r.writtenBy).sort()).toEqual(["a@example.com", "b@example.com"]);
+    expect(rows.every((r) => r.unconfirmed === undefined)).toBe(true);
+    db.close();
+  });
+
+  it("leaves an already-confirmed row untouched", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const confirmed = visit();
+    await db.outboxVisits.add({ ...confirmed, writtenBy: "a@example.com" });
+
+    await releaseUnconfirmed(db);
+
+    expect(await db.outboxVisits.get(confirmed.id)).toEqual({
+      ...confirmed,
+      writtenBy: "a@example.com",
+    });
+    db.close();
+  });
+
+  it("never deletes a row — INVARIANT 5", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await queueVisit(db, visit(), "a@example.com", true);
+
+    await releaseUnconfirmed(db);
 
     await expect(db.outboxVisits.count()).resolves.toBe(1);
     await expect(db.sentVisits.count()).resolves.toBe(1);

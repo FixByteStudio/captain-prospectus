@@ -24,7 +24,14 @@ import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
 import { hasReconnectMarker, reconnectUrl, withoutReconnectMarker } from "./field/reconnect-marker";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
-import { clearAgentCache, confirmOutbox, fieldDb, getMeta, setMeta } from "./field/db";
+import {
+  clearAgentCache,
+  confirmOutbox,
+  fieldDb,
+  getMeta,
+  releaseUnconfirmed,
+  setMeta,
+} from "./field/db";
 import { adminAccess, resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
 
@@ -254,20 +261,6 @@ export function App() {
   const [recheck, setRecheck] = useState(0);
   const online = useOnline();
 
-  // "Latest ref" pattern: the identity effect below intentionally depends on
-  // `[recheck]` alone (see its own comment), so a closure over
-  // `identityFromCache`/`me` captured there would read the value from
-  // whenever that effect last ran, not the one current when a later
-  // `settle()` call actually resolves — which is always at least one commit
-  // later, so syncing the ref from an effect (never during render itself) is
-  // still ahead of anything that reads it.
-  const identityFromCacheRef = useRef(identityFromCache);
-  const meRef = useRef(me);
-  useEffect(() => {
-    identityFromCacheRef.current = identityFromCache;
-    meRef.current = me;
-  });
-
   // docs/backlog/013: at most one `/api/me` in flight, so `recheckIdentity` —
   // called from every sync trigger while unconfirmed, not just the one online
   // transition below — cannot pile up concurrent requests and burn quota
@@ -275,6 +268,11 @@ export function App() {
   const identityInFlight = useRef(false);
   const recheckIdentity = useCallback(() => {
     if (identityInFlight.current) return;
+    // Set here, synchronously, not only in the effect below: the effect only
+    // runs after React commits the `recheck` update, and two callers of
+    // `recheckIdentity` in that window would both pass the guard and each
+    // queue an increment.
+    identityInFlight.current = true;
     setRecheck((n) => n + 1);
   }, []);
 
@@ -314,20 +312,18 @@ export function App() {
       const cached = await getMeta(fieldDb, "identity");
       if (cancelled) return;
       const outcome = resolveIdentity(result, cached);
-      // Read before this settle changes it: whether the identity this session
-      // was showing *before* this answer landed was cache-sourced, i.e.
-      // whether anything could have been queued `unconfirmed` (docs/backlog/013).
-      const wasCacheSourced = identityFromCacheRef.current;
 
       if (outcome.kind === "error") {
         // A 401 is the Worker revoking this identity. An expired cookie
-        // cannot confirm anyone, so a row queued while unconfirmed stays with
-        // the cached email the agent was shown rather than being left to
-        // confirm to nobody — run before the cache that is its only record
-        // of that email goes with `clearAgentCache`.
-        if (outcome.revoked && wasCacheSourced && meRef.current) {
-          await confirmOutbox(fieldDb, meRef.current.email);
-        }
+        // cannot confirm anyone, so nothing here is re-stamped to "the
+        // current identity" — a flagged row already carries the cached email
+        // it was written under, and dropping only the flag lets it keep that
+        // — run before the cache that is its only other record of that email
+        // goes with `clearAgentCache`. Unconditional, not only when this
+        // session opened cache-sourced: a row can be `unconfirmed` from an
+        // earlier, already-ended launch too.
+        if (outcome.revoked) await releaseUnconfirmed(fieldDb);
+        if (cancelled) return;
         // The cache it would otherwise be read from offline goes with it, or
         // airplane mode hands the round straight back
         // (docs/domains/identity-access.md). The outbox stays: INVARIANT 5.
@@ -344,15 +340,19 @@ export function App() {
       // rows stamped with the identity it is given (backlog/005).
       if (outcome.identitySwitched) {
         await clearAgentCache(fieldDb);
+        if (cancelled) return;
       }
-      // docs/backlog/013: this live answer is the first confirmation since
-      // the session opened on a cache-sourced identity, so whatever was
-      // queued as `unconfirmed` — by this agent, or (identitySwitched) by
-      // whoever held the phone before them — now has a name to belong to.
-      // Runs before `setMe`/`setIdentityFromCache` flip `confirmed` true on
-      // `SyncProvider`, so nothing can reach `runSync` still carrying the flag.
-      if (wasCacheSourced && !outcome.offline) {
+      // docs/backlog/013: a live answer confirms whoever it names, whatever
+      // this *session* started as — a row can be `unconfirmed` from a launch
+      // that ended (network lost, app killed) before its own confirmation
+      // landed, so this runs on every live answer, not only when
+      // `identityFromCache` was true a moment ago. Idempotent and a no-op
+      // with nothing flagged. Runs before `setMe`/`setIdentityFromCache` flip
+      // `confirmed` true on `SyncProvider`, so nothing already queued can
+      // reach `runSync` still carrying the flag.
+      if (!outcome.offline) {
         await confirmOutbox(fieldDb, outcome.identity.email);
+        if (cancelled) return;
       }
       setMe(outcome.identity);
       setIdentityFromCache(outcome.offline);
