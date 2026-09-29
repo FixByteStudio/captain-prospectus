@@ -135,6 +135,19 @@ describe("GET /api/admin/prospects/export.csv", () => {
     expect(body).not.toContain("Filtré");
   });
 
+  it("exports the Intéressé leads under their own status (ADR-0027)", async () => {
+    await seedProspect({ name: "Tiède", status: "interested" });
+    await seedProspect({ name: "Gagné", status: "converted" });
+
+    const rows = records(
+      await (await call("/api/admin/prospects/export.csv?status=interested")).text(),
+    );
+    expect(rows).toHaveLength(3);
+    const header = rows[0]?.split(",") ?? [];
+    expect(rows[1]?.split(",")[header.indexOf("status")]).toBe("interested");
+    expect(rows[1]).toContain("Tiède");
+  });
+
   it("takes several statuses, comma-separated, like the list", async () => {
     await seedProspect({ name: "Nouveau", status: "new" });
     await seedProspect({ name: "Assigné", status: "assigned" });

@@ -6,7 +6,14 @@
  */
 
 /** docs/glossary.md — a prospect's lifecycle. */
-export const STATUSES = ["new", "assigned", "follow_up", "converted", "rejected"] as const;
+export const STATUSES = [
+  "new",
+  "assigned",
+  "follow_up",
+  "interested",
+  "converted",
+  "rejected",
+] as const;
 export type Status = (typeof STATUSES)[number];
 
 /** docs/glossary.md — the result of one visit. */
@@ -61,7 +68,8 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
  */
 export const OUTCOME_TO_STATUS: Readonly<Record<Outcome, Status>> = {
   no_contact: "follow_up",
-  interested: "follow_up",
+  // Closed, so an Intéressé lead leaves the round (ADR-0027).
+  interested: "interested",
   not_interested: "rejected",
   follow_up: "follow_up",
   converted: "converted",

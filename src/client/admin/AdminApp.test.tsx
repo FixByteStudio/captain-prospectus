@@ -29,7 +29,7 @@ const DASHBOARD: DashboardResponse = {
     visitedProspects: { value: 386, previous: 383 },
   },
   visitsByDay: [],
-  pipeline: { new: 128, assigned: 86, follow_up: 64, converted: 41, rejected: 93 },
+  pipeline: { new: 128, assigned: 86, follow_up: 64, interested: 0, converted: 41, rejected: 93 },
   agents: [
     { email: "agent@example.com", visits: 386, converted: 41, followUp: 64, openProspects: 150 },
   ],

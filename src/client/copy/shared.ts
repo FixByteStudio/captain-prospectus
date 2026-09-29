@@ -119,16 +119,17 @@ export const OUTCOME_LABELS: Readonly<Record<Outcome, string>> = {
  */
 export const OUTCOME_HINTS: Readonly<Record<Outcome, string>> = {
   no_contact: "Fermé ou personne pour répondre. On repassera.",
-  interested: "Ouvert à la discussion, pas encore d'accord.",
+  interested: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente.",
   not_interested: "Refus clair.",
   follow_up: "Un rendez-vous à reprendre. Indiquez la date.",
-  converted: "Accord obtenu.",
+  converted: "Déjà inscrit sur la liste d'attente.",
 };
 
 export const STATUS_LABELS: Readonly<Record<Status, string>> = {
   new: "Nouveau",
   assigned: "Assigné",
   follow_up: "À relancer",
+  interested: "Intéressé",
   converted: "Converti",
   rejected: "Refusé",
 };

@@ -502,6 +502,35 @@ describe("PATCH /api/admin/prospects/:id", () => {
     expect(((await response.json()) as Prospect).status).toBe("assigned");
   });
 
+  it("sets Intéressé by hand, and lists it under its own filter (ADR-0027)", async () => {
+    await importRows([
+      { name: "Le Zinc", lat: 50.85, lng: 4.36 },
+      { name: "Chez Léa", lat: 50.84, lng: 4.35 },
+    ]);
+    const db = getDb(env.DB);
+    const [row] = await db.select().from(prospects).where(eq(prospects.name, "Le Zinc"));
+    if (!row) throw new Error("the import wrote nothing");
+
+    const response = await patch(`/api/admin/prospects/${row.id}`, { status: "interested" });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as Prospect).status).toBe("interested");
+
+    const listed = (await (
+      await call("/api/admin/prospects?status=interested")
+    ).json()) as ProspectsResponse;
+    expect(listed.prospects.map((p) => p.name)).toEqual(["Le Zinc"]);
+    expect(listed.total).toBe(1);
+  });
+
+  it("still refuses a status it does not know", async () => {
+    await importRows([{ name: "Le Zinc", lat: 50.85, lng: 4.36 }]);
+    const [row] = await getDb(env.DB).select().from(prospects);
+    if (!row) throw new Error("the import wrote nothing");
+
+    const response = await patch(`/api/admin/prospects/${row.id}`, { status: "warm" });
+    expect(response.status).toBe(400);
+  });
+
   it("answers 404 for an id that does not exist", async () => {
     const response = await patch(`/api/admin/prospects/${crypto.randomUUID()}`, { name: "X" });
     expect(response.status).toBe(404);

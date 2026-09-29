@@ -115,7 +115,7 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Prospects, Visites | "Exporter en CSV" · Visites strip: "Taux de conversion", "Flyers remis", "Relances dues sous 7 jours", "Agents en tournée" |
 | Field shell | Tabs "Tournée", "Carte", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
 | Tournée / Carte | "{5} visites sur {17} aujourd'hui" · "Carte indisponible hors ligne. La liste reste à jour." · "Voir la liste" · aria "Me recentrer" |
-| Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore d'accord." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre. Indiquez la date." · Converti: "Accord obtenu." |
+| Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre. Indiquez la date." · Converti: "Déjà inscrit sur la liste d'attente." |
 | Visit | Step indicators "Étape 1 sur 2 · Résultat" / "Étape 2 sur 2 · Questions" · stepper aria "Diminuer" / "Augmenter" |
 | Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui. La tournée est triée par nom." · "{17} arrêts" |
 | Save sheet | Overline "Validation" · "Enregistrer cette visite ?" · "{Curry House} · {Intéressé} · Flyer remis · {4} réponses" · "La visite reste sur ce téléphone jusqu'à la prochaine synchronisation." · "Modifier" / "Enregistrer" |

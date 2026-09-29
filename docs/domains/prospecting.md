@@ -7,24 +7,31 @@ stateDiagram-v2
   [*] --> new: import
   [*] --> assigned: agent adds in field
   new --> assigned: admin assigns
-  assigned --> follow_up: visit (no_contact / interested / follow_up)
+  assigned --> follow_up: visit (no_contact / follow_up)
+  assigned --> interested: visit (interested)
   assigned --> converted: visit (converted)
   assigned --> rejected: visit (not_interested)
   follow_up --> follow_up: revisit
+  follow_up --> interested: visit (interested)
   follow_up --> converted: visit (converted)
   follow_up --> rejected: visit (not_interested)
   rejected --> assigned: admin reopens
+  interested --> follow_up: newer visit (no_contact / follow_up)
+  interested --> converted: newer visit (converted)
+  interested --> rejected: newer visit (not_interested)
+  interested --> assigned: admin reopens
   assigned --> new: admin unassigns
 ```
 
 | Visit outcome | Resulting status |
 |---|---|
 | `no_contact` | `follow_up` |
-| `interested` | `follow_up` |
+| `interested` | `interested` |
 | `follow_up` | `follow_up` |
 | `not_interested` | `rejected` |
 | `converted` | `converted` |
 
+- **Intéressé** means open to the discussion, not yet signed up to the waitlist; **Converti** means already signed up to it. They stay apart because the conversion rate counts only `converted` ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)). `follow_up` means only "go back": a `no_contact` or `follow_up` outcome.
 - Status transitions caused by visits are **computed by the server** when a visit is received ([ADR-0011](../adr/0011-server-derived-prospect-status.md)).
 - Only the **latest visit by `visited_at`** moves the status. A late-syncing older visit is stored but does not overwrite a newer outcome. On a tie the visit received last decides, and inside one sync the greater `visits.id`, so the same visit always does.
 - Only the **assignee's** visit moves the status. A visit written by any other agent is
@@ -41,7 +48,7 @@ stateDiagram-v2
 - Admin can override status manually (reopen, close). The admin's status holds against any visit made at or before the change, however late that visit syncs; only a visit made after it moves the status again. The visit still updates `last_visit_at` ([ADR-0025](../adr/0025-admin-status-outlives-older-visits.md)).
 
 ## Open vs closed
-Open (appear on an agent's list): `new`, `assigned`, `follow_up`. Closed: `converted`, `rejected`.
+Open (appear on an agent's list): `new`, `assigned`, `follow_up`. Closed: `interested`, `converted`, `rejected`. An Intéressé lead waits off every round, visible to an admin who filters for it, until a newer visit or an admin moves it ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)).
 
 ## Assignment
 - A prospect has zero or one `assigned_to` agent (email).
@@ -69,7 +76,7 @@ Known limits, accepted for v1; the admin can merge manually later (roadmap M5):
 - An import overwrites a field **only when it carries a value for it**. A column left unmapped sends nothing, and the stored value stays as it was — otherwise forgetting to map the phone column would erase every phone number in the base. The spreadsheet is authoritative about what it says, not about what it omits. Clearing a field on purpose is what `PATCH` is for. `name` and `type` are the exceptions: name is required, and type carries a default, so neither can arrive empty to mean "unchanged".
 - An import never reports "skipped": a row matching an existing key is an update, which is the point of re-importing. The result is `{created, updated}`.
 - Duplicate rows **within one import request** collapse to one before they reach the database; the last one wins. SQLite refuses an `ON CONFLICT DO UPDATE` that would touch the same row twice in one statement.
-- Assignment moves status along exactly two edges: `new → assigned` when a prospect is assigned, `assigned → new` when it is unassigned. A prospect whose status came from a visit (`follow_up`, `converted`, `rejected`) keeps it.
+- Assignment moves status along exactly two edges: `new → assigned` when a prospect is assigned, `assigned → new` when it is unassigned. A prospect whose status came from a visit (`follow_up`, `interested`, `converted`, `rejected`) keeps it.
 - Prospects are never hard-deleted once they have visits.
 
 ## Merging

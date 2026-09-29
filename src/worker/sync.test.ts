@@ -940,7 +940,7 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
     await patch(id, { status: "rejected" });
     await sync({ visits: [visitAt(id, "interested", Date.now())] });
 
-    expect((await prospect(id))?.status).toBe("follow_up");
+    expect((await prospect(id))?.status).toBe("interested");
   });
 
   it("settles two visits with the same visited_at by id, whatever order they arrive in", async () => {
@@ -989,6 +989,33 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
     await patch(id, { assignedTo: AGENT });
     await sync({ visits: [visitAt(id, "interested", Date.now() - DAY)] });
 
-    expect((await prospect(id))?.status).toBe("follow_up");
+    expect((await prospect(id))?.status).toBe("interested");
+  });
+
+  it("closes the prospect on an Intéressé visit, so the next pull leaves it out (ADR-0027)", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+
+    const first = (await (
+      await sync({ visits: [visitAt(id, "interested", Date.now())] })
+    ).json()) as SyncResponse;
+
+    expect((await prospect(id))?.status).toBe("interested");
+    expect(first.prospects.map((p) => p.id)).not.toContain(id);
+    const next = (await (await sync({})).json()) as SyncResponse;
+    expect(next.prospects.map((p) => p.id)).not.toContain(id);
+  });
+
+  it("derives the status from a visit made after an admin reopens an Intéressé lead", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+    await sync({ visits: [visitAt(id, "interested", Date.now() - 2 * DAY)] });
+
+    expect((await patch(id, { status: "assigned" })).status).toBe(200);
+    const reopened = (await (await sync({})).json()) as SyncResponse;
+    expect(reopened.prospects.map((p) => p.id)).toContain(id);
+
+    await sync({ visits: [visitAt(id, "converted", Date.now())] });
+    expect((await prospect(id))?.status).toBe("converted");
   });
 });

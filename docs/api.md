@@ -168,7 +168,8 @@ the same response, additively.
   later: a conversion is an event, so a past period never shrinks. Every visit
   and manual change is keyed by `coalesce(merged_into, id)`, so an absorbed
   prospect counts as its survivor (one hop; A→B→C counts A under B). Its delta
-  follows the rule above.
+  follows the rule above. An `interested` prospect is never a conversion
+  ([ADR-0027](adr/0027-interested-is-its-own-closed-status.md)).
   *Limitation:* `status_set_at` keeps only the latest manual change, and a
   later visit replaces the status without touching it. So a manual status
   counts only while it is still in force (`last_visit_at` null or not after
@@ -201,7 +202,7 @@ the same response, additively.
   `openProspects` into `new`, `assigned` and `follow_up` with the same filter,
   and `openProspects` is its sum.
 - **Pipeline par statut** (`pipeline`, GH #112): live prospects
-  (`merged_into IS NULL`) per status, all five `STATUSES` with zeros. A
+  (`merged_into IS NULL`) per status, all six `STATUSES` with zeros. A
   snapshot of now like `openProspects`, so it ignores the period, and
   `new + assigned + follow_up` equals `openProspects`. The screen computes each
   share from the pipeline's own total, and shows 0 % when that total is 0.

@@ -62,7 +62,14 @@ function answer(
       ...rate,
     },
     visitsByDay: days(period),
-    pipeline: { new: 1000, assigned: 1, follow_up: 283, converted: 50, rejected: 166 },
+    pipeline: {
+      new: 1000,
+      assigned: 1,
+      follow_up: 283,
+      interested: 150,
+      converted: 50,
+      rejected: 166,
+    },
     agents: [
       {
         email: "lea@example.com",
@@ -231,14 +238,15 @@ describe("DashboardScreen", () => {
 
     const panel = within(await findCard(copy.dashboard.pipeline.title));
     // formatCount groups with a narrow no-break space; the normalizer folds it.
-    expect(panel.getByText("1 500 prospects")).toBeTruthy();
+    expect(panel.getByText("1 650 prospects")).toBeTruthy();
     const rows = panel.getAllByRole("listitem").map((li) => li.textContent);
     expect(rows).toEqual([
-      "Nouveau1\u202f00066,7\u00a0%",
+      "Nouveau1\u202f00060,6\u00a0%",
       "Assigné10,1\u00a0%",
-      "À relancer28318,9\u00a0%",
-      "Converti503,3\u00a0%",
-      "Refusé16611,1\u00a0%",
+      "À relancer28317,2\u00a0%",
+      "Intéressé1509,1\u00a0%",
+      "Converti503,0\u00a0%",
+      "Refusé16610,1\u00a0%",
     ]);
   });
 
@@ -246,7 +254,14 @@ describe("DashboardScreen", () => {
     stubFetch((period) =>
       json({
         ...answer(period),
-        pipeline: { new: 0, assigned: 0, follow_up: 0, converted: 0, rejected: 0 },
+        pipeline: {
+          new: 0,
+          assigned: 0,
+          follow_up: 0,
+          interested: 0,
+          converted: 0,
+          rejected: 0,
+        },
       }),
     );
     renderScreen();
@@ -254,7 +269,7 @@ describe("DashboardScreen", () => {
     const element = await findCard(copy.dashboard.pipeline.title);
     const panel = within(element);
     expect(panel.getByText("0 prospect")).toBeTruthy();
-    expect(panel.getAllByText("0,0 %")).toHaveLength(5);
+    expect(panel.getAllByText("0,0 %")).toHaveLength(6);
     for (const fill of element.querySelectorAll<HTMLElement>("li [aria-hidden] > div")) {
       expect(fill.style.width).toBe("0%");
     }

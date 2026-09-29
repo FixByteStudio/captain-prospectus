@@ -16,6 +16,7 @@ export const STATUS_EDGE: Readonly<Record<Status, string>> = {
   new: "shadow-[inset_4px_0_0_0_var(--color-status-new)]",
   assigned: "shadow-[inset_4px_0_0_0_var(--color-status-assigned)]",
   follow_up: "shadow-[inset_4px_0_0_0_var(--color-status-follow-up)]",
+  interested: "shadow-[inset_4px_0_0_0_var(--color-status-interested)]",
   converted: "shadow-[inset_4px_0_0_0_var(--color-status-converted)]",
   rejected: "shadow-[inset_4px_0_0_0_var(--color-status-rejected)]",
 };
@@ -29,6 +30,8 @@ export const STATUS_TEXT: Readonly<Record<Status, string>> = {
   new: "text-muted-foreground",
   assigned: "text-foreground font-medium",
   follow_up: "text-warn font-medium",
+  // No font-medium: one step quieter than Converti, whose green it shares.
+  interested: "text-success",
   converted: "text-success font-medium",
   rejected: "text-destructive font-medium",
 };
@@ -45,6 +48,7 @@ export const STATUS_BADGE: Readonly<Record<Status, string>> = {
   new: "bg-secondary text-muted-foreground",
   assigned: "bg-tint-assigned text-foreground",
   follow_up: "bg-tint-warn text-warn",
+  interested: "bg-tint-interested text-success",
   converted: "bg-tint-success text-success",
   rejected: "bg-tint-destructive text-destructive",
 };

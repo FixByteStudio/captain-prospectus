@@ -660,6 +660,7 @@ export const dashboardResponseSchema = z.object({
     new: countSchema,
     assigned: countSchema,
     follow_up: countSchema,
+    interested: countSchema,
     converted: countSchema,
     rejected: countSchema,
   }),

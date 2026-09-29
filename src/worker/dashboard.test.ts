@@ -247,6 +247,22 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
   );
 
   it.each(DASHBOARD_PERIODS)(
+    "does not count an Intéressé lead as a conversion, period %i (ADR-0027)",
+    async (period) => {
+      const { from } = brusselsPeriod(Date.now(), period);
+      await seedVisits(await seedProspect("converted"), [from], "converted");
+      await seedVisits(await seedProspect("interested"), [from], "interested");
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.converted.value).toBe(1);
+      expect(body.conversionRate.visitedProspects.value).toBe(2);
+      expect(body.conversionRate.value).toBe(0.5);
+      expect(body.pipeline.interested).toBe(1);
+      expect(body.pipeline.converted).toBe(1);
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
     "counts a manual conversion but not in the denominator, period %i (I/O matrix, manually)",
     async (period) => {
       const { from } = brusselsPeriod(Date.now(), period);
@@ -654,6 +670,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         "assigned",
         "assigned",
         "follow_up",
+        "interested",
         "converted",
         "rejected",
       ] as const) {
@@ -668,6 +685,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         new: 1,
         assigned: 2,
         follow_up: 1,
+        interested: 1,
         converted: 2,
         rejected: 1,
       });
@@ -791,6 +809,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         new: 0,
         assigned: 0,
         follow_up: 0,
+        interested: 0,
         converted: 0,
         rejected: 0,
       });

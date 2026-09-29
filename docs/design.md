@@ -96,15 +96,18 @@ var(--card))`).
 | Nouveau (`new`) | `muted-foreground` | `secondary` |
 | Assigné (`assigned`) | `foreground` | `tint-assigned`: 7 % ink, i.e. 12 % of the 55 % edge, kept opaque |
 | À relancer (`follow_up`) | `warn` | `tint-warn` |
+| Intéressé (`interested`, status) | `success` | `tint-interested`: 7 % success, i.e. 12 % of the 55 % edge, kept opaque |
 | Converti (`converted`) | `success` | `tint-success` |
 | Refusé (`rejected`) | `destructive` | `tint-destructive`: 12 % light, 10 % dark |
 | Personne sur place (`no_contact`) | `muted-foreground` | `secondary` |
-| Intéressé (`interested`) | `outcome-interested` | `tint-outcome-interested` |
+| Intéressé (`interested`, outcome) | `outcome-interested` | `tint-outcome-interested` |
 | Pas intéressé (`not_interested`) | `foreground` | `tint-outcome-not-interested` |
 
 `converted` has its own `success` token and is **always green**. A gold
 `converted` would sit 7° in hue from the mustard that means `follow_up`, and
-the two would stop being separable.
+the two would stop being separable. Intéressé (`interested`) uses the same
+green at partial strength — a 55 % edge and a regular-weight label — so it
+never reads as a win, and the label always tells the two apart.
 
 ### The six rules
 
@@ -169,6 +172,7 @@ reading a word.
 | `new` | `status-new` — 16% ink | `muted-foreground` |
 | `assigned` | `status-assigned` — 55% ink | `foreground` |
 | `follow_up` | `status-follow-up` — `warn` | `warn` |
+| `interested` | `status-interested` — 55% `success` | `success`, regular weight |
 | `converted` | `status-converted` — `success` | `success` |
 | `rejected` | `status-rejected` — `destructive` | `destructive` |
 
@@ -360,11 +364,12 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   meta on the right. One row per status in `STATUSES` order, zeros included:
   the `STATUS_LABELS` label on the left; on the right the count in semibold
   tabular figures — `muted-foreground` for Nouveau, `foreground` for Assigné,
-  `warn`, `success`, `destructive` for the others — and its share in meta, one
-  decimal. Under each, a 6px `secondary` track with a fill of that share in
-  `status-new`, `status-assigned`, `warn`, `success` or `destructive`. The
-  share is of the pipeline's own total; a total of 0 shows "0 prospect", 0,0 %
-  and empty tracks. The bars are decorative, the text carries the figures.
+  `warn`, `success` (Intéressé and Converti), `destructive` for the others —
+  and its share in meta, one decimal. Under each, a 6px `secondary` track with
+  a fill of that share in `status-new`, `status-assigned`, `warn`,
+  `status-interested`, `success` or `destructive`. The share is of the
+  pipeline's own total; a total of 0 shows "0 prospect", 0,0 % and empty
+  tracks. The bars are decorative, the text carries the figures.
 - **Activité par agent** (GH #112). A row under that, 3:2 with À traiter at ≥ lg, as
   in the mockup, so the five columns fit at 1280 px; full width below.
   A `Card` holding shadcn `Table`: the head row on `secondary` in
@@ -981,8 +986,8 @@ Six rules the ledger itself still encodes:
   rather than have missed it. `sonner` stays for things the admin *did*.
 - **The edge is the outcome's consequence, not the outcome.** A row's leading
   edge uses `STATUS_EDGE[OUTCOME_TO_STATUS[outcome]]`, so the column scans as
-  "what does this leave me to do" — `À relancer` mustard, `Converti` green,
-  `Refusé` red. The outcome's own French label sits in its column, because
+  "what does this leave me to do" — `À relancer` mustard, `Intéressé` faded
+  green, `Converti` green, `Refusé` red. The outcome's own French label sits in its column, because
   colour never carries the information alone.
 - **Time is the spine.** The feed orders by `received_at`, not `visited_at` —
   the server's clock, not the phone's, because a phone's clock can be wrong
@@ -1406,7 +1411,8 @@ else is allowed to compete.
 │  ├────────────────────────────┤  │
 │  │ [ic] Intéressé          (x)│  │  ← gold: chosen, never a status
 │  │     Ouvert à la discussion,│  │
-│  │     pas encore d'accord.   │  │
+│  │     pas encore inscrit sur │  │
+│  │     la liste d'attente.    │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] Pas intéressé      ( )│  │
 │  │     Refus clair.           │  │
@@ -1417,7 +1423,8 @@ else is allowed to compete.
 │  │     date.                  │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] Converti           ( )│  │
-│  │     Accord obtenu.         │  │
+│  │     Déjà inscrit sur la    │  │
+│  │     liste d'attente.       │  │
 │  └────────────────────────────┘  │
 │                                  │
 │  Relancer le   [ 29/09/2026 ]    │  only when the outcome is « À relancer »

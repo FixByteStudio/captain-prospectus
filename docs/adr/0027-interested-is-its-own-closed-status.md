@@ -1,6 +1,6 @@
 # ADR-0027: An "Intéressé" visit gives the prospect its own closed status
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-29
 - Deciders: mohss, Claude
 - Amends: [ADR-0011](0011-server-derived-prospect-status.md) (the outcome-to-status mapping it points to)

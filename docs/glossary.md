@@ -14,7 +14,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Admin** | Admin | Person who imports, assigns, configures scripts | manager |
 | **Visit** | Visite | One physical attempt at a prospect. A revisit is a new visit | check-in (that's the action) |
 | **Outcome** | Résultat | Result of a visit: `no_contact`, `interested`, `not_interested`, `follow_up`, `converted` | result |
-| **Status** | Statut | Lifecycle of a prospect: `new`, `assigned`, `follow_up`, `converted`, `rejected` | state |
+| **Status** | Statut | Lifecycle of a prospect: `new`, `assigned`, `follow_up`, `interested`, `converted`, `rejected` | state |
 | **Script** | Script | Versioned list of questions an agent asks during a visit | survey, form |
 | **Answers** | Réponses | Responses to a script, stored on the visit | |
 | **Import** | Import | Bulk creation of prospects from CSV or map | upload |
@@ -27,6 +27,10 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Flyer** | Flyer | The leaflet handed over during a visit | prospectus, brochure |
 | **Dashboard** | Tableau de bord | The admin's landing screen at `/admin`: how canvassing is going over 7, 30 or 90 days | home, overview |
 | **Open prospect** | Prospect ouvert | A live prospect (`merged_into IS NULL`) whose status is `new`, `assigned` or `follow_up` | active lead |
+| **Intéressé** (status) | Intéressé | A closed status: open to the discussion, not yet signed up to the waitlist. It leaves the round until an admin reopens it ([ADR-0027](adr/0027-interested-is-its-own-closed-status.md)) | converted, follow-up |
+| **Converti** (status) | Converti | Already signed up to the waitlist. Only this counts in the conversion rate | interested |
+| **Waitlist** | Liste d'attente | The prospects signed up to hear about the launch. Joining it is a conversion | mailing list, newsletter |
+| **Channel** | Canal | How a prospect joins the waitlist: today the WhatsApp group or the waitlist itself | medium, source (that's the import origin) |
 | **Conversion rate** | Taux de conversion | Prospects converted in a period ÷ distinct prospects visited in it ([api.md › The dashboard](api.md#the-dashboard)) | win rate, close rate |
 
 ## Enum values
@@ -46,6 +50,7 @@ Stored in English, rendered in French. These are the only labels the UI may show
 | `new` | Nouveau |
 | `assigned` | Assigné |
 | `follow_up` | À relancer |
+| `interested` | Intéressé |
 | `converted` | Converti |
 | `rejected` | Refusé |
 
