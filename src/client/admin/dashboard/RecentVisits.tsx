@@ -7,8 +7,10 @@ import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
 import { Badge } from "../../ui/badge";
 import { Card } from "../../ui/card";
+import { Skeleton } from "../../ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table";
 import { useVisitsFeed } from "../queries";
+import { ScreenState } from "../ScreenState";
 import { OUTCOME_BADGE } from "../outcome-badge";
 import { BADGE_SHAPE, STATUS_EDGE } from "../status";
 
@@ -27,7 +29,7 @@ const HEAD = "text-overline text-muted-foreground h-auto px-3 py-2.5 uppercase";
  * news on this screen.
  */
 export function RecentVisits() {
-  const { visits, arrived, isPending, isError, answeredAt } = useVisitsFeed();
+  const { visits, arrived, isPending, isError, isFetching, refetch, answeredAt } = useVisitsFeed();
   const t = copy.dashboard.recent;
   const shown = visits.slice(0, SHOWN);
   const fresh = new Set(arrived);
@@ -54,14 +56,37 @@ export function RecentVisits() {
         {arrivedShown > 0 ? copy.visits.arrived(arrivedShown) : ""}
       </p>
 
-      {/* As on Visites: rows already held stay, under the failure. */}
-      {isError && <p className="text-destructive px-4.5 pb-3">{copy.visits.loadFailed}</p>}
-      {!isError && shown.length === 0 && (
-        <p className="text-muted-foreground px-4.5 pb-3">
-          {isPending ? copy.visits.loading : copy.visits.empty}
-        </p>
-      )}
+      {/* As on Visites (#224): a skeleton until the first rows, then the
+          shared Alert with « Réessayer » above any rows already held. No
+          `loading` region: the screen's own already says it is loading. */}
+      <div className="px-4.5 empty:hidden">
+        <ScreenState
+          data={shown.length === 0 && isPending ? undefined : shown}
+          isPending={isPending}
+          isError={isError}
+          isFetching={isFetching}
+          onRetry={() => void refetch()}
+          loadFailed={copy.visits.loadFailed}
+          skeleton={
+            <ul aria-hidden="true" className="pb-3">
+              {Array.from({ length: SHOWN }, (_, i) => (
+                <li key={i} className="h-row flex items-center">
+                  <Skeleton className="h-5 w-full" />
+                </li>
+              ))}
+            </ul>
+          }
+        >
+          {(rows) =>
+            // A failed first load has nothing to be empty of: the Alert says it all.
+            rows.length === 0 &&
+            !isError && <p className="text-muted-foreground pb-3">{copy.visits.empty}</p>
+          }
+        </ScreenState>
+      </div>
 
+      {/* Full-bleed, so outside the padded state above; the rows held under
+          a failed poll's Alert. */}
       {shown.length > 0 && (
         <Table>
           <TableHeader className="bg-secondary">
