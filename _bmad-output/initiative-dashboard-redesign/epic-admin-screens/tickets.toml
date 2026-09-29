@@ -74,7 +74,7 @@ title = "Prospects rebuilt: name search, pagination and CSV export"
 description = "Rebuild Prospects on the new design keeping the URL filter contract 2.10 established, add the name search into the one toolbar slot that is replaced in place by the selection actions, add 25-row pagination and a CSV export button, keep the removable chips for several statuses and dueBefore and the row menu with its side submenus, render as a list of rows below 768px, and write the docs/design.md Prospects section the file has never had while rewriting One toolbar slot."
 verify = "The existing ProspectsScreen.test.tsx stays green in what it asserts, and new DOM tests pin q= reaching the request, pagination, the export button and both empty states; pnpm test is green."
 covers = ["CAP-3", "CAP-11"]
-after = [4, "2.10"]
+after = [4, "2.10", "4.13"]
 hitl = false
 risk = "high"
 references = [

@@ -7,7 +7,7 @@ type: story
 title: "Flows 1 and 4 on a real phone and tablet"
 parent: epic-field-screens
 covers: [CAP-6, CAP-7, CAP-8, CAP-9]
-after: [11]
+after: [11, 14]
 hitl: true
 risk: low
 ---

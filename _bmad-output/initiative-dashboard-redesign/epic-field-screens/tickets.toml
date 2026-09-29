@@ -140,12 +140,38 @@ hitl = false
 risk = "low"
 
 [[entry]]
+id = 13
+type = "story"
+title = "Intéressé becomes its own closed status"
+description = "Adds the closed status `interested` per ADR-0027, flipped to accepted in the same PR: OUTCOME_TO_STATUS, STATUSES and STATUS_LABELS, the faded-green `--color-status-interested` token with STATUS_EDGE, STATUS_TEXT, STATUS_BADGE and dashboard/status-fill.ts, the Prospects filter, dashboard pipeline, CSV export, manual-status PATCH and dev-seed-history.ts; the new Intéressé and Converti hints in copy/shared.ts; docs/glossary.md (interested, Waitlist, Channel), docs/domains/prospecting.md (mapping, lifecycle, Open vs closed) and docs/data-model.md's status enum. Entry 14 relies on `interested` no longer mapping to follow_up; 3.5 rebuilds Prospects on top of it."
+verify = "Worker tests show an Intéressé visit sets `interested` and the sync pull omits the prospect, a visit after an admin reopen derives as usual, and the conversion rate counts only converted; admin DOM tests show the Intéressé label and faded-green edge in Prospects, its filter, the pipeline and the export; the PR quotes the precache total against 1,000 KiB, since copy/shared.ts reaches the field bundle."
+covers = ["CAP-8"]
+after = ["3.1", "3.2"]
+hitl = false
+risk = "medium"
+references = ["_bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md, CAP-3 and CAP-4", "docs/adr/0027-interested-is-its-own-closed-status.md"]
+unknown = "None known; the colour is settled as converted's green at partial strength."
+
+[[entry]]
+id = 14
+type = "story"
+title = "A visited stop leaves the round"
+description = "Relies on entry 13 so a follow_up visited today can only be a stop kept for today; places each saved stop per round-placement.md before and after the sync in buildTodayList, so Carte's sheet follows, with a stop kept for today sorted last; adds the shared when step on step 2 for À relancer and Personne sur place per when-step.md, the picker starting tomorrow, and revisits the À relancer hint's 'Indiquez la date.'; simplifies progress.ts's total union if the placement allows; replaces TodayScreen.test.tsx:148 and :160 with the Flow 1 climax; reconciles EXPERIENCE.md, DESIGN.md, docs/design.md, docs/domains/field-operations.md and a note under spec-gh-118-tournee-du-jour.md."
+verify = "DOM tests show the next-stop card names a different stop after a queued Intéressé visit and it stays absent after the pull, Carte's sheet follows, a pulled prospect with lastVisitAt and nextVisitAt today sorts last, Personne sur place opens on 'Aujourd'hui' and sends today's Brussels date, À relancer cannot be saved with nothing ticked, the picker's min is tomorrow and a typed date not after today shows the copy/field message; the PR quotes the precache total against 1,000 KiB."
+covers = ["CAP-6", "CAP-7", "CAP-8"]
+after = [13]
+hitl = false
+risk = "medium"
+references = ["_bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md, CAP-1, CAP-2 and CAP-5", "_bmad-output/specs/spec-done-stop-leaves-the-round/round-placement.md", "_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md", "_bmad-output/implementation-artifacts/epic-117-retro-2026-09-29.md, action items 2 and 3", "_bmad-output/implementation-artifacts/spec-gh-118-tournee-du-jour.md", "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md, Flow 1", "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/DESIGN.md, Stop row"]
+unknown = "Two spec assumptions are unconfirmed: the when choice sits above Notes on the no-script single screen, and the wording 'Choisissez une date à partir de demain.'"
+
+[[entry]]
 id = 12
 type = "story"
 title = "Flows 1 and 4 on a real phone and tablet"
 description = "A person runs EXPERIENCE.md Flows 1 and 4 end to end on a phone and a tablet in airplane mode, in light and dark, on a seeded local build."
 verify = "The run's result, device and date for each flow are recorded in the epic's Notes."
 covers = ["CAP-6", "CAP-7", "CAP-8", "CAP-9"]
-after = [11]
+after = [11, 14]
 hitl = true
 risk = "low"
