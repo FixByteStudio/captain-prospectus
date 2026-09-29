@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
+import { InboxIcon } from "lucide-react";
 import type { AdminVisit } from "../../../shared/schemas";
 import { OUTCOME_TO_STATUS } from "../../../shared/constants";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
 import { Skeleton } from "../../ui/skeleton";
+import { EmptyTile } from "../EmptyTile";
 import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
 import { Pager } from "../Pager";
@@ -78,7 +80,13 @@ export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> 
         {() =>
           visits.length === 0 ? (
             // A failed first load has nothing to be empty of: the Alert says it all.
-            !isError && <p className="text-muted-foreground">{copy.visits.empty}</p>
+            !isError && (
+              <Surface>
+                <EmptyTile icon={<InboxIcon aria-hidden="true" />}>
+                  <p>{copy.visits.empty}</p>
+                </EmptyTile>
+              </Surface>
+            )
           ) : (
             <>
               <Surface>

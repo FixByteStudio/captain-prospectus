@@ -556,7 +556,8 @@ together.
 - **The empty state is healthy, not a failure**: an icon tile
   (`CopyCheckIcon`), « Aucun doublon détecté. », one sentence, and one
   `outline` button to Prospects — the same shape as every other empty state
-  in the app, reusing the shared `EmptyTile` (`src/client/admin/EmptyTile.tsx`).
+  in the app, reusing the shared `EmptyTile` (`src/client/admin/EmptyTile.tsx`),
+  which centres icon, text and button in the card.
 
 ### The script editor
 
@@ -1001,7 +1002,8 @@ Six rules the ledger itself still encodes:
   visit was made against.
 
 Empty, it is an invitation like every other empty screen: « Aucune visite reçue.
-Les visites apparaissent ici dès qu'un agent synchronise. »
+Les visites apparaissent ici dès qu'un agent synchronise. », in the shared
+`EmptyTile` with an inbox icon and no button.
 
 ### The repair queue
 
