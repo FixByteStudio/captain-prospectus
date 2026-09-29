@@ -269,3 +269,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-140-visit-history-offline.md`
   summary: The visit form renders the history's empty state before Dexie answers, because `useLiveQuery` defaults `history` to `[]` and `prospect` to undefined, so a prospect with cached history flashes an empty-state line first.
   evidence: The `useLiveQuery` defaults in `VisitScreen.tsx`. The flash predates #140 (it said « Première visite »). The admin side fixed the same class of flash in #222/#223; the field side needs a "not loaded yet" state that renders no empty line.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-147-progress-value.md`
+  summary: The MapStep and PreviewStep import progress bars have no accessible name (GH #231).
+  evidence: Radix does not name the progressbar root, and both call sites pass no aria-label (MapStep.tsx:312, PreviewStep.tsx:131). DailyProgress and ConversionBar each set one.

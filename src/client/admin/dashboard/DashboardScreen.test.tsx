@@ -378,9 +378,8 @@ describe("DashboardScreen", () => {
     // Not capped by the endpoint (manual conversions), so the bar is.
     const rate = within(card(copy.dashboard.conversionRate));
     expect(rate.getByText("32 convertis sur 5 prospects visités")).toBeTruthy();
-    // The indicator's transform, not aria-valuenow: the vendored Progress
-    // never forwards `value` to the Radix root (#147).
     expect(indicator(copy.dashboard.conversionRate)).toBe("translateX(-0%)");
+    expect(rate.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
   });
 
   it("keeps the rows' shape when nothing is open or visited (I/O matrix, open split zero and rate null)", async () => {
