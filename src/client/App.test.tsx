@@ -14,7 +14,7 @@
  * does not drag TanStack Query, sonner and PapaParse into a shell test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
@@ -48,6 +48,10 @@ const stub = vi.hoisted(() => ({
   /** Counts every `/api/me` fetch, so a test can pin that a live-confirmed
    * session going offline and back costs it no extra request (spec-gh-115). */
   identityCalls: 0,
+  /** The most recent props `<SyncProvider>` was mounted with — backlog 013:
+   * proves `App.tsx` actually passes `confirmed`/`recheckIdentity`, not just
+   * that the mock renders its children regardless of what it is handed. */
+  syncProviderProps: null as { confirmed: boolean; recheckIdentity: () => void } | null,
 }));
 
 /** What a revoked session's `ApiError` carries. A fixture, not UI copy:
@@ -73,7 +77,18 @@ vi.mock("./api", async (importOriginal) => {
 });
 
 vi.mock("./field/useSync", () => ({
-  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
+  SyncProvider: ({
+    children,
+    confirmed,
+    recheckIdentity,
+  }: {
+    children: React.ReactNode;
+    confirmed: boolean;
+    recheckIdentity: () => void;
+  }) => {
+    stub.syncProviderProps = { confirmed, recheckIdentity };
+    return children;
+  },
   useSyncState: () => ({ ...stub.sync, lastSyncAt: null, syncNow: async () => {} }),
 }));
 
@@ -151,6 +166,7 @@ beforeEach(async () => {
   stub.identityUnreachable = false;
   stub.identityRevoked = false;
   stub.identityCalls = 0;
+  stub.syncProviderProps = null;
 });
 
 afterEach(async () => {
@@ -422,6 +438,184 @@ describe("The admin tab and routes follow the network", () => {
     expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
     expect(fieldBand()).toBeTruthy();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
+  });
+});
+
+/**
+ * Backlog 013: `App.tsx`'s `settle` calls `confirmOutbox` on every live
+ * `/api/me` answer, before the identity-switch clear or the error frame. A
+ * real `fieldDb` (not the mocked `useSync`) is what makes this observable.
+ */
+describe("App confirms the outbox on a live /api/me answer", () => {
+  afterEach(async () => {
+    await fieldDb.outboxVisits.clear();
+  });
+
+  it("re-stamps an unconfirmed row to the live email once the re-check confirms it", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const rowId = crypto.randomUUID();
+      await fieldDb.outboxVisits.add({
+        id: rowId,
+        prospectId: crypto.randomUUID(),
+        visitedAt: 1_700_000_000_000,
+        lat: null,
+        lng: null,
+        flyerGiven: true,
+        outcome: "interested",
+        followUpAt: null,
+        notes: null,
+        scriptId: null,
+        answers: {},
+        writtenBy: AGENT.email,
+        unconfirmed: true,
+      });
+
+      stub.identityUnreachable = false;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await waitFor(async () => {
+        const row = await fieldDb.outboxVisits.get(rowId);
+        expect(row?.unconfirmed).toBeUndefined();
+      });
+      const row = await fieldDb.outboxVisits.get(rowId);
+      expect(row?.writtenBy).toBe(AGENT.email);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("keeps the cached email and only drops the flag on a 401", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const rowId = crypto.randomUUID();
+      await fieldDb.outboxVisits.add({
+        id: rowId,
+        prospectId: crypto.randomUUID(),
+        visitedAt: 1_700_000_000_000,
+        lat: null,
+        lng: null,
+        flyerGiven: true,
+        outcome: "interested",
+        followUpAt: null,
+        notes: null,
+        scriptId: null,
+        answers: {},
+        writtenBy: AGENT.email,
+        unconfirmed: true,
+      });
+
+      stub.identityUnreachable = false;
+      stub.identityRevoked = true;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await screen.findByText(REVOKED_MESSAGE);
+      const row = await fieldDb.outboxVisits.get(rowId);
+      expect(row?.unconfirmed).toBeUndefined();
+      expect(row?.writtenBy).toBe(AGENT.email);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("re-stamps to the live email, not the cached one, when a different agent confirms — and the row survives the identity-switch clear", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      // Cached as AGENT; the live answer names a different agent entirely —
+      // exactly the case that would pass even with the email argument
+      // ignored if the cached and live identities matched.
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const rowId = crypto.randomUUID();
+      await fieldDb.outboxVisits.add({
+        id: rowId,
+        prospectId: crypto.randomUUID(),
+        visitedAt: 1_700_000_000_000,
+        lat: null,
+        lng: null,
+        flyerGiven: true,
+        outcome: "interested",
+        followUpAt: null,
+        notes: null,
+        scriptId: null,
+        answers: {},
+        writtenBy: AGENT.email,
+        unconfirmed: true,
+      });
+
+      stub.identityUnreachable = false;
+      stub.me = ADMIN;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await screen.findByRole("img", { name: copy.nav.avatar(ADMIN.email) });
+      const row = await fieldDb.outboxVisits.get(rowId);
+      expect(row?.unconfirmed).toBeUndefined();
+      // The live email, not the cached AGENT it was written with — and it
+      // survives the identity-switch clear that follows confirmation
+      // (INVARIANT 5: the switch clears the round and history, never the
+      // outbox).
+      expect(row?.writtenBy).toBe(ADMIN.email);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+});
+
+describe("App passes SyncProvider a working confirmed/recheckIdentity — backlog 013", () => {
+  it("is false while the identity is cache-sourced, true once a live answer lands", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      expect(stub.syncProviderProps?.confirmed).toBe(false);
+
+      stub.identityUnreachable = false;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await waitFor(() => expect(stub.syncProviderProps?.confirmed).toBe(true));
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("recheckIdentity re-asks /api/me", async () => {
+    renderApp("/tournee");
+    await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+    const callsBefore = stub.identityCalls;
+    await act(async () => {
+      stub.syncProviderProps?.recheckIdentity();
+    });
+
+    expect(stub.identityCalls).toBeGreaterThan(callsBefore);
   });
 });
 

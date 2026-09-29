@@ -1692,7 +1692,7 @@ send" stays true for as long as there is no signal — sometimes hours. A toast
 shows it for four seconds and then lies by omission.
 
 So sync lives in two permanent places, both drawn from one pure function
-(`syncView`, `src/client/field/sync-view.ts`) that decides all seven states in
+(`syncView`, `src/client/field/sync-view.ts`) that decides all eight states in
 one place rather than letting the band and the strip each branch on their own:
 
 - **A dot and a count in the band**, always visible, on every field screen. The
@@ -1713,6 +1713,7 @@ one place rather than letting the band and the strip each branch on their own:
 | Failed | `warn` + count | `secondary` | `copy.sync.failed` | — |
 | Session expired | `destructive` + count | `destructive`, `on-destructive` text | `copy.sync.authExpired` | Se reconnecter |
 | Update needed | `warn` + count | `warn`, `on-destructive` text | `copy.sync.upgrade` | Mettre à jour |
+| Unconfirmed (backlog 013) | `warn` + count | `secondary` | `copy.sync.unconfirmed` | — |
 
 Only two states carry a button, because only two ask the agent for something
 the app cannot do by itself:

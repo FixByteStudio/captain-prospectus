@@ -56,7 +56,7 @@ const OUTCOME_ERROR_ID = "visit-outcome-error";
 export function VisitScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { syncNow, identity } = useSyncState();
+  const { syncNow, stamp } = useSyncState();
   const { point } = useAgentPosition();
   // Below 768px one column; from 768px the form left and `VisitSidePane`
   // right (spec-gh-126). Read in JS rather than `md:` classes alone, because
@@ -323,7 +323,7 @@ export function VisitScreen() {
       // visit. Nothing here touches the local copy — the new status arrives on
       // the next pull, in the list.
       try {
-        await queueVisit(fieldDb, result.visit, identity);
+        await queueVisit(fieldDb, result.visit, stamp);
       } catch {
         // Until this row exists, the outbox is not the only copy of the visit —
         // there is no copy at all (INVARIANT 5). A quota-exhausted or evicted
@@ -337,7 +337,7 @@ export function VisitScreen() {
       void syncNow();
       await navigate("/tournee", { replace: true, state: { saved: true } });
     },
-    [id, identity, navigate, point, script, syncNow, visitId],
+    [id, stamp, navigate, point, script, syncNow, visitId],
   );
 
   // A sync the server refuses drops the cached round (GH #35), and it can land

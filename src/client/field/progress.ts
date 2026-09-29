@@ -3,12 +3,14 @@
  * aujourd'hui" with a bar, and the dedupe-by-id union of the log and the
  * pending outbox (docs/domains/field-operations.md).
  *
- * Pure: `sendableBy` comes from `outbox-stamp.ts`, the one definition of
- * "mine" the outbox side shares (the two sides must agree), and `db.ts`
- * contributes types only.
+ * Pure: `countsFor` comes from `outbox-stamp.ts`, the one definition of
+ * "mine, for display" the outbox side shares (the two sides must agree), and
+ * `db.ts` contributes types only. `countsFor`, not `sendableBy`: an
+ * unconfirmed row written this launch is still this identity's own progress,
+ * even though the sync engine will not send it yet (backlog 013).
  */
 import type { SentVisit, StoredVisit } from "./db";
-import { sendableBy } from "./outbox-stamp";
+import { countsFor } from "./outbox-stamp";
 
 export type DailyProgressValue = { n: number; total: number; percent: number };
 
@@ -44,7 +46,7 @@ export function dailyProgress({
   /** The Brussels calendar day, from `src/shared/period.ts`. */
   period: { from: number; to: number };
 }): DailyProgressValue {
-  const mine = sendableBy(identity);
+  const mine = countsFor(identity);
   const isToday = (visitedAt: number) => visitedAt >= period.from && visitedAt < period.to;
   const visitIds = new Set<string>();
   const countedProspectIds = new Set<string>();

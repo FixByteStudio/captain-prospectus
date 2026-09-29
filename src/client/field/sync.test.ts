@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { CLIENT_VERSION, MAX_REQUEST_BYTES, SYNC_VISITS_PER_REQUEST } from "../../shared/constants";
 import type { FieldProspect, Script, SyncRequest, SyncResponse, Visit } from "../../shared/schemas";
-import { FieldDb, getMeta, setMeta } from "./db";
+import { clearAgentCache, confirmOutbox, FieldDb, getMeta, queueVisit, setMeta } from "./db";
+import { sendableBy } from "./outbox-stamp";
 import { backoffDelayMs, runSync } from "./sync";
 
 /**
@@ -545,5 +546,114 @@ describe("runSync — rows written by another identity", () => {
 
     expect(result).toMatchObject({ status: "offline", remaining: 2, heldBack: 1 });
     expect(await db.outboxVisits.count()).toBe(3);
+  });
+});
+
+/**
+ * docs/backlog/013: a row written under a cache-sourced identity is
+ * `unconfirmed`, and only `confirmOutbox` (run by `App.tsx` on a live
+ * `/api/me`) decides whose it is. These chain the same calls the shell makes.
+ */
+describe("runSync — rows written under an unconfirmed identity", () => {
+  const A = "a@example.com";
+  const B = "b@example.com";
+
+  const captureAll = () => {
+    const sent: SyncRequest[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as SyncRequest;
+      sent.push(body);
+      const accepted = {
+        prospects: body.prospects.map((p) => p.id),
+        visits: body.visits.map((v) => v.id),
+      };
+      return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+    }) as unknown as typeof fetch;
+    return { sent, fetchFn };
+  };
+
+  it("never sends an unconfirmed row, whatever the identity", async () => {
+    await queueVisit(db, visit(), { writtenBy: A, unconfirmed: true });
+
+    for (const identity of [A, B]) {
+      const { sent, fetchFn } = captureAll();
+      await runSync({ db, identity, fetchFn });
+      expect(sent[0]?.visits).toEqual([]);
+    }
+    expect(await db.outboxVisits.count()).toBe(1);
+  });
+
+  it("sends a visit queued as A under B once /api/me confirms B, and holds A's earlier rows back", async () => {
+    const earlier = visit();
+    await db.outboxVisits.add({ ...earlier, writtenBy: A });
+    const queued = visit();
+    await queueVisit(db, queued, { writtenBy: A, unconfirmed: true });
+
+    await confirmOutbox(db, B);
+    expect(await db.outboxVisits.get(queued.id)).toEqual({ ...queued, writtenBy: B });
+    expect((await db.sentVisits.get(queued.id))?.writtenBy).toBe(B);
+
+    const { sent, fetchFn } = captureAll();
+    const result = await runSync({ db, identity: B, fetchFn });
+
+    expect(sent[0]?.visits.map((v) => v.id)).toEqual([queued.id]);
+    expect(result).toMatchObject({ status: "ok", acceptedVisits: 1, heldBack: 1 });
+    expect(await db.outboxVisits.get(earlier.id)).toEqual({ ...earlier, writtenBy: A });
+  });
+
+  it("sends the visit and holds nothing back once /api/me confirms the same agent", async () => {
+    const queued = visit();
+    await queueVisit(db, queued, { writtenBy: A, unconfirmed: true });
+
+    await confirmOutbox(db, A);
+    const { sent, fetchFn } = captureAll();
+    const result = await runSync({ db, identity: A, fetchFn });
+
+    expect(sent[0]?.visits.map((v) => v.id)).toEqual([queued.id]);
+    expect(result).toMatchObject({ status: "ok", acceptedVisits: 1, heldBack: 0 });
+  });
+
+  it("keeps A without the flag on a 401, and the row survives clearAgentCache", async () => {
+    const queued = visit();
+    await queueVisit(db, queued, { writtenBy: A, unconfirmed: true });
+
+    // The order `App.tsx` uses on a revoked answer.
+    await confirmOutbox(db);
+    await clearAgentCache(db);
+
+    const row = await db.outboxVisits.get(queued.id);
+    expect(row).toEqual({ ...queued, writtenBy: A });
+    expect(row && sendableBy(A)(row)).toBe(true);
+    expect(row && sendableBy(B)(row)).toBe(false);
+  });
+
+  it("never puts `unconfirmed` or `writtenBy` in the request body", async () => {
+    const queued = visit();
+    await queueVisit(db, queued, { writtenBy: A, unconfirmed: true });
+    const prospect: FieldProspect = {
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+    };
+    await db.outboxProspects.add({ ...prospect, writtenBy: A, unconfirmed: true });
+    await confirmOutbox(db, A);
+
+    let raw = "";
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      raw = String(init.body);
+      return new Response(JSON.stringify(okResponse()), { status: 200 });
+    }) as unknown as typeof fetch;
+    await runSync({ db, identity: A, fetchFn });
+
+    const body = JSON.parse(raw) as SyncRequest;
+    expect(body.visits).toHaveLength(1);
+    expect(body.prospects).toHaveLength(1);
+    expect(raw).not.toContain("unconfirmed");
+    expect(raw).not.toContain("writtenBy");
   });
 });

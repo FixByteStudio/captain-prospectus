@@ -26,8 +26,16 @@ import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
 import type { TodayItem } from "./today";
 
+const syncStub = vi.hoisted(() => ({
+  stamp: { writtenBy: "agent@example.com" } as { writtenBy: string; unconfirmed?: true },
+}));
+
 vi.mock("./useSync", () => ({
-  useSyncState: () => ({ identity: "agent@example.com", syncNow: async () => {} }),
+  useSyncState: () => ({
+    identity: "agent@example.com",
+    stamp: syncStub.stamp,
+    syncNow: async () => {},
+  }),
 }));
 
 // Offline is the default state for a field test: nothing here should depend
@@ -704,6 +712,25 @@ describe("VisitScreen — step 2 (Questions)", () => {
     expect(loggedVisit?.id).toBe(queued?.id);
     expect(loggedVisit?.prospectId).toBe(queued?.prospectId);
     expect(loggedVisit?.writtenBy).toBe(queued?.writtenBy);
+  });
+
+  it("carries unconfirmed from useSyncState's stamp onto the outbox and log rows — backlog 013", async () => {
+    syncStub.stamp = { writtenBy: "agent@example.com", unconfirmed: true };
+    try {
+      const user = userEvent.setup();
+      await renderVisit({ expectContinue: false });
+
+      await user.click(outcomeRadio("interested"));
+      await confirmSave(user);
+
+      await screen.findByText(ROUND_MARKER);
+      const [queued] = await fieldDb.outboxVisits.toArray();
+      const [loggedVisit] = await fieldDb.sentVisits.toArray();
+      expect(queued?.unconfirmed).toBe(true);
+      expect(loggedVisit?.unconfirmed).toBe(true);
+    } finally {
+      syncStub.stamp = { writtenBy: "agent@example.com" };
+    }
   });
 });
 

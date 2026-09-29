@@ -35,7 +35,15 @@ export type SyncStatus =
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"
   /** Server or quota error. Keep everything; back off. */
-  | "error";
+  | "error"
+  /**
+   * The identity is cache-sourced and not yet confirmed against the live
+   * Access cookie (backlog 013). Never returned by `runSync` — `SyncProvider`
+   * reports it instead of calling `runSync` at all while `confirmed` is
+   * false, since sending anything under an unconfirmed identity is exactly
+   * what this status exists to prevent.
+   */
+  | "unconfirmed";
 
 export type SyncResult = {
   status: SyncStatus;
@@ -98,9 +106,10 @@ function serializeWithinCap(payload: SyncRequest): string {
 }
 
 /** The wire shape of an outbox row: the stamp stays on the device. */
-function unstamped<T extends OutboxStamp>(row: T): Omit<T, "writtenBy"> {
+function unstamped<T extends OutboxStamp>(row: T): Omit<T, "writtenBy" | "unconfirmed"> {
   const wire: T = { ...row };
   delete wire.writtenBy;
+  delete wire.unconfirmed;
   return wire;
 }
 

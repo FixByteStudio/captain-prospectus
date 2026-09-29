@@ -99,6 +99,23 @@ the identity signed in now (or unstamped, from before Dexie v3), so a row
 another agent queued on the same phone is held back, counted apart from the
 pending count («N éléments appartiennent à un autre agent…»), and waits until
 that agent signs in again — never sent under the wrong name, never dropped.
+This holds for a *confirmed* stamp; an `unconfirmed` one is a provisional
+guess at who wrote it, not yet a name `runSync` will honour either way — see
+below.
+
+**A cache-sourced identity is unconfirmed** ([backlog
+013](../backlog/013-sync-identity-from-cache.md),
+[identity-access.md](identity-access.md#offline-and-session-expiry)). A row
+written while the identity came from the offline cache (`identityFromCache`
+in `App.tsx`) carries `unconfirmed: true` alongside its `writtenBy` stamp, on
+both the outbox row and its `sentVisits` log entry. `sendableBy` never sends
+such a row, to anyone, until `confirmOutbox` (`src/client/field/db.ts`)
+re-stamps it on the first live `/api/me` — with the live email, or, on a 401,
+with nothing (the cached email stays, the flag drops). Display reads it
+differently from sync: `countsFor`, not `sendableBy`, is what `outboxCounts`
+and `dailyProgress` use, so an agent working offline from launch still sees
+their own visits as pending and counted today, not held back — `sendableBy`'s
+refusal to send is about the wire, not about whose progress this is.
 
 ### Protocol
 `POST /api/agent/sync`
@@ -143,6 +160,12 @@ Response
 
 ### Triggers
 App start · `online` event · immediately after saving a visit · every 60 s while the app is open.
+
+While the identity is unconfirmed (backlog 013), every one of these triggers
+re-asks `/api/me` instead of calling `runSync` — `SyncProvider` reports the
+`unconfirmed` status and backs off exactly as it would for `error`, so the
+heartbeat above keeps retrying a failed re-check rather than giving up after
+one attempt.
 
 ## Live feed
 

@@ -15,7 +15,7 @@ import type {
   VisitHistoryEntry,
 } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
-import { sendableBy, type OutboxStamp } from "./outbox-stamp";
+import { countsFor, sendableBy, type OutboxStamp, type WriteStamp } from "./outbox-stamp";
 
 // Re-exported so the store module still names everything a row carries;
 // pure callers (`progress.ts`, `sync.ts`) import from `outbox-stamp.ts`.
@@ -51,7 +51,14 @@ export type MetaRow = { key: MetaKey; value: MetaValues[MetaKey] };
  * like the outbox side (`sendableBy`) so a shared phone's count is the
  * signed-in agent's own. Never sent: this store never touches the wire.
  */
-export type SentVisit = { id: string; prospectId: string; sentAt: number; writtenBy: string };
+export type SentVisit = {
+  id: string;
+  prospectId: string;
+  sentAt: number;
+  writtenBy: string;
+  /** Same meaning as `OutboxStamp.unconfirmed` — backlog 013. */
+  unconfirmed?: true;
+};
 
 export class FieldDb extends Dexie {
   prospects!: Table<Prospect, string>;
@@ -142,9 +149,16 @@ export type OutboxCounts = {
   heldBack: number;
 };
 
-/** Split the outbox between what `identity` can send and what it holds back. */
+/**
+ * Split the outbox between what `identity` can send and what it holds back.
+ *
+ * Uses `countsFor`, not `sendableBy`: this is a display count, and an
+ * unconfirmed row written this launch is this identity's own, not another
+ * agent's, even though `sendableBy` (the *sync* predicate) will not send it
+ * until it is confirmed (backlog 013).
+ */
 export async function outboxCounts(db: FieldDb, identity: string): Promise<OutboxCounts> {
-  const mine = sendableBy(identity);
+  const mine = countsFor(identity);
   const [prospects, visits] = await Promise.all([
     db.outboxProspects.toArray(),
     db.outboxVisits.toArray(),
@@ -175,15 +189,19 @@ function dayStart(now: number): number {
  * queued visit is exactly what INVARIANT 5 forbids. Its failure is silent —
  * `todaysSentVisits` bounds the read at both ends, so an unpruned row from a
  * previous day is already invisible.
+ *
+ * `stamp` carries `unconfirmed` (backlog 013) when the identity that wrote
+ * this row is cache-sourced: both the outbox row and its log row take the
+ * flag, so `confirmOutbox` finds and re-stamps both together.
  */
-export async function queueVisit(db: FieldDb, visit: Visit, identity: string): Promise<void> {
+export async function queueVisit(db: FieldDb, visit: Visit, stamp: WriteStamp): Promise<void> {
   await db.transaction("rw", db.outboxVisits, db.sentVisits, async () => {
-    await db.outboxVisits.add({ ...visit, writtenBy: identity });
+    await db.outboxVisits.add({ ...visit, ...stamp });
     await db.sentVisits.put({
       id: visit.id,
       prospectId: visit.prospectId,
       sentAt: Date.now(),
-      writtenBy: identity,
+      ...stamp,
     });
   });
 
@@ -252,4 +270,31 @@ export async function clearAgentCache(db: FieldDb): Promise<void> {
     db.sentVisits.clear(),
     db.meta.delete("identity" satisfies MetaKey),
   ]);
+}
+
+/**
+ * Re-stamp every `unconfirmed` row to `email` and drop the flag — backlog
+ * 013. Called on every live `/api/me` answer, not only on a cache→live
+ * transition inside one run: a phone closed while unconfirmed leaves flagged
+ * rows behind, and only the next launch's live answer can confirm them.
+ *
+ * `email` is omitted on a 401: an expired cookie cannot confirm anyone, so
+ * the rows keep the cached email they were written with and only lose the
+ * flag, which is exactly what makes them `sendableBy` that identity again
+ * once its own session comes back — the 005 behaviour.
+ *
+ * One `rw` transaction over all three tables so a row is never left flagged
+ * in one and confirmed in another. Never deletes — INVARIANT 5.
+ */
+export async function confirmOutbox(db: FieldDb, email?: string): Promise<void> {
+  await db.transaction("rw", db.outboxVisits, db.outboxProspects, db.sentVisits, async () => {
+    const confirm = (row: OutboxStamp & { writtenBy?: string }) => {
+      row.writtenBy = email ?? row.writtenBy;
+      delete row.unconfirmed;
+    };
+    const isUnconfirmed = (row: OutboxStamp) => row.unconfirmed === true;
+    await db.outboxVisits.filter(isUnconfirmed).modify(confirm);
+    await db.outboxProspects.filter(isUnconfirmed).modify(confirm);
+    await db.sentVisits.filter(isUnconfirmed).modify(confirm);
+  });
 }

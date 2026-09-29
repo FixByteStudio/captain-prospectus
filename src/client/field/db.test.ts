@@ -6,6 +6,7 @@ import { brusselsPeriod } from "../../shared/period";
 import {
   cacheVisitHistory,
   clearAgentCache,
+  confirmOutbox,
   FieldDb,
   getMeta,
   outboxCounts,
@@ -223,7 +224,7 @@ describe("queueVisit", () => {
     await db.open();
     const v = visit();
 
-    await queueVisit(db, v, "a@example.com");
+    await queueVisit(db, v, { writtenBy: "a@example.com" });
 
     const [outboxRow] = await db.outboxVisits.toArray();
     const [logRow] = await db.sentVisits.toArray();
@@ -246,7 +247,7 @@ describe("queueVisit", () => {
     // transaction — including the log `put` — rolls back.
     await db.outboxVisits.add({ ...v, writtenBy: "a@example.com" });
 
-    await expect(queueVisit(db, v, "a@example.com")).rejects.toBeDefined();
+    await expect(queueVisit(db, v, { writtenBy: "a@example.com" })).rejects.toBeDefined();
 
     await expect(db.sentVisits.count()).resolves.toBe(0);
     db.close();
@@ -264,7 +265,7 @@ describe("queueVisit", () => {
       below: () => ({ delete: () => Promise.reject(new Error("boom")) }),
     } as unknown as ReturnType<typeof db.sentVisits.where>);
 
-    await expect(queueVisit(db, v, "a@example.com")).resolves.toBeUndefined();
+    await expect(queueVisit(db, v, { writtenBy: "a@example.com" })).resolves.toBeUndefined();
     // Let the fire-and-forget prune's rejection settle before asserting, so a
     // late unhandled rejection cannot leak into the next test either.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -283,7 +284,7 @@ describe("queueVisit", () => {
     await db.sentVisits.put({ ...stale, sentAt: from - 1, writtenBy: "a@example.com" });
 
     const v = visit({ visitedAt: now });
-    await queueVisit(db, v, "a@example.com");
+    await queueVisit(db, v, { writtenBy: "a@example.com" });
     // The prune is fire-and-forget after the transaction commits (db.ts's
     // comment on why); give it a tick before asserting it ran.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -302,7 +303,7 @@ describe("queueVisit", () => {
   // feature ships inert — is noticed.
   it("is still the write VisitScreen makes when it saves a visit", () => {
     const source = readFileSync(new URL("./VisitScreen.tsx", import.meta.url), "utf8");
-    expect(source).toMatch(/queueVisit\(\s*fieldDb\s*,\s*result\.visit\s*,\s*identity\s*\)/);
+    expect(source).toMatch(/queueVisit\(\s*fieldDb\s*,\s*result\.visit\s*,\s*stamp\s*\)/);
   });
 });
 
@@ -376,6 +377,112 @@ describe("outboxCounts", () => {
 
     // The unstamped row counts as whoever is signed in: it would be sent.
     await expect(outboxCounts(db, "b@example.com")).resolves.toEqual({ pending: 2, heldBack: 1 });
+    db.close();
+  });
+
+  it("counts an unconfirmed row as pending, not held back — backlog 013", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    // An offline launch's own visit is unconfirmed, but it is still this
+    // identity's own progress: `sendableBy` will not send it yet, but
+    // `outboxCounts` (display) must not lump it in with another agent's rows.
+    await db.outboxVisits.bulkPut([
+      { ...visit(), writtenBy: "a@example.com", unconfirmed: true },
+      { ...visit(), writtenBy: "b@example.com" },
+    ]);
+
+    await expect(outboxCounts(db, "a@example.com")).resolves.toEqual({ pending: 1, heldBack: 1 });
+    db.close();
+  });
+});
+
+describe("confirmOutbox", () => {
+  it("re-stamps every unconfirmed row across all three tables and drops the flag", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const v = visit();
+    await db.outboxVisits.add({ ...v, writtenBy: "a@example.com", unconfirmed: true });
+    await db.outboxProspects.add({
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+      writtenBy: "a@example.com",
+      unconfirmed: true,
+    });
+    await db.sentVisits.put({
+      id: v.id,
+      prospectId: v.prospectId,
+      sentAt: 1_700_000_000_000,
+      writtenBy: "a@example.com",
+      unconfirmed: true,
+    });
+
+    await confirmOutbox(db, "b@example.com");
+
+    const [outboxVisit] = await db.outboxVisits.toArray();
+    const [outboxProspect] = await db.outboxProspects.toArray();
+    const [sentVisit] = await db.sentVisits.toArray();
+    expect(outboxVisit).toMatchObject({ writtenBy: "b@example.com" });
+    expect(outboxVisit?.unconfirmed).toBeUndefined();
+    expect(outboxProspect).toMatchObject({ writtenBy: "b@example.com" });
+    expect(outboxProspect?.unconfirmed).toBeUndefined();
+    expect(sentVisit).toMatchObject({ writtenBy: "b@example.com" });
+    expect(sentVisit?.unconfirmed).toBeUndefined();
+    db.close();
+  });
+
+  it("keeps the cached email and only drops the flag when called with none — a 401", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const v = visit();
+    await db.outboxVisits.add({ ...v, writtenBy: "a@example.com", unconfirmed: true });
+
+    await confirmOutbox(db);
+
+    const [row] = await db.outboxVisits.toArray();
+    expect(row).toMatchObject({ writtenBy: "a@example.com" });
+    expect(row?.unconfirmed).toBeUndefined();
+    db.close();
+  });
+
+  it("leaves an already-confirmed row untouched", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await db.outboxVisits.add({ ...visit(), writtenBy: "a@example.com" });
+
+    await confirmOutbox(db, "b@example.com");
+
+    const [row] = await db.outboxVisits.toArray();
+    expect(row?.writtenBy).toBe("a@example.com");
+    db.close();
+  });
+
+  it("never deletes a row — INVARIANT 5", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await db.outboxVisits.add({ ...visit(), writtenBy: "a@example.com", unconfirmed: true });
+    await db.outboxProspects.add({
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+      writtenBy: "a@example.com",
+      unconfirmed: true,
+    });
+
+    await confirmOutbox(db, "b@example.com");
+
+    await expect(db.outboxVisits.count()).resolves.toBe(1);
+    await expect(db.outboxProspects.count()).resolves.toBe(1);
     db.close();
   });
 });

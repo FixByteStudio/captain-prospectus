@@ -29,7 +29,7 @@ import {
 import { useSyncState } from "./useSync";
 
 /**
- * `?sync=<state>` forces one of the seven states, dev-only, so each can be
+ * `?sync=<state>` forces one of the eight states, dev-only, so each can be
  * checked by eye against `key-f8-sync.html` without waiting for the network
  * or the outbox to be in the right shape. Built only inside the `DEV` branch
  * and looked up with `Object.hasOwn`, so this table costs nothing in
@@ -49,6 +49,7 @@ function forcedView(): SyncView | null {
     failed: syncView({ status: "error", running: false, pending: 3 }),
     auth: syncView({ status: "auth", running: false, pending: 3 }),
     upgrade: syncView({ status: "upgrade", running: false, pending: 3 }),
+    unconfirmed: syncView({ status: "unconfirmed", running: false, pending: 3 }),
   };
   if (!Object.hasOwn(table, key)) return null;
   return table[key] ?? null;

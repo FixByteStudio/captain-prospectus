@@ -80,3 +80,33 @@ outbox is never cleared this way (INVARIANT 5), and it is not sent under the new
 identity either: every outbox row is stamped with the email that wrote it, and
 `runSync` holds back rows stamped by anyone else until that agent signs in
 again (`docs/domains/field-operations.md#local-store-dexie`, backlog 005).
+
+**A cache-sourced session is unconfirmed** ([backlog
+013](../backlog/013-sync-identity-from-cache.md)). The cache is read only
+because `/api/me` could not be reached — a network blip or a Worker 5xx falls
+back to it the same as a genuine offline launch — so the Access cookie the
+next request will actually carry is not something the cache can name. Rather
+than trust it, `SyncProvider` sends nothing while the identity is
+cache-sourced: every sync trigger re-asks `/api/me` instead, and any visit or
+field prospect saved in the meantime is written with `unconfirmed: true`
+alongside its `writtenBy` stamp. The first live `/api/me` re-stamps every such
+row — outbox and the `sentVisits` log alike — to the email it names, in one
+Dexie transaction, before that identity's first sync runs; a 401 drops the
+flag instead and keeps the cached email, since an expired cookie cannot
+confirm anyone. This runs on every live answer, not only the first one inside
+a single page load, because a phone closed while still unconfirmed leaves
+flagged rows for the *next* launch's live answer to pick up.
+
+The residual this accepts, stated plainly: **every session that starts
+offline is unconfirmed for as long as it stays offline**, however long that
+is — not only the brief window until the next live answer. If a phone changes
+hands while still unconfirmed (agent A works offline, hands it to agent B,
+who keeps working offline), and the phone's next live `/api/me` names B
+because B is the one who eventually gets a signal, that answer confirms
+*every* unconfirmed row on the device to B — including the visits A logged
+before the hand-over — and B's next sync sends them under B's name. Narrower
+than the window backlog 013 closes (a confirmed sync filing rows under the
+wrong agent from a single stale cache read), because it needs an actual
+device hand-over during an unconfirmed stretch rather than one unlucky
+`/api/me` failure, and out of scope for backlog 013 — see its "Out of scope"
+for why narrowing the cache fallback further does not close it either.

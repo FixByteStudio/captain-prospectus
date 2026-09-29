@@ -1,6 +1,7 @@
 /**
- * The seven sync states, decided once — docs/design.md, "Sync is ambient,
- * never a toast"; `key-f8-sync.html`.
+ * The eight sync states, decided once — docs/design.md, "Sync is ambient,
+ * never a toast"; `key-f8-sync.html`. `unconfirmed` (backlog 013) joins the
+ * original seven.
  *
  * `SyncDot` and `SyncStrip` only draw what this returns; every branch on
  * `status`/`running`/`pending` and every button's effect live here so they
@@ -84,6 +85,16 @@ const FAILED_STRIP: SyncStripView = {
   politeness: "polite",
 };
 
+/** Backlog 013: a polite strip with no action — there is nothing for the
+ * agent to do while the phone re-asks `/api/me` on its own. */
+const UNCONFIRMED_STRIP: SyncStripView = {
+  tone: "secondary",
+  message: copy.sync.unconfirmed,
+  icon: "clock",
+  action: null,
+  politeness: "polite",
+};
+
 /**
  * The update-needed strip and the `UpdatePrompt` banner say the same fact, so
  * the banner steps aside while the strip shows it.
@@ -101,6 +112,14 @@ export function syncView({ status, running, pending }: SyncViewInput): SyncView 
   // tick would flicker the offline/failed strip and, worse, re-announce and
   // drop the button on the assertive session-expired/update-needed ones
   // (spec-gh-65 loop-1 finding #3, widened on review to every status).
+  if (status === "unconfirmed") {
+    return {
+      dot: { tone: "warn", pulse: running, label: copy.sync.unconfirmed },
+      count,
+      strip: UNCONFIRMED_STRIP,
+    };
+  }
+
   if (status === "auth") {
     return {
       dot: { tone: "destructive", pulse: running, label: copy.sync.authExpired },

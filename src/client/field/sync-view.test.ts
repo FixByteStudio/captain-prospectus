@@ -138,6 +138,19 @@ describe("syncView", () => {
     expect(syncView({ status: "error", running: true, pending: 0 }).dot.tone).toBe("warn");
   });
 
+  it("unconfirmed: warn dot + count, secondary strip, no button, polite — backlog 013", () => {
+    const view = syncView({ status: "unconfirmed", running: false, pending: 3 });
+    expect(view.dot).toEqual({ tone: "warn", pulse: false, label: copy.sync.unconfirmed });
+    expect(view.count).toBe(3);
+    expect(view.strip).toEqual({
+      tone: "secondary",
+      message: copy.sync.unconfirmed,
+      icon: "clock",
+      action: null,
+      politeness: "polite",
+    });
+  });
+
   it("hides the update banner only while the update-needed strip shows", () => {
     expect(hidesUpdateBanner(syncView({ status: "upgrade", running: false, pending: 0 }))).toBe(
       true,

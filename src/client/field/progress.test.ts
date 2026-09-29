@@ -32,6 +32,21 @@ const logged = (over: Partial<SentVisit> = {}): SentVisit => ({
 });
 
 describe("dailyProgress", () => {
+  it("counts this launch's unconfirmed visit as the agent's own (backlog 013)", () => {
+    const provisional = visit({ unconfirmed: true });
+    const result = dailyProgress({
+      logged: [
+        logged({ id: provisional.id, prospectId: provisional.prospectId, unconfirmed: true }),
+      ],
+      outboxVisits: [provisional],
+      identity: IDENTITY,
+      stops: [],
+      period: PERIOD,
+    });
+
+    expect(result.n).toBe(1);
+  });
+
   it("counts the union of the log and the pending outbox once each, by visit id (matrix: union, not sum)", () => {
     const shared = visit();
     const other = visit();
