@@ -20,7 +20,7 @@ erDiagram
     text source "csv|osm|google|field"
     text source_ref "e.g. osm node/123, google/ChIJ…"
     text dedupe_key UK
-    text status "new|assigned|follow_up|converted|rejected"
+    text status "new|assigned|follow_up|interested|converted|rejected"
     int status_set_at "last manual status change; null = visits decide"
     text assigned_to "agent email"
     int last_visit_at

@@ -71,7 +71,7 @@ function dashboardAnswer(period: number): DashboardResponse {
         counts: { no_contact: 0, interested: 0, not_interested: 0, follow_up: 0, converted: 0 },
       },
     ],
-    pipeline: { new: 50, assigned: 20, follow_up: 30, converted: 5, rejected: 2 },
+    pipeline: { new: 50, assigned: 20, follow_up: 30, interested: 0, converted: 5, rejected: 2 },
     agents: [],
     followUpsDue: 6,
     flyersGiven: 84,

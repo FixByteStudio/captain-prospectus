@@ -182,6 +182,24 @@ describe("ProspectsScreen › URL filters", () => {
     expect(location()).toBe("/admin/prospects?status=assigned&source=osm");
   });
 
+  it("offers Intéressé as a filter, and shows the row with its label and faded-green edge (ADR-0027)", async () => {
+    const lead = { ...prospect(crypto.randomUUID(), "Curry House"), status: "interested" as const };
+    const asked = stubFetch([lead], 1);
+    renderAt("/admin/prospects");
+    await screen.findByText("Curry House");
+
+    const user = userEvent.setup();
+    await user.click(statusSelect());
+    await user.click(await screen.findByRole("option", { name: STATUS_LABELS.interested }));
+    expect(location()).toBe("/admin/prospects?status=interested");
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects?status=interested"));
+
+    const row = (await screen.findByText("Curry House")).closest("tr");
+    if (!row) throw new Error("no table row for the lead");
+    expect(row.textContent).toContain(STATUS_LABELS.interested);
+    expect(row.innerHTML).toContain("--color-status-interested");
+  });
+
   it("clears every filter from the URL", async () => {
     stubFetch([], 0);
     renderAt("/admin/prospects?status=converted&dueBefore=5&source=osm");

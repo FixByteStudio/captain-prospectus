@@ -97,7 +97,7 @@ type Step = {
 export const FIXED_STORIES: readonly (readonly Step[])[] = [
   [
     { k: 20, outcome: "no_contact", followUpK: 12 },
-    { k: 12, outcome: "interested", followUpK: 2 },
+    { k: 12, outcome: "follow_up", followUpK: 2 },
     { k: 2, outcome: "converted" },
   ],
   [{ k: 9, outcome: "converted" }],
@@ -106,31 +106,39 @@ export const FIXED_STORIES: readonly (readonly Step[])[] = [
   // Due today: a Relance due.
   [{ k: 3, outcome: "follow_up", followUpK: 0 }],
   // Due in 5 days: a Relance due within 7 days.
-  [{ k: 1, outcome: "interested", followUpK: -5 }],
+  [{ k: 1, outcome: "follow_up", followUpK: -5 }],
   [{ k: 4, outcome: "not_interested" }],
   // No visit, so it stays assigned.
   [],
+  // A closed Intéressé lead (ADR-0027), so the Intéressé filter has a row.
+  // Last, so an agent with fewer prospects keeps the stories above.
+  [{ k: 6, outcome: "interested" }],
 ];
 
 /**
- * The walk's outcome weights, in percent of visits. `converted` and
- * `not_interested` end it. Tuned with the gap and the drop-out below so ~300
- * places average 10–15 visits a day over 180 days with ~5 % converted, the
- * mockup's figures; dev-seed-history.test.ts pins the average.
+ * The walk's outcome weights, in percent of visits. `converted`, `interested`
+ * and `not_interested` end it, as each closes the prospect. Tuned with the gap,
+ * the no-history share and the drop-out below so ~300 places average 10–15
+ * visits a day over 180 days with ~5 % converted, the mockup's figures;
+ * dev-seed-history.test.ts pins both. `interested` stays above `converted` so
+ * the demo funnel narrows the right way; since it now closes a walk too, walks
+ * are shorter, so the gap is 1–3 days and fewer places have no history, to
+ * keep the visits a day in range (measured: ~11.4 a day, ~4.8 % converted,
+ * ~5.5 % interested).
  */
 const WALK_WEIGHTS: readonly (readonly [Outcome, number])[] = [
-  ["no_contact", 36],
-  ["interested", 26],
-  ["follow_up", 31],
-  ["not_interested", 2],
-  ["converted", 5],
+  ["no_contact", 42],
+  ["interested", 6],
+  ["follow_up", 47],
+  ["not_interested", 1],
+  ["converted", 4],
 ];
 const WALK_TOTAL = WALK_WEIGHTS.reduce((sum, [, w]) => sum + w, 0);
-const NO_HISTORY_SHARE = 0.15;
+const NO_HISTORY_SHARE = 0.05;
 const DROP_OUT_SHARE = 0.01;
 const FLYER_SHARE = 0.4;
-const MIN_GAP_DAYS = 2;
-const MAX_GAP_DAYS = 4;
+const MIN_GAP_DAYS = 1;
+const MAX_GAP_DAYS = 3;
 /** Visits happen in the working day; follow-ups are booked for the morning. */
 const FIRST_VISIT_HOUR = 8;
 const VISIT_HOURS = 11;
@@ -146,7 +154,7 @@ function pickOutcome(rand: () => number): Outcome {
 }
 
 function takesFollowUp(outcome: Outcome): boolean {
-  return outcome === "no_contact" || outcome === "interested" || outcome === "follow_up";
+  return outcome === "no_contact" || outcome === "follow_up";
 }
 
 export type SeedSubject = {

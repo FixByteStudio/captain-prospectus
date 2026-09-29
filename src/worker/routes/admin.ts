@@ -951,7 +951,8 @@ adminRoutes.patch(
  *
  * Status moves only along the two edges prospecting.md allows: new → assigned
  * on assignment, assigned → new on unassignment. A prospect that has been
- * visited (follow_up, converted, rejected) keeps the status its visits earned.
+ * visited (follow_up, interested, converted, rejected) keeps the status its
+ * visits earned.
  */
 adminRoutes.post("/prospects/assign", validate("json", assignSchema), async (c) => {
   const { ids, assignedTo } = c.req.valid("json");

@@ -134,6 +134,7 @@
   --color-status-new: var(--status-new);
   --color-status-assigned: var(--status-assigned);
   --color-status-follow-up: var(--warn);
+  --color-status-interested: var(--status-interested);
   --color-status-converted: var(--success);
   --color-status-rejected: var(--destructive);
 
@@ -149,6 +150,7 @@
   --color-tint-assigned: var(--tint-assigned);
   --color-tint-warn: var(--tint-warn);
   --color-tint-success: var(--tint-success);
+  --color-tint-interested: var(--tint-interested);
   --color-tint-destructive: var(--tint-destructive);
   --color-tint-outcome-interested: var(--tint-outcome-interested);
   --color-tint-outcome-not-interested: var(--tint-outcome-not-interested);
@@ -271,12 +273,17 @@
   --status-new: color-mix(in oklab, var(--foreground) 16%, transparent);
   /* Someone owes this a visit. Legible, but it must not outshout converted. */
   --status-assigned: color-mix(in oklab, var(--foreground) 55%, transparent);
+  /* Warm but not won (ADR-0027): converted's green at partial strength, so it
+     sits one step quieter than Converti. */
+  --status-interested: color-mix(in oklab, var(--success) 55%, transparent);
 
   /* Badge fills, ≤ 12 % so the badge text keeps 4.5:1 on them. */
   /* 12 % of the 55 % edge, mixed from the ink so the fill stays opaque. */
   --tint-assigned: color-mix(in oklab, var(--foreground) 7%, var(--card));
   --tint-warn: color-mix(in oklab, var(--warn) 12%, var(--card));
   --tint-success: color-mix(in oklab, var(--success) 12%, var(--card));
+  /* 12 % of the 55 % edge, mixed from success so the fill stays opaque. */
+  --tint-interested: color-mix(in oklab, var(--success) 7%, var(--card));
   --tint-destructive: color-mix(in oklab, var(--destructive) 12%, var(--card));
   --tint-outcome-interested: color-mix(in oklab, var(--outcome-interested) 12%, var(--card));
   --tint-outcome-not-interested: color-mix(
