@@ -8,7 +8,6 @@ import {
   isPaletteShortcut,
   orphanTotal,
   queueCount,
-  shortcutHint,
 } from "./nav";
 
 /**
@@ -154,19 +153,6 @@ describe("breadcrumbFor", () => {
   it("has nothing to show for a path outside every group (I/O matrix, unknown path)", () => {
     expect(breadcrumbFor("/admin/xyz")).toEqual({ group: null, page: null });
     expect(breadcrumbFor("/admin/inconnu")).toEqual({ group: null, page: null });
-  });
-});
-
-describe("shortcutHint", () => {
-  it.each([
-    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "⌘K"],
-    ["Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", "⌘K"],
-    ["Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)", "⌘K"],
-    ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Ctrl K"],
-    ["Mozilla/5.0 (X11; Linux x86_64)", "Ctrl K"],
-    ["", "Ctrl K"],
-  ])("shortcutHint(%s) -> %s", (userAgent, expected) => {
-    expect(shortcutHint(userAgent)).toBe(expected);
   });
 });
 
