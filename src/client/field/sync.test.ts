@@ -547,3 +547,86 @@ describe("runSync — rows written by another identity", () => {
     expect(await db.outboxVisits.count()).toBe(3);
   });
 });
+
+/**
+ * docs/backlog/013: a row written while the identity was cache-sourced is
+ * never sendable, whatever identity `runSync` is later called with — the
+ * cache that wrote it may not be who the Access cookie really names.
+ */
+describe("runSync — unconfirmed rows", () => {
+  const A = "a@example.com";
+
+  const captureAll = () => {
+    const sent: SyncRequest[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as SyncRequest;
+      sent.push(body);
+      const accepted = {
+        prospects: body.prospects.map((p) => p.id),
+        visits: body.visits.map((v) => v.id),
+      };
+      return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+    }) as unknown as typeof fetch;
+    return { sent, fetchFn };
+  };
+
+  it("never sends an unconfirmed row, even to the identity that wrote it — but still counts it as remaining, not held back", async () => {
+    const own = visit();
+    await db.outboxVisits.add({ ...own, writtenBy: A, unconfirmed: true });
+
+    const { sent, fetchFn } = captureAll();
+    const result = await runSync({ db, identity: A, fetchFn });
+
+    expect(sent[0]?.visits).toEqual([]);
+    // It is A's own row, only not yet sendable — `remaining` (backed by
+    // `writtenByOrUnstamped`), not `heldBack` (another identity's writes).
+    expect(result).toMatchObject({ status: "ok", remaining: 1, heldBack: 0 });
+    expect(await db.outboxVisits.get(own.id)).toEqual({
+      ...own,
+      writtenBy: A,
+      unconfirmed: true,
+    });
+  });
+
+  it("holds back an unconfirmed field prospect from being sent, the same way", async () => {
+    const prospect: FieldProspect = {
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+    };
+    await db.outboxProspects.add({ ...prospect, writtenBy: A, unconfirmed: true });
+
+    const { sent, fetchFn } = captureAll();
+    const result = await runSync({ db, identity: A, fetchFn });
+
+    expect(sent[0]?.prospects).toEqual([]);
+    expect(result).toMatchObject({ remaining: 1, heldBack: 0 });
+  });
+
+  it("sends it once confirmed — never carrying `unconfirmed` or `writtenBy` on the wire", async () => {
+    await db.outboxVisits.add({ ...visit(), writtenBy: A, unconfirmed: true });
+
+    const { fetchFn: fetchFnStillUnconfirmed } = captureAll();
+    await runSync({ db, identity: A, fetchFn: fetchFnStillUnconfirmed });
+
+    // `confirmOutbox` (db.ts) is what an app confirming a cache-sourced
+    // identity calls; simulated here as the same Dexie write to keep this
+    // test at `runSync`'s own level.
+    await db.outboxVisits.toCollection().modify((row) => {
+      delete row.unconfirmed;
+    });
+
+    const { sent, fetchFn } = captureAll();
+    const result = await runSync({ db, identity: A, fetchFn });
+
+    expect(result).toMatchObject({ status: "ok", heldBack: 0 });
+    expect(sent[0]?.visits).toHaveLength(1);
+    expect(sent[0]?.visits[0]).not.toHaveProperty("unconfirmed");
+    expect(sent[0]?.visits[0]).not.toHaveProperty("writtenBy");
+  });
+});

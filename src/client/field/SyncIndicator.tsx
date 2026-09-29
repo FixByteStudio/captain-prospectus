@@ -46,6 +46,7 @@ function forcedView(): SyncView | null {
     waiting: syncView({ status: "ok", running: false, pending: 3 }),
     syncing: syncView({ status: "ok", running: true, pending: 0 }),
     offline: syncView({ status: "offline", running: false, pending: 3 }),
+    unconfirmed: syncView({ status: "unconfirmed", running: false, pending: 3 }),
     failed: syncView({ status: "error", running: false, pending: 3 }),
     auth: syncView({ status: "auth", running: false, pending: 3 }),
     upgrade: syncView({ status: "upgrade", running: false, pending: 3 }),

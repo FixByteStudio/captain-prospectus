@@ -80,3 +80,52 @@ outbox is never cleared this way (INVARIANT 5), and it is not sent under the new
 identity either: every outbox row is stamped with the email that wrote it, and
 `runSync` holds back rows stamped by anyone else until that agent signs in
 again (`docs/domains/field-operations.md#local-store-dexie`, backlog 005).
+
+**A cache-sourced session is unconfirmed, and syncs nothing until a live
+`/api/me` says otherwise (docs/backlog/013).** The cached email is a rendering
+convenience, not proof of who holds the Access cookie the next request will
+actually carry — if agent B signs in through Access on agent A's phone and
+that launch's `/api/me` hits a network blip or a 5xx, `resolveIdentity` falls
+back to A's cached identity (above) while the cookie is really B's. Backlog
+005 stamps every outbox row with the identity active when it was written, but
+a *cache-sourced* identity is exactly the one case that stamp cannot answer
+for. So while `identityFromCache` is true, `SyncProvider`
+(`src/client/field/useSync.tsx`) never calls `runSync`: every one of the four
+triggers re-asks `/api/me` instead (`App.tsx`'s `recheckIdentity`), and the
+band shows `"unconfirmed"` — distinct from `"offline"`, since the network may
+well be up; confirming itself then runs a sync at once, rather than waiting
+for the next trigger. A row written in the meantime (`queueVisit`, the
+add-prospect write) is stamped `writtenBy` the cached email **and**
+`unconfirmed: true`. `sendableBy` never sends such a row, whoever asks — but
+it still counts toward the agent's own pending total and today's progress
+(`writtenByOrUnstamped`, `src/client/field/outbox-stamp.ts`): it is their own
+not-yet-sendable work, not another agent's, and the `"unconfirmed"` status is
+what already says why it has not gone out.
+
+**Confirming re-stamps every `unconfirmed` row it finds, on every live
+`/api/me` — not only when *this* session happened to open cache-sourced.** A
+row can be left `unconfirmed` by a launch that ends (network lost, app
+killed) before its own confirmation lands; the next launch, even one whose
+first answer comes back live immediately, must still pick it up, or
+`sendableBy` refuses it from every identity for good. So `confirmOutbox`
+(`src/client/field/db.ts`) runs on every live, non-cached answer — outbox and
+the `sentVisits` log alike, in one transaction, re-stamping to the email that
+answer names and dropping the flag — before `SyncProvider` is told the
+identity is confirmed; it is a no-op once nothing is left flagged, so calling
+it unconditionally costs nothing. `SyncProvider` runs it once more itself,
+keyed on `confirmed` turning true, as a backstop for a row saved in the
+narrow window between that call and the state actually landing. On a 401 the
+cookie cannot confirm *anyone*, so nothing is re-stamped to a single "current"
+identity (there may be flagged rows from more than one cache-sourced launch);
+`releaseUnconfirmed` instead only drops the flag, letting each row's own
+already-stamped `writtenBy` — the cached email it was written under — take
+back over, held back from anyone else exactly like an ordinary confirmed row
+(backlog 005). **Residual:** a phone that changes hands again while still
+unconfirmed — offline from one launch to the next — re-stamps both sessions'
+queued rows to whoever confirms first; narrower than before this task, since
+nothing sends until some launch confirms, but not closed. An identity switch
+(`identitySwitched`, above) also clears `sentVisits` before confirming, so a
+row the new agent queued while still unconfirmed loses its progress-count
+entry even though the outbox row itself survives untouched (INVARIANT 5) —
+the log is read-only rendering, not a queued write, so nothing is lost that
+matters to sync.

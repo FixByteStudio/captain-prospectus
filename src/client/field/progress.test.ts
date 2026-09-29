@@ -103,6 +103,19 @@ describe("dailyProgress", () => {
     expect(result.total).toBe(1);
   });
 
+  it("still counts an unconfirmed row — this identity's own work, not another agent's (docs/backlog/013)", () => {
+    const unconfirmed: StoredVisit = { ...visit(), unconfirmed: true };
+    const result = dailyProgress({
+      logged: [],
+      outboxVisits: [unconfirmed],
+      identity: IDENTITY,
+      stops: [],
+      period: PERIOD,
+    });
+
+    expect(result.n).toBe(1);
+  });
+
   it("does not count another agent's pending outbox row either", () => {
     const theirs = visit({ writtenBy: "b@example.com" });
     const result = dailyProgress({

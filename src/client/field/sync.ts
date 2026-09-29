@@ -35,7 +35,14 @@ export type SyncStatus =
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"
   /** Server or quota error. Keep everything; back off. */
-  | "error";
+  | "error"
+  /**
+   * The identity is cache-sourced, not yet confirmed by a live `/api/me`
+   * (docs/backlog/013). `useSync` never calls `runSync` in this state — it
+   * re-asks `/api/me` instead — so this never reaches `runSync` itself; it
+   * exists here because it is a `SyncStatus` the same way the others are.
+   */
+  | "unconfirmed";
 
 export type SyncResult = {
   status: SyncStatus;
@@ -98,9 +105,10 @@ function serializeWithinCap(payload: SyncRequest): string {
 }
 
 /** The wire shape of an outbox row: the stamp stays on the device. */
-function unstamped<T extends OutboxStamp>(row: T): Omit<T, "writtenBy"> {
+function unstamped<T extends OutboxStamp>(row: T): Omit<T, "writtenBy" | "unconfirmed"> {
   const wire: T = { ...row };
   delete wire.writtenBy;
+  delete wire.unconfirmed;
   return wire;
 }
 

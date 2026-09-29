@@ -14,7 +14,7 @@
 import { createContext, use, useCallback, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { applyUpdateNow } from "../pwa";
-import { fieldDb, outboxCounts } from "./db";
+import { confirmOutbox, fieldDb, outboxCounts } from "./db";
 import { runSync, type SyncStatus } from "./sync";
 import { nextDelayMs, nextFailureCount, shouldDrain } from "./sync-schedule";
 
@@ -27,11 +27,21 @@ export type SyncState = {
   /**
    * Local writes another identity made on this device. Never sent while this
    * one is signed in (docs/backlog/005), so they are not "waiting on the
-   * network" and are counted apart from `pending`.
+   * network" and are counted apart from `pending`. A row this identity wrote
+   * while still `unconfirmed` (docs/backlog/013) is not held back — it is
+   * this identity's own not-yet-sendable work, and `pending` counts it (the
+   * `"unconfirmed"` status is what says why it has not gone out).
    */
   heldBack: number;
   /** The email every new outbox row is stamped with (`writtenBy`). */
   identity: string;
+  /**
+   * False while `identity` came from the cache rather than a live `/api/me`
+   * (docs/backlog/013): the Access cookie the next request carries may not
+   * match it. `queueVisit` and the add-prospect write read this to stamp a
+   * row `unconfirmed`.
+   */
+  confirmed: boolean;
   lastSyncAt: number | null;
   /** Run now. Awaited by the visit form so a save is followed by a push. */
   syncNow: () => Promise<void>;
@@ -50,14 +60,34 @@ export function useSyncState(): SyncState {
 
 export function SyncProvider({
   identity,
+  confirmed,
+  recheckIdentity,
   children,
 }: {
   identity: string;
+  /** False while `identity` is cache-sourced (docs/backlog/013). */
+  confirmed: boolean;
+  /** Re-asks `/api/me`; what every trigger calls instead of `runSync` while
+   * `confirmed` is false. Owned by `App.tsx`, which is the one place that
+   * knows how to re-run the identity fetch. */
+  recheckIdentity: () => void;
   children: React.ReactNode;
 }) {
   const [status, setStatus] = useState<SyncStatus>("ok");
   const [running, setRunning] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  /**
+   * Bumped at the end of every `syncNow` call, purely to force the heartbeat
+   * effect below to reschedule. The `unconfirmed` branch returns synchronously
+   * (no `await` before it), so a repeat tick's `setStatus("unconfirmed")` and
+   * `setRunning(true)`/`(false)` all land in the one React batch that follows
+   * — identical to the render from the *previous* tick, since neither value
+   * actually changed. Without a value that changes every time regardless,
+   * that batch is a no-op render as far as `[status, running]` are concerned,
+   * the heartbeat effect never reruns, and no next timer is ever scheduled:
+   * exactly the "retries once and never again" bug this state exists to close.
+   */
+  const [attempt, setAttempt] = useState(0);
 
   /**
    * Live from Dexie rather than set after a sync, so the count moves the
@@ -85,6 +115,18 @@ export function SyncProvider({
     setRunning(true);
 
     try {
+      // docs/backlog/013: a cache-sourced identity is unconfirmed, so nothing
+      // is sent under a name the Access cookie may not match. Every trigger
+      // that would otherwise call `runSync` re-asks `/api/me` instead — the
+      // heartbeat included, so a `/api/me` failure keeps retrying rather than
+      // giving up after the one re-check the online/offline transition makes.
+      if (!confirmed) {
+        recheckIdentity();
+        failures.current = nextFailureCount("unconfirmed", failures.current);
+        setStatus("unconfirmed");
+        return;
+      }
+
       let passes = 0;
       let result = await runSync({ db: fieldDb, identity });
       passes += 1;
@@ -109,8 +151,20 @@ export function SyncProvider({
     } finally {
       inFlight.current = false;
       setRunning(false);
+      setAttempt((n) => n + 1);
     }
-  }, [identity]);
+  }, [identity, confirmed, recheckIdentity]);
+
+  // docs/backlog/013: a defensive backstop, not the primary confirmation path
+  // (`App.tsx`'s own `confirmOutbox` call, which runs before `confirmed`
+  // flips true here). Closes the one window that call cannot: a row a save
+  // wrote `unconfirmed` reading the stale `confirmed=false` from a render
+  // that started before App's pass finished, but committed after it — that
+  // row's flag survives App's pass and would otherwise never clear. A no-op,
+  // idempotently, once nothing is left flagged.
+  useEffect(() => {
+    if (confirmed) void confirmOutbox(fieldDb, identity);
+  }, [confirmed, identity]);
 
   // Trigger 1: app start.
   useEffect(() => {
@@ -136,8 +190,9 @@ export function SyncProvider({
     };
     // `running` is in the deps so the next tick is scheduled from the end of a
     // run, not from its start — otherwise a slow sync would queue the next one
-    // immediately behind it.
-  }, [status, running, syncNow]);
+    // immediately behind it. `attempt` guarantees a reschedule even when a
+    // repeat tick changes neither `status` nor `running` (see its own comment).
+  }, [status, running, attempt, syncNow]);
 
   // A backgrounded tab syncing every 60 s spends request quota on nobody
   // looking. Coming back to the foreground is itself a trigger.
@@ -150,7 +205,9 @@ export function SyncProvider({
   }, [syncNow]);
 
   return (
-    <SyncContext value={{ status, running, pending, heldBack, identity, lastSyncAt, syncNow }}>
+    <SyncContext
+      value={{ status, running, pending, heldBack, identity, confirmed, lastSyncAt, syncNow }}
+    >
       {children}
     </SyncContext>
   );

@@ -57,11 +57,11 @@ identity opens the field screens only, never `/admin/*`.
 | Table | Content |
 |---|---|
 | `prospects` | Last pulled today list (replaced on each successful sync) |
-| `outboxProspects` | Field prospects not yet accepted, each stamped `writtenBy` (the email signed in when it was saved) |
-| `outboxVisits` | Visits not yet accepted, each stamped `writtenBy` the same way |
+| `outboxProspects` | Field prospects not yet accepted, each stamped `writtenBy` (the email signed in when it was saved) and, if that identity was cache-sourced, `unconfirmed: true` (docs/backlog/013) |
+| `outboxVisits` | Visits not yet accepted, each stamped `writtenBy` the same way, and `unconfirmed` the same way |
 | `visitHistory` | Cached `GET /api/agent/prospects/:id/visits` results, one prospect's cache replaced per pull, so the visit form's « Visites précédentes » still shows something with no signal |
 | `meta` | active script, last sync time, the last identity `/api/me` returned |
-| `sentVisits` | A log of the visit ids queued today (id, `prospectId`, `sentAt`, `writtenBy`), written by `queueVisit` on the same write as the outbox row |
+| `sentVisits` | A log of the visit ids queued today (id, `prospectId`, `sentAt`, `writtenBy`, `unconfirmed`), written by `queueVisit` on the same write as the outbox row |
 
 **"{n} visites sur {total} aujourd'hui" (GH #119, server-gap G8).** `n` is
 `sentVisits` unioned with the pending `outboxVisits`, deduplicated by visit
@@ -83,10 +83,13 @@ housekeeping prune below the day boundary removes them — never in response
 to the server. "Today" is a Europe/Brussels calendar day,
 `brusselsPeriod(now, 1).from` (`src/shared/period.ts`), the same boundary the
 admin dashboard counts "Visites aujourd'hui" with, so the two can never
-disagree. Both sides of the union are filtered through `sendableBy`, exactly
-like the outbox: on a shared phone, the line is the signed-in agent's own
-progress, and an unstamped row from before Dexie v3 counts for whoever syncs
-it first.
+disagree. Both sides of the union are filtered through `writtenByOrUnstamped`
+(`src/client/field/outbox-stamp.ts`): on a shared phone, the line is the
+signed-in agent's own progress, and an unstamped row from before Dexie v3
+counts for whoever syncs it first. A row still `unconfirmed`
+(docs/backlog/013) still counts here — it is this agent's own queued visit,
+only not yet sendable, which is a narrower predicate (`sendableBy`) that only
+`runSync` needs.
 
 The today list itself is built from `prospects` **and** `outboxProspects`
 together: a field prospect the server has not accepted yet still has to be
@@ -99,6 +102,13 @@ the identity signed in now (or unstamped, from before Dexie v3), so a row
 another agent queued on the same phone is held back, counted apart from the
 pending count («N éléments appartiennent à un autre agent…»), and waits until
 that agent signs in again — never sent under the wrong name, never dropped.
+
+**`unconfirmed` never goes on the wire either**, and a row carrying it is
+never sendable, whatever identity `runSync` runs as (docs/backlog/013,
+`identity-access.md#offline-and-session-expiry`). It is set when the identity
+was cache-sourced at write time, and cleared — along with the flag itself —
+the moment a live `/api/me` says who is really signed in
+(`confirmOutbox`, `src/client/field/db.ts`).
 
 ### Protocol
 `POST /api/agent/sync`
@@ -143,6 +153,11 @@ Response
 
 ### Triggers
 App start · `online` event · immediately after saving a visit · every 60 s while the app is open.
+
+**While the identity is `unconfirmed` (docs/backlog/013), each trigger re-asks
+`/api/me` instead of syncing** — `SyncProvider` never calls `runSync` until a
+live answer confirms who is signed in. Confirmation itself then runs a sync at
+once, rather than waiting for the next trigger.
 
 ## Live feed
 

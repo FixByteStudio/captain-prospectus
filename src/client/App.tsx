@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -24,7 +24,14 @@ import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
 import { hasReconnectMarker, reconnectUrl, withoutReconnectMarker } from "./field/reconnect-marker";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
-import { clearAgentCache, fieldDb, getMeta, setMeta } from "./field/db";
+import {
+  clearAgentCache,
+  confirmOutbox,
+  fieldDb,
+  getMeta,
+  releaseUnconfirmed,
+  setMeta,
+} from "./field/db";
 import { adminAccess, resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
 
@@ -254,6 +261,21 @@ export function App() {
   const [recheck, setRecheck] = useState(0);
   const online = useOnline();
 
+  // docs/backlog/013: at most one `/api/me` in flight, so `recheckIdentity` —
+  // called from every sync trigger while unconfirmed, not just the one online
+  // transition below — cannot pile up concurrent requests and burn quota
+  // (free-tier-budget.md) on a session that is already waiting on one.
+  const identityInFlight = useRef(false);
+  const recheckIdentity = useCallback(() => {
+    if (identityInFlight.current) return;
+    // Set here, synchronously, not only in the effect below: the effect only
+    // runs after React commits the `recheck` update, and two callers of
+    // `recheckIdentity` in that window would both pass the guard and each
+    // queue an increment.
+    identityInFlight.current = true;
+    setRecheck((n) => n + 1);
+  }, []);
+
   // Registers the service worker on mount, before and regardless of whether
   // `/api/me` answers. See the note on `UpdatePrompt`.
   const pwa = usePwa();
@@ -284,6 +306,7 @@ export function App() {
    */
   useEffect(() => {
     let cancelled = false;
+    identityInFlight.current = true;
 
     const settle = async (result: Parameters<typeof resolveIdentity>[0]) => {
       const cached = await getMeta(fieldDb, "identity");
@@ -291,10 +314,19 @@ export function App() {
       const outcome = resolveIdentity(result, cached);
 
       if (outcome.kind === "error") {
-        // A 401 is the Worker revoking this identity. The cache it would
-        // otherwise be read from offline goes with it, or airplane mode hands
-        // the round straight back (docs/domains/identity-access.md). The
-        // outbox stays: INVARIANT 5.
+        // A 401 is the Worker revoking this identity. An expired cookie
+        // cannot confirm anyone, so nothing here is re-stamped to "the
+        // current identity" — a flagged row already carries the cached email
+        // it was written under, and dropping only the flag lets it keep that
+        // — run before the cache that is its only other record of that email
+        // goes with `clearAgentCache`. Unconditional, not only when this
+        // session opened cache-sourced: a row can be `unconfirmed` from an
+        // earlier, already-ended launch too.
+        if (outcome.revoked) await releaseUnconfirmed(fieldDb);
+        if (cancelled) return;
+        // The cache it would otherwise be read from offline goes with it, or
+        // airplane mode hands the round straight back
+        // (docs/domains/identity-access.md). The outbox stays: INVARIANT 5.
         if (outcome.revoked) await clearAgentCache(fieldDb);
         if (cancelled) return;
         setError({ message: outcome.message, revoked: outcome.revoked });
@@ -308,6 +340,19 @@ export function App() {
       // rows stamped with the identity it is given (backlog/005).
       if (outcome.identitySwitched) {
         await clearAgentCache(fieldDb);
+        if (cancelled) return;
+      }
+      // docs/backlog/013: a live answer confirms whoever it names, whatever
+      // this *session* started as — a row can be `unconfirmed` from a launch
+      // that ended (network lost, app killed) before its own confirmation
+      // landed, so this runs on every live answer, not only when
+      // `identityFromCache` was true a moment ago. Idempotent and a no-op
+      // with nothing flagged. Runs before `setMe`/`setIdentityFromCache` flip
+      // `confirmed` true on `SyncProvider`, so nothing already queued can
+      // reach `runSync` still carrying the flag.
+      if (!outcome.offline) {
+        await confirmOutbox(fieldDb, outcome.identity.email);
+        if (cancelled) return;
       }
       setMe(outcome.identity);
       setIdentityFromCache(outcome.offline);
@@ -320,7 +365,10 @@ export function App() {
 
     apiFetch<unknown>("/api/me")
       .then((body) => settle({ ok: true, body }))
-      .catch((error: unknown) => settle({ ok: false, error }));
+      .catch((error: unknown) => settle({ ok: false, error }))
+      .finally(() => {
+        identityInFlight.current = false;
+      });
 
     return () => {
       cancelled = true;
@@ -342,9 +390,11 @@ export function App() {
     // read true" into one `/api/me` attempt, decoupled from the fetch
     // effect's own dependency array so that effect setting
     // `identityFromCache` cannot retrigger this one (see above).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate
-    if (identityFromCache && online) setRecheck((n) => n + 1);
-  }, [identityFromCache, online]);
+    // Routed through `recheckIdentity` (not `setRecheck` directly) so this
+    // and the heartbeat's own re-check (docs/backlog/013, `useSync.tsx`)
+    // share the one `identityInFlight` guard and cannot both start a fetch.
+    if (identityFromCache && online) recheckIdentity();
+  }, [identityFromCache, online, recheckIdentity]);
 
   if (error) {
     // A reload cannot get past a revoked session: the service worker answers
@@ -393,7 +443,11 @@ export function App() {
   const { screens, entry } = adminAccess({ role: me.role, fromCache: identityFromCache, online });
 
   return (
-    <SyncProvider identity={me.email}>
+    <SyncProvider
+      identity={me.email}
+      confirmed={!identityFromCache}
+      recheckIdentity={recheckIdentity}
+    >
       <Routes>
         {/* Not under FieldFrame: the redirect target decides which frame
             shows, so the field band must not render even for one commit. */}

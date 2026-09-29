@@ -14,11 +14,11 @@
  * does not drag TanStack Query, sonner and PapaParse into a shell test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
-import type { MeResponse } from "../shared/schemas";
+import type { MeResponse, Visit } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
 import { fieldDb, getMeta, setMeta } from "./field/db";
@@ -28,7 +28,23 @@ import type { SyncState } from "./field/useSync";
 type SyncStub = Pick<SyncState, "status" | "running" | "pending">;
 
 const AGENT: MeResponse = { email: "agent@example.com", role: "agent" };
+const OTHER_AGENT: MeResponse = { email: "other@example.com", role: "agent" };
 const ADMIN: MeResponse = { email: "admin@example.com", role: "admin" };
+
+const visit = (over: Partial<Visit> = {}): Visit => ({
+  id: crypto.randomUUID(),
+  prospectId: crypto.randomUUID(),
+  visitedAt: 1_700_000_000_000,
+  lat: null,
+  lng: null,
+  flyerGiven: true,
+  outcome: "interested",
+  followUpAt: null,
+  notes: null,
+  scriptId: null,
+  answers: {},
+  ...over,
+});
 const QUIET: SyncStub = { status: "ok", running: false, pending: 0 };
 
 const stub = vi.hoisted(() => ({
@@ -422,6 +438,177 @@ describe("The admin tab and routes follow the network", () => {
     expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
     expect(fieldBand()).toBeTruthy();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
+  });
+});
+
+/**
+ * `SyncProvider` is mocked away in this file (its own engine has
+ * `useSync.test.tsx`), but `confirmOutbox` (docs/backlog/013) is App's own
+ * bookkeeping around the identity effect — real `fieldDb` rows, asserted
+ * directly, the same as `getMeta(fieldDb, "identity")` is above.
+ */
+describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)", () => {
+  afterEach(async () => {
+    await fieldDb.outboxVisits.clear();
+  });
+
+  it("re-stamps an unconfirmed row to whoever /api/me now names, holding an earlier confirmed row back", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queuedUnconfirmed = visit();
+      await fieldDb.outboxVisits.add({
+        ...queuedUnconfirmed,
+        writtenBy: AGENT.email,
+        unconfirmed: true,
+      });
+      // Already confirmed, from before this cache-sourced launch: must stay A's.
+      const earlier = visit();
+      await fieldDb.outboxVisits.add({ ...earlier, writtenBy: AGENT.email });
+
+      // The live answer names a different agent than the cache did.
+      stub.identityUnreachable = false;
+      stub.me = OTHER_AGENT;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      // Polls the outbox itself rather than the nav, which was already on
+      // screen before this re-check landed and so proves nothing about it.
+      await waitFor(async () => {
+        expect((await fieldDb.outboxVisits.get(queuedUnconfirmed.id))?.writtenBy).toBe(
+          OTHER_AGENT.email,
+        );
+      });
+      const restamped = await fieldDb.outboxVisits.get(queuedUnconfirmed.id);
+      expect(restamped?.unconfirmed).toBeUndefined();
+      expect(await fieldDb.outboxVisits.get(earlier.id)).toMatchObject({
+        writtenBy: AGENT.email,
+      });
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("re-stamps to the same identity when the live answer simply confirms it", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queued = visit();
+      await fieldDb.outboxVisits.add({ ...queued, writtenBy: AGENT.email, unconfirmed: true });
+
+      stub.identityUnreachable = false;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      await waitFor(async () => {
+        expect((await fieldDb.outboxVisits.get(queued.id))?.unconfirmed).toBeUndefined();
+      });
+      const row = await fieldDb.outboxVisits.get(queued.id);
+      expect(row?.writtenBy).toBe(AGENT.email);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("on a 401, re-stamps to the cached email before the cache is cleared — the outbox survives", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", AGENT);
+      stub.me = AGENT;
+      stub.identityUnreachable = true;
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      const queued = visit();
+      await fieldDb.outboxVisits.add({ ...queued, writtenBy: AGENT.email, unconfirmed: true });
+
+      // An expired cookie cannot confirm anyone, so the row stays with the
+      // identity the agent was shown rather than being left to confirm to
+      // nobody (identity-access.md).
+      stub.identityUnreachable = false;
+      stub.identityRevoked = true;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+      await screen.findByText(REVOKED_MESSAGE);
+
+      const row = await fieldDb.outboxVisits.get(queued.id);
+      expect(row?.writtenBy).toBe(AGENT.email);
+      expect(row?.unconfirmed).toBeUndefined();
+      // INVARIANT 5, same as the plain revoked case above: the outbox itself
+      // is never touched by `clearAgentCache`.
+      await expect(fieldDb.outboxVisits.count()).resolves.toBe(1);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  /**
+   * The bug a first version of this confirmation gated on `identityFromCache`
+   * being true *this session* missed entirely: a row left `unconfirmed` by an
+   * earlier launch that ended (killed, network lost) before its own
+   * confirmation landed. The very next launch, even one whose first `/api/me`
+   * answers live immediately — never touching the cache-fallback branch at
+   * all — must still pick it up, or `sendableBy` refuses it for ever.
+   */
+  it("confirms a row left unconfirmed by an earlier, already-ended launch, even when this one is live from the start", async () => {
+    const queuedByAnEarlierLaunch = visit();
+    await fieldDb.outboxVisits.add({
+      ...queuedByAnEarlierLaunch,
+      writtenBy: AGENT.email,
+      unconfirmed: true,
+    });
+
+    stub.me = AGENT;
+    // Fully live, fully online: `identityFromCache` never becomes true this
+    // session, unlike every other case in this file.
+    renderApp("/tournee");
+    await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+    await waitFor(async () => {
+      expect(
+        (await fieldDb.outboxVisits.get(queuedByAnEarlierLaunch.id))?.unconfirmed,
+      ).toBeUndefined();
+    });
+    expect(await fieldDb.outboxVisits.get(queuedByAnEarlierLaunch.id)).toMatchObject({
+      writtenBy: AGENT.email,
+    });
+  });
+
+  it("on a 401 that opens the session (no cache fallback this launch either), still releases rows left unconfirmed by different earlier launches", async () => {
+    const fromA = visit();
+    const fromB = visit();
+    await fieldDb.outboxVisits.bulkAdd([
+      { ...fromA, writtenBy: AGENT.email, unconfirmed: true },
+      { ...fromB, writtenBy: OTHER_AGENT.email, unconfirmed: true },
+    ]);
+
+    stub.identityRevoked = true;
+    renderApp("/tournee");
+
+    await screen.findByText(REVOKED_MESSAGE);
+    await waitFor(async () => {
+      expect((await fieldDb.outboxVisits.get(fromA.id))?.unconfirmed).toBeUndefined();
+      expect((await fieldDb.outboxVisits.get(fromB.id))?.unconfirmed).toBeUndefined();
+    });
+    // Each row keeps its own writer — a 401 never assumes a single "current"
+    // identity to re-stamp everything to.
+    expect(await fieldDb.outboxVisits.get(fromA.id)).toMatchObject({ writtenBy: AGENT.email });
+    expect(await fieldDb.outboxVisits.get(fromB.id)).toMatchObject({
+      writtenBy: OTHER_AGENT.email,
+    });
   });
 });
 
