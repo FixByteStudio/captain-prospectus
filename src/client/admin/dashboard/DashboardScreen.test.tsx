@@ -97,7 +97,7 @@ function json(body: unknown, status = 200): Response {
 
 /** The other requests on the screen (GH #113), each answered by its own function. */
 type Others = {
-  feed?: () => Response;
+  feed?: () => Response | Promise<Response>;
   orphans?: () => Response;
   duplicates?: () => Response;
 };
@@ -732,6 +732,58 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     expect(announcement()).toBe("1 nouvelle visite");
   });
 
+  it("shows row skeletons, not a text line, before the first answer (#222)", async () => {
+    stubFetch((period) => json(answer(period)), { feed: () => new Promise<Response>(() => {}) });
+    renderScreen();
+
+    const recent = await findCard(copy.dashboard.recent.title);
+    expect(recent.querySelectorAll('[aria-busy="true"] li [data-slot="skeleton"]')).toHaveLength(5);
+    expect(within(recent).queryByText(copy.visits.loading)).toBeNull();
+    expect(within(recent).queryByText(copy.visits.empty)).toBeNull();
+  });
+
+  it("shows the load-failed Alert and refetches on « Réessayer », with no empty copy (#222)", async () => {
+    const user = userEvent.setup();
+    let fail = true;
+    stubFetch((period) => json(answer(period)), {
+      feed: () => (fail ? json({}, 500) : json({ visits: [visit(1)], serverTime: 0 })),
+    });
+    renderScreen();
+
+    const recent = await findCard(copy.dashboard.recent.title);
+    const alert = await within(recent).findByRole("alert");
+    expect(alert.textContent).toContain(copy.visits.loadFailed);
+    expect(within(recent).queryByText(copy.visits.empty)).toBeNull();
+
+    fail = false;
+    await user.click(within(alert).getByRole("button", { name: copy.errors.retry }));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(within(recent).queryByRole("alert")).toBeNull();
+  });
+
+  it("goes from the skeleton straight to the rows, never through the empty copy (#223)", async () => {
+    let release: (response: Response) => void = () => {};
+    const held = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    stubFetch((period) => json(answer(period)), { feed: () => held });
+    renderScreen();
+    const recent = await findCard(copy.dashboard.recent.title);
+
+    // Detached nodes keep their text, so a one-render flash is still caught.
+    const added: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes) added.push(node.textContent ?? "");
+    });
+    observer.observe(recent, { childList: true, subtree: true, characterData: true });
+
+    release(json({ visits: [visit(1)], serverTime: 0 }));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    observer.disconnect();
+    expect(added.some((text) => text.includes(copy.visits.empty))).toBe(false);
+  });
+
   it("says so when the feed is empty (I/O matrix, no visits)", async () => {
     stubFetch((period) => json(answer(period)));
     renderScreen();
@@ -795,7 +847,9 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     expect(
       await within(await findCard(copy.dashboard.recent.title)).findByText(copy.visits.loadFailed),
     ).toBeTruthy();
-    expect(screen.queryByRole("alert")).toBeNull();
+    // The card's own Alert (#222) is the only one: the dashboard's is not raised.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.queryByText(copy.dashboard.loadFailed)).toBeNull();
   });
 
   it("links « Tout voir » to Visites", async () => {
