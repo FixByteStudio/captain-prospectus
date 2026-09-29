@@ -116,12 +116,6 @@ export function breadcrumbFor(pathname: string): Breadcrumb {
   return { group: null, page: null };
 }
 
-/** True for the platforms that label the palette shortcut "⌘K" instead of
- * "Ctrl K" — iOS/iPadOS report "Mac" too since Safari 13 (spec-gh-64). */
-function isApplePlatform(userAgent: string): boolean {
-  return /Mac|iPhone|iPad|iPod/.test(userAgent);
-}
-
 /**
  * ⌘K or Ctrl+K, whatever the case (Caps Lock sends "K"), and nothing else:
  * - `key` is typed `string` on `KeyboardEvent`, but Chrome's autofill fires a
@@ -143,10 +137,4 @@ export function isPaletteShortcut(event: {
   if (typeof event.key !== "string") return false;
   if (event.shiftKey || event.altKey || event.repeat) return false;
   return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
-}
-
-/** The search button's shortcut hint, read from `navigator.userAgent` at the
- * call site so this stays a pure, testable function. */
-export function shortcutHint(userAgent: string): string {
-  return isApplePlatform(userAgent) ? "⌘K" : "Ctrl K";
 }

@@ -18,7 +18,7 @@ export const adminCopy = {
   search: {
     // Reused verbatim as the ≥768px button's text and, below 768px, as the
     // icon-only button's aria-label (spec's Always list).
-    button: "Rechercher un prospect…",
+    button: "Rechercher…",
     // The palette makes no request yet — this is its only content besides
     // the input, so it doubles as the dialog's sr-only description.
     unavailable:

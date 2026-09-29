@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { SearchIcon } from "lucide-react";
+import { CommandIcon, SearchIcon } from "lucide-react";
 import { copy } from "../copy";
 import { Button } from "../ui/button";
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from "../ui/command";
-import { isPaletteShortcut, shortcutHint } from "./nav";
+import { isPaletteShortcut } from "./nav";
 
 /**
  * The top bar's search button and its ⌘K palette (GH #64). Search itself is
@@ -39,9 +39,13 @@ export function SearchPalette() {
           {copy.search.button}
         </span>
         {/* Hidden from the accessible name: without this the button reads
-            "Rechercher un prospect… Ctrl K" instead of just its label. */}
-        <kbd aria-hidden="true" className="text-muted-foreground text-xs">
-          {shortcutHint(navigator.userAgent)}
+            "Rechercher… ⌘K" instead of just its label. */}
+        <kbd
+          aria-hidden="true"
+          className="bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center gap-0.5 rounded border px-1.5 font-mono text-xs font-medium select-none"
+        >
+          <CommandIcon className="size-2.5" />
+          <span className="relative top-px leading-none">K</span>
         </kbd>
       </Button>
       <Button
