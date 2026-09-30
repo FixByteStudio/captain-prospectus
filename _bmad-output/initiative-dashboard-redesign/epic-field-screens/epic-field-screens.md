@@ -40,7 +40,7 @@ The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Entry 13
 - spec — _bmad-output/specs/spec-dashboard-redesign/SPEC.md, CAP-6 to CAP-9; _bmad-output/specs/spec-dashboard-redesign/server-gaps.md, G8; _bmad-output/specs/spec-dashboard-redesign/screen-map.md, Field
 - design — _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-f1-tournee.html, key-f2-carte.html, key-f3-f5-visit.html; _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md, Flows 1 and 4
 - constraint — docs/adr/0026-budget-the-field-precache-not-the-entry-chunk.md
-- spec — _bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md, CAP-1 to CAP-5, for entries 13 and 14
+- spec — _bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md, CAP-1 to CAP-5, for entries 13 and 14; CAP-4 and CAP-6, for entry 15
 
 ## Notes
 
@@ -57,3 +57,4 @@ The four field screens, the Carte tab (CAP-5 for that tab only) and G8. Entry 13
 - Decision (2026-09-30): no second refactor sweep after 13 and 14; the sweep (11) already ran, and each is a scoped remediation that runs lint, typecheck, test and build itself.
 - Decision (2026-09-30): 13 waits on 3.1 (app.css) and 3.2 (export in admin.ts), and 3.5 waits on 13 so the Prospects rebuild starts with six statuses (owner).
 - Decision (2026-09-30): #129 (12) runs after 14; Flow 1's climax is its concrete check (retro action item 5).
+- Decision (2026-09-30): entry 15 follows the spec retrospective (RETROSPECTIVE.md, F1): À relancer may have nobody able to answer the script, so it hides the questions like Personne sur place (owner); 12's run waits on it.
