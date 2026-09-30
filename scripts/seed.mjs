@@ -7,9 +7,11 @@
  * 404s off localhost. The route generates each place's visit history from its
  * dedupe key, so running this twice inserts nothing the second time.
  *
- * Usage: npm run dev   (in one terminal)
- *        npm run db:seed:local
+ * Usage: pnpm dev   (in one terminal)
+ *        pnpm db:seed:local:full
  */
+
+import { script } from "./seed-script.mjs";
 
 const URL_BASE = process.env.SEED_URL ?? "http://localhost:5173";
 const AGENT = process.env.DEV_USER_EMAIL ?? "admin@example.com";
@@ -143,21 +145,6 @@ const generated = PLACES.flatMap((place, row) =>
     };
   }),
 );
-
-const script = {
-  name: "Questionnaire par défaut",
-  questions: [
-    { key: "has_delivery", label: "Proposez-vous la livraison ?", type: "yes_no", required: true },
-    {
-      key: "pos_system",
-      label: "Quel logiciel de caisse utilisez-vous ?",
-      type: "single",
-      options: ["Aucun", "Papier", "Une autre application"],
-    },
-    { key: "covers_per_day", label: "Combien de couverts par jour ?", type: "number" },
-    { key: "remarks", label: "Remarques", type: "text" },
-  ],
-};
 
 // IMPORT_ROWS_PER_REQUEST in src/shared/constants.ts: one request stays inside
 // the Worker's CPU budget. The specials sit in the first batch.

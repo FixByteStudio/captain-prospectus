@@ -25,6 +25,7 @@
       "Bash(pnpm db:generate)",
       "Bash(pnpm db:migrate:local)",
       "Bash(pnpm db:seed:local)",
+      "Bash(pnpm db:seed:local:full)",
       "Bash(pnpm install)",
       "Bash(pnpm install --frozen-lockfile)"
     ],
