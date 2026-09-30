@@ -118,6 +118,13 @@ describe("POST /api/dev/seed", () => {
     expect(row?.status).toBe("new");
   });
 
+  it("quarantines nothing when orphans is false", async () => {
+    const response = await postSeed(seedBody({ orphans: false }));
+    expect(await response.json()).toMatchObject({ inserted: { orphans: 0 } });
+    const [row] = await getDb(env.DB).select({ n: count() }).from(visitsOrphaned);
+    expect(row?.n).toBe(0);
+  });
+
   /** INVARIANT 6: the body used to be cast to a type and inserted unchecked. */
   it("rejects a body that does not match devSeedSchema", async () => {
     const response = await postSeed(

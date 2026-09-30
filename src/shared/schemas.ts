@@ -914,6 +914,8 @@ export const devSeedSchema = z
       )
       .check(z.maxLength(IMPORT_ROWS_PER_REQUEST)),
     script: scriptCreateSchema,
+    /** `false` quarantines nothing, for the blank seed. Absent means true. */
+    orphans: z.optional(z.boolean()),
   })
   .check((ctx) => {
     // A merge target is resolved by name within this one body, so a name that

@@ -17,7 +17,7 @@
  * warm ones. Local hardware is not Cloudflare's: keep headroom. Written
  * against Node 24 (`node:sqlite`'s `setReturnArrays`).
  *
- * Usage: pnpm db:migrate:local && (pnpm dev, then pnpm db:seed:local)
+ * Usage: pnpm db:migrate:local && (pnpm dev, then pnpm db:seed:local:full)
  *        node scripts/measure-dashboard-cpu.mjs
  * Env:   D1_SQLITE (the local D1 file; found under .wrangler/state),
  *        RUNS per period (200), WARMUP (50),

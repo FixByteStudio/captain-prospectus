@@ -198,7 +198,8 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   }
 
   // 7. One quarantined visit of each reason, shaped as sync writes them.
-  const orphans = seedOrphans(seeds, stored, c.env.DEV_USER_EMAIL, now);
+  const orphans =
+    body.orphans === false ? [] : seedOrphans(seeds, stored, c.env.DEV_USER_EMAIL, now);
   let insertedOrphans = 0;
   if (orphans.length > 0) {
     // A repaired orphan now lives in `visits`; quarantining it again would
