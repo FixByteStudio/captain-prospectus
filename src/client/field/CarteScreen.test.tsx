@@ -55,6 +55,7 @@ const item = (over: Partial<TodayItem> = {}): TodayItem => ({
   address: "12 rue Sainte-Catherine",
   status: "assigned",
   nextVisitAt: null,
+  lastVisitAt: null,
   pending: false,
   distanceM: null,
   visitQueued: false,

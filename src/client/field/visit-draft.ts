@@ -11,11 +11,25 @@ import { answersSchemaFor } from "../../shared/answers";
 import { visitSchema, type Answers, type Script, type Visit } from "../../shared/schemas";
 import type { Outcome } from "../../shared/constants";
 import type { Point } from "../../shared/geo";
+import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
+
+/**
+ * À relancer and Personne sur place share the when step (when-step.md,
+ * CAP-2); every other result has none. The one home for this rule — `today.ts`
+ * and `VisitScreen.tsx` both import it rather than restating the outcome list.
+ */
+export function hasWhenStep(outcome: Outcome): boolean {
+  return outcome === "follow_up" || outcome === "no_contact";
+}
 
 export type VisitDraft = {
   flyerGiven: boolean;
   outcome: Outcome | null;
-  /** The raw "YYYY-MM-DD" from `<input type="date">`, or "" when untouched. */
+  /** À relancer or Personne sur place's when choice (when-step.md). Every
+   * other result has no when step and this stays null. */
+  when: "today" | "date" | null;
+  /** The raw "YYYY-MM-DD" from `<input type="date">`, or "" when untouched.
+   * Only read when `when === "date"`. */
   followUpDate: string;
   notes: string;
   /** Keyed by question `key`; only the questions this build can ask. */
@@ -25,6 +39,7 @@ export type VisitDraft = {
 export const emptyDraft: VisitDraft = {
   flyerGiven: false,
   outcome: null,
+  when: null,
   followUpDate: "",
   notes: "",
   answers: {},
@@ -41,7 +56,9 @@ export const emptyDraft: VisitDraft = {
  */
 export type DraftErrors = {
   outcome?: "required";
-  followUpDate?: "required" | "invalid";
+  /** À relancer saved with nothing ticked (when-step.md). */
+  when?: "required";
+  followUpDate?: "required" | "invalid" | "notAfterToday";
   notes?: "tooLong";
   /** Per question `key`, so each control is marked on its own. */
   answers?: Record<string, "required" | "invalid">;
@@ -60,8 +77,16 @@ export type DraftResult = { ok: true; visit: Visit } | { ok: false; errors: Draf
  * control, leaving the save button doing nothing with no error in view.
  */
 export function withOutcome(draft: VisitDraft, outcome: Outcome): VisitDraft {
-  if (outcome === "follow_up") return { ...draft, outcome };
-  return { ...draft, outcome, followUpDate: "" };
+  // Tapping the outcome already picked is not a change (the spec's Design Notes): the
+  // when choice and date survive an idempotent tap, same as they always have.
+  if (outcome === draft.outcome) return { ...draft, outcome };
+
+  // Every other change resets the when choice to the new result's own
+  // default and drops the date — a "today" carried over from Personne sur
+  // place into À relancer would be the hurried-agent error when-step.md
+  // rejects, and a date left behind is one the agent can no longer see.
+  const when = outcome === "no_contact" ? "today" : null;
+  return { ...draft, outcome, when, followUpDate: "" };
 }
 
 /**
@@ -123,22 +148,47 @@ export function toVisit(
 
   if (!draft.outcome) errors.outcome = "required";
 
-  const followUpAt = draft.followUpDate ? dateInputToEpochMs(draft.followUpDate) : null;
-  if (draft.followUpDate && followUpAt === null) errors.followUpDate = "invalid";
+  // when-step.md: À relancer and Personne sur place share one when step.
+  // Every other result has none and sends no `followUpAt`.
+  const needsWhen = draft.outcome !== null && hasWhenStep(draft.outcome);
+  let followUpAt: number | null = null;
 
-  // field-operations.md: required when the outcome is follow_up. visitSchema
-  // refines this too; checking here is what lets the error point at the field.
-  if (draft.outcome === "follow_up" && followUpAt === null) {
-    errors.followUpDate = draft.followUpDate ? "invalid" : "required";
+  if (needsWhen && draft.when === null) {
+    errors.when = "required";
+  } else if (needsWhen && draft.when === "today") {
+    // Today's Brussels calendar day, not the device's — the day a Brussels
+    // agent means by "aujourd'hui" regardless of the phone's own timezone.
+    followUpAt = brusselsMidnightDaysFromNow(context.visitedAt, 0);
+  } else if (needsWhen && draft.when === "date") {
+    if (!draft.followUpDate) {
+      errors.followUpDate = "required";
+    } else {
+      const parsed = dateInputToEpochMs(draft.followUpDate);
+      if (parsed === null) {
+        errors.followUpDate = "invalid";
+      } else {
+        // String comparison of "YYYY-MM-DD"s, so "not after today" never
+        // depends on the device's own zone (when-step.md's Design Notes).
+        const today = periodDates(brusselsMidnightDaysFromNow(context.visitedAt, 0), 1)[0];
+        if (today !== undefined && draft.followUpDate <= today) {
+          errors.followUpDate = "notAfterToday";
+        } else {
+          followUpAt = parsed;
+        }
+      }
+    }
   }
 
-  // field-operations.md: required questions must be answered unless the outcome
-  // is `no_contact` — nobody was there to ask. A wrong answer is still wrong.
+  // field-operations.md: required questions must be answered. `no_contact`
+  // skips this entirely, not just the requiredness: its questions are hidden
+  // behind the when radios (when-step.md), so a stale invalid answer typed
+  // under another result must not block a save the agent cannot see why is
+  // stuck — Enregistrer would do nothing, with no error in view.
   const script = context.script ?? null;
-  if (script) {
-    const answers = answersSchemaFor(script.questions, {
-      enforceRequired: draft.outcome !== "no_contact",
-    }).safeParse(draft.answers);
+  if (script && draft.outcome !== "no_contact") {
+    const answers = answersSchemaFor(script.questions, { enforceRequired: true }).safeParse(
+      draft.answers,
+    );
 
     if (!answers.success) {
       const byKey: Record<string, "required" | "invalid"> = {};
@@ -167,7 +217,10 @@ export function toVisit(
     notes: draft.notes.trim() || null,
     // The version the agent actually answered, not whichever is active now.
     scriptId: script?.id ?? null,
-    answers: script ? draft.answers : {},
+    // Personne sur place hides the script's questions behind the when radios
+    // (when-step.md): an answer left in the draft from another result must
+    // not ride along unseen (Design Notes).
+    answers: script && draft.outcome !== "no_contact" ? draft.answers : {},
   };
 
   const parsed = visitSchema.safeParse(candidate);

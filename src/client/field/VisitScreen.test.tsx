@@ -20,6 +20,7 @@ import Dexie from "dexie";
 import { copy, OUTCOME_HINTS, STATUS_LABELS } from "../copy";
 import type { Prospect, Script } from "../../shared/schemas";
 import { OUTCOMES, type Outcome } from "../../shared/constants";
+import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
 import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
@@ -146,7 +147,9 @@ async function toStep2(user: ReturnType<typeof userEvent.setup>, outcome: Outcom
   await renderVisit({ expectContinue: true });
   await user.click(outcomeRadio(outcome));
   await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-  await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+  // Personne sur place's step 2 is the when step alone, named for it.
+  const stepName = outcome === "no_contact" ? copy.visit.when : copy.visit.questions;
+  await screen.findByText(copy.visit.step(2, 2, stepName));
 }
 
 /** The save confirmation (GH #125), open. Sheet or Dialog, both `role="dialog"`. */
@@ -350,34 +353,116 @@ describe("VisitScreen — step 1", () => {
     expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 
-  it("shows Relancer le only for À relancer, and drops it when the outcome changes", async () => {
+  it("no script: Personne sur place shows the when step on the single screen, opened on Aujourd'hui", async () => {
     const user = userEvent.setup();
     await renderVisit({ expectContinue: false });
 
-    await user.click(outcomeRadio("follow_up"));
-    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
-    expect(date.type).toBe("date");
-    await user.type(date, "2026-10-01");
-
-    await user.click(outcomeRadio("interested"));
-    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
-
-    // `withOutcome` dropped the value with the control: coming back starts empty.
-    await user.click(outcomeRadio("follow_up"));
-    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe("");
+    await user.click(outcomeRadio("no_contact"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      true,
+    );
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).type).toBe("date");
   });
 
-  it("requires a follow-up date before Continuer, and focuses it when missing", async () => {
+  it("step 2, À relancer: questions answered but no when choice blocks the save and focuses Aujourd'hui", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(outcomeRadio("follow_up"));
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.whenRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("step 2, À relancer: an unanswered question above the radios wins the focus over the when choice", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.answerRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(document.getElementById(questionDomId("delivery")));
+  });
+
+  it("shows the when step only for À relancer, opened on nothing, and the date only with Choisir une date", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      false,
+    );
+    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
+    expect(date.type).toBe("date");
+    await user.type(date, "2026-10-01");
+
+    await user.click(outcomeRadio("interested"));
+    expect(screen.queryByRole("radio", { name: copy.visit.whenToday })).toBeNull();
+    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
+
+    // `withOutcome` reset the when choice with the control: coming back
+    // starts unticked, not carrying "Choisir une date" over.
+    await user.click(outcomeRadio("follow_up"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenDate })).toHaveProperty(
+      "checked",
+      false,
+    );
+  });
+
+  it("blocks Enregistrer with no when choice, and focuses the radios", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.whenRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks Enregistrer with Choisir une date and no date typed, and focuses it", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(await screen.findByText(copy.visit.followUpRequired)).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.followUpAt));
-    expect(screen.getByRole("button", { name: copy.visit.continue })).toBeTruthy();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks a date that is not after today, with the input floor set to tomorrow", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
+    expect(date.min).toBe(periodDates(brusselsMidnightDaysFromNow(Date.now(), 0), 2)[1]);
+    await user.type(date, "2020-01-01");
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.followUpNotAfterToday)).toBeTruthy();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 
   it("focuses the first unanswered required question when step 2's save is blocked, and queues nothing", async () => {
@@ -431,25 +516,24 @@ describe("VisitScreen — step 1", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
-  it("keeps the outcome, flyer and date intact when Résultat is tapped from step 2", async () => {
+  it("keeps the outcome and flyer intact when Résultat is tapped from step 2, and the when step's own choice too", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(screen.getByRole("checkbox", { name: new RegExp(copy.visit.flyerGiven) }));
     await user.click(outcomeRadio("follow_up"));
-    await user.type(screen.getByLabelText(copy.visit.followUpAt), "2026-10-01");
 
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
     expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
+
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    await user.type(screen.getByLabelText(copy.visit.followUpAt), "2026-10-01");
 
     await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
 
     expect(screen.getByText(copy.visit.step(1, 2, copy.visit.outcome))).toBeTruthy();
     expect(outcomeRadio("follow_up").checked).toBe(true);
-    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe(
-      "2026-10-01",
-    );
     expect(
       (
         screen.getByRole("checkbox", {
@@ -457,6 +541,16 @@ describe("VisitScreen — step 1", () => {
         }) as HTMLInputElement
       ).checked,
     ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
+    expect(screen.getByRole("radio", { name: copy.visit.whenDate })).toHaveProperty(
+      "checked",
+      true,
+    );
+    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe(
+      "2026-10-01",
+    );
   });
 });
 
@@ -469,9 +563,6 @@ describe("VisitScreen — step 2 (Questions)", () => {
     const no = screen.getByRole("radio", { name: copy.visit.no }) as HTMLInputElement;
     const group = yes.closest('[role="radiogroup"]') as HTMLElement;
     expect(group.className).toContain("grid-cols-2");
-    // The Personne sur place callout is for no_contact only: above required
-    // questions it would tell the agent they may skip what save then blocks.
-    expect(screen.queryByText(copy.visit.questionsOptional)).toBeNull();
 
     // The tile's gold fill is a `has-[:checked]:` utility (DESIGN.md
     // choice-selected) — present on both tiles, but a CSS-conditional class
@@ -668,19 +759,24 @@ describe("VisitScreen — step 2 (Questions)", () => {
     expect(visit?.scriptId).toBe(SCRIPT2.id);
   });
 
-  it("personne sur place: shows the callout at the top of step 2, and saves with nothing answered", async () => {
+  it("personne sur place: replaces the script's questions with the when radios, opened on Aujourd'hui, and saves with nothing answered", async () => {
     const user = userEvent.setup();
     await toStep2(user, "no_contact");
 
-    const alert = screen.getByText(copy.visit.questionsOptional).closest('[role="note"]');
-    if (!alert) throw new Error("no callout rendered");
-    const heading = screen.getByText(copy.visit.questions);
-    // The callout comes before the Questions heading in document order.
-    expect(alert.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The script's own questions are not asked at all — nobody was there.
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      true,
+    );
 
     await confirmSave(user);
 
     await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.answers).toEqual({});
+    // "Aujourd'hui" sends today's Brussels midnight (when-step.md).
+    expect(visit?.followUpAt).toBe(brusselsMidnightDaysFromNow(visit?.visitedAt ?? 0, 0));
   });
 
   it("no script: Notes sits inline on the single step, and save queues the typed notes", async () => {
@@ -915,7 +1011,14 @@ describe("VisitScreen — save confirmation", () => {
 
   it("counts only answered questions: personne sur place with none reads 0 réponse", async () => {
     const user = userEvent.setup();
-    await toStep2(user, "no_contact");
+    // An answer typed under À relancer is not sent with Personne sur place,
+    // so the sheet must not count it either.
+    await toStep2(user, "follow_up");
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+    await user.click(outcomeRadio("no_contact"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(within(await confirmation()).getByText(copy.visit.confirm.answers(0))).toBeTruthy();
@@ -1072,6 +1175,7 @@ function onRound(over: Partial<TodayItem> = {}) {
       address: null,
       status: "assigned",
       nextVisitAt: null,
+      lastVisitAt: null,
       pending: false,
       distanceM: null,
       visitQueued: false,

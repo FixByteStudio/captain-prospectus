@@ -121,7 +121,7 @@ export const OUTCOME_HINTS: Readonly<Record<Outcome, string>> = {
   no_contact: "Fermé ou personne pour répondre. On repassera.",
   interested: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente.",
   not_interested: "Refus clair.",
-  follow_up: "Un rendez-vous à reprendre. Indiquez la date.",
+  follow_up: "Un rendez-vous à reprendre.",
   converted: "Déjà inscrit sur la liste d'attente.",
 };
 

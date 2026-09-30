@@ -117,6 +117,7 @@ baseline_commit: 'a96ab86d634dd309569f14ee94ec5a12549776eb'
 ## Design Notes
 
 - EXPERIENCE.md Flow 1 says the visited stop is "gone" at once. Hiding it client-side would mean deriving status from the outcome, which invariant 3 forbids. DESIGN.md's stop row keeps it on the list with "Pas encore envoyé" until a sync replaces `prospects`. This story follows the invariant and DESIGN.md.
+  **Superseded by GH #239** (`_bmad-output/specs/spec-done-stop-leaves-the-round/round-placement.md`): the outcome the agent picked, not a derived status, now places the stop immediately — a closed result does leave the round before the sync, which is what makes Flow 1's climax actually happen. "Pas encore envoyé" still shows on whatever stop is queued; it no longer implies the stop never moves.
 - The row header is one `<button aria-expanded aria-controls>`, and the actions sit outside it, so no link is nested in a button. Plus tard rows are plain `<li>`: "They can't be visited from here" (EXPERIENCE.md).
 
 ## Verification

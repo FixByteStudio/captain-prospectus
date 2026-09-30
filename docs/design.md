@@ -1257,10 +1257,14 @@ too.
 
 **Pas encore envoyé.** A stop whose visit is sitting in `outboxVisits`, or a
 field prospect still in `outboxProspects`, carries a `warn`-tinted badge with
-that text on its row. It is read-only knowledge of the outbox: it never hides
-the stop, changes its status or moves it in the walking order (invariants 2,
-3) — the row looks exactly like any other until a sync replaces `prospects`
-and the badge is simply not there any more.
+that text on its row. It is read-only knowledge of the outbox: it never invents
+a status (invariants 2, 3) — but the outcome the agent picked does place the
+stop before the sync confirms it (`docs/domains/field-operations.md` › Today
+list): a closed result (Intéressé, Converti, Pas intéressé) leaves the round
+immediately, and À relancer or Personne sur place moves it to Plus tard or to
+the end of today's round depending on the when choice. The badge itself still
+looks exactly like any other until a sync replaces `prospects` and it is
+simply not there any more.
 
 **Plus tard** is follow-ups not yet due, each a plain `<li>` — no button, no
 link, name and "À relancer le {date}" only. They "can't be visited from here"
@@ -1419,15 +1423,15 @@ else is allowed to compete.
 │  ├────────────────────────────┤  │
 │  │ [ic] À relancer         ( )│  │
 │  │     Un rendez-vous à       │  │
-│  │     reprendre. Indiquez la │  │
-│  │     date.                  │  │
+│  │     reprendre.             │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] Converti           ( )│  │
 │  │     Déjà inscrit sur la    │  │
 │  │     liste d'attente.       │  │
 │  └────────────────────────────┘  │
 │                                  │
-│  Relancer le   [ 29/09/2026 ]    │  only when the outcome is « À relancer »
+│  Quand ?                         │  only for À relancer / Personne sur place
+│  ( ) Aujourd'hui  ( ) Choisir…   │  when-step.md; date shown once chosen
 │                                  │
 │  Notes                           │
 │  ┌────────────────────────────┐  │
@@ -1502,12 +1506,15 @@ with it, so the questions do not join it — they follow it.
 │  │ [ic] Converti           ( )│  │ │  └────────────────────────────┘  │
 │  └────────────────────────────┘  │ │                                  │
 │                                  │ │  Satisfaction ?                  │
-│  Relancer le   [ 29/09/2026 ]    │ │  ┌──┐┌──┐┌──┐┌──┐┌──┐            │
-├──────────────────────────────────┤ │  │1 ││2 ││3 ││4 ││5 │            │
-│  [        Continuer          ]   │ │  └──┘└──┘└──┘└──┘└──┘            │
-└──────────────────────────────────┘ │                                  │
+├──────────────────────────────────┤ │  ┌──┐┌──┐┌──┐┌──┐┌──┐            │
+│  [        Continuer          ]   │ │  │1 ││2 ││3 ││4 ││5 │            │
+└──────────────────────────────────┘ │  └──┘└──┘└──┘└──┘└──┘            │
+                                     │                                  │
                                      │  Combien de places ?             │
                                      │  ( − )   [    3    ]   ( + )     │
+                                     │                                  │
+                                     │  Quand ?                         │
+                                     │  ( ) Aujourd'hui  ( ) Choisir…   │
                                      │                                  │
                                      │  Notes                           │
                                      │  ┌────────────────────────────┐  │
@@ -1522,8 +1529,9 @@ This reverses an earlier call here — "no 1 sur 2, no dots, no progress bar" �
 because DESIGN.md's redesign (› Step indicator) asks for one, echoed in
 EXPERIENCE.md › Step indicator: an action's own name is not enough to say
 *which* step an agent is on. A `size-1.5` gold dot leads a `text-overline` line
-reading « Étape 1 sur 2 · Résultat » or « Étape 2 sur 2 · Questions », on both
-steps, and it is absent only when the visit has one step to begin with — a
+reading « Étape 1 sur 2 · Résultat » or « Étape 2 sur 2 · Questions » (« Étape 2
+sur 2 · Quand ? » for Personne sur place, whose step 2 is the when step alone,
+GH #239), on both steps, and it is absent only when the visit has one step to begin with — a
 script with nothing this build can render must never make the one-step path
 read "1 sur 2". An action still keeps its own name through the flow, so «
 Enregistrer la visite » still appears exactly once, on the screen that
@@ -1558,14 +1566,16 @@ with Notes inline, « Enregistrer la visite ». A missing questionnaire must
 never stand between an agent and a saved visit, and it must not cost a tap
 either.
 
-**`no_contact` still gets step 2, with nothing required.** Nobody was there to
-ask, so `field-operations.md` waives the required questions — but the notes live
-on this screen, and "ferme le lundi" written off a sign in the window is the most
-valuable thing an agent can record about a door nobody answered. Hiding the step
-would hide the notes with it. So the step stays and the obligation goes. What
-replaces the required questions is a callout at the top of the step, above the
-first question: « Personne sur place : répondez seulement si vous savez. » — the
-one thing an agent must not read as an instruction to guess.
+**`no_contact` still gets step 2, but the script's questions are gone.** Nobody
+was there to ask, so `field-operations.md` waives them entirely rather than
+asking and waiving each one — the questions themselves are not rendered, and no
+answer rides along unseen. What replaces them is the when step (GH #239,
+`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`), the same one
+À relancer uses below its own questions: "Aujourd'hui" or "Choisir une date",
+opened on "Aujourd'hui" since Personne sur place can only lack a choice by bug.
+The notes still live on this screen, and "ferme le lundi" written off a sign in
+the window is the most valuable thing an agent can record about a door nobody
+answered.
 
 **A blocked save moves the screen to the problem.** With a variable number of
 questions, the first invalid one can easily sit below the fold, and a button that

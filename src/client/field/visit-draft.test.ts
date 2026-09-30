@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Script } from "../../shared/schemas";
+import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
 import {
   answeredCount,
   dateInputToEpochMs,
@@ -15,6 +16,9 @@ const CONTEXT = {
   visitedAt: 1_700_000_000_000,
   position: { lat: 45.7578, lng: 4.832 },
 };
+
+const TODAY = periodDates(brusselsMidnightDaysFromNow(CONTEXT.visitedAt, 0), 1)[0] ?? "";
+const TOMORROW = periodDates(brusselsMidnightDaysFromNow(CONTEXT.visitedAt, 1), 1)[0] ?? "";
 
 const draft = (over: Partial<typeof emptyDraft> = {}) => ({ ...emptyDraft, ...over });
 
@@ -61,22 +65,44 @@ describe("toVisit", () => {
     if (!result.ok) expect(result.errors.outcome).toBe("required");
   });
 
-  it("requires a follow-up date when the outcome is follow_up", () => {
+  it("requires a when choice when the outcome is follow_up (when-step.md)", () => {
     const result = toVisit(draft({ outcome: "follow_up" }), CONTEXT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.when).toBe("required");
+  });
+
+  it("requires a follow-up date once Choisir une date is picked", () => {
+    const result = toVisit(draft({ outcome: "follow_up", when: "date" }), CONTEXT);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.followUpDate).toBe("required");
   });
 
   it("saves a follow-up once the date is there", () => {
-    const result = toVisit(draft({ outcome: "follow_up", followUpDate: "2026-09-29" }), CONTEXT);
+    const result = toVisit(
+      draft({ outcome: "follow_up", when: "date", followUpDate: TOMORROW }),
+      CONTEXT,
+    );
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.visit.followUpAt).toBe(dateInputToEpochMs("2026-09-29"));
+    if (result.ok) expect(result.visit.followUpAt).toBe(dateInputToEpochMs(TOMORROW));
+  });
+
+  it("Aujourd'hui sends today's Brussels midnight as followUpAt (when-step.md)", () => {
+    const result = toVisit(draft({ outcome: "follow_up", when: "today" }), CONTEXT);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.visit.followUpAt).toBe(brusselsMidnightDaysFromNow(CONTEXT.visitedAt, 0));
+    }
   });
 
   it("rejects a malformed date the browser let through", () => {
-    const result = toVisit(draft({ outcome: "interested", followUpDate: "2026-02-30" }), CONTEXT);
+    const result = toVisit(
+      draft({ outcome: "follow_up", when: "date", followUpDate: "2026-02-30" }),
+      CONTEXT,
+    );
 
     expect(result.ok).toBe(false);
     // "invalid", not "required": the agent typed a date, it just cannot exist,
@@ -84,10 +110,20 @@ describe("toVisit", () => {
     if (!result.ok) expect(result.errors.followUpDate).toBe("invalid");
   });
 
+  it("rejects a date that is not after today, distinctly from missing or impossible", () => {
+    const result = toVisit(
+      draft({ outcome: "follow_up", when: "date", followUpDate: TODAY }),
+      CONTEXT,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.followUpDate).toBe("notAfterToday");
+  });
+
   it("separates an impossible follow-up date from a missing one", () => {
-    const missing = toVisit(draft({ outcome: "follow_up" }), CONTEXT);
+    const missing = toVisit(draft({ outcome: "follow_up", when: "date" }), CONTEXT);
     const impossible = toVisit(
-      draft({ outcome: "follow_up", followUpDate: "2026-02-30" }),
+      draft({ outcome: "follow_up", when: "date", followUpDate: "2026-02-30" }),
       CONTEXT,
     );
 
@@ -97,8 +133,33 @@ describe("toVisit", () => {
     if (!impossible.ok) expect(impossible.errors.followUpDate).toBe("invalid");
   });
 
-  it.each(["no_contact", "interested", "not_interested", "converted"] as const)(
-    "saves %s with no date",
+  it("requires a when choice for Personne sur place too, sharing the same step", () => {
+    const result = toVisit(draft({ outcome: "no_contact" }), CONTEXT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.when).toBe("required");
+  });
+
+  it("Personne sur place sends answers: {} even when a script is pinned (Design Notes)", () => {
+    const script: Script = {
+      id: 9,
+      name: "s",
+      version: 1,
+      isActive: true,
+      createdAt: 0,
+      questions: [{ key: "note_pos", label: "Caisse ?", type: "text" }],
+    };
+    const result = toVisit(
+      draft({ outcome: "no_contact", when: "today", answers: { note_pos: "leftover" } }),
+      { ...CONTEXT, script },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.answers).toEqual({});
+  });
+
+  it.each(["interested", "not_interested", "converted"] as const)(
+    "saves %s with no when step and no date",
     (outcome) => {
       const result = toVisit(draft({ outcome }), CONTEXT);
 
@@ -168,27 +229,29 @@ describe("toVisit", () => {
 });
 
 describe("withOutcome", () => {
-  it("keeps the date while the outcome still asks for one", () => {
+  it("keeps the when choice and date on an idempotent tap of the same outcome", () => {
     const next = withOutcome(
-      draft({ outcome: "follow_up", followUpDate: "2026-09-29" }),
+      draft({ outcome: "follow_up", when: "date", followUpDate: "2026-09-29" }),
       "follow_up",
     );
 
+    expect(next.when).toBe("date");
     expect(next.followUpDate).toBe("2026-09-29");
   });
 
-  it.each(["no_contact", "interested", "not_interested", "converted"] as const)(
-    "drops the date when the outcome becomes %s",
+  it.each(["interested", "not_interested", "converted"] as const)(
+    "resets the when choice to null and drops the date when the outcome becomes %s",
     (outcome) => {
-      // The control is unmounted for these, so a date left behind is one the
-      // agent cancelled and can no longer see — and the Worker would still
-      // write it to prospects.next_visit_at.
+      // The when step is unmounted for these, so a choice left behind is one
+      // the agent cancelled and can no longer see — and the Worker would
+      // still write the date to prospects.next_visit_at.
       const next = withOutcome(
-        draft({ outcome: "follow_up", followUpDate: "2026-09-29" }),
+        draft({ outcome: "follow_up", when: "date", followUpDate: "2026-09-29" }),
         outcome,
       );
 
       expect(next.outcome).toBe(outcome);
+      expect(next.when).toBeNull();
       expect(next.followUpDate).toBe("");
 
       const result = toVisit(next, CONTEXT);
@@ -196,6 +259,25 @@ describe("withOutcome", () => {
       if (result.ok) expect(result.visit.followUpAt).toBeNull();
     },
   );
+
+  it("defaults Personne sur place's when choice to Aujourd'hui (when-step.md)", () => {
+    const next = withOutcome(
+      draft({ outcome: "follow_up", when: "date", followUpDate: "2026-09-29" }),
+      "no_contact",
+    );
+
+    expect(next.when).toBe("today");
+    expect(next.followUpDate).toBe("");
+  });
+
+  it("resets À relancer's when choice to null rather than carrying a date's choice over", () => {
+    // when-step.md: an agent in a hurry must tick something for À relancer —
+    // a "today" carried over from Personne sur place would file "come back
+    // Thursday" as today.
+    const next = withOutcome(draft({ outcome: "no_contact", when: "today" }), "follow_up");
+
+    expect(next.when).toBeNull();
+  });
 
   it("leaves the rest of the draft alone", () => {
     const next = withOutcome(draft({ flyerGiven: true, notes: "ferme le lundi" }), "interested");
@@ -257,19 +339,30 @@ describe("toVisit — the script's answers", () => {
 
   /** field-operations.md: nobody was there to ask. */
   it("waives required questions when the outcome is no_contact", () => {
-    const result = toVisit(draft({ outcome: "no_contact", answers: {} }), withScript);
+    const result = toVisit(
+      draft({ outcome: "no_contact", when: "today", answers: {} }),
+      withScript,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.visit.scriptId).toBe(7);
   });
 
-  it("still refuses a wrong answer when the outcome is no_contact", () => {
+  it("never validates answers for no_contact, even a stale invalid one left over from another result", () => {
+    // The questions are hidden behind the when radios for Personne sur place
+    // (when-step.md); a wrong answer typed under another outcome must not
+    // block a save the agent cannot see why is stuck.
     const result = toVisit(
-      draft({ outcome: "no_contact", answers: { has_delivery: 3 as unknown as boolean } }),
+      draft({
+        outcome: "no_contact",
+        when: "today",
+        answers: { has_delivery: 3 as unknown as boolean },
+      }),
       withScript,
     );
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.answers).toEqual({});
   });
 
   it("does not send answers it has no script to interpret them against", () => {
