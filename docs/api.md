@@ -33,11 +33,11 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
 | `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached, cachedAt?}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
 | `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached, cachedAt?}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
-| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]`; all bounds apply together. Newest first, max 500. **400** when `from > to`. Each carries `prospectName` |
+| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&reason=&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]` and the refusal `reason` (see [The live feed](#the-live-feed)); all bounds apply together. Newest first, max 500. **400** when `from > to` or `reason` is unknown or empty. Each carries `prospectName` and `refusalReason` (null unless given on a `not_interested` visit) |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, and up to 5 `candidates` ranked by distance from where the visit happened |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
 | `POST /api/admin/visits/orphaned/:id/discard` | Deletes the row for good → `{discarded}`. Idempotent. The one place a visit is deliberately lost, behind a confirmation in the UI |
-| `GET /api/admin/visits/export.csv?from=<ms>&to=<ms>` | Visits as CSV for a range, defaulting to the last 30 days. Filtered on `received_at`, not `visited_at`. **400** when `from > to`. Max 500 rows, `x-truncated` when capped |
+| `GET /api/admin/visits/export.csv?from=<ms>&to=<ms>&reason=` | Visits as CSV for a range, defaulting to the last 30 days. Filtered on `received_at`, not `visited_at`; `reason` narrows it exactly as it narrows the feed. A `refusal_reason` column follows `outcome` (the English value, empty when none). **400** when `from > to` or `reason` is unknown or empty. Max 500 rows, `x-truncated` when capped |
 | `GET /api/admin/scripts` | `{scripts[]}` — all versions, newest first, max 100. At most one has `isActive` |
 | `POST /api/admin/scripts` | `{name, questions[]}` → **201** with the created script. Writes version N+1 of that name and makes it the only active one |
 
@@ -287,6 +287,11 @@ tab is visible (ADR-0010).
   duplicate. The name shown is the one the visit was made against.
 - `serverTime` is the server's clock as it answered, so a client never has to
   derive a cursor from its own.
+- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value), or
+  `none` for the `not_interested` visits that carry no reason — not every
+  visit without one, since a `converted` visit has none by construction. The
+  export takes the same parameter, through the same schema and SQL, so both
+  list the same visits. Absent, nothing changes; empty or unknown is **400**.
 
 ## The map import
 

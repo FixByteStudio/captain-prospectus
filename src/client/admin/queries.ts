@@ -37,6 +37,7 @@ import type {
   ScriptsResponse,
   OrphansResponse,
   OrphanRepairResult,
+  VisitsReasonFilter,
 } from "../../shared/schemas";
 import type { DashboardPeriod, Source, Status } from "../../shared/constants";
 
@@ -321,8 +322,11 @@ const FEED_POLL_MS = 15_000;
  * every period's entry. A period change is a fresh mount of this hook
  * (`VisitsScreenBody` is keyed by `period`), so the cursor, `seeded` and
  * `held` all start over rather than carry state across a re-seed.
+ *
+ * `reason` narrows it to one refusal reason (GH #249) the same way: sent on
+ * every poll, part of the scoped key, and a change is a fresh mount.
  */
-export function useVisitsFeed(period?: DashboardPeriod) {
+export function useVisitsFeed(period?: DashboardPeriod, reason?: VisitsReasonFilter) {
   const since = useRef(0);
   /**
    * Whether a first answer has landed. Without this the opening page arrives
@@ -355,7 +359,10 @@ export function useVisitsFeed(period?: DashboardPeriod) {
   const [mountedAt] = useState(() => Date.now());
 
   const query = useQuery({
-    queryKey: period !== undefined ? [...adminKeys.visitsFeed(), period] : adminKeys.visitsFeed(),
+    queryKey:
+      period !== undefined || reason !== undefined
+        ? [...adminKeys.visitsFeed(), period ?? null, reason ?? null]
+        : adminKeys.visitsFeed(),
     queryFn: () => {
       const params = new URLSearchParams({ since: String(since.current) });
       if (period !== undefined) {
@@ -365,6 +372,7 @@ export function useVisitsFeed(period?: DashboardPeriod) {
         params.set("from", String(bounds.from));
         params.set("to", String(bounds.to - 1));
       }
+      if (reason !== undefined) params.set("reason", reason);
       return apiFetch<AdminVisitsResponse>(`/api/admin/visits?${params}`);
     },
     refetchInterval: FEED_POLL_MS,

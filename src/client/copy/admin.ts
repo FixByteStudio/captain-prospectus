@@ -471,6 +471,14 @@ export const adminCopy = {
     /** The 25-row pager over the held feed (GH #178). */
     pager: { ...PAGER, nav: "Pagination des visites" },
 
+    /** Narrows the ledger and its export to one refusal reason (GH #249). */
+    reasonFilter: {
+      label: "Raison du refus",
+      any: "Toutes les raisons",
+      none: "Sans raison",
+      empty: "Aucune visite pour cette raison sur la période.",
+    },
+
     /**
      * The export button (GH #178) — a warning toast, not a blocking dialog,
      * when the server flags `x-truncated`. Its own cap, `EXPORT_ROWS`, is a

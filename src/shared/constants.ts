@@ -75,6 +75,12 @@ export const REFUSAL_REASONS = [
 ] as const;
 export type RefusalReason = (typeof REFUSAL_REASONS)[number];
 
+/**
+ * The Visites filter's "Sans raison": a `not_interested` visit with no reason
+ * (docs/api.md › The live feed). Not a refusal reason, so never stored.
+ */
+export const NO_REFUSAL_REASON = "none";
+
 export const QUESTION_TYPES = ["yes_no", "single", "multi", "text", "number", "rating"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 

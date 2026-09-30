@@ -12,7 +12,7 @@ import { MemoryRouter, useLocation } from "react-router";
 import { ADMIN_VISITS_PAGE_SIZE, EXPORT_ROWS } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
 import type { AdminVisit, DashboardResponse } from "../../shared/schemas";
-import { copy } from "../copy";
+import { OUTCOME_LABELS, REFUSAL_REASON_LABELS, copy } from "../copy";
 import { Toaster } from "../ui/sonner";
 import { adminKeys } from "./queries";
 import { createAdminQueryClient } from "./query-client";
@@ -34,7 +34,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
  * a handful of milliseconds apart is enough to keep every test's relative
  * ordering while staying well within even a 7-day window.
  */
-function visit(id: string, receivedAt: number): AdminVisit {
+function visit(id: string, receivedAt: number, over: Partial<AdminVisit> = {}): AdminVisit {
   const at = NOW - 10_000_000 + receivedAt;
   return {
     id,
@@ -47,6 +47,8 @@ function visit(id: string, receivedAt: number): AdminVisit {
     outcome: "interested",
     followUpAt: null,
     notes: null,
+    refusalReason: null,
+    ...over,
   };
 }
 
@@ -432,6 +434,7 @@ describe("VisitsScreen", () => {
     const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
     // The export asks for the same window the feed shows.
     expect(bounds(exportCall)).toEqual(bounds(feedCall));
+    expect(new URLSearchParams(exportCall?.split("?")[1]).get("reason")).toBeNull();
   });
 
   it("warns that the session expired when the export's request is redirected (401)", async () => {
@@ -510,5 +513,157 @@ describe("VisitsScreen › live feed rows (#185)", () => {
     const toasts = Array.from(document.querySelectorAll("[data-sonner-toast]"));
     expect(toasts.filter((t) => t.textContent?.includes(copy.visits.arrived(1)))).toHaveLength(0);
     expect(toasts.filter((t) => t.textContent?.includes("Place b"))).toHaveLength(0);
+  });
+});
+
+describe("VisitsScreen › refusal reasons (GH #249)", () => {
+  const reasonSelect = () => screen.getByRole("combobox", { name: copy.visits.reasonFilter.label });
+  const param = (url: string | undefined, name: string) =>
+    new URLSearchParams(url?.split("?")[1]).get(name);
+
+  /** Answers by `reason=`, so a narrowed ledger proves the request carried it. */
+  function byReason(url: URL): Response {
+    const reason = url.searchParams.get("reason");
+    const all = [
+      visit("a", 3, { outcome: "not_interested", refusalReason: "no_need" }),
+      visit("b", 2, { outcome: "not_interested", refusalReason: "fee_distrust" }),
+      visit("c", 1, { outcome: "converted" }),
+    ];
+    const visits = reason === null ? all : all.filter((v) => v.refusalReason === reason);
+    return json({ visits, serverTime: 4 });
+  }
+
+  it("shows the reason's label beside Pas intéressé, and nothing on a visit without one", async () => {
+    stubFetch({
+      visits: () =>
+        json({
+          visits: [
+            visit("a", 2, { outcome: "not_interested", refusalReason: "too_many_devices" }),
+            visit("b", 1, { outcome: "not_interested" }),
+          ],
+          serverTime: 3,
+        }),
+    });
+    renderScreen();
+
+    const withReason = (await screen.findByText("Place a")).closest("li");
+    expect(within(withReason as HTMLElement).getByText(OUTCOME_LABELS.not_interested)).toBeTruthy();
+    expect(
+      within(withReason as HTMLElement).getByText(REFUSAL_REASON_LABELS.too_many_devices),
+    ).toBeTruthy();
+
+    const without = screen.getByText("Place b").closest("li");
+    for (const label of Object.values(REFUSAL_REASON_LABELS)) {
+      expect(without?.textContent).not.toContain(label);
+    }
+  });
+
+  it("puts the chosen reason in the URL and reseeds a narrowed feed from since=0", async () => {
+    const asked = stubFetch({ visits: byReason });
+    const client = renderScreen("/admin/visites?period=7");
+    await screen.findByText("Place c");
+    const before = asked.length;
+
+    const user = userEvent.setup();
+    await user.click(reasonSelect());
+    await user.click(await screen.findByRole("option", { name: REFUSAL_REASON_LABELS.no_need }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/admin/visites?period=7&reason=no_need",
+      ),
+    );
+    await waitFor(() => expect(screen.queryByText("Place c")).toBeNull());
+    expect(screen.getByText("Place a")).toBeTruthy();
+    expect(screen.queryByText("Place b")).toBeNull();
+    expect(screen.queryByText(copy.visits.arrived(1))).toBeNull();
+
+    const reseed = asked.slice(before).find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(reseed, "since")).toBe("0");
+    expect(param(reseed, "reason")).toBe("no_need");
+    const period7 = brusselsPeriod(NOW, 7);
+    expect(bounds(reseed)).toEqual([String(period7.from), String(period7.to - 1)]);
+
+    // A later poll keeps asking for the same reason.
+    const beforePoll = asked.length;
+    vi.setSystemTime(NOW + 1);
+    // `active`: the unfiltered entry left behind by the remount is inactive.
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed(), type: "active" });
+    const poll = asked.slice(beforePoll).find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(poll, "since")).not.toBe("0");
+    expect(param(poll, "reason")).toBe("no_need");
+  });
+
+  it("drops ?reason= from the URL when Toutes les raisons is chosen", async () => {
+    stubFetch({ visits: byReason });
+    renderScreen("/admin/visites?period=7&reason=no_need");
+    await screen.findByText("Place a");
+
+    const user = userEvent.setup();
+    await user.click(reasonSelect());
+    await user.click(await screen.findByRole("option", { name: copy.visits.reasonFilter.any }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe("/admin/visites?period=7"),
+    );
+    expect(await screen.findByText("Place c")).toBeTruthy();
+  });
+
+  it("reads ?period=7&reason=no_need back: the select shows the reason, the period stays 7", async () => {
+    stubFetch({ visits: byReason });
+    renderScreen("/admin/visites?period=7&reason=no_need");
+    await screen.findByText("Place a");
+
+    expect(reasonSelect().textContent).toBe(REFUSAL_REASON_LABELS.no_need);
+    expect(
+      screen.getByRole("radio", { name: copy.dashboard.periods[7] }).getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  it("reads Sans raison back from ?reason=none and asks the feed for it", async () => {
+    const asked = stubFetch({});
+    renderScreen("/admin/visites?reason=none");
+    await screen.findByText(copy.visits.reasonFilter.empty);
+    expect(screen.queryByText(copy.visits.empty)).toBeNull();
+
+    expect(reasonSelect().textContent).toBe(copy.visits.reasonFilter.none);
+    const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(feedCall, "reason")).toBe("none");
+  });
+
+  it("treats a bad ?reason= as Toutes les raisons, and the feed asks without one", async () => {
+    const asked = stubFetch({ visits: byReason });
+    renderScreen("/admin/visites?reason=bogus");
+    await screen.findByText("Place c");
+
+    expect(reasonSelect().textContent).toBe(copy.visits.reasonFilter.any);
+    const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(feedCall, "reason")).toBeNull();
+  });
+
+  it("exports with the same reason and bounds the feed asks with", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:visites");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const asked = stubFetch({
+      visits: byReason,
+      exportCsv: () =>
+        new Response("received_at\n", {
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="visites-2026-09-27.csv"',
+          },
+        }),
+    });
+    renderScreen("/admin/visites?period=7&reason=fee_distrust");
+    await screen.findByText("Place b");
+
+    await userEvent.click(screen.getByRole("button", { name: copy.visits.export.button }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+
+    const exportCall = asked.find((u) => u.startsWith("/api/admin/visits/export.csv?"));
+    const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(exportCall, "reason")).toBe("fee_distrust");
+    expect(bounds(exportCall)).toEqual(bounds(feedCall));
   });
 });

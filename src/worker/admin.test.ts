@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { ADMIN_VISITS_PAGE_SIZE } from "../shared/constants";
+import { ADMIN_VISITS_PAGE_SIZE, type RefusalReason } from "../shared/constants";
 import { prospects, scripts, visits } from "./db/schema";
 import type {
   AdminVisitsResponse,
@@ -1083,7 +1083,12 @@ describe("GET /api/admin/visits", () => {
    * about `received_at`, and only a direct insert lets a test place two visits
    * on either side of a known cursor.
    */
-  async function seedVisit(name: string, receivedAt: number, outcome = "interested") {
+  async function seedVisit(
+    name: string,
+    receivedAt: number,
+    outcome = "interested",
+    refusalReason: RefusalReason | null = null,
+  ) {
     const db = getDb(env.DB);
     const prospectId = crypto.randomUUID();
     await db.insert(prospects).values({
@@ -1106,6 +1111,7 @@ describe("GET /api/admin/visits", () => {
       receivedAt,
       flyerGiven: true,
       outcome: outcome as "interested",
+      refusalReason,
       clientVersion: 1,
     });
     return prospectId;
@@ -1236,6 +1242,52 @@ describe("GET /api/admin/visits", () => {
   it("is admin-only", async () => {
     env.DEV_USER_EMAIL = AGENT;
     expect((await call("/api/admin/visits")).status).toBe(403);
+  });
+
+  describe("refusal reasons (GH #249)", () => {
+    it("returns refusalReason, null where the visit has none", async () => {
+      await seedVisit("Refus", 1_000, "not_interested", "no_need");
+      await seedVisit("Ancien refus", 2_000, "not_interested");
+      const byName = new Map((await feed()).visits.map((v) => [v.prospectName, v]));
+      expect(byName.get("Refus")?.refusalReason).toBe("no_need");
+      expect(byName.get("Ancien refus")?.refusalReason).toBeNull();
+    });
+
+    it("keeps only the visits with the reason asked for", async () => {
+      await seedVisit("Trop d'applis", 1_000, "not_interested", "too_many_devices");
+      await seedVisit("Pas besoin", 2_000, "not_interested", "no_need");
+      await seedVisit("Converti", 3_000, "converted");
+
+      const body = await feed("?reason=too_many_devices");
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Trop d'applis"]);
+    });
+
+    it("reads `none` as a refusal without a reason, not every visit without one", async () => {
+      await seedVisit("Sans raison", 1_000, "not_interested");
+      await seedVisit("Avec raison", 2_000, "not_interested", "fee_distrust");
+      await seedVisit("Converti", 3_000, "converted");
+      await seedVisit("A revoir", 4_000, "follow_up");
+
+      const body = await feed("?reason=none");
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Sans raison"]);
+    });
+
+    it("applies reason alongside since, from and to", async () => {
+      await seedVisit("Avant since", 500, "not_interested", "no_need");
+      await seedVisit("Avant la fenetre", 1_000, "not_interested", "no_need");
+      await seedVisit("Autre raison", 2_000, "not_interested", "other");
+      await seedVisit("Dans la fenetre", 2_500, "not_interested", "no_need");
+      await seedVisit("Apres la fenetre", 4_000, "not_interested", "no_need");
+
+      const body = await feed("?reason=no_need&since=600&from=1500&to=3000");
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+    });
+
+    it.each(["reason=bogus", "reason=", "reason=NONE"])("rejects %s", async (query) => {
+      const response = await call(`/api/admin/visits?${query}`);
+      expect(response.status).toBe(400);
+      expect(((await response.json()) as { error: string }).error).toBe("validation");
+    });
   });
 });
 

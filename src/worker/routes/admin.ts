@@ -28,6 +28,7 @@ import {
   DUPLICATES_PAGE_SIZE,
   DUPLICATES_SCAN_LIMIT,
   EXPORT_ROWS,
+  NO_REFUSAL_REASON,
   ORPHAN_CANDIDATES,
   OPEN_STATUSES,
   ORPHANS_PAGE_SIZE,
@@ -92,6 +93,7 @@ import type {
   ProspectsResponse,
   Script,
   ScriptsResponse,
+  VisitsReasonFilter,
 } from "../../shared/schemas";
 import { parseEmails, roleFor } from "../auth";
 import { validate } from "../validate";
@@ -1410,6 +1412,19 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
 /* ---------------------------------------------------------------- live feed */
 
 /**
+ * `reason=` as SQL, written once so the feed and its export can never list
+ * different visits. `none` is a refusal without a reason, not every visit
+ * without one: a `converted` visit has none by construction (docs/api.md).
+ */
+function refusalReasonFilter(reason: VisitsReasonFilter | undefined): SQL | undefined {
+  if (reason === undefined) return undefined;
+  if (reason === NO_REFUSAL_REASON) {
+    return and(eq(visits.outcome, "not_interested"), isNull(visits.refusalReason));
+  }
+  return eq(visits.refusalReason, reason);
+}
+
+/**
  * Visits as they arrive — ADR-0010, docs/design.md "The live feed".
  *
  * Ordered by `received_at`, not `visited_at`: the feed answers "what has
@@ -1418,16 +1433,17 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
  *
  * `since` is exclusive, so the client can pass back the last `receivedAt` it
  * saw and get only what is new. Polling every 15 s makes that the difference
- * between 500 rows and none.
+ * between 500 rows and none. `reason` narrows it like the export does.
  */
 adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) => {
-  const { since, from, to, limit } = c.req.valid("query");
+  const { since, from, to, reason, limit } = c.req.valid("query");
   const db = getDb(c.env.DB);
 
   const filters = [
     since > 0 ? gt(visits.receivedAt, since) : undefined,
     from !== undefined ? gte(visits.receivedAt, from) : undefined,
     to !== undefined ? lte(visits.receivedAt, to) : undefined,
+    refusalReasonFilter(reason),
   ].filter((f) => f !== undefined);
 
   /**
@@ -1452,6 +1468,7 @@ adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) 
       outcome: visits.outcome,
       followUpAt: visits.followUpAt,
       notes: visits.notes,
+      refusalReason: visits.refusalReason,
     })
     .from(visits)
     .innerJoin(prospects, eq(visits.prospectId, prospects.id))
@@ -1473,10 +1490,10 @@ adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) 
  * same reason the prospect export is: a literal path must never be read as an
  * id. Joined to prospects for the name, and NOT filtered on `merged_into`,
  * matching the live feed — this records what agents did, and an absorbed
- * prospect keeps its visits.
+ * prospect keeps its visits. `reason` narrows it exactly as it narrows the feed.
  */
 adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema), async (c) => {
-  const { from, to } = c.req.valid("query");
+  const { from, to, reason } = c.req.valid("query");
   const db = getDb(c.env.DB);
   const now = Date.now();
 
@@ -1487,13 +1504,16 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       agentEmail: visits.agentEmail,
       prospectName: prospects.name,
       outcome: visits.outcome,
+      refusalReason: visits.refusalReason,
       flyerGiven: visits.flyerGiven,
       followUpAt: visits.followUpAt,
       notes: visits.notes,
     })
     .from(visits)
     .innerJoin(prospects, eq(visits.prospectId, prospects.id))
-    .where(and(gte(visits.receivedAt, from), lte(visits.receivedAt, to)))
+    .where(
+      and(gte(visits.receivedAt, from), lte(visits.receivedAt, to), refusalReasonFilter(reason)),
+    )
     .orderBy(desc(visits.receivedAt))
     .limit(EXPORT_ROWS + 1);
 
@@ -1506,6 +1526,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       "agent_email",
       "prospect_name",
       "outcome",
+      "refusal_reason",
       "flyer_given",
       "follow_up_at",
       "notes",
@@ -1516,6 +1537,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       v.agentEmail,
       v.prospectName,
       v.outcome,
+      v.refusalReason,
       v.flyerGiven,
       csvTimestamp(v.followUpAt),
       // Free text typed outdoors: commas, quotes and newlines all turn up, and

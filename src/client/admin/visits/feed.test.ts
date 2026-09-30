@@ -14,6 +14,7 @@ function visit(id: string, receivedAt: number): AdminVisit {
     outcome: "interested",
     followUpAt: null,
     notes: null,
+    refusalReason: null,
   };
 }
 
