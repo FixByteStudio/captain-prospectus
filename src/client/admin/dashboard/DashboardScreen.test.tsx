@@ -646,6 +646,7 @@ function visit(n: number, over: Partial<AdminVisit> = {}): AdminVisit {
     outcome: "interested",
     followUpAt: null,
     notes: null,
+    refusalReason: null,
     ...over,
   };
 }

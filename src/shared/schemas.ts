@@ -535,6 +535,8 @@ export const adminVisitSchema = z.object({
   outcome: outcomeSchema,
   followUpAt: z.nullable(epochMsSchema),
   notes: z.nullable(longText),
+  /** Null on every outcome but `not_interested`, and on refusals before #247. */
+  refusalReason: z.nullable(refusalReasonSchema),
 });
 export type AdminVisit = z.infer<typeof adminVisitSchema>;
 
@@ -557,6 +559,13 @@ const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
 );
 
 /**
+ * `reason=` — one refusal reason. Shared by the feed and its export so both list the same visits; optional,
+ * and an empty or unknown value is a 400 like any bad param.
+ */
+export const visitsReasonQuerySchema = z.enum(REFUSAL_REASONS);
+export type VisitsReasonFilter = z.infer<typeof visitsReasonQuerySchema>;
+
+/**
  * `from`/`to` bound `received_at` (INVARIANT 12's ordering, not `visited_at`),
  * alongside `since`: all three apply together, so a client can both page by
  * `since` and narrow to a range. Optional and undefined by default — omitted,
@@ -571,6 +580,7 @@ export const visitsSinceQuerySchema = z
     since: z._default(z.coerce.number().check(z.int(), z.nonnegative()), 0),
     from: z.optional(epochMsQuerySchema),
     to: z.optional(epochMsQuerySchema),
+    reason: z.optional(visitsReasonQuerySchema),
     limit: z._default(
       z.coerce.number().check(z.int(), z.positive(), z.lte(ADMIN_VISITS_PAGE_SIZE)),
       ADMIN_VISITS_PAGE_SIZE,
@@ -809,16 +819,18 @@ export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 export const prospectsExportQuerySchema = prospectFiltersSchema;
 
 /**
- * `GET /api/admin/visits/export.csv?from=&to=`.
+ * `GET /api/admin/visits/export.csv?from=&to=&reason=`.
  *
  * Both optional; omitted, the window is the last 30 days ending now, unlike
  * the feed's `from`/`to`, which stay unbounded when omitted. The reversed-range
- * refine is `reversedRangeRefine`, shared with the feed.
+ * refine is `reversedRangeRefine` and `reason` is `visitsReasonQuerySchema`,
+ * both shared with the feed.
  */
 export const visitsExportQuerySchema = z
   .object({
     from: z._default(epochMsQuerySchema, () => Date.now() - EXPORT_DEFAULT_WINDOW_MS),
     to: z._default(epochMsQuerySchema, () => Date.now()),
+    reason: z.optional(visitsReasonQuerySchema),
   })
   .check(reversedRangeRefine);
 

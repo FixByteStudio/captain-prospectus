@@ -923,6 +923,7 @@ spine.
 
 ```
 │ Visites            312 visites  [7 j|30 j|90 j]  [Exporter en CSV] │
+│                    Raison du refus [Toutes les raisons ▾]          │
 │ Les visites arrivent ici dès qu'un agent synchronise.               │
 │                                                                     │
 │ RELANCES DUES     TAUX DE          FLYERS REMIS    AGENTS EN        │
@@ -931,7 +932,7 @@ spine.
 │ Avant le 4 oct.   38 convertis…    Sur la période  Aujourd'hui      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 16:42  Le Bouchon          Intéressé      flyer  agent@…            │
-│ 16:31  Chez Marcel         Pas intéressé         agent@…            │
+│ 16:31  Chez Marcel         Pas intéressé  Pas besoin…  agent@…      │
 │ 15:58  Pizza Vera          À relancer     flyer  agent@…            │
 │        « rappeler après 18 h »                                      │
 │ 15:12  Le Comptoir         Converti       flyer  agent@…            │
@@ -977,6 +978,14 @@ period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
   cap the server answers `x-truncated: true`; the button shows a warning toast
   naming the cap and suggesting a shorter period, the same rule Prospects'
   export (#179) follows.
+- **Raison du refus narrows the ledger and its export alike** (GH #249) — the
+  shared `prospects/Filter` select beside the period, held in the URL
+  (`?reason=`, one of the 7 refusal reasons; any other value reads as Toutes
+  les raisons). A change reseeds the feed exactly as a period
+  change does, and every poll and the export carry the same `reason=`. A
+  refused visit shows its reason's label, muted, right after Pas intéressé;
+  a refusal without one shows nothing extra. The strip stays on the whole
+  period, since its figures are not refusals.
 
 Six rules the ledger itself still encodes:
 
