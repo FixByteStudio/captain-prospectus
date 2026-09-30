@@ -1262,16 +1262,6 @@ describe("GET /api/admin/visits", () => {
       expect(body.visits.map((v) => v.prospectName)).toEqual(["Trop d'applis"]);
     });
 
-    it("reads `none` as a refusal without a reason, not every visit without one", async () => {
-      await seedVisit("Raison non saisie", 1_000, "not_interested");
-      await seedVisit("Avec raison", 2_000, "not_interested", "fee_distrust");
-      await seedVisit("Converti", 3_000, "converted");
-      await seedVisit("A revoir", 4_000, "follow_up");
-
-      const body = await feed("?reason=none");
-      expect(body.visits.map((v) => v.prospectName)).toEqual(["Raison non saisie"]);
-    });
-
     it("applies reason alongside since, from and to", async () => {
       await seedVisit("Avant since", 500, "not_interested", "no_need");
       await seedVisit("Avant la fenetre", 1_000, "not_interested", "no_need");
@@ -1283,11 +1273,14 @@ describe("GET /api/admin/visits", () => {
       expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
     });
 
-    it.each(["reason=bogus", "reason=", "reason=NONE"])("rejects %s", async (query) => {
-      const response = await call(`/api/admin/visits?${query}`);
-      expect(response.status).toBe(400);
-      expect(((await response.json()) as { error: string }).error).toBe("validation");
-    });
+    it.each(["reason=bogus", "reason=", "reason=NONE", "reason=none"])(
+      "rejects %s",
+      async (query) => {
+        const response = await call(`/api/admin/visits?${query}`);
+        expect(response.status).toBe(400);
+        expect(((await response.json()) as { error: string }).error).toBe("validation");
+      },
+    );
   });
 });
 

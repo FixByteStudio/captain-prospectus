@@ -143,4 +143,4 @@ Status: done
 
 **Verification:** `pnpm typecheck` green; `pnpm lint` green; `pnpm test` 83 files / 2067 tests green; `pnpm build` green, precache 25 entries (932.45 KiB) / 1,000 KiB.
 
-**Residual risks:** none on labels: at the owner's request (2026-09-30) the null bucket's label "Sans raison" was renamed "Raison non saisie", so it no longer reads like the stored reason "Refus sans raison". The wire value stays `none`. The KPI strip stays period-only by design.
+**Residual risks:** none. Owner decision (2026-09-30): there is no pre-#247 data, so the null bucket (`reason=none`, first labelled "Sans raison", then "Raison non saisie") was dropped. The filter offers only the 7 reasons, `reason=none` is now a 400, and Refus sans raison (`no_reason_given`) is the one way to say no reason. This overrides the ticket's "plus 'Sans raison'" and the I/O matrix's Sans raison row.

@@ -25,7 +25,6 @@ import {
   DASHBOARD_PERIODS,
   EXPORT_DEFAULT_WINDOW_MS,
   IMPORT_ROWS_PER_REQUEST,
-  NO_REFUSAL_REASON,
   ORPHAN_CANDIDATES,
   ORPHAN_REASONS,
   ORPHANS_PAGE_SIZE,
@@ -560,11 +559,10 @@ const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
 );
 
 /**
- * `reason=` — one refusal reason, or `none` for the refusals that have none.
- * Shared by the feed and its export so both list the same visits; optional,
+ * `reason=` — one refusal reason. Shared by the feed and its export so both list the same visits; optional,
  * and an empty or unknown value is a 400 like any bad param.
  */
-export const visitsReasonQuerySchema = z.enum([...REFUSAL_REASONS, NO_REFUSAL_REASON]);
+export const visitsReasonQuerySchema = z.enum(REFUSAL_REASONS);
 export type VisitsReasonFilter = z.infer<typeof visitsReasonQuerySchema>;
 
 /**

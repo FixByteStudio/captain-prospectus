@@ -316,7 +316,7 @@ describe("GET /api/admin/visits/export.csv", () => {
   });
 
   /** One reason= rule for both routes (GH #249): the export lists what the feed lists. */
-  it.each(["no_need", "none"])(
+  it.each(["no_need", "fee_distrust"])(
     "lists the same visits as the feed for reason=%s and the same range",
     async (reason) => {
       const now = Date.now();
@@ -327,11 +327,7 @@ describe("GET /api/admin/visits/export.csv", () => {
           { outcome: "not_interested", refusalReason: "no_need", receivedAt: now - 120_000 },
         ],
         ["Mefiance", { outcome: "not_interested", refusalReason: "fee_distrust" }],
-        ["Raison non saisie", { outcome: "not_interested" }],
-        [
-          "Raison non saisie hors fenetre",
-          { outcome: "not_interested", receivedAt: now - 120_000 },
-        ],
+        ["Refus ancien", { outcome: "not_interested" }],
         ["Converti", { outcome: "converted" }],
         ["A revoir", { outcome: "follow_up" }],
       ];
@@ -346,13 +342,13 @@ describe("GET /api/admin/visits/export.csv", () => {
       const csv = records(await (await call(`/api/admin/visits/export.csv?${query}`)).text());
       const exported = csv.slice(1, -1).map((row) => row.split(",")[3]);
 
-      const expected = reason === "none" ? ["Raison non saisie"] : ["Pas besoin"];
+      const expected = reason === "fee_distrust" ? ["Mefiance"] : ["Pas besoin"];
       expect(feed.visits.map((v) => v.prospectName)).toEqual(expected);
       expect(exported).toEqual(expected);
     },
   );
 
-  it.each(["reason=bogus", "reason="])("refuses %s with 400", async (query) => {
+  it.each(["reason=bogus", "reason=", "reason=none"])("refuses %s with 400", async (query) => {
     const response = await call(`/api/admin/visits/export.csv?${query}`);
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "validation" });

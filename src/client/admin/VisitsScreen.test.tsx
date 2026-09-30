@@ -620,15 +620,15 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
     ).toBe("true");
   });
 
-  it("reads Raison non saisie back from ?reason=none and asks the feed for it", async () => {
+  it("says no visit matches the reason, not that none arrived, when the filter is empty", async () => {
     const asked = stubFetch({});
-    renderScreen("/admin/visites?reason=none");
+    renderScreen("/admin/visites?reason=wait_and_see");
     await screen.findByText(copy.visits.reasonFilter.empty);
     expect(screen.queryByText(copy.visits.empty)).toBeNull();
 
-    expect(reasonSelect().textContent).toBe(copy.visits.reasonFilter.none);
+    expect(reasonSelect().textContent).toBe(REFUSAL_REASON_LABELS.wait_and_see);
     const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
-    expect(param(feedCall, "reason")).toBe("none");
+    expect(param(feedCall, "reason")).toBe("wait_and_see");
   });
 
   it("treats a bad ?reason= as Toutes les raisons, and the feed asks without one", async () => {

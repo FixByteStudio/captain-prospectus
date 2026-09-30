@@ -287,9 +287,7 @@ tab is visible (ADR-0010).
   duplicate. The name shown is the one the visit was made against.
 - `serverTime` is the server's clock as it answered, so a client never has to
   derive a cursor from its own.
-- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value), or
-  `none` for the `not_interested` visits that carry no reason — not every
-  visit without one, since a `converted` visit has none by construction. The
+- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value). The
   export takes the same parameter, through the same schema and SQL, so both
   list the same visits. Absent, nothing changes; empty or unknown is **400**.
 

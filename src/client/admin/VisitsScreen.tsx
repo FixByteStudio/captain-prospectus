@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import {
   DASHBOARD_DEFAULT_PERIOD,
   EXPORT_ROWS,
-  NO_REFUSAL_REASON,
   REFUSAL_REASONS,
   type DashboardPeriod,
 } from "../../shared/constants";
@@ -43,11 +42,11 @@ function parseReason(raw: string | null): VisitsReasonFilter | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-/** The select's options, in `REFUSAL_REASONS`' display order, then Raison non saisie. */
-const REASON_OPTIONS = [
-  ...REFUSAL_REASONS.map((value) => ({ value, label: REFUSAL_REASON_LABELS[value] })),
-  { value: NO_REFUSAL_REASON, label: copy.visits.reasonFilter.none },
-];
+/** The select's options, in `REFUSAL_REASONS`' display order. */
+const REASON_OPTIONS = REFUSAL_REASONS.map((value) => ({
+  value,
+  label: REFUSAL_REASON_LABELS[value],
+}));
 
 /**
  * Visites — ADR-0010, docs/design.md "The live feed", rebuilt for GH #178.

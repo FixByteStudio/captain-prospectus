@@ -980,8 +980,8 @@ period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
   export (#179) follows.
 - **Raison du refus narrows the ledger and its export alike** (GH #249) — the
   shared `prospects/Filter` select beside the period, held in the URL
-  (`?reason=`, a refusal reason or `none` for Raison non saisie; any other value
-  reads as Toutes les raisons). A change reseeds the feed exactly as a period
+  (`?reason=`, one of the 7 refusal reasons; any other value reads as Toutes
+  les raisons). A change reseeds the feed exactly as a period
   change does, and every poll and the export carry the same `reason=`. A
   refused visit shows its reason's label, muted, right after Pas intéressé;
   a refusal without one shows nothing extra. The strip stays on the whole

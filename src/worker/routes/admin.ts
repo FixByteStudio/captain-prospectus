@@ -28,7 +28,6 @@ import {
   DUPLICATES_PAGE_SIZE,
   DUPLICATES_SCAN_LIMIT,
   EXPORT_ROWS,
-  NO_REFUSAL_REASON,
   ORPHAN_CANDIDATES,
   OPEN_STATUSES,
   ORPHANS_PAGE_SIZE,
@@ -1413,15 +1412,10 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
 
 /**
  * `reason=` as SQL, written once so the feed and its export can never list
- * different visits. `none` is a refusal without a reason, not every visit
- * without one: a `converted` visit has none by construction (docs/api.md).
+ * different visits.
  */
 function refusalReasonFilter(reason: VisitsReasonFilter | undefined): SQL | undefined {
-  if (reason === undefined) return undefined;
-  if (reason === NO_REFUSAL_REASON) {
-    return and(eq(visits.outcome, "not_interested"), isNull(visits.refusalReason));
-  }
-  return eq(visits.refusalReason, reason);
+  return reason === undefined ? undefined : eq(visits.refusalReason, reason);
 }
 
 /**
