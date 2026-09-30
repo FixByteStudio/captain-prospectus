@@ -34,6 +34,7 @@ import {
   PROSPECTS_MAX_OFFSET,
   PROSPECTS_PAGE_SIZE,
   OUTCOMES,
+  REFUSAL_REASONS,
   POLYGON_MAX_VERTICES,
   POLYGON_MIN_VERTICES,
   PROSPECT_TYPES,
@@ -71,6 +72,7 @@ const shortTextRequired = shortText.check(z.minLength(1));
 
 export const statusSchema = z.enum(STATUSES);
 export const outcomeSchema = z.enum(OUTCOMES);
+export const refusalReasonSchema = z.enum(REFUSAL_REASONS);
 export const prospectTypeSchema = z.enum(PROSPECT_TYPES);
 export const sourceSchema = z.enum(SOURCES);
 export const roleSchema = z.enum(ROLES);
@@ -438,6 +440,8 @@ export const visitSchema = z
     flyerGiven: z.boolean(),
     outcome: outcomeSchema,
     followUpAt: z.nullish(epochMsSchema),
+    /** Kept only when outcome is not_interested (docs/domains/prospecting.md). */
+    refusalReason: z.nullish(refusalReasonSchema),
     notes: z.nullish(longText),
     scriptId: z.nullish(z.int().check(z.positive())),
     answers: z._default(answersSchema, {}),

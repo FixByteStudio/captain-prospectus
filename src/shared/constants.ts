@@ -58,6 +58,23 @@ export type Role = (typeof ROLES)[number];
 export const ORPHAN_REASONS = ["unknown_prospect", "not_assigned"] as const;
 export type OrphanReason = (typeof ORPHAN_REASONS)[number];
 
+/**
+ * docs/domains/prospecting.md — why a `not_interested` visit was refused.
+ *
+ * Order is display order. Values are stored for ever: never rename or reuse
+ * one with another meaning.
+ */
+export const REFUSAL_REASONS = [
+  "too_many_devices",
+  "wait_and_see",
+  "fee_distrust",
+  "no_need",
+  "out_of_target",
+  "no_reason_given",
+  "other",
+] as const;
+export type RefusalReason = (typeof REFUSAL_REASONS)[number];
+
 export const QUESTION_TYPES = ["yes_no", "single", "multi", "text", "number", "rating"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 

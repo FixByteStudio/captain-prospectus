@@ -1710,6 +1710,7 @@ adminRoutes.post(
           flyerGiven: held.flyerGiven,
           outcome: held.outcome,
           followUpAt: held.followUpAt,
+          refusalReason: held.refusalReason,
           notes: held.notes,
           scriptId,
           answers: held.answers,

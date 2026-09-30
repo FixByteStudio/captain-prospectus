@@ -47,6 +47,32 @@ stateDiagram-v2
 - `next_visit_at` = `follow_up_at` of the latest visit, if any.
 - Admin can override status manually (reopen, close). The admin's status holds against any visit made at or before the change, however late that visit syncs; only a visit made after it moves the status again. The visit still updates `last_visit_at` ([ADR-0025](../adr/0025-admin-status-outlives-older-visits.md)).
 
+## Refusal reasons
+
+A `not_interested` visit may carry a `refusalReason`, from a fixed list of 7 values (`REFUSAL_REASONS`). It is **stored only on `not_interested`**; sent with another outcome, or missing (an older build), it is stored null — either way the visit is accepted and the status is still `OUTCOME_TO_STATUS[outcome]`, so a missing or misplaced reason never refuses the visit (INVARIANT 5). A value outside the list is refused with a 400, as for any invalid enum value. `visits_orphaned` mirrors the column so a repair carries it through unchanged.
+
+The rule: a refusal reason is something the pitch can't answer at the door. If the pitch has a ready answer, the agent gives it, and it is not a reason.
+
+| Value | What it tells the admin |
+|---|---|
+| `too_many_devices` | effort: one more device on the counter |
+| `wait_and_see` | trust: pre-launch, no restaurants yet |
+| `fee_distrust` | "free" isn't believed (HubRise, the cost-sharing fallback) |
+| `no_need` | happy as they are |
+| `out_of_target` | the base is wrong: closed, or no longer a food business. Flags the prospect for an admin to fix |
+| `no_reason_given` | nothing to learn |
+| `other` | the rest; the phone requires a note that says what (not enforced server-side) |
+
+Not refusals — sent as a different outcome instead:
+
+| Heard at the door | Where it goes | Why |
+|---|---|---|
+| "Pas le temps, là" | `follow_up` | a timing problem, not a no |
+| "Faut voir avec le patron" | `follow_up` | the decision-maker wasn't asked |
+| "Contre les commissions" | not a reason | 0 % commission on dishes is the pitch |
+| "Déjà sur Uber Eats / Deliveroo" | not a reason | there's no exclusivity; the real no behind it is effort or trust |
+| "On ne livre pas" | not a reason | delivery isn't live; click and collect and QR at the table are for these places |
+
 ## Open vs closed
 Open (appear on an agent's list): `new`, `assigned`, `follow_up`. Closed: `interested`, `converted`, `rejected`. An Intéressé lead waits off every round, visible to an admin who filters for it, until a newer visit or an admin moves it ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)).
 

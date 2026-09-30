@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge : Pas intéressé</title>
+<style>
+:root{--bg:#f6f1e7;--paper:#fffdf8;--ink:#2a2420;--muted:#7a6f64;--rule:#e2d8c8;--seal:#9c2a22;--seal-dk:#6e1c16;--ok:#2f6b3e;--kill:#8a8078}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1815;--paper:#25211d;--ink:#ece4d8;--muted:#a79c8f;--rule:#3a342e;--seal:#c0463b;--seal-dk:#8a2a22;--ok:#7fbf8c;--kill:#8f867c}}
+:root[data-theme="dark"]{--bg:#1b1815;--paper:#25211d;--ink:#ece4d8;--muted:#a79c8f;--rule:#3a342e;--seal:#c0463b;--seal-dk:#8a2a22;--ok:#7fbf8c;--kill:#8f867c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Georgia,"Times New Roman",serif}
+main{max-width:760px;margin:0 auto;padding:32px 16px 64px}
+.sheet{background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:32px 28px;position:relative}
+h1{font-size:1.7rem;margin:0 0 4px;padding-right:150px}
+.sub{color:var(--muted);margin:0 0 24px;padding-right:150px}
+h2{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule);padding-bottom:6px;margin:32px 0 12px}
+.seal{position:absolute;top:18px;right:18px;width:130px;height:130px;transform:rotate(-12deg)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+td{padding:7px 4px;border-bottom:1px dashed var(--rule);vertical-align:top}
+td code{font-family:ui-monospace,Menlo,monospace;font-size:.82rem;color:var(--muted)}
+ul{padding-left:20px;margin:0}
+li{margin:6px 0}
+.kill li{color:var(--kill)}
+.kill b{text-decoration:line-through;color:var(--ink)}
+.rule{border-left:3px solid var(--seal);padding:8px 14px;margin:0;font-style:italic}
+.cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.p{border:1px solid var(--rule);border-radius:6px;padding:10px 12px;font-size:.9rem}
+.p b{display:block;font-size:1rem}
+.p i{color:var(--muted)}
+@media (max-width:560px){.seal{position:static;display:block;margin:0 auto 12px}h1,.sub{padding-right:0}.sheet{padding:22px 16px}}
+</style>
+</head>
+<body>
+<main><div class="sheet">
+<svg class="seal" viewBox="0 0 130 130" role="img" aria-label="Sceau : HARDENED">
+  <path fill="var(--seal)" d="M65 4c8 0 10 7 17 9s13-3 18 3 1 12 5 18 11 6 12 14-6 11-6 17 7 11 3 18-11 5-15 10-2 13-9 16-12-2-18 0-10 9-17 9-10-7-17-9-13 3-18-3-1-12-5-18-11-6-12-14 6-11 6-17-7-11-3-18 11-5 15-10 2-13 9-16 12 2 18 0 10-9 17-9z"/>
+  <circle cx="65" cy="65" r="44" fill="none" stroke="var(--seal-dk)" stroke-width="2"/>
+  <circle cx="65" cy="65" r="38" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="65" y="62" text-anchor="middle" fill="#fff" font-family="Georgia,serif" font-size="14" font-weight="bold" letter-spacing="1.5">HARDENED</text>
+  <text x="65" y="80" text-anchor="middle" fill="#fff" fill-opacity=".85" font-family="Georgia,serif" font-size="9" letter-spacing="1">30 · IX · 2026</text>
+</svg>
+
+<h1>Pas intéressé : une raison, pas le script</h1>
+<p class="sub">Forge · Captain Prospectus · 30 septembre 2026</p>
+
+<h2>Issue</h2>
+<p>A prospect who refuses won't answer a whole questionnaire. From now on, a <b>Pas intéressé</b> visit skips the script's questions, and the agent records one refusal reason with a single tap. Because refusals no longer answer the script, the reason is the only record of <i>why</i> Brussels says no.</p>
+
+<h2>La règle</h2>
+<p class="rule">A refusal reason is something the pitch can't answer on the spot. If the pitch has an answer, the agent should have given it, and it's not a reason.</p>
+
+<h2>Raisons retenues</h2>
+<table>
+<tr><td>Trop d'applis / de tablettes</td><td><code>too_many_devices</code></td></tr>
+<tr><td>Attend de voir (rien n'est lancé)</td><td><code>wait_and_see</code></td></tr>
+<tr><td>Méfiance sur les frais</td><td><code>fee_distrust</code></td></tr>
+<tr><td>Pas besoin, ça marche comme ça</td><td><code>no_need</code></td></tr>
+<tr><td>Hors cible / fermé</td><td><code>out_of_target</code></td></tr>
+<tr><td>Refus sans raison</td><td><code>no_reason_given</code></td></tr>
+<tr><td>Autre (+ note)</td><td><code>other</code></td></tr>
+</table>
+<p style="color:var(--muted);font-size:.9rem">"Pas le temps" and "Voir avec le patron" aren't refusals. They go to <b>À revoir</b>.</p>
+
+<h2>Écarté</h2>
+<ul class="kill">
+<li><b>Full script for refusals</b>: nobody who refuses answers six questions.</li>
+<li><b>Free text only</b>: can't be counted, and agents end up typing "pas intéressé".</li>
+<li><b>An admin-edited list</b>: it's a one-question script, so the script machinery comes back.</li>
+<li><b>Contre les commissions</b>: 0 % commission on dishes <i>is</i> the pitch.</li>
+<li><b>Déjà sur les plateformes</b>: a situation, not a reason. There's no exclusivity.</li>
+<li><b>Ne livre pas</b>: delivery isn't live yet. Click and collect and QR at the table are for these places.</li>
+</ul>
+
+<h2>Points qui tiennent encore</h2>
+<ul>
+<li>Captain Food takes Brussels restaurants, which the owner confirmed. The research still says Tours only.</li>
+<li>Is the reason required? The owner leans towards one required tap.</li>
+<li>Should <code>out_of_target</code> flag the prospect for the admin?</li>
+<li>Additive sync field, and <code>enforceRequired</code> changes on both client and server. Check whether this needs an ADR under ADR-0024.</li>
+</ul>
+
+<h2>Autour de la table</h2>
+<div class="cast">
+<div class="p">📋 <b>John</b><i>PM, detective</i><br>Set the rule: if the pitch answers it, it's not a reason. He also won the "six-month follow-up" argument.</div>
+<div class="p">🎨 <b>Sally</b><i>UX, filmmaker</i><br>Made the list steer the agent: fake no's go to À revoir.</div>
+<div class="p">🏗️ <b>Winston</b><i>Architect</i><br>Pointed out that dine-in-only restaurants are a fit for QR ordering, and raised the Tours question.</div>
+<div class="p">💻 <b>Amelia</b><i>Dev</i><br>Stable English values, and every value is a column forever.</div>
+<div class="p">🚚 <b>Karim</b><i>Field agent, walk-on</i><br>"J'ai déjà trois tablettes sur le comptoir."</div>
+<div class="p">📊 <b>Hélène</b><i>Sales director, walk-on</i><br>Protected the "why no" data and found "Méfiance sur les frais".</div>
+</div>
+</div></main>
+</body>
+</html>

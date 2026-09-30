@@ -12,6 +12,7 @@ import {
   ORPHAN_REASONS,
   OUTCOMES,
   PROSPECT_TYPES,
+  REFUSAL_REASONS,
   SOURCES,
   STATUSES,
 } from "../../shared/constants";
@@ -59,6 +60,13 @@ export const prospects = sqliteTable(
      * query that lists live prospects must filter on this being null.
      */
     mergedInto: text("merged_into").references((): AnySQLiteColumn => prospects.id),
+
+    /**
+     * Reserved for the Hors cible review (epic #246): when a visit's refusal
+     * reason flags this prospect as out_of_target and an admin has reviewed it.
+     * Nothing writes it yet.
+     */
+    outOfTargetReviewedAt: integer("out_of_target_reviewed_at"),
 
     createdBy: text("created_by").notNull(),
     createdAt: integer("created_at").notNull(),
@@ -109,6 +117,8 @@ export const visits = sqliteTable(
     flyerGiven: integer("flyer_given", { mode: "boolean" }).notNull().default(false),
     outcome: text("outcome", { enum: OUTCOMES }).notNull(),
     followUpAt: integer("follow_up_at"),
+    /** Kept only when outcome is not_interested. See REFUSAL_REASONS. */
+    refusalReason: text("refusal_reason", { enum: REFUSAL_REASONS }),
     notes: text("notes"),
 
     /** The exact script version answered, so answers stay interpretable. */
@@ -167,6 +177,8 @@ export const visitsOrphaned = sqliteTable(
     flyerGiven: integer("flyer_given", { mode: "boolean" }).notNull().default(false),
     outcome: text("outcome", { enum: OUTCOMES }).notNull(),
     followUpAt: integer("follow_up_at"),
+    /** Mirrors visits.refusal_reason, so a repair is a straight copy. */
+    refusalReason: text("refusal_reason", { enum: REFUSAL_REASONS }),
     notes: text("notes"),
 
     /**

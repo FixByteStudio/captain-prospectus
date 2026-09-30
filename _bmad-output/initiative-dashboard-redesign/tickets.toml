@@ -33,3 +33,10 @@ slug = "epic-admin-round-view"
 title = "An admin sees any agent's round"
 covers = ["CAP-4", "CAP-11"]
 after = [{ epic = 4, needs = "the map, pin and stop-row components from Carte and Tournée" }]
+
+[[epic]]
+id = 6
+slug = "epic-refusal-reasons"
+title = "A refusal carries its reason"
+covers = []
+after = [{ epic = 3, needs = "the rebuilt Visites ledger (3.4) and Prospects filter bar (3.5)" }, { epic = 4, needs = "the visit form's step 2 with the when step (4.14)" }]
