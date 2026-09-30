@@ -1530,8 +1530,8 @@ because DESIGN.md's redesign (› Step indicator) asks for one, echoed in
 EXPERIENCE.md › Step indicator: an action's own name is not enough to say
 *which* step an agent is on. A `size-1.5` gold dot leads a `text-overline` line
 reading « Étape 1 sur 2 · Résultat » or « Étape 2 sur 2 · Questions » (« Étape 2
-sur 2 · Quand ? » for Personne sur place, whose step 2 is the when step alone,
-GH #239), on both steps, and it is absent only when the visit has one step to begin with — a
+sur 2 · Quand ? » for À relancer and Personne sur place, whose step 2 is the
+when step alone, GH #239, GH #244), on both steps, and it is absent only when the visit has one step to begin with — a
 script with nothing this build can render must never make the one-step path
 read "1 sur 2". An action still keeps its own name through the flow, so «
 Enregistrer la visite » still appears exactly once, on the screen that
@@ -1566,13 +1566,15 @@ with Notes inline, « Enregistrer la visite ». A missing questionnaire must
 never stand between an agent and a saved visit, and it must not cost a tap
 either.
 
-**`no_contact` still gets step 2, but the script's questions are gone.** Nobody
-was there to ask, so `field-operations.md` waives them entirely rather than
-asking and waiving each one — the questions themselves are not rendered, and no
-answer rides along unseen. What replaces them is the when step (GH #239,
-`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`), the same one
-À relancer uses below its own questions: "Aujourd'hui" or "Choisir une date",
-opened on "Aujourd'hui" since Personne sur place can only lack a choice by bug.
+**`no_contact` and `follow_up` still get step 2, but the script's questions
+are gone.** Nobody able to answer may have been at the door — closed, or the
+boss busy or away — so `field-operations.md` never asks them rather than asking
+and waiving each one: the questions are not rendered, and no answer rides along
+unseen (GH #244). An agent made to answer anyway would invent the answers. What
+replaces them is the when step (GH #239,
+`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`): "Aujourd'hui"
+or "Choisir une date", opened on "Aujourd'hui" for Personne sur place, which can
+only lack a choice by bug, and on nothing for À relancer.
 The notes still live on this screen, and "ferme le lundi" written off a sign in
 the window is the most valuable thing an agent can record about a door nobody
 answered.
@@ -1626,8 +1628,8 @@ never an `outcome-*` colour and never the status it leads to (INVARIANT 3). A
 row that does not apply is absent rather than "Non": no flyer row when none was
 left, no Notes row when none were typed, and no Questions row on a visit with no
 script. With a script, the row counts only what was answered — a cleared text
-or an unticked multi-choice is not an answer — so Personne sur place with
-nothing answered reads « 0 réponse ».
+or an unticked multi-choice is not an answer — so À relancer and Personne sur place,
+which send no answers, read « 0 réponse ».
 
 **« Modifier » loses nothing.** It closes the summary and puts focus back on «
 Enregistrer la visite ». The form was never unmounted, so every answer, the

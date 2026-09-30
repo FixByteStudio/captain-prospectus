@@ -12,8 +12,8 @@ export function StepIndicator({
   whenOnly = false,
 }: {
   step: 1 | 2;
-  /** Personne sur place: step 2 holds only the when step, no questions
-   * (when-step.md), so it is named for that. */
+  /** À relancer and Personne sur place: step 2 holds only the when step, no
+   * questions (when-step.md), so it is named for that. */
   whenOnly?: boolean;
 }) {
   // Step 1 is always Résultat; step 2 is Questions, or the when step alone.

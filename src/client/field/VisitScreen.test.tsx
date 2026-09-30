@@ -147,8 +147,10 @@ async function toStep2(user: ReturnType<typeof userEvent.setup>, outcome: Outcom
   await renderVisit({ expectContinue: true });
   await user.click(outcomeRadio(outcome));
   await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-  // Personne sur place's step 2 is the when step alone, named for it.
-  const stepName = outcome === "no_contact" ? copy.visit.when : copy.visit.questions;
+  // À relancer's and Personne sur place's step 2 is the when step alone,
+  // named for it (SPEC CAP-6).
+  const stepName =
+    outcome === "no_contact" || outcome === "follow_up" ? copy.visit.when : copy.visit.questions;
   await screen.findByText(copy.visit.step(2, 2, stepName));
 }
 
@@ -366,15 +368,18 @@ describe("VisitScreen — step 1", () => {
     expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).type).toBe("date");
   });
 
-  it("step 2, À relancer: questions answered but no when choice blocks the save and focuses Aujourd'hui", async () => {
+  it("step 2, À relancer: no script questions, only the when step and Notes; no when choice blocks and focuses Aujourd'hui", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(outcomeRadio("follow_up"));
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
-    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    // Named for the when step, like Personne sur place (SPEC CAP-6).
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+    expect(screen.queryByRole("radio", { name: copy.visit.yes })).toBeNull();
+    expect(screen.getByLabelText(copy.visit.notes)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(await screen.findByText(copy.visit.whenRequired)).toBeTruthy();
@@ -382,18 +387,22 @@ describe("VisitScreen — step 1", () => {
     expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 
-  it("step 2, À relancer: an unanswered question above the radios wins the focus over the when choice", async () => {
+  it("step 2, À relancer: a required question never blocks the save, and no answers are sent", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(outcomeRadio("follow_up"));
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
-    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    await confirmSave(user);
 
-    expect(await screen.findByText(copy.visit.answerRequired)).toBeTruthy();
-    expect(document.activeElement).toBe(document.getElementById(questionDomId("delivery")));
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    expect(screen.queryByText(copy.visit.answerRequired)).toBeNull();
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.answers).toEqual({});
+    expect(visit?.followUpAt).toBe(brusselsMidnightDaysFromNow(visit?.visitedAt ?? 0, 0));
   });
 
   it("shows the when step only for À relancer, opened on nothing, and the date only with Choisir une date", async () => {
@@ -525,7 +534,7 @@ describe("VisitScreen — step 1", () => {
     await user.click(outcomeRadio("follow_up"));
 
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
+    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.when))).toBeTruthy();
 
     await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
     await user.type(screen.getByLabelText(copy.visit.followUpAt), "2026-10-01");
@@ -543,7 +552,7 @@ describe("VisitScreen — step 1", () => {
     ).toBe(true);
 
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
+    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.when))).toBeTruthy();
     expect(screen.getByRole("radio", { name: copy.visit.whenDate })).toHaveProperty(
       "checked",
       true,
@@ -1009,16 +1018,17 @@ describe("VisitScreen — save confirmation", () => {
     expect(view.queryByText(copy.visit.notes)).toBeNull();
   });
 
-  it("counts only answered questions: personne sur place with none reads 0 réponse", async () => {
+  it("counts no answers for a when-step result: typed under Intéressé, then À relancer, reads 0 réponse", async () => {
     const user = userEvent.setup();
-    // An answer typed under À relancer is not sent with Personne sur place,
-    // so the sheet must not count it either.
-    await toStep2(user, "follow_up");
+    // An answer typed under Intéressé is not sent with À relancer, so the
+    // sheet must not count it either.
+    await toStep2(user, "interested");
     await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
     await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
-    await user.click(outcomeRadio("no_contact"));
+    await user.click(outcomeRadio("follow_up"));
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
     await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenToday }));
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(within(await confirmation()).getByText(copy.visit.confirm.answers(0))).toBeTruthy();

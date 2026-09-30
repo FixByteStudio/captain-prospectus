@@ -27,6 +27,8 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Flyer** | Flyer | The leaflet handed over during a visit | prospectus, brochure |
 | **Dashboard** | Tableau de bord | The admin's landing screen at `/admin`: how canvassing is going over 7, 30 or 90 days | home, overview |
 | **Open prospect** | Prospect ouvert | A live prospect (`merged_into IS NULL`) whose status is `new`, `assigned` or `follow_up` | active lead |
+| **Personne sur place** (outcome `no_contact`) | Personne sur place | Closed, or nobody at all to speak to. The agent comes back; the script is not asked | absent |
+| **À relancer** (outcome `follow_up`) | À relancer | Someone was there (staff or the boss), but the boss is busy, away, or not interested right now while keeping the door open for later. The agent comes back; the script is not asked | callback |
 | **Intéressé** (status) | Intéressé | A closed status: open to the discussion, not yet signed up to the waitlist. It leaves the round until an admin reopens it ([ADR-0027](adr/0027-interested-is-its-own-closed-status.md)) | converted, follow-up |
 | **Converti** (status) | Converti | Already signed up to the waitlist. Only this counts in the conversion rate | interested |
 | **Waitlist** | Liste d'attente | The prospects signed up to hear about the launch. Joining it is a conversion | mailing list, newsletter |

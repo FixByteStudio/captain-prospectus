@@ -220,9 +220,9 @@ export function VisitScreen() {
       return;
     }
 
-    // On À relancer's step 2 the questions render above the when radios, so
-    // an invalid question is the first problem on screen. Only step 2 saves,
-    // so no step change is needed to reach one.
+    // Only a result with no when step asks the script (Intéressé, Pas
+    // intéressé, Converti), and only its step 2 saves, so no step change is
+    // needed to reach an invalid question.
     const firstKey = questions.find(
       (question) => form.getFieldState(`answers.${question.key}`).invalid,
     )?.key;
@@ -475,11 +475,11 @@ export function VisitScreen() {
           name,
           outcome: pending.outcome,
           flyerGiven: pending.flyerGiven,
-          // Personne sur place sends no answers (`toVisit`), so the sheet
-          // counts none — it shows what is sent.
+          // À relancer and Personne sur place send no answers (`toVisit`), so
+          // the sheet counts none — it shows what is sent.
           answerCount: !hasQuestions
             ? null
-            : pending.outcome === "no_contact"
+            : hasWhenStep(pending.outcome)
               ? 0
               : answeredCount(
                   pending.answers,
@@ -541,10 +541,7 @@ export function VisitScreen() {
             )}
             {/* Hidden with no questions: the one-step path must not read "1 sur 2". */}
             {hasQuestions && (
-              <StepIndicator
-                step={step === "outcome" ? 1 : 2}
-                whenOnly={outcome === "no_contact"}
-              />
+              <StepIndicator step={step === "outcome" ? 1 : 2} whenOnly={showsWhenStep} />
             )}
             <h2 className="mt-1 text-xl font-semibold tracking-[-0.005em]">{name ?? ""}</h2>
             {type && <p className="text-muted-foreground text-sm">{TYPE_LABELS[type]}</p>}
@@ -622,10 +619,10 @@ export function VisitScreen() {
 
           {step === "questions" && (
             <>
-              {/* Personne sur place replaces the script's questions with the
-                when radios (when-step.md) rather than asking them at all —
-                nobody was there to answer. */}
-              {outcome !== "no_contact" && (
+              {/* À relancer and Personne sur place replace the script's
+                questions with the when radios (when-step.md): nobody able to
+                answer may have been at the door (SPEC CAP-6). */}
+              {!showsWhenStep && (
                 <div className="border-border mt-6 border-t pt-4">
                   <h3 className="font-medium">{copy.visit.questions}</h3>
                   <div className="mt-4">

@@ -23,7 +23,7 @@
 Captured fields: check-in position (one reading, if permitted), `flyer_given`, script answers, `outcome`, optional `follow_up_at`, optional notes.
 
 - The visit form shows the **previous visits' notes** for that prospect when online (`GET /api/agent/prospects/:id/visits`); offline it shows what is cached.
-- Required questions of the active script must be answered unless the outcome is `no_contact`; when the outcome is `no_contact` the script's questions are not asked at all, and no answer is sent (they are replaced by the when step below).
+- The script is asked only where someone could answer it. For `interested`, `not_interested` and `converted`, its required questions must be answered. For `follow_up` and `no_contact` the boss may be busy or away, so the script's questions are not asked at all and no answer is sent; the when step below replaces them (`_bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md`, CAP-6).
 - `follow_up_at` is required when the outcome is `follow_up` or `no_contact` — both share one when step (Aujourd'hui / Choisir une date): "Aujourd'hui" sends today's Brussels midnight, "Choisir une date" requires a date strictly after today (`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`).
 
 ### The script is a second step
@@ -41,11 +41,12 @@ outcome first is also what says whether the questions are obligatory at all.
   script whose questions this build cannot render, and the form is one screen
   with the notes inline. A missing questionnaire never stands between an agent
   and a saved visit.
-- **`no_contact` still gets step 2, but the script's questions are replaced by
-  the when step.** Nobody was there to ask, so the questions are not rendered
-  at all rather than asked-and-waived; the notes still live there, and what an
-  agent reads off a sign in the window is the most useful thing they can
-  record about a door nobody answered.
+- **`no_contact` and `follow_up` still get step 2, but the script's questions
+  are replaced by the when step.** Nobody able to answer may have been at the
+  door (closed, or the boss busy or away), so the questions are not rendered at
+  all rather than asked-and-waived (see Rules); the notes still live there, and
+  what an agent reads off a sign in the window is the most useful thing they
+  can record about a door nobody answered.
 - **A question this build cannot ask is skipped, never fatal.** A script is data,
   not contract shape: `clientVersion` governs the sync payload, not the
   questionnaire inside it, so an admin on a newer build can save a question type

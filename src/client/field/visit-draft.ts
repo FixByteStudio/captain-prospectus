@@ -179,13 +179,14 @@ export function toVisit(
     }
   }
 
-  // field-operations.md: required questions must be answered. `no_contact`
-  // skips this entirely, not just the requiredness: its questions are hidden
-  // behind the when radios (when-step.md), so a stale invalid answer typed
-  // under another result must not block a save the agent cannot see why is
-  // stuck — Enregistrer would do nothing, with no error in view.
+  // field-operations.md: the script is asked only where someone could answer
+  // it. À relancer and Personne sur place skip it entirely, not just the
+  // requiredness: the boss may be busy or away, so their step 2 is the when
+  // step (when-step.md), and a stale invalid answer typed under another
+  // result must not block a save with no error in view.
   const script = context.script ?? null;
-  if (script && draft.outcome !== "no_contact") {
+  const asksScript = draft.outcome !== null && !hasWhenStep(draft.outcome);
+  if (script && asksScript) {
     const answers = answersSchemaFor(script.questions, { enforceRequired: true }).safeParse(
       draft.answers,
     );
@@ -217,10 +218,10 @@ export function toVisit(
     notes: draft.notes.trim() || null,
     // The version the agent actually answered, not whichever is active now.
     scriptId: script?.id ?? null,
-    // Personne sur place hides the script's questions behind the when radios
-    // (when-step.md): an answer left in the draft from another result must
-    // not ride along unseen (Design Notes).
-    answers: script && draft.outcome !== "no_contact" ? draft.answers : {},
+    // A when-step result never shows the script's questions (when-step.md):
+    // an answer left in the draft from another result must not ride along
+    // unseen, nor be stored as if the prospect had given it.
+    answers: script && asksScript ? draft.answers : {},
   };
 
   const parsed = visitSchema.safeParse(candidate);

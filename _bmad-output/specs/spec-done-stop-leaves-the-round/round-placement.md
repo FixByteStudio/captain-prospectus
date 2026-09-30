@@ -23,7 +23,8 @@ Each must state the table above and stop contradicting it:
 - `spec-gh-118` Design Notes — a note pointing to this decision.
 - `docs/domains/prospecting.md` — mapping table, lifecycle diagram, "Open vs closed" (ADR-0027 follow-up).
 - `docs/data-model.md` — `status` enum.
-- `docs/glossary.md` — `interested` status, Waitlist, Channel.
+- `docs/glossary.md` — `interested` status, Waitlist, Channel; À relancer and Personne sur place by who was at the door (CAP-4).
+- `docs/domains/field-operations.md` › Visit rules — script questions only on results with no when step (CAP-6).
 
 ## Code that locks in today's behaviour (retro action item 3)
 
