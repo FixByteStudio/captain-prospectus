@@ -23,7 +23,7 @@
 Captured fields: check-in position (one reading, if permitted), `flyer_given`, script answers, `outcome`, optional `follow_up_at`, optional notes.
 
 - The visit form shows the **previous visits' notes** for that prospect when online (`GET /api/agent/prospects/:id/visits`); offline it shows what is cached.
-- The script is asked only where someone could answer it. For `interested`, `not_interested` and `converted`, its required questions must be answered. For `follow_up` and `no_contact` the boss may be busy or away, so the script's questions are not asked at all and no answer is sent; the when step below replaces them (`_bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md`, CAP-6).
+- The script is asked only where someone could answer it. For `interested` and `converted`, its required questions must be answered. For `follow_up` and `no_contact` the boss may be busy or away, so the script's questions are not asked at all and no answer is sent; the when step below replaces them (`_bmad-output/specs/spec-done-stop-leaves-the-round/SPEC.md`, CAP-6). For `not_interested` the agent picks one refusal reason instead of answering the script — the list is in [prospecting.md](prospecting.md#refusal-reasons); "Autre" also requires a note, checked phone-side only.
 - `follow_up_at` is required when the outcome is `follow_up` or `no_contact` — both share one when step (Aujourd'hui / Choisir une date): "Aujourd'hui" sends today's Brussels midnight, "Choisir une date" requires a date strictly after today (`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`).
 
 ### The script is a second step
@@ -47,6 +47,12 @@ outcome first is also what says whether the questions are obligatory at all.
   all rather than asked-and-waived (see Rules); the notes still live there, and
   what an agent reads off a sign in the window is the most useful thing they
   can record about a door nobody answered.
+- **`not_interested` always gets step 2, even with no cached script — the one
+  exception to "step 2 exists only when there is something to ask" above.**
+  There is always a reason to ask why, so the radios and the notes hold that
+  place instead of the questions. The reason is a draft field, not an answer:
+  it never reaches `answersSchemaFor`, and it rides with `answers: {}`
+  (`prospecting.md#refusal-reasons`).
 - **A question this build cannot ask is skipped, never fatal.** A script is data,
   not contract shape: `clientVersion` governs the sync payload, not the
   questionnaire inside it, so an admin on a newer build can save a question type

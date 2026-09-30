@@ -17,9 +17,9 @@ import { buttonVariants } from "@/ui/button-variants";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { copy, OUTCOME_LABELS } from "../copy/field";
+import { copy, OUTCOME_LABELS, REFUSAL_REASON_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import type { Outcome } from "../../shared/constants";
+import type { Outcome, RefusalReason } from "../../shared/constants";
 
 export type SaveSummary = {
   name: string;
@@ -28,6 +28,9 @@ export type SaveSummary = {
   /** `null` when the visit has no questions: the row is absent, not "0". */
   answerCount: number | null;
   notes: string;
+  /** Pas intéressé's picked reason (refusal-reasons.md); null for every
+   * other outcome, where the row is absent. */
+  refusalReason: RefusalReason | null;
 };
 
 type Props = {
@@ -159,6 +162,13 @@ function Body({
         {summary.answerCount !== null && (
           <Row label={copy.visit.questions}>
             <span className="tabular-nums">{copy.visit.confirm.answers(summary.answerCount)}</span>
+          </Row>
+        )}
+        {summary.refusalReason !== null && (
+          <Row label={copy.visit.refusalReason}>
+            <Badge variant="secondary" className="bg-card text-sm">
+              {REFUSAL_REASON_LABELS[summary.refusalReason]}
+            </Badge>
           </Row>
         )}
         {summary.notes !== "" && (

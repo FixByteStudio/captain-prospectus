@@ -86,6 +86,10 @@ export const copy = {
     followUpInvalid: "Cette date n'existe pas. Vérifiez le jour et le mois.",
     followUpNotAfterToday: "Choisissez une date à partir de demain.",
     notesTooLong: "Ces notes sont trop longues. Raccourcissez-les.",
+    /** Pas intéressé's step 2 (refusal-reasons.md, CAP-1/CAP-2). */
+    refusalReason: "Raison du refus",
+    refusalReasonRequired: "Choisissez une raison du refus.",
+    refusalOtherNeedsNote: "Précisez la raison dans les notes.",
     noPreviousVisits: "Première visite à cet endroit.",
     historyOffline: "Les visites précédentes s'afficheront au retour du réseau.",
     flyerHint: "Cochez si vous avez laissé un flyer sur place.",

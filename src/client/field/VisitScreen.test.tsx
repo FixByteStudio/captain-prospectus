@@ -17,9 +17,9 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import Dexie from "dexie";
-import { copy, OUTCOME_HINTS, STATUS_LABELS } from "../copy";
+import { copy, OUTCOME_HINTS, REFUSAL_REASON_LABELS, STATUS_LABELS } from "../copy";
 import type { Prospect, Script } from "../../shared/schemas";
-import { OUTCOMES, type Outcome } from "../../shared/constants";
+import { OUTCOMES, REFUSAL_REASONS, type Outcome } from "../../shared/constants";
 import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
 import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
@@ -563,6 +563,203 @@ describe("VisitScreen — step 1", () => {
   });
 });
 
+/** refusal-reasons.md, CAP-1/CAP-2. */
+describe("VisitScreen — the refusal reason step", () => {
+  it("no script: Pas intéressé still reads « Continuer » and lands on step 2 with the radios in order", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("not_interested"));
+    expect(await screen.findByRole("button", { name: copy.visit.continue })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+
+    const radios = screen
+      .getAllByRole("radio")
+      .filter((el) => (el as HTMLInputElement).name === "refusalReason");
+    expect(radios.map((el) => (el as HTMLInputElement).value)).toEqual([...REFUSAL_REASONS]);
+    for (const reason of REFUSAL_REASONS) {
+      expect(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[reason] })).toBeTruthy();
+    }
+    expect(screen.getByLabelText(copy.visit.notes)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+    const view = within(await confirmation());
+    expect(view.getByText(REFUSAL_REASON_LABELS.no_need)).toBeTruthy();
+    // No script, so no Questions row (design.md, "Saving asks once").
+    expect(view.queryByText(copy.visit.questions)).toBeNull();
+  });
+
+  it("no script: blocks Enregistrer with no reason, then Autre with blank notes, each focused on step 2", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(await screen.findByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalReasonRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[REFUSAL_REASONS[0]] }),
+    );
+
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalOtherNeedsNote)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.notes));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("with a script cached, Pas intéressé's step 2 shows the radios in place of the questions", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+
+    expect(screen.queryByRole("radio", { name: copy.visit.yes })).toBeNull();
+    expect(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.too_many_devices }),
+    ).toBeTruthy();
+  });
+
+  it("blocks Enregistrer with no reason ticked, and focuses the first radio", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalReasonRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[REFUSAL_REASONS[0]] }),
+    );
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks Autre with blank notes, focuses Notes, and another reason clears the message", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalOtherNeedsNote)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.notes));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+
+    // A reason that needs no note takes the message away.
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    expect(screen.queryByText(copy.visit.refusalOtherNeedsNote)).toBeNull();
+  });
+
+  it("saves Autre with a note, queuing the reason and no script answers", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.type(screen.getByLabelText(copy.visit.notes), "Déménage");
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBe("other");
+    expect(visit?.notes).toBe("Déménage");
+    expect(visit?.answers).toEqual({});
+  });
+
+  it("the save summary's « Raison du refus » row shows the picked label, absent for other outcomes", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    const view = within(await confirmation());
+    expect(view.getByText(copy.visit.refusalReason)).toBeTruthy();
+    expect(view.getByText(REFUSAL_REASON_LABELS.no_need)).toBeTruthy();
+  });
+
+  it("a reason picked and then abandoned for Intéressé is not sent, and Intéressé's own answers are", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBeNull();
+    expect(visit?.answers).toEqual({ delivery: true });
+  });
+
+  it("an answer typed under Intéressé is neither counted nor sent once the result is Pas intéressé", async () => {
+    const user = userEvent.setup();
+    await toStep2(user, "interested");
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.wait_and_see }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    const view = within(await confirmation());
+    expect(view.getByText(copy.visit.confirm.answers(0))).toBeTruthy();
+    await user.click(view.getByRole("button", { name: copy.visit.confirm.save }));
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBe("wait_and_see");
+    expect(visit?.answers).toEqual({});
+  });
+
+  it("an over-long note on another result still reads « trop longues », not the Autre message", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByLabelText(copy.visit.notes));
+    await user.paste("x".repeat(2001));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.notesTooLong)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.refusalOtherNeedsNote)).toBeNull();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+});
+
 describe("VisitScreen — step 2 (Questions)", () => {
   it("yes/no: two equal tiles carrying the choice-selected utilities, only the tapped one checked", async () => {
     const user = userEvent.setup();
@@ -1008,14 +1205,15 @@ describe("VisitScreen — save confirmation", () => {
   it("with no script, no flyer and no note, those rows are absent", async () => {
     const user = userEvent.setup();
     await renderVisit({ expectContinue: false });
-    await user.click(outcomeRadio("not_interested"));
+    await user.click(outcomeRadio("interested"));
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     const view = within(await confirmation());
-    expect(view.getByText("Pas intéressé")).toBeTruthy();
+    expect(view.getByText("Intéressé")).toBeTruthy();
     expect(view.queryByText(copy.visit.questions)).toBeNull();
     expect(view.queryByText(copy.visit.confirm.flyer)).toBeNull();
     expect(view.queryByText(copy.visit.notes)).toBeNull();
+    expect(view.queryByText(copy.visit.refusalReason)).toBeNull();
   });
 
   it("counts no answers for a when-step result: typed under Intéressé, then À relancer, reads 0 réponse", async () => {

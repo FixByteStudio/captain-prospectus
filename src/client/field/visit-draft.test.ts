@@ -158,7 +158,7 @@ describe("toVisit", () => {
     if (result.ok) expect(result.visit.answers).toEqual({});
   });
 
-  it.each(["interested", "not_interested", "converted"] as const)(
+  it.each(["interested", "converted"] as const)(
     "saves %s with no when step and no date",
     (outcome) => {
       const result = toVisit(draft({ outcome }), CONTEXT);
@@ -167,6 +167,13 @@ describe("toVisit", () => {
       if (result.ok) expect(result.visit.followUpAt).toBeNull();
     },
   );
+
+  it("saves not_interested with no when step and no date, given a refusal reason", () => {
+    const result = toVisit(draft({ outcome: "not_interested", refusalReason: "no_need" }), CONTEXT);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.followUpAt).toBeNull();
+  });
 
   it("records the check-in position", () => {
     const result = toVisit(draft({ outcome: "interested" }), CONTEXT);
@@ -239,7 +246,7 @@ describe("withOutcome", () => {
     expect(next.followUpDate).toBe("2026-09-29");
   });
 
-  it.each(["interested", "not_interested", "converted"] as const)(
+  it.each(["interested", "converted"] as const)(
     "resets the when choice to null and drops the date when the outcome becomes %s",
     (outcome) => {
       // The when step is unmounted for these, so a choice left behind is one
@@ -259,6 +266,26 @@ describe("withOutcome", () => {
       if (result.ok) expect(result.visit.followUpAt).toBeNull();
     },
   );
+
+  it("resets the when choice to null and drops the date when the outcome becomes not_interested", () => {
+    const next = withOutcome(
+      draft({ outcome: "follow_up", when: "date", followUpDate: "2026-09-29" }),
+      "not_interested",
+    );
+
+    expect(next.outcome).toBe("not_interested");
+    expect(next.when).toBeNull();
+    expect(next.followUpDate).toBe("");
+
+    // A reason is still required — the when step's absence does not waive it.
+    const withoutReason = toVisit(next, CONTEXT);
+    expect(withoutReason.ok).toBe(false);
+    if (!withoutReason.ok) expect(withoutReason.errors.refusalReason).toBe("required");
+
+    const result = toVisit({ ...next, refusalReason: "no_need" }, CONTEXT);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.followUpAt).toBeNull();
+  });
 
   it("defaults Personne sur place's when choice to Aujourd'hui (when-step.md)", () => {
     const next = withOutcome(
@@ -431,6 +458,111 @@ describe("toVisit — the script's answers", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.visit.scriptId).toBe(7);
+  });
+});
+
+/** refusal-reasons.md: Pas intéressé asks for a reason, not the script. */
+describe("toVisit — the refusal reason", () => {
+  const script: Script = {
+    id: 7,
+    name: "Questionnaire",
+    version: 3,
+    isActive: true,
+    createdAt: 1_700_000_000_000,
+    questions: [{ key: "has_delivery", label: "Livraison ?", type: "yes_no", required: true }],
+  };
+  const withScript = { ...CONTEXT, script };
+
+  it("saves with a reason picked, and no script answers", () => {
+    const result = toVisit(
+      draft({ outcome: "not_interested", refusalReason: "too_many_devices" }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.visit.refusalReason).toBe("too_many_devices");
+      expect(result.visit.answers).toEqual({});
+      expect(result.visit.scriptId).toBe(7);
+    }
+  });
+
+  it("refuses to save with no reason ticked", () => {
+    const result = toVisit(draft({ outcome: "not_interested" }), withScript);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.refusalReason).toBe("required");
+  });
+
+  it("refuses Autre with blank notes", () => {
+    const result = toVisit(
+      draft({ outcome: "not_interested", refusalReason: "other", notes: "   " }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.notes).toBe("requiredForOther");
+  });
+
+  it("saves Autre with a trimmed note", () => {
+    const result = toVisit(
+      draft({ outcome: "not_interested", refusalReason: "other", notes: "  Déménage  " }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.visit.refusalReason).toBe("other");
+      expect(result.visit.notes).toBe("Déménage");
+    }
+  });
+
+  it("never validates or sends a stale answer left over from another result", () => {
+    const result = toVisit(
+      draft({
+        outcome: "not_interested",
+        refusalReason: "no_need",
+        answers: { has_delivery: 3 as unknown as boolean },
+      }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.answers).toEqual({});
+  });
+
+  it("drops the reason when the outcome changes to something else", () => {
+    const refused = withOutcome(
+      draft({ outcome: "not_interested", refusalReason: "no_need" }),
+      "converted",
+    );
+
+    expect(refused.refusalReason).toBeNull();
+
+    const result = toVisit({ ...refused, answers: { has_delivery: true } }, withScript);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.refusalReason).toBeNull();
+  });
+
+  it("Pas intéressé always gets a reason step, even with no cached script", () => {
+    const result = toVisit(draft({ outcome: "not_interested" }), CONTEXT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.refusalReason).toBe("required");
+
+    const saved = toVisit(draft({ outcome: "not_interested", refusalReason: "no_need" }), CONTEXT);
+    expect(saved.ok).toBe(true);
+    if (saved.ok) expect(saved.visit.scriptId).toBeNull();
+  });
+
+  it("never sends a reason on any other outcome", () => {
+    const result = toVisit(
+      draft({ outcome: "interested", answers: { has_delivery: true } }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.refusalReason).toBeNull();
   });
 });
 

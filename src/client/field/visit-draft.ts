@@ -9,7 +9,7 @@
  */
 import { answersSchemaFor } from "../../shared/answers";
 import { visitSchema, type Answers, type Script, type Visit } from "../../shared/schemas";
-import type { Outcome } from "../../shared/constants";
+import type { Outcome, RefusalReason } from "../../shared/constants";
 import type { Point } from "../../shared/geo";
 import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
 
@@ -20,6 +20,15 @@ import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
  */
 export function hasWhenStep(outcome: Outcome): boolean {
   return outcome === "follow_up" || outcome === "no_contact";
+}
+
+/**
+ * Pas intéressé asks for a refusal reason instead of the script
+ * (refusal-reasons.md, CAP-1/CAP-2) — the one home for this rule, so
+ * `asksScript` below and `VisitScreen.tsx` never restate the outcome list.
+ */
+export function asksRefusalReason(outcome: Outcome): boolean {
+  return outcome === "not_interested";
 }
 
 export type VisitDraft = {
@@ -34,6 +43,9 @@ export type VisitDraft = {
   notes: string;
   /** Keyed by question `key`; only the questions this build can ask. */
   answers: Answers;
+  /** Pas intéressé's required choice (refusal-reasons.md). Every other
+   * outcome has none and this stays null. */
+  refusalReason: RefusalReason | null;
 };
 
 export const emptyDraft: VisitDraft = {
@@ -43,6 +55,7 @@ export const emptyDraft: VisitDraft = {
   followUpDate: "",
   notes: "",
   answers: {},
+  refusalReason: null,
 };
 
 /**
@@ -59,9 +72,12 @@ export type DraftErrors = {
   /** À relancer saved with nothing ticked (when-step.md). */
   when?: "required";
   followUpDate?: "required" | "invalid" | "notAfterToday";
-  notes?: "tooLong";
+  /** "Autre" saved with empty notes (refusal-reasons.md). */
+  notes?: "tooLong" | "requiredForOther";
   /** Per question `key`, so each control is marked on its own. */
   answers?: Record<string, "required" | "invalid">;
+  /** Pas intéressé saved with nothing ticked (refusal-reasons.md). */
+  refusalReason?: "required";
 };
 
 export type DraftResult = { ok: true; visit: Visit } | { ok: false; errors: DraftErrors };
@@ -86,7 +102,10 @@ export function withOutcome(draft: VisitDraft, outcome: Outcome): VisitDraft {
   // place into À relancer would be the hurried-agent error when-step.md
   // rejects, and a date left behind is one the agent can no longer see.
   const when = outcome === "no_contact" ? "today" : null;
-  return { ...draft, outcome, when, followUpDate: "" };
+  // A refusal reason picked under Pas intéressé does not survive a change to
+  // another result either — same reasoning as the when choice above: it
+  // would ride along on a result that never shows the radios to reconsider it.
+  return { ...draft, outcome, when, followUpDate: "", refusalReason: null };
 }
 
 /**
@@ -179,13 +198,27 @@ export function toVisit(
     }
   }
 
+  // refusal-reasons.md: Pas intéressé asks for one reason instead of the
+  // script. "Autre" without a note says nothing, so it is refused the same
+  // way a missing reason is.
+  const needsRefusalReason = draft.outcome !== null && asksRefusalReason(draft.outcome);
+  if (needsRefusalReason) {
+    if (!draft.refusalReason) {
+      errors.refusalReason = "required";
+    } else if (draft.refusalReason === "other" && draft.notes.trim() === "") {
+      errors.notes = "requiredForOther";
+    }
+  }
+
   // field-operations.md: the script is asked only where someone could answer
   // it. À relancer and Personne sur place skip it entirely, not just the
   // requiredness: the boss may be busy or away, so their step 2 is the when
   // step (when-step.md), and a stale invalid answer typed under another
-  // result must not block a save with no error in view.
+  // result must not block a save with no error in view. Pas intéressé skips
+  // it too — its step 2 is the refusal reason above.
   const script = context.script ?? null;
-  const asksScript = draft.outcome !== null && !hasWhenStep(draft.outcome);
+  const asksScript =
+    draft.outcome !== null && !hasWhenStep(draft.outcome) && !asksRefusalReason(draft.outcome);
   if (script && asksScript) {
     const answers = answersSchemaFor(script.questions, { enforceRequired: true }).safeParse(
       draft.answers,
@@ -218,10 +251,16 @@ export function toVisit(
     notes: draft.notes.trim() || null,
     // The version the agent actually answered, not whichever is active now.
     scriptId: script?.id ?? null,
-    // A when-step result never shows the script's questions (when-step.md):
-    // an answer left in the draft from another result must not ride along
-    // unseen, nor be stored as if the prospect had given it.
+    // A when-step or refusal result never shows the script's questions
+    // (when-step.md, refusal-reasons.md): an answer left in the draft from
+    // another result must not ride along unseen, nor be stored as if the
+    // prospect had given it.
     answers: script && asksScript ? draft.answers : {},
+    // Only Pas intéressé sends a reason (refusal-reasons.md); every other
+    // outcome sends null, even one picked and then abandoned for another
+    // result (dropped already by `withOutcome`, restated here for whatever
+    // reaches `toVisit` directly, as tests do).
+    refusalReason: needsRefusalReason ? draft.refusalReason : null,
   };
 
   const parsed = visitSchema.safeParse(candidate);
@@ -234,6 +273,7 @@ export function toVisit(
     const field = issue.path[0];
     if (field === "notes") errors.notes = "tooLong";
     else if (field === "followUpAt") errors.followUpDate = "required";
+    else if (field === "refusalReason") errors.refusalReason = "required";
     else if (field === "answers") {
       const key = issue.path[1];
       if (typeof key === "string") errors.answers = { ...errors.answers, [key]: "invalid" };
