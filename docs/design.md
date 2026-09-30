@@ -1579,6 +1579,43 @@ The notes still live on this screen, and "ferme le lundi" written off a sign in
 the window is the most valuable thing an agent can record about a door nobody
 answered.
 
+**Pas intéressé always gets step 2, and asks for a reason instead of the
+script — the one exception to "step 2 exists only when there is something to
+ask" above.** A restaurateur who says no won't answer a whole questionnaire,
+but one tapped reason is the only record of why (`prospecting.md#refusal-
+reasons`, GH #248). Step 1 reads « Continuer » for this outcome even with no
+cached script, and step 2's indicator reads « Étape 2 sur 2 · Raison du
+refus »:
+
+```
+     step 1                             step 2
+┌──────────────────────────────────┐ ┌───────────────────────────────────┐
+│ ←  Retour à la tournée           │ │ ←  Résultat                       │
+│ ●  Étape 1 sur 2 · Résultat      │ │ ●  Étape 2 sur 2 · Raison du refus│
+│ Le Bouchon des Filles            │ │ Le Bouchon des Filles             │
+├──────────────────────────────────┤ ├───────────────────────────────────┤
+│ [x] Flyer remis                  │ │  Raison du refus                  │
+├──────────────────────────────────┤ │  ( ) Trop d'applis / de tablettes │
+│  Résultat                        │ │  ( ) Attend de voir…              │
+│  ┌────────────────────────────┐  │ │  ( ) Méfiance sur les frais       │
+│  │ [ic] Pas intéressé      (x)│  │ │  ( ) Pas besoin, ça marche…       │
+│  └────────────────────────────┘  │ │  ( ) Hors cible / fermé           │
+│                                  │ │  ( ) Refus sans raison            │
+├──────────────────────────────────┤ │  ( ) Autre                        │
+│  [        Continuer          ]   │ │                                   │
+└──────────────────────────────────┘ │  Notes                            │
+                                     │  ┌────────────────────────────┐   │
+                                     │  └────────────────────────────┘   │
+                                     ├───────────────────────────────────┤
+                                     │  [   Enregistrer la visite   ]    │
+                                     └───────────────────────────────────┘
+```
+
+The radios are native (ADR-0015, ADR-0026), in `REFUSAL_REASONS`'s order.
+"Autre" also requires a note — the only combination that needs one — checked
+the same way a missing reason is, on save. The save summary gains a
+« Raison du refus » row with the chosen label, shown only for this outcome.
+
 **A blocked save moves the screen to the problem.** With a variable number of
 questions, the first invalid one can easily sit below the fold, and a button that
 appears to do nothing is how a form gets abandoned on a pavement. Saving with an

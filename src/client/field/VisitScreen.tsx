@@ -32,15 +32,16 @@ import { ScriptQuestions, questionDomId } from "./ScriptQuestions";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { apiFetch } from "../api";
-import { copy, TYPE_LABELS } from "../copy/field";
+import { copy, REFUSAL_REASON_LABELS, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import { OUTCOMES, type Outcome } from "../../shared/constants";
+import { OUTCOMES, REFUSAL_REASONS, type Outcome } from "../../shared/constants";
 import { visitHistoryResponseSchema } from "../../shared/schemas";
 import { answerableQuestions } from "../../shared/answers";
 import type { Answers, Script } from "../../shared/schemas";
 import { cacheVisitHistory, fieldDb, getMeta, queueVisit } from "./db";
 import {
   answeredCount,
+  asksRefusalReason,
   emptyDraft,
   hasWhenStep,
   toVisit,
@@ -64,6 +65,12 @@ const WHEN_ERROR_ID = "visit-when-error";
 /** Stable id for the when radiogroup's first option, so a blocked save can
  * focus it (when-step.md). */
 const WHEN_TODAY_ID = "visit-when-today";
+/** Ties the refusal-reason radiogroup to its own error line
+ * (refusal-reasons.md), same reasoning as `WHEN_ERROR_ID`. */
+const REFUSAL_REASON_ERROR_ID = "visit-refusal-reason-error";
+/** Stable id for the refusal-reason radiogroup's first option, so a blocked
+ * save can focus it (refusal-reasons.md). */
+const REFUSAL_REASON_FIRST_ID = "visit-refusal-reason-first";
 
 export function VisitScreen() {
   const { id } = useParams<{ id: string }>();
@@ -166,18 +173,26 @@ export function VisitScreen() {
   const form = useForm<VisitDraft>({ resolver, defaultValues: emptyDraft });
   /**
    * `useWatch`, not `form.watch()`: the latter returns a function the React
-   * Compiler cannot memoize, so it bails out of compiling this component. Only
-   * two values are watched: the outcome, which decides whether the follow-up
-   * date exists at all, and the answers, which step 2's controls render from.
+   * Compiler cannot memoize, so it bails out of compiling this component.
+   * Only the values step 2's own controls render from are watched: the
+   * outcome (which when, question and reason controls exist at all), the
+   * when choice, the answers and the refusal reason.
    */
   const outcome = useWatch({ control: form.control, name: "outcome" });
   const when = useWatch({ control: form.control, name: "when" });
   const answers = useWatch({ control: form.control, name: "answers" });
+  const refusalReason = useWatch({ control: form.control, name: "refusalReason" });
   const errors = form.formState.errors;
 
   // À relancer and Personne sur place share the when step (when-step.md);
   // every other result has none.
   const showsWhenStep = outcome !== null && hasWhenStep(outcome);
+  // Pas intéressé's step 2 holds the refusal reason instead of the script
+  // (refusal-reasons.md).
+  const showsRefusalStep = outcome !== null && asksRefusalReason(outcome);
+  // Whether there is a step 2 at all — Pas intéressé is the one exception to
+  // "step 2 exists only when there is something to ask" (field-operations.md).
+  const hasStep2 = hasQuestions || showsRefusalStep;
 
   // The date input's `min` (when-step.md): computed once per mount, not on
   // every render, since a form left open across midnight should not have its
@@ -220,9 +235,9 @@ export function VisitScreen() {
       return;
     }
 
-    // Only a result with no when step asks the script (Intéressé, Pas
-    // intéressé, Converti), and only its step 2 saves, so no step change is
-    // needed to reach an invalid question.
+    // Only Intéressé and Converti ask the script (`asksScript`), and only
+    // their step 2 saves, so no step change is needed to reach an invalid
+    // question.
     const firstKey = questions.find(
       (question) => form.getFieldState(`answers.${question.key}`).invalid,
     )?.key;
@@ -248,7 +263,23 @@ export function VisitScreen() {
       form.setFocus("followUpDate");
       return;
     }
-  }, [form, hasQuestions, questions]);
+
+    // The refusal reason always sits on step 2 (field-operations.md).
+    if (form.getFieldState("refusalReason").invalid) {
+      flushSync(() => setStep("questions"));
+      const element = document.getElementById(REFUSAL_REASON_FIRST_ID);
+      element?.scrollIntoView({ block: "center" });
+      element?.focus({ preventScroll: true });
+      return;
+    }
+    // Autre with a blank note (refusal-reasons.md). Only that notes error
+    // moves focus: a `tooLong` keeps its behaviour on every other outcome.
+    if (form.getFieldState("notes").error?.type === "requiredForOther") {
+      if (hasStep2) flushSync(() => setStep("questions"));
+      form.setFocus("notes");
+      return;
+    }
+  }, [form, hasQuestions, hasStep2, questions]);
 
   /**
    * Step 1 does not save; it checks its own two controls and moves on. Doing
@@ -291,7 +322,11 @@ export function VisitScreen() {
           <FormControl>
             <Textarea className="mt-1.5 text-base md:text-base" rows={3} {...field} />
           </FormControl>
-          <FormMessage className="mt-1.5">{copy.visit.notesTooLong}</FormMessage>
+          <FormMessage className="mt-1.5">
+            {errors.notes?.type === "requiredForOther"
+              ? copy.visit.refusalOtherNeedsNote
+              : copy.visit.notesTooLong}
+          </FormMessage>
         </FormItem>
       )}
     />
@@ -363,6 +398,54 @@ export function VisitScreen() {
             </FormItem>
           )}
         />
+      )}
+    </div>
+  );
+
+  /**
+   * Pas intéressé's step 2: the reason radios replace the script's
+   * questions (refusal-reasons.md). Native radios, same reasons as
+   * `whenField` (ADR-0015, ADR-0026); the 7 values and their order come
+   * straight from `REFUSAL_REASONS`.
+   */
+  const refusalReasonField = (
+    <div className="border-border mt-6 border-t pt-4">
+      <p className="mb-3 font-medium">{copy.visit.refusalReason}</p>
+      <FieldRadioGroup
+        label={copy.visit.refusalReason}
+        invalid={errors.refusalReason !== undefined}
+        aria-describedby={errors.refusalReason ? REFUSAL_REASON_ERROR_ID : undefined}
+        className="gap-3"
+      >
+        {REFUSAL_REASONS.map((reason, index) => (
+          <FieldRadioOption
+            key={reason}
+            id={index === 0 ? REFUSAL_REASON_FIRST_ID : undefined}
+            name="refusalReason"
+            value={reason}
+            checked={refusalReason === reason}
+            onSelect={() => {
+              form.setValue("refusalReason", reason);
+              form.clearErrors("refusalReason");
+              // "Autre" is the only reason that needs the note; picking any
+              // other one clears an error left from a previous "Autre" pick —
+              // but never a real `tooLong`, which this pick did not fix.
+              if (
+                reason !== "other" &&
+                form.getFieldState("notes").error?.type === "requiredForOther"
+              ) {
+                form.clearErrors("notes");
+              }
+            }}
+          >
+            {REFUSAL_REASON_LABELS[reason]}
+          </FieldRadioOption>
+        ))}
+      </FieldRadioGroup>
+      {errors.refusalReason && (
+        <p role="alert" id={REFUSAL_REASON_ERROR_ID} className="text-destructive mt-1.5 text-sm">
+          {copy.visit.refusalReasonRequired}
+        </p>
       )}
     </div>
   );
@@ -475,11 +558,11 @@ export function VisitScreen() {
           name,
           outcome: pending.outcome,
           flyerGiven: pending.flyerGiven,
-          // À relancer and Personne sur place send no answers (`toVisit`), so
-          // the sheet counts none — it shows what is sent.
+          // À relancer, Personne sur place and Pas intéressé send no answers
+          // (`toVisit`), so the sheet counts none — it shows what is sent.
           answerCount: !hasQuestions
             ? null
-            : hasWhenStep(pending.outcome)
+            : hasWhenStep(pending.outcome) || asksRefusalReason(pending.outcome)
               ? 0
               : answeredCount(
                   pending.answers,
@@ -487,6 +570,8 @@ export function VisitScreen() {
                 ),
           // Trimmed as `toVisit` queues it, so the summary shows what is sent.
           notes: pending.notes.trim(),
+          // Only Pas intéressé's row shows (SaveConfirmation).
+          refusalReason: asksRefusalReason(pending.outcome) ? pending.refusalReason : null,
         }
       : null;
 
@@ -539,9 +624,12 @@ export function VisitScreen() {
                 {copy.visit.backToOutcome}
               </button>
             )}
-            {/* Hidden with no questions: the one-step path must not read "1 sur 2". */}
-            {hasQuestions && (
-              <StepIndicator step={step === "outcome" ? 1 : 2} whenOnly={showsWhenStep} />
+            {/* Hidden with no step 2: the one-step path must not read "1 sur 2". */}
+            {hasStep2 && (
+              <StepIndicator
+                step={step === "outcome" ? 1 : 2}
+                step2={showsWhenStep ? "when" : showsRefusalStep ? "refusal" : "questions"}
+              />
             )}
             <h2 className="mt-1 text-xl font-semibold tracking-[-0.005em]">{name ?? ""}</h2>
             {type && <p className="text-muted-foreground text-sm">{TYPE_LABELS[type]}</p>}
@@ -588,10 +676,17 @@ export function VisitScreen() {
                         form.setValue("outcome", next.outcome);
                         form.setValue("when", next.when);
                         form.setValue("followUpDate", next.followUpDate);
+                        form.setValue("refusalReason", next.refusalReason);
                         // Controls behind the old outcome may have just been
                         // unmounted; an error pinned to one would block saving
                         // with nothing on screen.
-                        form.clearErrors(["outcome", "when", "followUpDate"]);
+                        form.clearErrors(["outcome", "when", "followUpDate", "refusalReason"]);
+                        // Only the refusal step's own `requiredForOther` is
+                        // cleared here — a real `tooLong` on Notes is not
+                        // fixed by changing the outcome.
+                        if (form.getFieldState("notes").error?.type === "requiredForOther") {
+                          form.clearErrors("notes");
+                        }
                       }}
                     />
                   ))}
@@ -607,8 +702,10 @@ export function VisitScreen() {
                 there is no step 2 to carry the when step or Notes, so both
                 live here instead — once the script read has settled, so
                 neither flashes here and then moves to step 2 under the
-                agent's thumb. The when step sits above Notes (when-step.md). */}
-              {script !== undefined && !hasQuestions && (
+                agent's thumb. The when step sits above Notes (when-step.md).
+                Pas intéressé is the one exception (field-operations.md), so
+                `hasStep2` already excludes it. */}
+              {script !== undefined && !hasStep2 && (
                 <>
                   {showsWhenStep && whenField}
                   {notesField}
@@ -620,9 +717,10 @@ export function VisitScreen() {
           {step === "questions" && (
             <>
               {/* À relancer and Personne sur place replace the script's
-                questions with the when radios (when-step.md): nobody able to
-                answer may have been at the door (SPEC CAP-6). */}
-              {!showsWhenStep && (
+                questions with the when radios (when-step.md), and Pas
+                intéressé replaces them with the refusal reason
+                (field-operations.md). */}
+              {!showsWhenStep && !showsRefusalStep && (
                 <div className="border-border mt-6 border-t pt-4">
                   <h3 className="font-medium">{copy.visit.questions}</h3>
                   <div className="mt-4">
@@ -639,6 +737,7 @@ export function VisitScreen() {
               )}
 
               {showsWhenStep && whenField}
+              {showsRefusalStep && refusalReasonField}
 
               {notesField}
             </>
@@ -670,7 +769,7 @@ export function VisitScreen() {
           >
             {/* An action keeps its name through the flow, so « Enregistrer la
               visite » appears only on the screen that actually saves. */}
-            {step === "outcome" && hasQuestions ? (
+            {step === "outcome" && hasStep2 ? (
               /* `key` is load-bearing: without it React reconciles both branches
                to the same <button> node, and a node that has been type="submit"
                on step 2 keeps submitting when step 1 renders it as

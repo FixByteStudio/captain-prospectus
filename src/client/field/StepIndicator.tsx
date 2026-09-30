@@ -9,15 +9,23 @@ import { copy } from "../copy/field";
 
 export function StepIndicator({
   step,
-  whenOnly = false,
+  step2 = "questions",
 }: {
   step: 1 | 2;
-  /** À relancer and Personne sur place: step 2 holds only the when step, no
-   * questions (when-step.md), so it is named for that. */
-  whenOnly?: boolean;
+  /** What step 2 actually holds: the script's questions, the when step
+   * (when-step.md — À relancer, Personne sur place), or the refusal reason
+   * (refusal-reasons.md — Pas intéressé). */
+  step2?: "questions" | "when" | "refusal";
 }) {
-  // Step 1 is always Résultat; step 2 is Questions, or the when step alone.
-  const name = step === 1 ? copy.visit.outcome : whenOnly ? copy.visit.when : copy.visit.questions;
+  // Step 1 is always Résultat; step 2 is named for whichever of the three it holds.
+  const name =
+    step === 1
+      ? copy.visit.outcome
+      : step2 === "when"
+        ? copy.visit.when
+        : step2 === "refusal"
+          ? copy.visit.refusalReason
+          : copy.visit.questions;
   return (
     <p className="text-overline text-muted-foreground mt-3 flex items-center gap-1.5 uppercase">
       <span
