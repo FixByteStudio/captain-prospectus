@@ -11,6 +11,7 @@ const item = (over: Partial<TodayItem> = {}): TodayItem => ({
   address: null,
   status: "assigned",
   nextVisitAt: null,
+  lastVisitAt: null,
   pending: false,
   distanceM: null,
   visitQueued: false,

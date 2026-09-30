@@ -7,10 +7,17 @@
  */
 import { copy } from "../copy/field";
 
-export function StepIndicator({ step }: { step: 1 | 2 }) {
-  // Step 1 is always Résultat, step 2 always Questions — the visit form has
-  // no other shape (design.md, "The script is the second screen").
-  const name = step === 1 ? copy.visit.outcome : copy.visit.questions;
+export function StepIndicator({
+  step,
+  whenOnly = false,
+}: {
+  step: 1 | 2;
+  /** Personne sur place: step 2 holds only the when step, no questions
+   * (when-step.md), so it is named for that. */
+  whenOnly?: boolean;
+}) {
+  // Step 1 is always Résultat; step 2 is Questions, or the when step alone.
+  const name = step === 1 ? copy.visit.outcome : whenOnly ? copy.visit.when : copy.visit.questions;
   return (
     <p className="text-overline text-muted-foreground mt-3 flex items-center gap-1.5 uppercase">
       <span

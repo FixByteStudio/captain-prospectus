@@ -193,6 +193,22 @@ describe("dailyProgress", () => {
     expect(result.total).toBe(1);
   });
 
+  it("does not double-count a stop kept on the round after its visit (round-placement.md)", () => {
+    const v = visit({ outcome: "follow_up" });
+    const result = dailyProgress({
+      logged: [logged({ id: v.id, prospectId: v.prospectId })],
+      outboxVisits: [],
+      identity: IDENTITY,
+      // Kept at the end of today's round rather than moved off it
+      // (round-placement.md's "kept for today" row) — still one stop.
+      stops: [{ id: v.prospectId }],
+      period: PERIOD,
+    });
+
+    expect(result.n).toBe(1);
+    expect(result.total).toBe(1);
+  });
+
   it("renders as an empty round when there are no stops and nothing logged (matrix: empty round)", () => {
     const result = dailyProgress({
       logged: [],

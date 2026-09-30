@@ -5,13 +5,26 @@
 - Ordered by **greedy nearest-next** from the phone's current position; prospects without coordinates go last.
 - `follow_up` prospects whose `next_visit_at` is in the future are shown in a separate "later" group.
 - Each item links to the phone's maps app for navigation.
+- **A saved visit places its stop immediately, before the sync confirms it**
+  (GH #239, `_bmad-output/specs/spec-done-stop-leaves-the-round/round-placement.md`):
+  a closed outcome (Intéressé, Converti, Pas intéressé) leaves the round
+  entirely, and À relancer or Personne sur place moves it to Plus tard or to
+  the end of today's round, depending on the when choice. The phone never
+  derives or shows a status from this (invariant 3) — the picked outcome only
+  decides placement, in `buildTodayList`.
+- **A `follow_up` stop visited today stays on today's round, at the end.**
+  After the sync, a stop with `status = follow_up`, `last_visit_at` on today's
+  Brussels calendar day and no `next_visit_at` at or after tomorrow's Brussels
+  midnight is kept in the round rather than moving to "later" — "end of
+  today's round" ignores distance and always sorts after every stop not
+  visited today.
 
 ## Visit
 Captured fields: check-in position (one reading, if permitted), `flyer_given`, script answers, `outcome`, optional `follow_up_at`, optional notes.
 
 - The visit form shows the **previous visits' notes** for that prospect when online (`GET /api/agent/prospects/:id/visits`); offline it shows what is cached.
-- Required questions of the active script must be answered unless the outcome is `no_contact`.
-- `follow_up_at` is required when the outcome is `follow_up`.
+- Required questions of the active script must be answered unless the outcome is `no_contact`; when the outcome is `no_contact` the script's questions are not asked at all, and no answer is sent (they are replaced by the when step below).
+- `follow_up_at` is required when the outcome is `follow_up` or `no_contact` — both share one when step (Aujourd'hui / Choisir une date): "Aujourd'hui" sends today's Brussels midnight, "Choisir une date" requires a date strictly after today (`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`).
 
 ### The script is a second step
 
@@ -28,9 +41,11 @@ outcome first is also what says whether the questions are obligatory at all.
   script whose questions this build cannot render, and the form is one screen
   with the notes inline. A missing questionnaire never stands between an agent
   and a saved visit.
-- **`no_contact` still gets step 2, with nothing required.** The notes live
-  there, and what an agent reads off a sign in the window is the most useful
-  thing they can record about a door nobody answered.
+- **`no_contact` still gets step 2, but the script's questions are replaced by
+  the when step.** Nobody was there to ask, so the questions are not rendered
+  at all rather than asked-and-waived; the notes still live there, and what an
+  agent reads off a sign in the window is the most useful thing they can
+  record about a door nobody answered.
 - **A question this build cannot ask is skipped, never fatal.** A script is data,
   not contract shape: `clientVersion` governs the sync payload, not the
   questionnaire inside it, so an admin on a newer build can save a question type

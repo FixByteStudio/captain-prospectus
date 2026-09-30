@@ -76,7 +76,14 @@ export const copy = {
     previousVisits: "Visites précédentes",
     back: "Retour à la tournée",
     outcomeRequired: "Choisissez un résultat.",
+    /** The when step, shared by À relancer and Personne sur place
+     * (when-step.md, CAP-2). */
+    when: "Quand ?",
+    whenToday: "Aujourd'hui",
+    whenDate: "Choisir une date",
+    whenRequired: "Choisissez quand relancer : aujourd'hui ou une date.",
     followUpInvalid: "Cette date n'existe pas. Vérifiez le jour et le mois.",
+    followUpNotAfterToday: "Choisissez une date à partir de demain.",
     notesTooLong: "Ces notes sont trop longues. Raccourcissez-les.",
     noPreviousVisits: "Première visite à cet endroit.",
     historyOffline: "Les visites précédentes s'afficheront au retour du réseau.",
@@ -100,8 +107,6 @@ export const copy = {
     /** The back link on step 2 names where it goes: step 1, draft intact. */
     backToOutcome: "Résultat",
     questions: "Questions",
-    /** Shown when the outcome is `no_contact`: nobody was there to ask. */
-    questionsOptional: "Personne sur place : répondez seulement si vous savez.",
     answerRequired: "Répondez à cette question.",
     answerInvalid: "Cette réponse n'est pas valide. Vérifiez-la.",
     yes: "Oui",

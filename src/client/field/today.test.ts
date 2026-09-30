@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FieldProspect, Prospect } from "../../shared/schemas";
-import { buildTodayList, navigationUrl } from "./today";
+import { brusselsPeriod } from "../../shared/period";
+import { buildTodayList, navigationUrl, type QueuedVisit } from "./today";
 
 /** The Grand-Place, which is where the local seed puts the round. */
 const GRAND_PLACE = { lat: 50.8467, lng: 4.3525 };
@@ -22,6 +23,14 @@ const prospect = (over: Partial<Prospect> = {}): Prospect => ({
   assignedTo: "agent@example.com",
   lastVisitAt: null,
   nextVisitAt: null,
+  ...over,
+});
+
+const queuedVisit = (over: Partial<QueuedVisit> = {}): QueuedVisit => ({
+  prospectId: crypto.randomUUID(),
+  outcome: "follow_up",
+  followUpAt: null,
+  visitedAt: NOW,
   ...over,
 });
 
@@ -215,38 +224,180 @@ describe("visitQueued", () => {
     expect(list.now[0]?.visitQueued).toBe(false);
   });
 
-  it("flags only the stop whose visit is queued, leaving order and later unchanged", () => {
-    const queued = prospect({ name: "en attente", ...near(400) });
-    const list = buildTodayList(
-      [
-        prospect({ name: "loin", ...near(800) }),
-        prospect({ name: "près", ...near(100) }),
-        queued,
-        prospect({
-          name: "plus tard",
-          status: "follow_up",
-          nextVisitAt: NOW + DAY,
-        }),
-      ],
-      [],
-      GRAND_PLACE,
-      NOW,
-      new Set([queued.id]),
-    );
-
-    // Walking order is untouched by the flag.
-    expect(list.now.map((i) => i.name)).toEqual(["près", "en attente", "loin"]);
-    expect(list.now.find((i) => i.id === queued.id)?.visitQueued).toBe(true);
-    expect(list.now.filter((i) => i.visitQueued)).toHaveLength(1);
-    expect(list.later.every((i) => !i.visitQueued)).toBe(true);
-  });
-
   it("flags a field prospect not yet accepted, on top of its own pending flag", () => {
     const outboxRow = field({ name: "camion" });
-    const list = buildTodayList([], [outboxRow], GRAND_PLACE, NOW, new Set([outboxRow.id]));
+    const list = buildTodayList([], [outboxRow], GRAND_PLACE, NOW, [
+      queuedVisit({ prospectId: outboxRow.id, outcome: "no_contact" }),
+    ]);
 
     expect(list.now[0]?.pending).toBe(true);
     expect(list.now[0]?.visitQueued).toBe(true);
+  });
+});
+
+/**
+ * Where a saved stop sits before and after the sync — round-placement.md's
+ * I/O matrix (GH #239, epic #117 retro).
+ */
+describe("round placement", () => {
+  it("a queued closed result leaves the round: absent from now and later", () => {
+    const closed = prospect({ name: "Curry House" });
+    const list = buildTodayList(
+      [closed, prospect({ name: "Bar des Marolles" })],
+      [],
+      GRAND_PLACE,
+      NOW,
+      [queuedVisit({ prospectId: closed.id, outcome: "interested" })],
+    );
+
+    expect(list.now.map((i) => i.name)).toEqual(["Bar des Marolles"]);
+    expect(list.later).toEqual([]);
+  });
+
+  it.each(["interested", "converted", "not_interested"] as const)(
+    "every closed outcome (%s) leaves the round the same way",
+    (outcome) => {
+      const closed = prospect({ name: "Curry House" });
+      const list = buildTodayList([closed], [], GRAND_PLACE, NOW, [
+        queuedVisit({ prospectId: closed.id, outcome }),
+      ]);
+
+      expect(list.now).toEqual([]);
+      expect(list.later).toEqual([]);
+    },
+  );
+
+  it("a queued follow-up date after today sits under Plus tard, sorted by that date", () => {
+    const dated = prospect({ name: "Repasser jeudi" });
+    const list = buildTodayList([dated], [], GRAND_PLACE, NOW, [
+      queuedVisit({ prospectId: dated.id, outcome: "follow_up", followUpAt: NOW + 3 * DAY }),
+    ]);
+
+    expect(list.now).toEqual([]);
+    expect(list.later.map((i) => i.name)).toEqual(["Repasser jeudi"]);
+    expect(list.later[0]?.visitQueued).toBe(true);
+    expect(list.later[0]?.nextVisitAt).toBe(NOW + 3 * DAY);
+  });
+
+  it("sorts a queued date among pulled follow-ups by that date", () => {
+    const dated = prospect({ name: "queued, day 3" });
+    const pulled = prospect({
+      name: "pulled, day 2",
+      status: "follow_up",
+      nextVisitAt: NOW + 2 * DAY,
+    });
+    const list = buildTodayList([dated, pulled], [], GRAND_PLACE, NOW, [
+      queuedVisit({ prospectId: dated.id, followUpAt: NOW + 3 * DAY }),
+    ]);
+
+    expect(list.later.map((i) => i.name)).toEqual(["pulled, day 2", "queued, day 3"]);
+  });
+
+  it("places a stop by its latest queued visit, whichever order they were queued in", () => {
+    const { from: todayStart } = brusselsPeriod(NOW, 1);
+    const closedLast = prospect({ name: "closed last" });
+    const keptLast = prospect({ name: "kept last" });
+    const list = buildTodayList([closedLast, keptLast], [], GRAND_PLACE, NOW, [
+      queuedVisit({ prospectId: closedLast.id, outcome: "interested", visitedAt: NOW }),
+      queuedVisit({
+        prospectId: closedLast.id,
+        outcome: "no_contact",
+        followUpAt: todayStart,
+        visitedAt: NOW - 1000,
+      }),
+      queuedVisit({
+        prospectId: keptLast.id,
+        outcome: "no_contact",
+        followUpAt: todayStart,
+        visitedAt: NOW,
+      }),
+      queuedVisit({ prospectId: keptLast.id, outcome: "interested", visitedAt: NOW - 1000 }),
+    ]);
+
+    expect(list.now.map((i) => i.name)).toEqual(["kept last"]);
+    expect(list.later).toEqual([]);
+  });
+
+  it("a when-step visit queued yesterday and still unsent joins the normal order", () => {
+    const { from: todayStart } = brusselsPeriod(NOW, 1);
+    const overnight = prospect({ name: "hier", ...near(50) });
+    const list = buildTodayList(
+      [prospect({ name: "loin", ...near(800) }), overnight],
+      [],
+      GRAND_PLACE,
+      NOW,
+      [
+        queuedVisit({
+          prospectId: overnight.id,
+          outcome: "no_contact",
+          followUpAt: todayStart - DAY,
+          visitedAt: todayStart - 1000,
+        }),
+      ],
+    );
+
+    expect(list.now.map((i) => i.name)).toEqual(["hier", "loin"]);
+    expect(list.now[0]?.visitQueued).toBe(true);
+  });
+
+  it("a queued Aujourd'hui sits last in now, keeping « Pas encore envoyé »", () => {
+    const { to: tomorrow } = brusselsPeriod(NOW, 1);
+    const today = tomorrow - DAY;
+    const near0 = prospect({ name: "près", ...near(100) });
+    const queuedToday = prospect({ name: "Aujourd'hui", ...near(50) });
+    const list = buildTodayList([near0, queuedToday], [], GRAND_PLACE, NOW, [
+      queuedVisit({ prospectId: queuedToday.id, outcome: "no_contact", followUpAt: today }),
+    ]);
+
+    expect(list.now.map((i) => i.name)).toEqual(["près", "Aujourd'hui"]);
+    expect(list.now[1]?.visitQueued).toBe(true);
+    expect(list.later).toEqual([]);
+  });
+
+  it("a stop pulled kept for today (lastVisitAt today, nextVisitAt today) sits last in now", () => {
+    const { from: todayStart } = brusselsPeriod(NOW, 1);
+    const near0 = prospect({ name: "près", ...near(100) });
+    const kept = prospect({
+      name: "gardé pour aujourd'hui",
+      status: "follow_up",
+      lastVisitAt: todayStart,
+      nextVisitAt: todayStart,
+      ...near(900),
+    });
+    const list = buildTodayList([near0, kept], [], GRAND_PLACE, NOW);
+
+    // "End of today's round" ignores distance: "gardé" is much closer than
+    // "près" would normally put it, and still sorts last.
+    expect(list.now.map((i) => i.name)).toEqual(["près", "gardé pour aujourd'hui"]);
+    expect(list.later).toEqual([]);
+  });
+
+  it("a stop pulled kept for today with no nextVisitAt sits last in now the same way", () => {
+    const { from: todayStart } = brusselsPeriod(NOW, 1);
+    const kept = prospect({
+      name: "gardé",
+      status: "follow_up",
+      lastVisitAt: todayStart,
+      nextVisitAt: null,
+    });
+    const list = buildTodayList([kept], [], GRAND_PLACE, NOW);
+
+    expect(list.now.map((i) => i.name)).toEqual(["gardé"]);
+  });
+
+  it("a stop visited yesterday keeps the normal nearest-next order, not forced last", () => {
+    const { from: todayStart } = brusselsPeriod(NOW, 1);
+    const yesterday = prospect({
+      name: "hier",
+      status: "follow_up",
+      lastVisitAt: todayStart - 1,
+      nextVisitAt: null,
+      ...near(900),
+    });
+    const near0 = prospect({ name: "près", ...near(100) });
+    const list = buildTodayList([yesterday, near0], [], GRAND_PLACE, NOW);
+
+    expect(list.now.map((i) => i.name)).toEqual(["près", "hier"]);
   });
 });
 

@@ -51,14 +51,23 @@ export function useRound(): RoundState {
   const prospects = useLiveQuery(() => fieldDb.prospects.toArray(), [], []);
   const outbox = useLiveQuery(() => fieldDb.outboxProspects.toArray(), [], []);
   const outboxVisits = useLiveQuery(() => fieldDb.outboxVisits.toArray(), [], []);
-  const queuedVisitProspectIds = useMemo(
-    () => new Set(outboxVisits.map((v) => v.prospectId)),
+  // The outcome and follow-up date place the stop before the sync confirms it
+  // (round-placement.md) — not just its id, so buildTodayList can tell a
+  // closed result from a kept-for-today one.
+  const queuedVisits = useMemo(
+    () =>
+      outboxVisits.map((v) => ({
+        prospectId: v.prospectId,
+        outcome: v.outcome,
+        followUpAt: v.followUpAt ?? null,
+        visitedAt: v.visitedAt,
+      })),
     [outboxVisits],
   );
 
   // Recomputed when the position or any of the three tables changes. Cheap:
   // the round is tens of prospects, and orderByNearestNext is O(n²) on that.
-  const list = buildTodayList(prospects, outbox, point, now, queuedVisitProspectIds);
+  const list = buildTodayList(prospects, outbox, point, now, queuedVisits);
 
   return { list, point, locating, denied, refresh, now, outboxVisits };
 }

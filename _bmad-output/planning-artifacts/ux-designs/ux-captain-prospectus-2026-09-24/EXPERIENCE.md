@@ -115,7 +115,7 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Prospects, Visites | "Exporter en CSV" · Visites strip: "Taux de conversion", "Flyers remis", "Relances dues sous 7 jours", "Agents en tournée" |
 | Field shell | Tabs "Tournée", "Carte", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
 | Tournée / Carte | "{5} visites sur {17} aujourd'hui" · "Carte indisponible hors ligne. La liste reste à jour." · "Voir la liste" · aria "Me recentrer" |
-| Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre. Indiquez la date." · Converti: "Déjà inscrit sur la liste d'attente." |
+| Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre." · Converti: "Déjà inscrit sur la liste d'attente." |
 | Visit | Step indicators "Étape 1 sur 2 · Résultat" / "Étape 2 sur 2 · Questions" · stepper aria "Diminuer" / "Augmenter" |
 | Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui. La tournée est triée par nom." · "{17} arrêts" |
 | Save sheet | Overline "Validation" · "Enregistrer cette visite ?" · "{Curry House} · {Intéressé} · Flyer remis · {4} réponses" · "La visite reste sur ce téléphone jusqu'à la prochaine synchronisation." · "Modifier" / "Enregistrer" |
@@ -146,7 +146,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | **Daily progress** | Tournée du jour | "{n} visites sur {total} aujourd'hui" with a bar. n = the agent's visits recorded today, including those not yet sent; total = n + stops still on today's list. Only the bar and the count: no percentage, no ETA, no "restants". |
 | **Plus tard** | Tournée du jour | Follow-ups whose date hasn't come yet, each with "À relancer le {date}". They can't be visited from here. |
 | **Carte sheet** | Carte | A bottom sheet shows the next stop (number, name, type, distance) with "Y aller" and "Visiter". Tapping another pin moves the sheet to that stop. The re-centre button follows the agent's position. The sheet always sits above the tab bar. |
-| **Outcome cards** | Visite, step 1 | Single choice; required before "Continuer". Choosing "À relancer" reveals "Relancer le" with a native date input. The cards never show or imply a status (invariant 3). |
+| **Outcome cards** | Visite, step 1 | Single choice; required before "Continuer". The date is not asked here: À relancer and Personne sur place say when to come back on the when step ("Aujourd'hui" / "Choisir une date", GH #239). The cards never show or imply a status (invariant 3). |
 | **Step indicator** | Visite | "Étape 1 sur 2 · Résultat" and "Étape 2 sur 2 · Questions". When there is no script, the visit is one step with no indicator, and the button reads "Enregistrer la visite". |
 | **Back links** | Visite | Step 1: "Retour à la tournée". Step 2: "Résultat", which goes back to step 1 with the draft intact. |
 | **Number stepper** | Visite, step 2 | − / + change the value by 1. The number stays typeable, and the field never goes below 0. |
@@ -179,13 +179,14 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Position denied | Tournée du jour, Carte | Under the title: "Sans votre position, la tournée n'est pas triée par distance." with "Réessayer". Distances read "Position inconnue". |
 | Offline | Field shell | The strip reads "Hors ligne. Vos visites sont conservées et partiront au retour du réseau." Everything except the map keeps working. |
 | Offline map | Carte | Grey canvas with "Carte indisponible hors ligne. La liste reste à jour." and "Voir la liste". Tiles are never downloaded in bulk (OSM tile policy). |
-| Waiting to send | Field shell, stop rows | Amber dot with a count, and the strip "{n} éléments en attente d'envoi". The row of a stop visited but not yet sent shows "Pas encore envoyé". |
+| Waiting to send | Field shell, stop rows | Amber dot with a count, and the strip "{n} éléments en attente d'envoi". A stop visited but not yet sent keeps a row only when it stays on the round (kept for today, at the end, or under Plus tard); that row shows "Pas encore envoyé". Intéressé, Converti and Pas intéressé take the stop off the round at once (round-placement, GH #239). |
 | Session expired | Field shell | Red strip "Votre session a expiré. Reconnectez-vous pour synchroniser." with "Se reconnecter". The outbox is kept (invariant 5). |
 | Update required (426) | Field shell | Strip "Une mise à jour est nécessaire. Vos visites sont conservées." with "Mettre à jour". The outbox is kept. |
 | Sync failed | Field shell | Strip "La synchronisation a échoué. Nouvel essai automatique." No button. |
 | Syncing | Field shell | A pulsing dot. No strip unless something is also waiting. |
 | Outcome missing | Visite, step 1 | "Choisissez un résultat." under Résultat. The screen scrolls to it and focuses it. |
-| Invalid answer | Visite, step 2 | Saving scrolls to the first invalid question and focuses it. With Personne sur place, no answer is required, and the note "Personne sur place : répondez seulement si vous savez." shows at the top. |
+| Invalid answer | Visite, step 2 | Saving scrolls to the first invalid question and focuses it. With Personne sur place, the script's questions are not asked at all — they are replaced by the when step (Aujourd'hui / Choisir une date, GH #239). |
+| When choice missing | Visite, step 2 (or the single screen) | "Choisissez quand relancer : aujourd'hui ou une date." under the when radios, for À relancer or Personne sur place. |
 | Missing name | Ajouter | "Indiquez le nom de l'établissement." under Nom. |
 | Not found / offline sign-in | Field | "Page introuvable." with "Retour à la tournée". "Impossible de vous identifier hors ligne. Connectez-vous une fois avec du réseau." |
 | No agent position | Admin Tournée du jour | The list is ordered by name, with the notice "Aucune position reçue aujourd'hui…". Every position shows its age. |
