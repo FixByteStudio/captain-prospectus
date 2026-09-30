@@ -172,6 +172,8 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
         flyerGiven: v.flyerGiven,
         outcome: v.outcome,
         followUpAt: v.followUpAt ?? null,
+        // Kept only on not_interested: the reason never refuses a visit (INVARIANT 5).
+        refusalReason: v.outcome === "not_interested" ? (v.refusalReason ?? null) : null,
         notes: v.notes ?? null,
         scriptId: v.scriptId ?? null,
         answers: v.answers,

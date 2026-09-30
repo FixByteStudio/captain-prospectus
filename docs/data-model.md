@@ -26,6 +26,7 @@ erDiagram
     int last_visit_at
     int next_visit_at
     text merged_into FK "null = live; set = absorbed by another prospect"
+    int out_of_target_reviewed_at "reserved for the Hors cible review (epic #246); nothing writes it yet"
     text created_by
     int created_at
     int updated_at
@@ -40,6 +41,7 @@ erDiagram
     int flyer_given
     text outcome
     int follow_up_at
+    text refusal_reason "null unless outcome=not_interested"
     text notes
     int script_id FK
     text answers "JSON"
@@ -59,6 +61,7 @@ erDiagram
     int flyer_given
     text outcome
     int follow_up_at
+    text refusal_reason "mirrors visits.refusal_reason"
     text notes
     int script_id "NOT a FK either"
     text answers "JSON"

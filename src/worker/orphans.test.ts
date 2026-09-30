@@ -65,7 +65,8 @@ async function quarantine(
     reason?: "unknown_prospect" | "not_assigned";
     lat?: number | null;
     lng?: number | null;
-    outcome?: "interested" | "converted";
+    outcome?: "interested" | "converted" | "not_interested";
+    refusalReason?: "too_many_devices" | null;
     quarantinedAt?: number;
   } = {},
 ): Promise<string> {
@@ -84,6 +85,7 @@ async function quarantine(
     flyerGiven: true,
     outcome: over.outcome ?? "converted",
     followUpAt: null,
+    refusalReason: over.refusalReason ?? null,
     notes: "Patron absent",
     scriptId: null,
     answers: {},
@@ -217,6 +219,21 @@ describe("POST /api/admin/visits/orphaned/:id/repair", () => {
     const [stored] = await db.select().from(visits);
     expect(stored?.visitedAt).toBe(before?.visitedAt);
     expect(stored?.receivedAt).toBe(before?.receivedAt);
+  });
+
+  it("carries the refusal reason through repair", async () => {
+    const db = getDb(env.DB);
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+    const visitId = await quarantine({
+      outcome: "not_interested",
+      refusalReason: "too_many_devices",
+    });
+
+    await post(`/api/admin/visits/orphaned/${visitId}/repair`, { prospectId });
+
+    const [stored] = await db.select().from(visits);
+    expect(stored?.refusalReason).toBe("too_many_devices");
   });
 
   it("repairing twice is a no-op, not an error (INVARIANT 4)", async () => {

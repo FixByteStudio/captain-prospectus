@@ -6,7 +6,14 @@
  * Enum labels must match the tables in docs/glossary.md. Copy style follows
  * CLAUDE.md: sentence case, active verbs, errors say what happened and what to do.
  */
-import type { Outcome, ProspectType, QuestionType, Source, Status } from "../../shared/constants";
+import type {
+  Outcome,
+  ProspectType,
+  QuestionType,
+  RefusalReason,
+  Source,
+  Status,
+} from "../../shared/constants";
 
 export const sharedCopy = {
   appName: "Captain Prospectus",
@@ -123,6 +130,17 @@ export const OUTCOME_HINTS: Readonly<Record<Outcome, string>> = {
   not_interested: "Refus clair.",
   follow_up: "Un rendez-vous à reprendre.",
   converted: "Déjà inscrit sur la liste d'attente.",
+};
+
+/** docs/glossary.md — REFUSAL_REASONS, in list order. */
+export const REFUSAL_REASON_LABELS: Readonly<Record<RefusalReason, string>> = {
+  too_many_devices: "Trop d'applis / de tablettes",
+  wait_and_see: "Attend de voir (rien n'est lancé)",
+  fee_distrust: "Méfiance sur les frais",
+  no_need: "Pas besoin, ça marche comme ça",
+  out_of_target: "Hors cible / fermé",
+  no_reason_given: "Refus sans raison",
+  other: "Autre",
 };
 
 export const STATUS_LABELS: Readonly<Record<Status, string>> = {

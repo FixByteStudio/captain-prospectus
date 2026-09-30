@@ -7,6 +7,7 @@ import { chunk } from "../shared/chunk";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
+import { OUTCOMES, OUTCOME_TO_STATUS } from "../shared/constants";
 import {
   MAX_REQUEST_BYTES,
   SCRIPT_QUESTIONS_MAX,
@@ -180,6 +181,130 @@ describe("POST /api/agent/sync", () => {
     const [row] = await db.select().from(prospects);
     // INVARIANT 3: the client sent an outcome, never a status.
     expect(row?.status).toBe("converted");
+  });
+
+  it("stores refusalReason when the outcome is not_interested", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          refusalReason: "too_many_devices",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBe("too_many_devices");
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("rejected");
+  });
+
+  it("stores refusalReason as null when an old build omits it", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBeNull();
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("rejected");
+  });
+
+  it("drops refusalReason sent with another outcome", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "converted",
+          refusalReason: "no_need",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBeNull();
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("converted");
+  });
+
+  it.each(OUTCOMES)("a refusalReason never changes the status %s derives", async (outcome) => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome,
+          followUpAt: Date.now() + 86_400_000,
+          refusalReason: "out_of_target",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const [prospectRow] = await getDb(env.DB).select().from(prospects);
+    expect(prospectRow?.status).toBe(OUTCOME_TO_STATUS[outcome]);
+    const [visitRow] = await getDb(env.DB).select().from(visits);
+    expect(visitRow?.refusalReason).toBe(outcome === "not_interested" ? "out_of_target" : null);
+  });
+
+  it("rejects a refusalReason outside the enum, as for any bad value", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          refusalReason: "bogus",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(400);
   });
 
   it("is idempotent: resending the same payload changes nothing", async () => {
@@ -821,6 +946,18 @@ describe("POST /api/agent/sync — a visit for someone else's prospect", () => {
     expect(held?.prospectId).toBe(id);
     // Attributed to whoever really wrote it (INVARIANT 10), never the assignee.
     expect(held?.agentEmail).toBe(OTHER);
+  });
+
+  it("quarantines a refusal with its reason intact", async () => {
+    const db = getDb(env.DB);
+    const id = crypto.randomUUID();
+    await seedProspect(id, AGENT);
+    const visit = { ...visitOf(id, "not_interested"), refusalReason: "no_need" as const };
+
+    await asOtherAgent({ visits: [visit] });
+
+    const [held] = await db.select().from(visitsOrphaned);
+    expect(held?.refusalReason).toBe("no_need");
   });
 
   it("still derives status from the assignee's own visit", async () => {
