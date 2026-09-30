@@ -327,8 +327,11 @@ describe("GET /api/admin/visits/export.csv", () => {
           { outcome: "not_interested", refusalReason: "no_need", receivedAt: now - 120_000 },
         ],
         ["Mefiance", { outcome: "not_interested", refusalReason: "fee_distrust" }],
-        ["Sans raison", { outcome: "not_interested" }],
-        ["Sans raison hors fenetre", { outcome: "not_interested", receivedAt: now - 120_000 }],
+        ["Raison non saisie", { outcome: "not_interested" }],
+        [
+          "Raison non saisie hors fenetre",
+          { outcome: "not_interested", receivedAt: now - 120_000 },
+        ],
         ["Converti", { outcome: "converted" }],
         ["A revoir", { outcome: "follow_up" }],
       ];
@@ -343,7 +346,7 @@ describe("GET /api/admin/visits/export.csv", () => {
       const csv = records(await (await call(`/api/admin/visits/export.csv?${query}`)).text());
       const exported = csv.slice(1, -1).map((row) => row.split(",")[3]);
 
-      const expected = reason === "none" ? ["Sans raison"] : ["Pas besoin"];
+      const expected = reason === "none" ? ["Raison non saisie"] : ["Pas besoin"];
       expect(feed.visits.map((v) => v.prospectName)).toEqual(expected);
       expect(exported).toEqual(expected);
     },

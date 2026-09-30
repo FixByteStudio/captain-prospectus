@@ -143,4 +143,4 @@ Status: done
 
 **Verification:** `pnpm typecheck` green; `pnpm lint` green; `pnpm test` 83 files / 2067 tests green; `pnpm build` green, precache 25 entries (932.45 KiB) / 1,000 KiB.
 
-**Residual risks:** "Refus sans raison" (a stored reason) and "Sans raison" (null) sit side by side in the select, as the intent names them; the owner may want to relabel one. The KPI strip stays period-only by design.
+**Residual risks:** none on labels: at the owner's request (2026-09-30) the null bucket's label "Sans raison" was renamed "Raison non saisie", so it no longer reads like the stored reason "Refus sans raison". The wire value stays `none`. The KPI strip stays period-only by design.

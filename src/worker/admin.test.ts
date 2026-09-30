@@ -1263,13 +1263,13 @@ describe("GET /api/admin/visits", () => {
     });
 
     it("reads `none` as a refusal without a reason, not every visit without one", async () => {
-      await seedVisit("Sans raison", 1_000, "not_interested");
+      await seedVisit("Raison non saisie", 1_000, "not_interested");
       await seedVisit("Avec raison", 2_000, "not_interested", "fee_distrust");
       await seedVisit("Converti", 3_000, "converted");
       await seedVisit("A revoir", 4_000, "follow_up");
 
       const body = await feed("?reason=none");
-      expect(body.visits.map((v) => v.prospectName)).toEqual(["Sans raison"]);
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Raison non saisie"]);
     });
 
     it("applies reason alongside since, from and to", async () => {

@@ -475,7 +475,7 @@ export const adminCopy = {
     reasonFilter: {
       label: "Raison du refus",
       any: "Toutes les raisons",
-      none: "Sans raison",
+      none: "Raison non saisie",
       empty: "Aucune visite pour cette raison sur la période.",
     },
 

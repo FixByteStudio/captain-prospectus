@@ -43,7 +43,7 @@ function parseReason(raw: string | null): VisitsReasonFilter | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-/** The select's options, in `REFUSAL_REASONS`' display order, then Sans raison. */
+/** The select's options, in `REFUSAL_REASONS`' display order, then Raison non saisie. */
 const REASON_OPTIONS = [
   ...REFUSAL_REASONS.map((value) => ({ value, label: REFUSAL_REASON_LABELS[value] })),
   { value: NO_REFUSAL_REASON, label: copy.visits.reasonFilter.none },

@@ -620,7 +620,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
     ).toBe("true");
   });
 
-  it("reads Sans raison back from ?reason=none and asks the feed for it", async () => {
+  it("reads Raison non saisie back from ?reason=none and asks the feed for it", async () => {
     const asked = stubFetch({});
     renderScreen("/admin/visites?reason=none");
     await screen.findByText(copy.visits.reasonFilter.empty);
