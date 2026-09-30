@@ -11,7 +11,7 @@ lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-ali
 review_loop_iteration: 0
 baseline_commit: 'a8b59ca1f1201bb8d89286cfa0e65f33cf2caf31'
 context:
-  - '/home/m0/PROJECTs/captain-prospectus/_bmad-output/specs/spec-not-interested-skips-script/refusal-reasons.md' # untracked in the main checkout, read it from there
+  - '{project-root}/_bmad-output/specs/spec-not-interested-skips-script/refusal-reasons.md'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
