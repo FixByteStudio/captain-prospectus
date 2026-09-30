@@ -31,7 +31,7 @@ stateDiagram-v2
 | `not_interested` | `rejected` |
 | `converted` | `converted` |
 
-- **Intéressé** means open to the discussion, not yet signed up to the waitlist; **Converti** means already signed up to it. They stay apart because the conversion rate counts only `converted` ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)). `follow_up` means only "go back": a `no_contact` or `follow_up` outcome.
+- **Intéressé** means open to the discussion, not yet signed up to the waitlist; **Converti** means already signed up to it. They stay apart because the conversion rate counts only `converted` ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)). `follow_up` means only "go back": a `no_contact` or `follow_up` outcome. The two are told apart by who was at the door: **Personne sur place** (`no_contact`) means closed, or nobody at all to speak to; **À relancer** (`follow_up`) means someone was there but the boss is busy, away, or not interested right now while keeping the door open for a later discussion. Neither asks the script ([field-operations](field-operations.md#rules)).
 - Status transitions caused by visits are **computed by the server** when a visit is received ([ADR-0011](../adr/0011-server-derived-prospect-status.md)).
 - Only the **latest visit by `visited_at`** moves the status. A late-syncing older visit is stored but does not overwrite a newer outcome. On a tie the visit received last decides, and inside one sync the greater `visits.id`, so the same visit always does.
 - Only the **assignee's** visit moves the status. A visit written by any other agent is

@@ -337,6 +337,35 @@ describe("toVisit — the script's answers", () => {
     if (!result.ok) expect(result.errors.answers).toEqual({ has_delivery: "invalid" });
   });
 
+  /** SPEC CAP-6: the boss may be busy or away, so nobody may answer. */
+  it("never asks the script on À relancer: required questions unanswered still save, with no answers sent", () => {
+    const result = toVisit(draft({ outcome: "follow_up", when: "today", answers: {} }), withScript);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.answers).toEqual({});
+  });
+
+  it("neither validates nor sends a stale answer left in the draft on À relancer", () => {
+    const result = toVisit(
+      draft({
+        outcome: "follow_up",
+        when: "today",
+        answers: { has_delivery: 3 as unknown as boolean },
+      }),
+      withScript,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.visit.answers).toEqual({});
+  });
+
+  it("still blocks Intéressé on an unanswered required question", () => {
+    const result = toVisit(draft({ outcome: "interested", answers: {} }), withScript);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.answers).toEqual({ has_delivery: "required" });
+  });
+
   /** field-operations.md: nobody was there to ask. */
   it("waives required questions when the outcome is no_contact", () => {
     const result = toVisit(

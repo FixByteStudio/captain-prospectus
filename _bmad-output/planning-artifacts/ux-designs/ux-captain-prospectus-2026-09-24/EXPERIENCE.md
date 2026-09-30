@@ -185,7 +185,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Sync failed | Field shell | Strip "La synchronisation a échoué. Nouvel essai automatique." No button. |
 | Syncing | Field shell | A pulsing dot. No strip unless something is also waiting. |
 | Outcome missing | Visite, step 1 | "Choisissez un résultat." under Résultat. The screen scrolls to it and focuses it. |
-| Invalid answer | Visite, step 2 | Saving scrolls to the first invalid question and focuses it. With Personne sur place, the script's questions are not asked at all — they are replaced by the when step (Aujourd'hui / Choisir une date, GH #239). |
+| Invalid answer | Visite, step 2 | Saving scrolls to the first invalid question and focuses it. With À relancer or Personne sur place, the script's questions are not asked at all — they are replaced by the when step (Aujourd'hui / Choisir une date, GH #239, GH #244). |
 | When choice missing | Visite, step 2 (or the single screen) | "Choisissez quand relancer : aujourd'hui ou une date." under the when radios, for À relancer or Personne sur place. |
 | Missing name | Ajouter | "Indiquez le nom de l'établissement." under Nom. |
 | Not found / offline sign-in | Field | "Page introuvable." with "Retour à la tournée". "Impossible de vous identifier hors ligne. Connectez-vous une fois avec du réseau." |
