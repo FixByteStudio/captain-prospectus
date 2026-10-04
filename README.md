@@ -14,6 +14,8 @@ B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a
 
 **Hard constraint: runs at zero cost.** See [ADR-0002](docs/adr/0002-zero-cost-constraint.md).
 
+<p><img src="public/dashboard.jpg" alt="Dashboard" height="320" />&nbsp;&nbsp;<img src="public/mobile-tourne.jpg" alt="Mobile app" height="320" /></p>
+
 ## Status
 
 M0 done: the app is scaffolded, CI runs lint, typecheck, tests and build, and the
@@ -21,8 +23,6 @@ sync endpoint works end to end against a local D1. Not yet deployed — the
 Cloudflare account and Access application are set up by hand, see
 [deployment](docs/deployment.md). Next: M1, prospects and CSV import.
 See the [roadmap](docs/roadmap.md).
-
-<p><img src="public/dashboard.jpg" alt="Dashboard" height="320" />&nbsp;&nbsp;<img src="public/mobile-tourne.jpg" alt="Mobile app" height="320" /></p>
 
 ## Develop
 
