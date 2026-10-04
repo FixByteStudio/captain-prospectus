@@ -1,14 +1,16 @@
-<h1 align="center"><img src="docs/brand/favicon.svg" alt="" width="42" align="center" /> Captain Prospectus</h1>
+<h1 align="center"><img src="docs/brand/cp.png" alt="Captain Prospectus" width="500" /></h1>
 
 B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a map area), assigns them to field agents, and watches visits arrive live. Agents work from a phone, offline-first: they walk their list, hand out flyers, run the question script, log the outcome, and add places they discover on the street.
 
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232a)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Cloudflare D1](https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/d1/)
-[![license: Coopyleft](https://img.shields.io/badge/license-Coopyleft%20%28AGPL--3.0%20based%29-e0a12b?labelColor=0e3a5f)](LICENSE.md)
-[![join the crew](https://img.shields.io/badge/join.captain.food-%E2%9A%93%20come%20aboard-e8613a?labelColor=0e3a5f)](https://join.captain.food)
+<p align="center">
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232a" alt="React 19" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5" /></a>
+  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white" alt="Vite 8" /></a>
+  <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare_Workers-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" /></a>
+  <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1" /></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-Coopyleft%20%28AGPL--3.0%20based%29-e0a12b?labelColor=0e3a5f" alt="license: Coopyleft" /></a>
+  <a href="https://join.captain.food"><img src="https://img.shields.io/badge/join.captain.food-%E2%9A%93%20come%20aboard-e8613a?labelColor=0e3a5f" alt="join the crew" /></a>
+</p>
 
 **Hard constraint: runs at zero cost.** See [ADR-0002](docs/adr/0002-zero-cost-constraint.md).
 
