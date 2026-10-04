@@ -1,4 +1,4 @@
-<h1><img src="docs/brand/favicon.svg" alt="" width="42" align="center" /> Captain Prospectus</h1>
+<h1 align="center"><img src="docs/brand/favicon.svg" alt="" width="42" align="center" /> Captain Prospectus</h1>
 
 B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a map area), assigns them to field agents, and watches visits arrive live. Agents work from a phone, offline-first: they walk their list, hand out flyers, run the question script, log the outcome, and add places they discover on the street.
 
@@ -20,7 +20,7 @@ Cloudflare account and Access application are set up by hand, see
 [deployment](docs/deployment.md). Next: M1, prospects and CSV import.
 See the [roadmap](docs/roadmap.md).
 
-<p><img src="public/dashboard.jpg" alt="Dashboard" height="350" />&nbsp;&nbsp;<img src="public/mobile-tourne.jpg" alt="Mobile app" height="350" /></p>
+<p><img src="public/dashboard.jpg" alt="Dashboard" height="320" />&nbsp;&nbsp;<img src="public/mobile-tourne.jpg" alt="Mobile app" height="320" /></p>
 
 ## Develop
 
