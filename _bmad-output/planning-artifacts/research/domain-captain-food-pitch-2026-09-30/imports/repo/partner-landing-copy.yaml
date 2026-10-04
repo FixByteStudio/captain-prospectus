@@ -1,0 +1,10 @@
+# ── partner landing ──────────────────────────────────────────────────────────
+partner.header:     { messages: { en: "Partner with us", fr: "Devenez partenaire" } }
+partner.hero_title: { messages: { en: "Grow your restaurant with Captain.Food", fr: "Développez votre restaurant avec Captain.Food" } }
+partner.hero_body:  { messages: { en: "Join Tours' leading food platform. No commission model — flat subscription.", fr: "Rejoignez la première plateforme food de Tours. Sans commission — abonnement forfaitaire." } }
+partner.prop.orders.title:  { messages: { en: "Increase orders", fr: "Augmentez vos commandes" } }
+partner.prop.orders.body:   { messages: { en: "Reach thousands of new customers in your city.", fr: "Touchez des milliers de nouveaux clients dans votre ville." } }
+partner.prop.margins.title: { messages: { en: "Keep your margins", fr: "Préservez vos marges" } }
+partner.prop.margins.body:  { messages: { en: "Flat monthly fee. No per-order commission.", fr: "Forfait mensuel fixe. Aucune commission par commande." } }
+partner.prop.control.title: { messages: { en: "Full control", fr: "Contrôle total" } }
+partner.prop.control.body:  { messages: { en: "Manage your menu, hours, and catalog in real-time.", fr: "Gérez votre menu, vos horaires et votre catalogue en temps réel." } }

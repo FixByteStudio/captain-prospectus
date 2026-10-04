@@ -1,0 +1,280 @@
+# --- Value Objects ---
+
+Money:
+  type: object
+  description: >
+    Stronger-typed money than HubRise's "9.80 EUR" string. Converted at the
+    HubRise boundary (parse + x100), kept as integer minor units + currency internally.
+  properties:
+    amountCents:
+      $ref: 'scalars.yaml#/MoneyCents'
+    currency:
+      $ref: 'scalars.yaml#/CurrencyCode'
+  required: [amountCents, currency]
+
+
+PaymentBreakdown:
+  type: object
+  description: >
+    The order's money breakdown, computed server-side by PlaceOrderProcess (ADR-0016/0017/0018). Carries
+    BOTH the buyer-facing checkout lines and the 3-way Stripe Connect split, in one place so they can't
+    diverge. Invariants: total = articles + delivery + serviceFee; restaurantPayout = articles −
+    restaurantContribution; riderPayout = delivery; captainNet = serviceFee + restaurantContribution
+    (gross of Stripe fees, which Captain absorbs as merchant of record). 0% commission on food:
+    restaurantContribution is a distinct service line, never a cut of the menu price.
+  properties:
+    # buyer-facing (checkout display, ADR-0018)
+    articles:
+      $ref: '#/Money'
+      description: "Food sub-total TTC (100% to the restaurant, minus its service contribution)."
+    delivery:
+      $ref: '#/Money'
+      description: "Delivery fee (→ rider); zero for collection. Delivery integration is post-V0."
+    serviceFee:
+      $ref: '#/Money'
+      description: "Captain service fee shown to the buyer (the buyer part of the fee)."
+    total:
+      $ref: '#/Money'
+      description: "What the buyer pays = articles + delivery + serviceFee (the PaymentIntent amount)."
+    # 3-way split (ADR-0017)
+    restaurantContribution:
+      $ref: '#/Money'
+      description: "Restaurant's variable service part (margin-proportional); deducted from its payout."
+    restaurantPayout:
+      $ref: '#/Money'
+      description: "Transfer to the restaurant Connect account = articles − restaurantContribution."
+    riderPayout:
+      $ref: '#/Money'
+      description: "Transfer to the rider Connect account = delivery."
+    captainNet:
+      $ref: '#/Money'
+      description: "Kept on the Captain platform account = serviceFee + restaurantContribution (gross of Stripe)."
+  required: [articles, delivery, serviceFee, total, restaurantContribution, restaurantPayout, riderPayout, captainNet]
+
+
+Courier:
+  type: object
+  description: >
+    The person delivering an order. For an INDEPENDENT rider, `riderId` is set (a Captain RIDER);
+    for a PARTNER courier (e.g. Avelo37) only `displayName`/`phone` are known, reported by the partner.
+  properties:
+    displayName:
+      type: string
+      maxLength: 140
+    phone:
+      $ref: 'scalars.yaml#/PhoneNumber'
+      nullable: true
+    riderId:
+      $ref: 'scalars.yaml#/RiderId'
+      nullable: true
+      description: "Set when the courier is an independent Captain rider; null for a partner courier."
+  required: [displayName]
+
+
+TaxRate:
+  type: object
+  description: "Per-service-mode VAT, mirroring HubRise product tax_rate."
+  properties:
+    delivery:
+      $ref: 'scalars.yaml#/TaxRatePercent'
+    collection:
+      $ref: 'scalars.yaml#/TaxRatePercent'
+      nullable: true
+    eatIn:
+      $ref: 'scalars.yaml#/TaxRatePercent'
+      nullable: true
+  required: [delivery]
+
+
+Address:
+  type: object
+  properties:
+    line1:
+      $ref: 'scalars.yaml#/AddressLine'
+    line2:
+      $ref: 'scalars.yaml#/AddressLine'
+      nullable: true
+    postalCode:
+      $ref: 'scalars.yaml#/PostalCode'
+    city:
+      $ref: 'scalars.yaml#/CityName'
+    country:
+      $ref: 'scalars.yaml#/CountryCode'
+  required: [line1, postalCode, city, country]
+
+
+CustomerContact:
+  type: object
+  properties:
+    displayName:
+      $ref: 'scalars.yaml#/CustomerDisplayName'
+    email:
+      $ref: 'scalars.yaml#/EmailAddress'
+    phone:
+      $ref: 'scalars.yaml#/PhoneNumber'
+  required: [displayName, phone]
+
+
+# --- Orders ---
+
+SelectedOption:
+  type: object
+  description: "An option chosen by the customer on a line item, priced at order time."
+  properties:
+    optionId:
+      $ref: 'scalars.yaml#/OptionId'
+    optionListId:
+      $ref: 'scalars.yaml#/OptionListId'
+    name:
+      $ref: 'scalars.yaml#/OptionName'
+    price:
+      $ref: '#/Money'
+  required: [optionId, name, price]
+
+
+OrderLineItem:
+  type: object
+  properties:
+    offerId:
+      $ref: 'scalars.yaml#/OfferId'
+    productId:
+      $ref: 'scalars.yaml#/ProductId'
+    name:
+      $ref: 'scalars.yaml#/ProductName'
+    offerName:
+      $ref: 'scalars.yaml#/OfferName'
+      nullable: true
+    quantity:
+      type: integer
+      minimum: 1
+    unitPrice:
+      $ref: '#/Money'
+    selectedOptions:
+      type: array
+      items:
+        $ref: '#/SelectedOption'
+    lineTotal:
+      $ref: '#/Money'
+      description: "(unitPrice + sum(selectedOptions.price)) * quantity, computed server-side."
+  required:
+    - offerId
+    - name
+    - quantity
+    - unitPrice
+    - lineTotal
+
+
+CheckoutSnapshot:
+  type: object
+  description: >
+    The validated, server-priced checkout PlaceOrderProcess freezes onto events.yaml#/PaymentIntentCreated
+    when it creates the Stripe PaymentIntent — everything events.yaml#/OrderPlaced +
+    events.yaml#/CartCheckedOut need beyond the inbound PaymentAuthorized fact, so the order is
+    reconstructable from the event log alone (no out-of-log store). Mirrors the application
+    `CheckoutSnapshot` port type. Invariant: totalAmount == breakdown.total (== the PaymentIntent amount).
+  properties:
+    orderId:
+      $ref: 'scalars.yaml#/OrderId'
+    cartId:
+      $ref: 'scalars.yaml#/CartId'
+    restaurantId:
+      $ref: 'scalars.yaml#/RestaurantId'
+    customerId:
+      $ref: 'scalars.yaml#/CustomerId'
+      description: "REQUIRED (#144) — frozen from PlaceOrder, whose customerId is now required."
+    mode:
+      $ref: 'scalars.yaml#/Mode'
+      nullable: true
+    ref:
+      $ref: 'scalars.yaml#/ExternalReference'
+      nullable: true
+    customerContact:
+      $ref: '#/CustomerContact'
+    serviceType:
+      $ref: 'scalars.yaml#/ServiceType'
+    deliveryAddress:
+      $ref: '#/Address'
+      nullable: true
+    items:
+      type: array
+      items:
+        $ref: '#/OrderLineItem'
+      description: "Priced order lines frozen at checkout — recomputed server-side from the live catalog (rules.yaml#/ServerPriceAuthority)."
+    totalAmount:
+      $ref: '#/Money'
+    breakdown:
+      $ref: '#/PaymentBreakdown'
+    note:
+      $ref: 'scalars.yaml#/OrderNote'
+      nullable: true
+    # --- Service-window verdict EVIDENCE (RSO-1, DECISIONS §43 amendment 6) ---
+    # The guard computes the fact; these fields stop it being thrown away: a restaurant disputing
+    # an order accepted at 22:40 asks a question the log can now answer. A stored `wasOpen: true`
+    # would be unfalsifiable six months later; a stored WINDOW is evidence. ALL FIVE ARE OPTIONAL,
+    # FOREVER: stored PaymentIntentCreated rows predate them, and a required field would make those
+    # rows undeserializable — an orphaned-payment incident. Tolerance falls out of Option + serde
+    # default; never move these into `required`. Deliberately NOT the api ServiceWindow shape: the
+    # event carries evidence, the api carries a conversation — in particular no `validUntil` here
+    # (a config-derived TTL is not history).
+    verdict:
+      $ref: 'scalars.yaml#/ServiceWindowVerdict'
+      nullable: true
+      description: "The service-hours verdict at acceptance. Absent on snapshots frozen before RSO-1; recorded even in shadow mode (the gate changes whether OUTSIDE_HOURS refuses, never whether the verdict is recorded)."
+    windowFrom:
+      type: string
+      format: date-time
+      nullable: true
+      description: "Evidence: start instant of the window the verdict was judged against (null under HOURS_UNDECLARED, or pre-RSO-1)."
+    windowTo:
+      type: string
+      format: date-time
+      nullable: true
+      description: "Evidence: end instant of that window — min(door-close, cutoff), the same number the guard enforced."
+    timezone:
+      $ref: 'scalars.yaml#/TimeZone'
+      nullable: true
+      description: "Evidence: the timezone the evaluation ran in (null when undeclared — one input to HOURS_UNDECLARED)."
+    evaluatedAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: "Evidence: the injected request instant the verdict was evaluated at."
+  required:
+    - orderId
+    - cartId
+    - restaurantId
+    - customerId
+    - customerContact
+    - serviceType
+    - items
+    - totalAmount
+    - breakdown
+
+
+CommandFailureAttribution:
+  type: object
+  description: >
+    THE ONLY SHAPE a non-catalogued command failure may write into `inbound_messages.error.context`
+    ([#623](https://github.com/TheCaptainCompany/captain-food/issues/623),
+    [#625](https://github.com/TheCaptainCompany/captain-food/issues/625)). Every field is a closed
+    set or a number, so a provider body is UNSPELLABLE here — the guarantee is the type, not a
+    review convention, which is what the ten existing `context: { detail: e.to_string() }` sites
+    show a convention is worth. The free diagnostic text still exists and still matters; it goes to
+    the LOG at the seam that produced it, never into this row, because this row persists for the
+    retention window and is served to callers as `Operation.errorCode` / `Operation.message`.
+    NOT an event payload and not a projected entity: it is the vocabulary of one jsonb column.
+  properties:
+    seam:
+      $ref: 'scalars.yaml#/CommandFailureSeam'
+      description: "Which boundary failed — the first discrimination an operator needs."
+    reason:
+      $ref: 'scalars.yaml#/CommandFailureReason'
+      description: "Why it failed, in the coarsest vocabulary that changes the operational response."
+    gatewayStatus:
+      $ref: 'scalars.yaml#/GatewayStatusCode'
+      nullable: true
+      description: >
+        The gateway's HTTP status, present ONLY at the PAYMENT_GATEWAY seam. Its ABSENCE on every
+        other seam is meaningful and is asserted: a status on a payload-decode failure would mean
+        the classifier had guessed.
+  required: [seam, reason]
