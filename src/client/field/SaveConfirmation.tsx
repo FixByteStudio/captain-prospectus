@@ -191,11 +191,16 @@ function Body({
       )}
 
       {/* Enregistrer first in the DOM, so it is also first for the keyboard;
-          on a dialog it is drawn on the right, where a confirm sits. */}
-      <div className={cn("flex gap-2", stacked ? "flex-col" : "flex-row-reverse")}>
+          on a dialog it is drawn on the right, where a confirm sits. Stacked
+          buttons skip flex-1: its 0% basis on the column axis would override
+          h-touch and shrink them to their text. cn() stays on each button:
+          its merge is what drops the base text-sm for touch's text-base. */}
+      <div
+        className={cn("flex gap-2", stacked ? "flex-col" : "flex-row-reverse [&>button]:flex-1")}
+      >
         <button
           type="button"
-          className={cn(buttonVariants({ size: "touch" }), "flex-1")}
+          className={cn(buttonVariants({ size: "touch" }))}
           disabled={saving}
           onClick={onConfirm}
         >
@@ -203,7 +208,7 @@ function Body({
         </button>
         <button
           type="button"
-          className={cn(buttonVariants({ variant: "secondary", size: "touch" }), "flex-1")}
+          className={cn(buttonVariants({ variant: "secondary", size: "touch" }))}
           disabled={saving}
           onClick={onEdit}
         >
