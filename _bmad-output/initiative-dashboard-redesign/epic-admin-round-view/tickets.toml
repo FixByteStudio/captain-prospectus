@@ -1,0 +1,103 @@
+# The stories of epic-admin-round-view, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "ADR-0028: agent position at sync"
+description = "Writes ADR-0028 deciding that the phone sends the last position reading it already took today with each sync (sync never requests GPS), that the server keeps one row per agent overwritten by a newer reading and deleted overnight when not from today, that `at` is clamped to received_at, that only admins see it in Terrain › Tournée du jour, and how this stays inside vision.md's no-continuous-tracking non-goal and invariants 2, 4 and 12; security-reviewer reviews it, the owner accepts it, and docs/domains/field-operations.md:199, docs/vision.md:30 ('captured at check-in only') and docs/glossary.md ('agent position') record the rule."
+verify = "ADR-0028 is listed as accepted in docs/adr, the security-reviewer verdict is linked in its PR, and field-operations.md no longer says agent-position retention is undecided."
+covers = ["CAP-4"]
+after = []
+hitl = true
+risk = "high"
+references = ["docs/adr/0023-retention-by-redaction.md", "docs/adr/0024-adrs-only-for-hard-to-reverse-decisions.md", "docs/vision.md, Non-goals", "_bmad-output/specs/spec-dashboard-redesign/server-gaps.md, G7"]
+unknown = "Whether the admin map shows the exact position dot (the mockup and DESIGN.md › Map already draw one) or only its age; the ADR settles it."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Position stored at sync and served to the admin"
+description = "Tracer bullet: adds an agent_positions table (agent_email primary key, lat, lng, accuracy, captured_at, received_at) via pnpm db:generate, an optional `position` on syncRequestSchema (zod/mini, no clientVersion bump) upserted so an older reading never overwrites a newer one with captured_at clamped to received_at, a delete of non-today rows in runRetention, and GET /api/admin/agents/:email/round returning {prospects: the same open assigned prospects the sync pull returns, position: {lat,lng,accuracy,capturedAt}|null when not from today}, refusing an email not in assignableEmails; entries 3 and 5 build on this shape; updates docs/api.md and docs/data-model.md."
+verify = "Worker tests show a clientVersion 1 body with no position still syncs, a position is stored and served, an older one does not replace a newer one, a future capturedAt is clamped, yesterday's row is served as null and removed by runRetention, an unknown agent gets 404 and an agent caller 403; the migration applies with pnpm db:migrate:local, and the PR links an approved security-reviewer verdict on the diff."
+covers = ["CAP-4"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["src/shared/schemas.ts, syncRequestSchema", "src/worker/routes/agent.ts", "src/worker/retention.ts", "src/worker/routes/admin.ts, assignableEmails"]
+unknown = "None known."
+
+[[entry]]
+id = 3
+type = "story"
+title = "The phone sends its last reading at sync"
+description = "Keeps the last reading useAgentPosition took (outside React state, not in Dexie) and has runSync add it as entry 2's optional `position` when it was taken today in Brussels time, never calling geolocation itself; a phone with no reading sends no field; docs/domains/field-operations.md describes it."
+verify = "Unit tests on runSync show the body carries today's reading, omits yesterday's or a missing one, and that a sync triggers no geolocation call; the PR quotes the precache total against 1,000 KiB and links an approved security-reviewer verdict on the diff."
+covers = ["CAP-4"]
+after = [2]
+hitl = false
+risk = "medium"
+references = ["src/client/field/useAgentPosition.ts", "src/client/field/sync.ts"]
+unknown = "None known."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Today's round rule moves to src/shared"
+description = "Moves the pure stop-selection part of buildTodayList (due, kept for today, Plus tard, as left by 4.14) from src/client/field/today.ts into src/shared with no DOM or Dexie input, so the admin view (entry 5) shows exactly the stops the agent's Tournée shows; the field keeps its behaviour."
+verify = "Existing field tests pass unchanged, and a new shared unit test gives the same stops for the same prospects and date as the field list."
+covers = ["CAP-4"]
+after = ["4.14"]
+hitl = false
+risk = "medium"
+references = ["src/client/field/today.ts, buildTodayList", "_bmad-output/specs/spec-done-stop-leaves-the-round/round-placement.md"]
+unknown = "Assumption: buildTodayList(prospects, outbox, from, now, queued) takes the outbox and queued visits as plain arguments, so the admin passes [] for both."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Admin Tournée du jour: agent picker and ordered list"
+description = "Adds /admin/tournee under Terrain in nav.ts and AdminApp.tsx (with nav.test.ts), an agent Select from GET /agents, and a read-only list of today's stops only (no Plus tard group) from entry 2's endpoint in the order entry 4's shared rule gives from the stored position (no second sort), with '{n} arrêts', 'Position du {date heure}' and distances; with no position it sorts the rule's stops by name and shows the 'Aucune position reçue aujourd'hui…' notice; strings in copy.ts; the admin round view section of docs/design.md."
+verify = "DOM tests show the shared rule's order, the stop count and the position age for an agent with a position, name order with the notice and no distances without one, and no Visiter or Y aller on any row."
+covers = ["CAP-4", "CAP-11"]
+after = [2, 4, "3.1"]
+hitl = false
+risk = "medium"
+references = ["_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/DESIGN.md, Admin round view", "_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md, Flow 3 and No agent position", "src/client/admin/nav.ts"]
+unknown = "None known."
+
+[[entry]]
+id = 6
+type = "story"
+title = "Admin Tournée du jour: map pane"
+description = "Puts the map right of entry 5's list by reusing RoundMap, mapPins and walkingPath with no selection and recentre made optional, numbered pins in the list's order, the position marker per ADR-0028, and Leaflet's OSM attribution; the field Carte keeps its behaviour."
+verify = "DOM tests show pin numbers follow the list order, the attribution renders, no position marker shows without a position, and Carte's tests pass unchanged; the PR quotes the precache total against 1,000 KiB."
+covers = ["CAP-4", "CAP-11"]
+after = [5]
+hitl = false
+risk = "low"
+references = ["src/client/field/RoundMap.tsx", "src/client/field/round-map.ts", "docs/adr/0019-admin-chunk-out-of-the-precache.md"]
+unknown = "None known."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Flow 3 at 1280, 820 and 390, light and dark"
+description = "Runs EXPERIENCE.md Flow 3 and its no-position failure on a seeded local build at 1280, 820 and 390 in light and dark, with a phone sync carrying a position."
+verify = "Screenshots of each width and theme, both states, are in the PR."
+covers = ["CAP-4", "CAP-11"]
+after = [3, 6]
+hitl = true
+risk = "low"
+unknown = "None known."
+
+[[entry]]
+id = 8
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only, scoped when pulled from the build records and review findings deferred during this epic."
+verify = "Typecheck, lint, tests and build are green and no behaviour changes."
+covers = ["CAP-4", "CAP-11"]
+after = [1, 2, 3, 4, 5, 6, 7]
+hitl = false
+risk = "low"
+unknown = "Scope set at pull."

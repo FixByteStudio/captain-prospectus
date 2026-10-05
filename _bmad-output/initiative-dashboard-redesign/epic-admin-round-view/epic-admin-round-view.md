@@ -40,3 +40,9 @@ The admin round view, the position field in sync, and its storage and retention.
 
 - Waits on epic-field-screens because: it reuses the Carte map, pin and stop-row components.
 - Decision (2026-09-24): kept as its own last epic, gated on the ADR and the security review (user's choice).
+- Decision (2026-10-05): the admin position is one row per agent, overwritten by a newer reading and deleted overnight when not from today; ADR-0028 (entry 1) records it.
+- Decision (2026-10-05): the phone sends the last reading it already took today; sync never asks for GPS.
+- Decision (2026-10-05): the admin sees the same stops as the agent's Tournée, today's stops only (no Plus tard); entry 4 moves the today rule to src/shared.
+- Decision (2026-10-05): tracer bullet is entry 2 (sync → D1 → admin API), kept as one story; after it, 3 and 5 run in parallel, and 4 runs beside 2 and 3.
+- Decision (2026-10-05): the security-reviewer verdict is in the verify of entries 2 and 3, before location code merges; entry 7 is the Flow 3 screenshot pass.
+- Decision (2026-10-05): the epic-4 gate resolves to 4.14 (merged) on entry 4; entry 5 also waits on 3.1.
