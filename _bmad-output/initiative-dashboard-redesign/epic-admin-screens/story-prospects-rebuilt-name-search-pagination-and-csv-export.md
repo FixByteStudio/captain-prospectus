@@ -1,7 +1,7 @@
 ---
 tracker_id: "179"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/179"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Prospects rebuilt: name search, pagination and CSV export"

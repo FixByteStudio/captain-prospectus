@@ -1,7 +1,7 @@
 ---
 tracker_id: "182"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/182"
-tracker_status: backlog
+tracker_status: done
 id: 8
 type: story
 title: "Doublons rebuilt"

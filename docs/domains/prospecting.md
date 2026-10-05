@@ -49,7 +49,7 @@ stateDiagram-v2
 
 ## Refusal reasons
 
-A `not_interested` visit may carry a `refusalReason`, from a fixed list of 7 values (`REFUSAL_REASONS`). It is **stored only on `not_interested`**; sent with another outcome, or missing (an older build), it is stored null — either way the visit is accepted and the status is still `OUTCOME_TO_STATUS[outcome]`, so a missing or misplaced reason never refuses the visit (INVARIANT 5). A value outside the list is refused with a 400, as for any invalid enum value. `visits_orphaned` mirrors the column so a repair carries it through unchanged.
+A `not_interested` visit may carry a `refusalReason`, from a fixed list of 7 values (`REFUSAL_REASONS`). It is **stored only on `not_interested`**; sent with another outcome, or missing (an older build), it is stored null — either way the visit is accepted and the status is still `OUTCOME_TO_STATUS[outcome]`, so a missing or misplaced reason never refuses the visit (INVARIANT 5). A value outside the list is refused with a 400, as for any invalid enum value, so a new reason value ships to the server before any phone build sends it, and rolling the server back below a build phones already have blocks their sync (the outbox keeps the visits until it is fixed). `visits_orphaned` mirrors the column so a repair carries it through unchanged.
 
 The rule: a refusal reason is something the pitch can't answer at the door. If the pitch has a ready answer, the agent gives it, and it is not a reason.
 

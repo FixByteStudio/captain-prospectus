@@ -1,7 +1,7 @@
 ---
 tracker_id: "181"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/181"
-tracker_status: backlog
+tracker_status: done
 id: 7
 type: story
 title: "Import rebuilt: the map path"

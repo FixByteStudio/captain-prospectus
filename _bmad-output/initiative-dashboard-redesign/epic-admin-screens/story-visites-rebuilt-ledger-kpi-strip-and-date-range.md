@@ -1,7 +1,7 @@
 ---
 tracker_id: "178"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/178"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Visites rebuilt: ledger, KPI strip and date range"

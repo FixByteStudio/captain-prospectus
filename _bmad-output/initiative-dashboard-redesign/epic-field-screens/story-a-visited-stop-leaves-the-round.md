@@ -1,7 +1,7 @@
 ---
 tracker_id: "239"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/239"
-tracker_status: backlog
+tracker_status: done
 id: 14
 type: story
 title: "A visited stop leaves the round"

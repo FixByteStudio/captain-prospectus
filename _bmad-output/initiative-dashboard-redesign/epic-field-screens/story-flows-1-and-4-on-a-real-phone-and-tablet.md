@@ -1,7 +1,7 @@
 ---
 tracker_id: "129"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/129"
-tracker_status: backlog
+tracker_status: done
 id: 12
 type: story
 title: "Flows 1 and 4 on a real phone and tablet"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "174"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/174"
-tracker_status: backlog
+tracker_status: done
 type: epic
 title: "Every admin screen runs on the new design"
 parent: initiative-dashboard-redesign
@@ -9,7 +9,7 @@ covers: [CAP-3, CAP-11]
 after: []
 assignee: ""
 risk: medium
-status: in-progress
+status: done
 ---
 
 # Every admin screen runs on the new design

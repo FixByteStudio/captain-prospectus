@@ -1,7 +1,7 @@
 ---
 tracker_id: "250"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/250"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Prospects flags places reported Hors cible"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "185"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/185"
-tracker_status: backlog
+tracker_status: done
 id: 11
 type: story
 title: "The six screens at 1280, 820 and 390, light and dark"

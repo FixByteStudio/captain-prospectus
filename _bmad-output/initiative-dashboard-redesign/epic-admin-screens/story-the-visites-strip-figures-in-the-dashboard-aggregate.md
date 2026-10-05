@@ -1,7 +1,7 @@
 ---
 tracker_id: "177"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/177"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "The Visites strip figures in the dashboard aggregate"

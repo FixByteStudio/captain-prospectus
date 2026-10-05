@@ -1,7 +1,7 @@
 ---
 tracker_id: "186"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/186"
-tracker_status: backlog
+tracker_status: done
 id: 12
 type: story
 title: "Refactor sweep"
