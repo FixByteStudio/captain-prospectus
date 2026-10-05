@@ -1301,8 +1301,9 @@ blocks the first paint on Leaflet loading; ADR-0026 still precaches the chunk
 regardless, so it is already on the phone and Carte works the first time it is
 opened offline. Built from the same `useRound()` the round itself reads: same
 rules and the same prospect data as Tournée, though each screen takes its own
-one-shot position reading (`useAgentPosition` has no shared state), so the two
-are read moments apart, not literally the same call.
+one-shot position reading (no screen reads another's; the latest reading is also
+kept in module memory, for the next sync only, per ADR-0028), so the two are read
+moments apart, not literally the same call.
 
 Below 768px the map carries a selected stop in a persistent sheet; from 768px
 the sheet is replaced by a list pane, the map's own left-hand twin

@@ -2,14 +2,17 @@
  * One position reading, on request.
  *
  * `getCurrentPosition`, never `watchPosition`: continuous GPS tracking of
- * agents is an explicit non-goal in vision.md, and the data model captures
- * position at check-in only. This hook is the whole of the app's access to it.
+ * agents is an explicit non-goal in vision.md. This hook is the whole of the
+ * app's access to it. Each reading is also kept in module memory, so the next
+ * sync can offer the latest one of the day to the admin's round view; sync
+ * itself never reads the position (ADR-0028, `last-reading.ts`).
  *
  * Every failure is survivable. A denied permission orders the list by nothing
  * and labels distances « Position inconnue »; it never blocks a visit.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Point } from "../../shared/geo";
+import { rememberReading } from "./last-reading";
 
 export type PositionState = {
   point: Point | null;
@@ -48,6 +51,14 @@ export function useAgentPosition(): PositionState {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        // The fix was taken whether or not this screen is still mounted, and
+        // `timestamp` is when the device took it, not when we got here.
+        rememberReading({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          capturedAt: pos.timestamp,
+        });
         if (cancelled) return;
         setPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setDenied(false);

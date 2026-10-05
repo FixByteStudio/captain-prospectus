@@ -26,8 +26,8 @@ Object.defineProperty(navigator, "geolocation", {
           return;
         }
         ok({
-          coords: { latitude: fix.lat, longitude: fix.lng },
-          timestamp: Date.now(),
+          coords: { latitude: fix.lat, longitude: fix.lng, accuracy: fix.accuracy ?? 20 },
+          timestamp: fix.timestamp ?? Date.now(),
         } as GeolocationPosition);
       });
     },

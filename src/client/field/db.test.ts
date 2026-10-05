@@ -15,6 +15,7 @@ import {
   setMeta,
   todaysSentVisits,
 } from "./db";
+import { readingToSend, rememberReading, setReadingIdentity } from "./last-reading";
 
 /**
  * INVARIANT 5 again, from the storage end. A schema upgrade is the one moment
@@ -491,6 +492,21 @@ describe("clearAgentCache", () => {
     // Read-only knowledge for rendering, not a queued write (GH #119): leaving
     // it would carry the previous agent's visit ids and email on a shared phone.
     await expect(db.sentVisits.count()).resolves.toBe(0);
+    db.close();
+  });
+
+  it("drops the last position reading (ADR-0028)", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const now = Date.now();
+    setReadingIdentity("a@example.com");
+    rememberReading({ lat: 50.8467, lng: 4.3525, accuracy: 20, capturedAt: now });
+    expect(readingToSend("a@example.com", now)).toBeDefined();
+
+    await clearAgentCache(db);
+
+    expect(readingToSend("a@example.com", now)).toBeUndefined();
+    setReadingIdentity(null);
     db.close();
   });
 
