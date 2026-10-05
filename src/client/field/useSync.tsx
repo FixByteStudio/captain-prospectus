@@ -15,6 +15,7 @@ import { createContext, use, useCallback, useEffect, useRef, useState } from "re
 import { useLiveQuery } from "dexie-react-hooks";
 import { applyUpdateNow } from "../pwa";
 import { confirmOutbox, fieldDb, outboxCounts } from "./db";
+import { setReadingIdentity } from "./last-reading";
 import { runSync, type SyncStatus } from "./sync";
 import { nextDelayMs, nextFailureCount, shouldDrain } from "./sync-schedule";
 
@@ -164,6 +165,14 @@ export function SyncProvider({
   // idempotently, once nothing is left flagged.
   useEffect(() => {
     if (confirmed) void confirmOutbox(fieldDb, identity);
+  }, [confirmed, identity]);
+
+  // ADR-0028: the position reading is stamped with the *confirmed* identity,
+  // never a cache-sourced one. Cleanup runs on a switch and on unmount, so a
+  // reading never outlives the identity that took it.
+  useEffect(() => {
+    setReadingIdentity(confirmed ? identity : null);
+    return () => setReadingIdentity(null);
   }, [confirmed, identity]);
 
   // Trigger 1: app start.

@@ -15,6 +15,7 @@ import type {
   VisitHistoryEntry,
 } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
+import { dropReading } from "./last-reading";
 import { sendableBy, writtenByOrUnstamped, type OutboxStamp } from "./outbox-stamp";
 
 // Re-exported so the store module still names everything a row carries;
@@ -273,6 +274,8 @@ export async function cacheVisitHistory(
  * the device would be the same leak this function exists to close.
  */
 export async function clearAgentCache(db: FieldDb): Promise<void> {
+  // The last position reading is the previous agent's too (ADR-0028).
+  dropReading();
   await Promise.all([
     db.prospects.clear(),
     db.visitHistory.clear(),

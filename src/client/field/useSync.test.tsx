@@ -11,6 +11,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { fieldDb, type StoredVisit } from "./db";
+import { setGeolocation } from "../../../test/geolocation";
+import { dropReading, readingToSend, rememberReading } from "./last-reading";
+import { useAgentPosition } from "./useAgentPosition";
 import { SyncProvider, useSyncState } from "./useSync";
 
 function Probe() {
@@ -166,5 +169,107 @@ describe("SyncProvider — unconfirmed identity", () => {
       expect((await fieldDb.outboxVisits.get(stray.id))?.unconfirmed).toBeUndefined();
     });
     expect(await fieldDb.outboxVisits.get(stray.id)).toMatchObject({ writtenBy: identity });
+  });
+});
+
+/**
+ * ADR-0028: the position reading is stamped by the confirmed identity the
+ * provider announces, and goes when that identity does.
+ */
+describe("SyncProvider — the position reading's identity", () => {
+  const NOW = Date.now();
+  const take = () => rememberReading({ lat: 50.8467, lng: 4.3525, accuracy: 20, capturedAt: NOW });
+
+  afterEach(() => dropReading());
+
+  it("keeps a reading taken under a confirmed identity, and drops it when the identity switches", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(okBody), { status: 200 }),
+    );
+    const { rerender } = render(
+      <SyncProvider identity="a@example.com" confirmed={true} recheckIdentity={vi.fn()}>
+        <Probe />
+      </SyncProvider>,
+    );
+    take();
+    expect(readingToSend("a@example.com", NOW)).toBeDefined();
+
+    rerender(
+      <SyncProvider identity="b@example.com" confirmed={true} recheckIdentity={vi.fn()}>
+        <Probe />
+      </SyncProvider>,
+    );
+
+    expect(readingToSend("a@example.com", NOW)).toBeUndefined();
+    expect(readingToSend("b@example.com", NOW)).toBeUndefined();
+  });
+
+  it("keeps no reading taken while the identity is cache-sourced", () => {
+    render(
+      <SyncProvider identity="a@example.com" confirmed={false} recheckIdentity={vi.fn()}>
+        <Probe />
+      </SyncProvider>,
+    );
+    take();
+    expect(readingToSend("a@example.com", NOW)).toBeUndefined();
+  });
+
+  it("drops the reading on unmount", () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(okBody), { status: 200 }),
+    );
+    const { unmount } = render(
+      <SyncProvider identity="a@example.com" confirmed={true} recheckIdentity={vi.fn()}>
+        <Probe />
+      </SyncProvider>,
+    );
+    take();
+    unmount();
+    expect(readingToSend("a@example.com", NOW)).toBeUndefined();
+  });
+});
+
+/**
+ * The whole path in one place, with nothing seeded by hand: a screen's hook
+ * takes a fix, `SyncProvider` has stamped the confirmed identity, and the sync
+ * the provider runs puts that fix on the wire.
+ */
+describe("SyncProvider — hook to wire", () => {
+  function Screen() {
+    const { point } = useAgentPosition();
+    const { syncNow } = useSyncState();
+    return (
+      <button type="button" onClick={() => void syncNow()}>
+        {point ? "located" : "locating"}
+      </button>
+    );
+  }
+
+  it("sends the fix a mounted screen took with the next sync", async () => {
+    const taken = Date.now() - 30_000;
+    setGeolocation({ lat: 50.8467, lng: 4.3525, accuracy: 18, timestamp: taken });
+    const bodies: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      bodies.push(String(init?.body));
+      return new Response(JSON.stringify(okBody), { status: 200 });
+    });
+
+    render(
+      <SyncProvider identity="a@example.com" confirmed={true} recheckIdentity={vi.fn()}>
+        <Screen />
+      </SyncProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole("button").textContent).toBe("located"));
+    bodies.length = 0;
+
+    await act(async () => screen.getByRole("button").click());
+
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    expect(JSON.parse(bodies[0] ?? "{}").position).toEqual({
+      lat: 50.8467,
+      lng: 4.3525,
+      accuracy: 18,
+      capturedAt: taken,
+    });
   });
 });
