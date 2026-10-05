@@ -682,6 +682,12 @@ describe("runSync — the position", () => {
     expect(await sentBody()).not.toHaveProperty("position");
   });
 
+  it("carries none for a reading dated after today in Brussels", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix({ capturedAt: MIDNIGHT + 24 * 60 * 60_000 }));
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
   it("carries none for a reading stamped with another identity", async () => {
     setReadingIdentity(OTHER);
     rememberReading(fix());

@@ -90,6 +90,8 @@ context:
 
 ## Spec Change Log
 
+- 2026-10-06, PR #275 review: the frozen Always line states only the lower bound (`capturedAt` ≥ today's Brussels midnight). The code also rejects `capturedAt` ≥ `brusselsPeriod(now, 1).to`, at the owner's request; the frozen block is left as approved. Avoids: a phone clock moved back across midnight sending a next-day fix that blocks later readings. KEEP: the same-day skew stays accepted, per ADR-0028.
+
 ## Review Triage Log
 
 Pass 1 (2026-10-06): high 0, medium 1, low 8, false 3, maybe-false 0. No intent_gap or bad_spec; 3 patches applied inline, none deferred. Lenses: blind-hunter, edge-case-hunter, verification-gap (no gaps), intent-alignment, plus the security-reviewer.
@@ -101,7 +103,7 @@ Pass 1 (2026-10-06): high 0, medium 1, low 8, false 3, maybe-false 0. No intent_
 | 3 | intent | No test chains hook, provider and `runSync` | low | patch | `SyncProvider — hook to wire` test: a mounted screen's fix reaches the fetch body |
 | 4 | blind | `dropReading` comment names a sign-out nothing calls | low | patch | Comment names `setReadingIdentity(null)` |
 | 5 | blind | A fix taken before confirmation is lost | false | reject | ADR-0028 requires it: never a cache-sourced identity |
-| 6 | edge | A future-dated `capturedAt` shadows later fixes | low | reject | ADR-0028 prescribes the raw comparison; the OS stamps the fix |
+| 6 | edge, PR review | A `capturedAt` dated after today (clock moved back across midnight) is sent and shadows later fixes through the server's raw strict-newer upsert | medium | patch | Reopened by the owner's PR comment: `readingToSend` also rejects `capturedAt >= brusselsPeriod(now, 1).to`; unit and wire tests. A same-day skew stays accepted (ADR-0028) |
 | 7 | edge | A fix resolving after `clearAgentCache` is kept | low | reject | Same window as row 1; the same identity took it |
 | 8 | edge | The provider cleanup nulls the identity on any dependency change | false | reject | Dependencies change only on a real switch or confirmation flip, which must drop it |
 | 9 | security | `docs/security.md:37` is conditional on a release that has now landed | low | reject | Ticket note: docs change only if the code departs; the release checklist owns that wording |
@@ -113,7 +115,7 @@ Pass 1 (2026-10-06): high 0, medium 1, low 8, false 3, maybe-false 0. No intent_
 
 - **Why a module, not the hook's context:** `useRound`, Ajouter and the visit form each call `useAgentPosition()` with no provider, and several tests mock `useSync`. `SyncProvider` owns identity and `confirmed`, so it tells the module (`setReadingIdentity`); the hook records into it. A reading stamped `null` is never stored.
 - **Stamp at capture:** `rememberReading` reads the module's current identity. `setReadingIdentity(next)` drops a reading whose stamp differs, so a switch never leaves a reading another agent could send.
-- **Clock:** the client checks `capturedAt` against Brussels midnight only; the server clamps to receipt (ADR-0028).
+- **Clock:** the client checks `capturedAt` against both of today's Brussels bounds. The server clamps to receipt but stores the raw value and upserts only a strictly newer one (ADR-0028), so a fix dated after today would shadow later valid ones.
 
 ## Verification
 

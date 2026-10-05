@@ -9,6 +9,8 @@ import { dropReading, readingToSend, rememberReading, setReadingIdentity } from 
 const NOW = Date.UTC(2026, 9, 5, 12, 0, 0); // 14:00 in Brussels (CEST)
 // Brussels midnight starting 5 October 2026 is 22:00 UTC on the 4th.
 const MIDNIGHT = Date.UTC(2026, 9, 4, 22, 0, 0);
+// ...and tomorrow's starts 24 h later.
+const NEXT_MIDNIGHT = Date.UTC(2026, 9, 5, 22, 0, 0);
 
 const reading = (over: Partial<Parameters<typeof rememberReading>[0]> = {}) => ({
   lat: 50.8467,
@@ -44,6 +46,18 @@ describe("last-reading", () => {
   it("offers a reading taken exactly at Brussels midnight", () => {
     setReadingIdentity("a@example.com");
     rememberReading(reading({ capturedAt: MIDNIGHT }));
+    expect(readingToSend("a@example.com", NOW)).toBeDefined();
+  });
+
+  it("offers nothing for a reading dated on a later Brussels day (the clock moved back)", () => {
+    setReadingIdentity("a@example.com");
+    rememberReading(reading({ capturedAt: NEXT_MIDNIGHT }));
+    expect(readingToSend("a@example.com", NOW)).toBeUndefined();
+  });
+
+  it("offers a reading taken one millisecond before the next Brussels midnight", () => {
+    setReadingIdentity("a@example.com");
+    rememberReading(reading({ capturedAt: NEXT_MIDNIGHT - 1 }));
     expect(readingToSend("a@example.com", NOW)).toBeDefined();
   });
 

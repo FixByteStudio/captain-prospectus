@@ -48,12 +48,17 @@ export function rememberReading(position: AgentPosition): void {
 
 /**
  * The reading `runSync` may send as `identity`, or `undefined` for "send no
- * field": stamped by that identity, taken today in Brussels (the server clamps
- * to receipt, so only the lower bound matters here), and valid on the wire.
+ * field": stamped by that identity, taken today in Brussels, and valid on the
+ * wire. Both bounds matter: the server stores the raw `capturedAt` and only
+ * upserts a strictly newer one, so a fix dated after today (the phone clock
+ * moved back since) would shadow every later valid reading.
  */
 export function readingToSend(identity: string, now: number): AgentPosition | undefined {
   if (!last || last.stamp !== identity) return undefined;
-  if (last.position.capturedAt < brusselsPeriod(now, 1).from) return undefined;
+  const today = brusselsPeriod(now, 1);
+  if (last.position.capturedAt < today.from || last.position.capturedAt >= today.to) {
+    return undefined;
+  }
   const parsed = agentPositionSchema.safeParse(last.position);
   return parsed.success ? parsed.data : undefined;
 }
