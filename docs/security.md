@@ -34,13 +34,15 @@ it — a payload the server always refuses is an outbox that never drains (INVAR
 
 ## Personal data
 - **Prospect data** is mostly public business info, but may include a contact person's name or phone. Keep it to what the business needs.
-- **Agent location** is personal data. One reading (`getCurrentPosition`, never `watchPosition`) is written to the visit at check-in and to a field prospect when it is added — that reading is what reaches the server and is stored. The today list also takes a reading to order the round by distance; that one stays in memory for the ordering only and is never persisted or sent. Neither case tracks in the background. Agents are told this.
+- **Agent location** is personal data. One reading (`getCurrentPosition`, never `watchPosition`) is written to the visit at check-in and to a field prospect when it is added — that reading is what reaches the server and is stored. The today list also takes a reading to order the round by distance. Once epic 5's phone side ships, the latest reading taken today goes with each sync and is kept, one per agent, for the admin round view until the night's sweep ([ADR-0028](adr/0028-agent-position-at-sync.md)); the owner tells the agents before that release. Nothing tracks in the background. Agents are told this.
 - **Retention**: a visit is kept for ever; its **position and notes are nulled after
   90 days** (`RETENTION_DAYS`), measured on `received_at` because a phone's clock can be
   wrong. A daily Cron Trigger runs the sweep
   ([ADR-0023](adr/0023-retention-by-redaction.md), `src/worker/retention.ts`). The fact of
   a visit is business history; where the agent was standing is not. A consequence worth
   knowing: a visit older than 90 days can no longer be checked against where it was made.
+  An agent's latest position of the day (`agent_positions`) is served only for that Brussels
+  day and deleted by the next morning's sweep ([ADR-0028](adr/0028-agent-position-at-sync.md)).
 - No third-party analytics, and the data stays in the Cloudflare account. Backups go to R2, not to a GitHub artifact (ADR-0023, [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)); the bucket is one-time setup in [deployment.md](deployment.md).
 - The Worker's unhandled-error log (`onError`, `src/worker/index.ts`) carries only error names and the route, never a message or bound values — Drizzle's own message is `Failed query: <sql>\nparams: <values>`, which can be a visit note or an agent's email (`src/worker/errors.ts`).
 

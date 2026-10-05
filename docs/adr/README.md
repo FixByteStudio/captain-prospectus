@@ -33,5 +33,6 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0025](0025-admin-status-outlives-older-visits.md) | An admin's manual status is not undone by an older visit | accepted |
 | [0026](0026-budget-the-field-precache-not-the-entry-chunk.md) | Budget the field route by its precache, not its entry chunk | accepted |
 | [0027](0027-interested-is-its-own-closed-status.md) | An "Intéressé" visit gives the prospect its own closed status | accepted |
+| [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | proposed |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.

@@ -15,6 +15,7 @@ See [ADR-0006](../adr/0006-cloudflare-access-auth.md).
 | Import, edit, assign prospects | | ✓ |
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |
+| Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
 
 ## Local development
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost` or `127.0.0.1`.
