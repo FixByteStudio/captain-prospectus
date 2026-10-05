@@ -129,5 +129,5 @@ exactly as the list screen filters it — status, due date, assignee, source,
 name search (`q`) and Hors cible signalé alike, drawn from the one filter schema the list uses so the
 two cannot diverge — and excluding merged prospects like every other list.
 Timestamps become ISO-8601 and the file carries the OSM attribution on its
-last line (`docs/api.md`). There is no download button yet — the endpoint
-ships first, the screen needs a design pass.
+last line (`docs/api.md`). Prospects has the download button: it exports the
+filtered list as shown and warns when the file is cut at the export cap.

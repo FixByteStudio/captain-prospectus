@@ -292,3 +292,4 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-250-prospects-flags-hors-cible.md`
   summary: `docs/domains/prospecting.md` still says the prospects export has no download button, but Prospects has one (issue #256).
   evidence: Pre-existing drift at `docs/domains/prospecting.md:134`; `copy.prospects.export.button` renders in `ProspectsScreen.tsx`.
+  closed_by: GH #251 (epic #246 sweep) — the Export section now describes the button and the cap warning; closes #256.

@@ -37,6 +37,7 @@ import {
   SCRIPTS_PAGE_SIZE,
   STATUSES,
   type Outcome,
+  type RefusalReason,
   type Source,
   type Status,
 } from "../../shared/constants";
@@ -92,7 +93,6 @@ import type {
   ProspectsResponse,
   Script,
   ScriptsResponse,
-  VisitsReasonFilter,
 } from "../../shared/schemas";
 import { parseEmails, roleFor } from "../auth";
 import { validate } from "../validate";
@@ -1440,7 +1440,7 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
  * `reason=` as SQL, written once so the feed and its export can never list
  * different visits.
  */
-function refusalReasonFilter(reason: VisitsReasonFilter | undefined): SQL | undefined {
+function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined {
   return reason === undefined ? undefined : eq(visits.refusalReason, reason);
 }
 

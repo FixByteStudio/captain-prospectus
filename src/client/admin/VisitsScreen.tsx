@@ -6,13 +6,10 @@ import {
   EXPORT_ROWS,
   REFUSAL_REASONS,
   type DashboardPeriod,
+  type RefusalReason,
 } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
-import {
-  dashboardQuerySchema,
-  visitsReasonQuerySchema,
-  type VisitsReasonFilter,
-} from "../../shared/schemas";
+import { dashboardQuerySchema, refusalReasonSchema } from "../../shared/schemas";
 import { ApiError } from "../api";
 import { REFUSAL_REASON_LABELS, copy } from "../copy";
 import { PeriodToggle } from "./PeriodToggle";
@@ -37,8 +34,8 @@ function parsePeriod(raw: string | null): DashboardPeriod {
  * `?reason=` read through the Worker's own schema: a bad value is no filter
  * (I/O matrix), so the feed never asks with something it would 400 on.
  */
-function parseReason(raw: string | null): VisitsReasonFilter | undefined {
-  const parsed = visitsReasonQuerySchema.safeParse(raw);
+function parseReason(raw: string | null): RefusalReason | undefined {
+  const parsed = refusalReasonSchema.safeParse(raw);
   return parsed.success ? parsed.data : undefined;
 }
 
@@ -112,7 +109,7 @@ function VisitsScreenBody({
   onReasonChange,
 }: {
   period: DashboardPeriod;
-  reason: VisitsReasonFilter | undefined;
+  reason: RefusalReason | undefined;
   onPeriodChange: (period: DashboardPeriod) => void;
   onReasonChange: (reason: string) => void;
 }) {

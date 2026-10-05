@@ -38,9 +38,8 @@ import type {
   ScriptsResponse,
   OrphansResponse,
   OrphanRepairResult,
-  VisitsReasonFilter,
 } from "../../shared/schemas";
-import type { DashboardPeriod, Source, Status } from "../../shared/constants";
+import type { DashboardPeriod, RefusalReason, Source, Status } from "../../shared/constants";
 
 export type ProspectFilters = {
   /** Any of these. The API reads them comma-separated (docs/api.md). */
@@ -334,7 +333,7 @@ const FEED_POLL_MS = 15_000;
  * `reason` narrows it to one refusal reason (GH #249) the same way: sent on
  * every poll, part of the scoped key, and a change is a fresh mount.
  */
-export function useVisitsFeed(period?: DashboardPeriod, reason?: VisitsReasonFilter) {
+export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) {
   const since = useRef(0);
   /**
    * Whether a first answer has landed. Without this the opening page arrives
