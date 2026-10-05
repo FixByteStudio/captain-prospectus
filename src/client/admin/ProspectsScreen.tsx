@@ -159,10 +159,8 @@ export function ProspectsScreen() {
   }
 
   function setOutOfTarget(on: boolean) {
-    const next = { ...filters };
-    if (on) next.outOfTarget = true;
-    else delete next.outOfTarget;
-    writeFilters(next);
+    if (on) writeFilters({ ...filters, outOfTarget: true });
+    else dropFilter("outOfTarget");
   }
 
   function dropFilter(key: keyof ProspectFilters) {

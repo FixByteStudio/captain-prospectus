@@ -18,10 +18,10 @@ import { PAGE_SIZE, pageCount, pageSlice } from "../pagination";
  * The ledger half of Visites — ADR-0010, docs/design.md › "The live feed".
  *
  * Reads the feed as `VisitsScreenBody` holds it: that parent is remounted
- * (keyed by period and refusal reason) whenever either changes, since `useVisitsFeed` keeps
- * its cursor in a ref and the only clean way to reseed it from `since=0`
- * under a new window is a fresh mount — which is also what the I/O matrix
- * asks for ("no wash/announcement for the reseed": `seeded` starts false
+ * (keyed by period and refusal reason) whenever either changes, since
+ * `useVisitsFeed` keeps its cursor in a ref and the only clean way to reseed
+ * it from `since=0` under a new window is a fresh mount — which is also what
+ * the I/O matrix asks for ("no wash/announcement for the reseed": `seeded` starts false
  * again, so the opening page under the new filter is not news).
  */
 export function VisitsLedger({
