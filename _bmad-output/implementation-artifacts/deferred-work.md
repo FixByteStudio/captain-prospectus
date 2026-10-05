@@ -293,3 +293,6 @@
   summary: `docs/domains/prospecting.md` still says the prospects export has no download button, but Prospects has one (issue #256).
   evidence: Pre-existing drift at `docs/domains/prospecting.md:134`; `copy.prospects.export.button` renders in `ProspectsScreen.tsx`.
   closed_by: GH #251 (epic #246 sweep) — the Export section now describes the button and the cap warning; closes #256.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-adr-0028-agent-position-at-sync.md`
+  summary: Decide whether CLAUDE.md invariant 2 ("agents only insert") gains a one-line pointer to ADR-0028's `agent_positions` upsert.
+  evidence: ADR-0028 argues the row is the agent's own state, not shared data, but an agent reading only CLAUDE.md could flag story 5.2's upsert as a violation; CLAUDE.md is agent-context, so not edited in this story.

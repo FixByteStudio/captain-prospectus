@@ -3,6 +3,7 @@
 ## Today list
 - All prospects assigned to the agent with an open status.
 - Ordered by **greedy nearest-next** from the phone's current position; prospects without coordinates go last.
+- With epic 5, the latest reading the phone took today goes with each sync, so the admin round view (Terrain › Tournée du jour) can order the same stops; sync never takes a reading itself ([ADR-0028](../adr/0028-agent-position-at-sync.md)).
 - `follow_up` prospects whose `next_visit_at` is in the future are shown in a separate "later" group.
 - Each item links to the phone's maps app for navigation.
 - **A saved visit places its stop immediately, before the sync confirms it**
@@ -196,4 +197,5 @@ date range, defaulting to the last 30 days. The range reads **`received_at`, not
 `visited_at`**: a phone can sync days late, and a range on the phone's clock
 would silently drop exactly those visits (INVARIANT 12). Script answers are not
 included — a nested shape in a flat CSV is a decision, not an implementation
-detail — and neither are agent positions, whose retention is still undecided.
+detail — and neither are agent positions, which only the admin round view shows
+([ADR-0028](../adr/0028-agent-position-at-sync.md)).
