@@ -1,4 +1,7 @@
 ---
+tracker_id: "264"
+remote: "https://github.com/FixByteStudio/captain-prospectus/issues/264"
+tracker_status: done
 id: 1
 type: story
 title: "ADR-0028: agent position at sync"
