@@ -63,6 +63,8 @@ The rule: a refusal reason is something the pitch can't answer at the door. If t
 | `no_reason_given` | nothing to learn |
 | `other` | the rest; the phone requires a note that says what (not enforced server-side) |
 
+**Hors cible signalé.** An admin screen lists the prospects that need fixing. A prospect is flagged while its **latest visit** (ordered `visited_at`, `received_at`, `id` descending, as the status is) has `refusal_reason = 'out_of_target'` and `out_of_target_reviewed_at` is null or **not after** that visit's `visited_at`. A direct admin `PATCH /prospects/:id` (fields or status) stamps `out_of_target_reviewed_at` with the current time and is the only writer. Assigning, unassigning, merging and CSV or map imports do not, and the flag never reads `updated_at`, which they all move. A newer visit with another outcome or reason unflags the prospect, since its latest visit no longer carries the reason; a newer `out_of_target` visit flags it again after a review. Merged prospects are never listed. The review is compared to the visit's `visited_at`, so a visit dated before an admin edit but synced after it is not flagged. The Prospects list and its export take `outOfTarget=true`, and the toolbar toggle "Hors cible signalé" shows the filtered `total` while it is on.
+
 Not refusals — sent as a different outcome instead:
 
 | Heard at the door | Where it goes | Why |
@@ -123,8 +125,8 @@ A rename slips past the dedupe key, so the same place ends up as two prospects a
 ## Export
 
 `GET /api/admin/prospects/export.csv` hands the ledger to a spreadsheet, filtered
-exactly as the list screen filters it — status, due date, assignee, source and
-name search (`q`) alike, drawn from the one filter schema the list uses so the
+exactly as the list screen filters it — status, due date, assignee, source,
+name search (`q`) and Hors cible signalé alike, drawn from the one filter schema the list uses so the
 two cannot diverge — and excluding merged prospects like every other list.
 Timestamps become ISO-8601 and the file carries the OSM attribution on its
 last line (`docs/api.md`). There is no download button yet — the endpoint

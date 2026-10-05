@@ -449,7 +449,10 @@ list; a change replaces the URL rather than pushing a history entry, and
 clears the selection. The search box itself holds its own text and writes the
 URL ~300ms after the last keystroke, so a fast typist does not mint a request
 per letter; an outside URL change (Effacer les filtres, Back, the sidebar)
-resets the box from the URL. A filter the selects cannot show — several
+resets the box from the URL. After the selects, an outline `Toggle`
+"Hors cible signalé" (`outOfTarget=true`, GH #250) narrows the list to places
+agents reported closed or off-target and no admin has fixed since; while on, its
+label carries the filtered total ("Hors cible signalé : 3"). A filter the selects cannot show — several
 statuses, or a due date — stays in the slot as a `secondary` Badge chip
 ("Statut : Nouveau, Assigné, À relancer", "Relance avant le
 28 septembre 2026", a Brussels day) with a ghost × that drops just that filter;

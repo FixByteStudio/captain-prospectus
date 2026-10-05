@@ -343,6 +343,195 @@ describe("GET /api/admin/prospects", () => {
   });
 });
 
+describe("Hors cible signalé (GH #250)", () => {
+  const T0 = 1_000_000;
+
+  async function seedProspect(name: string, over: Partial<typeof prospects.$inferInsert> = {}) {
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({
+        id,
+        name,
+        type: "restaurant",
+        source: "csv",
+        dedupeKey: `test:${id}`,
+        status: "assigned",
+        createdBy: ADMIN,
+        createdAt: T0,
+        updatedAt: T0,
+        ...over,
+      });
+    return id;
+  }
+
+  /** Straight to D1: a test has to place visits before and after an admin edit. */
+  async function seedVisit(
+    prospectId: string,
+    visitedAt: number,
+    over: Partial<typeof visits.$inferInsert> = {},
+  ) {
+    const db = getDb(env.DB);
+    await db.insert(visits).values({
+      id: crypto.randomUUID(),
+      prospectId,
+      agentEmail: AGENT,
+      visitedAt,
+      clientVisitedAt: visitedAt,
+      receivedAt: visitedAt,
+      flyerGiven: true,
+      outcome: "not_interested",
+      refusalReason: "out_of_target",
+      clientVersion: 1,
+      ...over,
+    });
+    await db.update(prospects).set({ lastVisitAt: visitedAt }).where(eq(prospects.id, prospectId));
+  }
+
+  /** A prospect flagged the way an agent flags it: one out_of_target refusal. */
+  async function flagged(name: string, over: Partial<typeof prospects.$inferInsert> = {}) {
+    const id = await seedProspect(name, over);
+    await seedVisit(id, T0);
+    return id;
+  }
+
+  async function list(query = "outOfTarget=true") {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as ProspectsResponse;
+    return { names: body.prospects.map((p) => p.name).sort(), total: body.total };
+  }
+
+  it("lists a prospect whose latest visit reported out_of_target, and counts it", async () => {
+    await flagged("Fermé");
+    const other = await seedProspect("Ouvert");
+    await seedVisit(other, T0, { refusalReason: "no_need" });
+    await seedProspect("Jamais visité");
+
+    expect(await list()).toEqual({ names: ["Fermé"], total: 1 });
+    expect((await list("")).total).toBe(3);
+  });
+
+  it("leaves the list once an admin PATCHes fields, and the total drops", async () => {
+    const id = await flagged("Fermé");
+    await flagged("Autre fermé");
+    expect((await list()).total).toBe(2);
+
+    expect((await patch(`/api/admin/prospects/${id}`, { phone: "0478000000" })).status).toBe(200);
+    expect(await list()).toEqual({ names: ["Autre fermé"], total: 1 });
+  });
+
+  it("leaves the list once an admin PATCHes the status", async () => {
+    const id = await flagged("Fermé");
+    await patch(`/api/admin/prospects/${id}`, { status: "rejected" });
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("leaves the list when a newer visit has another outcome or another reason", async () => {
+    const outcome = await flagged("Revenu");
+    await seedVisit(outcome, T0 + 1, { outcome: "interested", refusalReason: null });
+    const reason = await flagged("Autre raison");
+    await seedVisit(reason, T0 + 1, { refusalReason: "no_need" });
+
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("settles a tie on visited_at by received_at, then id, like the status does", async () => {
+    const id = await flagged("Égalité");
+    await seedVisit(id, T0, { outcome: "interested", refusalReason: null, receivedAt: T0 + 5 });
+    expect((await list()).total).toBe(0);
+
+    const later = await flagged("Égalité 2");
+    await seedVisit(later, T0, { receivedAt: T0 - 5, outcome: "interested", refusalReason: null });
+    expect(await list()).toEqual({ names: ["Égalité 2"], total: 1 });
+  });
+
+  it("is back in the list when a newer out_of_target visit follows the review", async () => {
+    const id = await flagged("Fermé");
+    await patch(`/api/admin/prospects/${id}`, { phone: "0478000000" });
+    expect((await list()).total).toBe(0);
+
+    await seedVisit(id, Date.now() + 60_000);
+    expect(await list()).toEqual({ names: ["Fermé"], total: 1 });
+  });
+
+  it("stays flagged when the review is stamped at exactly the visit's instant, not after it", async () => {
+    const id = await flagged("Pile");
+    const db = getDb(env.DB);
+    await db.update(prospects).set({ outOfTargetReviewedAt: T0 }).where(eqId(id));
+    expect((await list()).total).toBe(1);
+
+    await db
+      .update(prospects)
+      .set({ outOfTargetReviewedAt: T0 + 1 })
+      .where(eqId(id));
+    expect((await list()).total).toBe(0);
+  });
+
+  it("stays flagged through assign, unassign, merge as survivor and a CSV re-import", async () => {
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35 }]);
+    await importRows([{ name: "Doublon", lat: 50.9, lng: 4.4 }]);
+    const db = getDb(env.DB);
+    const rows = await db.select().from(prospects);
+    const target = rows.find((r) => r.name === "Chez Fermé");
+    const duplicate = rows.find((r) => r.name === "Doublon");
+    if (!target || !duplicate) throw new Error("the import wrote nothing");
+    await seedVisit(target.id, T0);
+
+    await post("/api/admin/prospects/assign", { ids: [target.id], assignedTo: AGENT });
+    expect((await list()).total).toBe(1);
+    await post("/api/admin/prospects/assign", { ids: [target.id], assignedTo: null });
+    expect((await list()).total).toBe(1);
+
+    const merge = await post("/api/admin/prospects/merge", {
+      survivorId: target.id,
+      mergedId: duplicate.id,
+    });
+    expect(merge.status).toBe(200);
+    expect((await list()).total).toBe(1);
+
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35, phone: "0478000000" }]);
+    expect(await list()).toEqual({ names: ["Chez Fermé"], total: 1 });
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35, phone: "0478111111" }], "osm");
+    expect(await list()).toEqual({ names: ["Chez Fermé"], total: 1 });
+    const [after] = await db.select().from(prospects).where(eqId(target.id));
+    expect(after?.outOfTargetReviewedAt).toBeNull();
+  });
+
+  it("never lists nor counts a merged prospect", async () => {
+    const survivor = await seedProspect("Survivant");
+    const absorbed = await flagged("Absorbé", { mergedInto: survivor });
+    expect(absorbed).not.toBe(survivor);
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("combines with another filter, and totals the combined set", async () => {
+    await flagged("Chez Léa", { assignedTo: AGENT });
+    await flagged("Le Zinc", { assignedTo: ADMIN });
+    await seedProspect("Ouvert", { assignedTo: AGENT });
+
+    expect(await list(`outOfTarget=true&assignedTo=${AGENT}`)).toEqual({
+      names: ["Chez Léa"],
+      total: 1,
+    });
+  });
+
+  it("filters the CSV export the same way", async () => {
+    await flagged("Fermé");
+    await seedProspect("Ouvert");
+    const csv = await (await call("/api/admin/prospects/export.csv?outOfTarget=true")).text();
+    expect(csv).toContain("Fermé");
+    expect(csv).not.toContain("Ouvert");
+  });
+
+  it.each(["maybe", "false", "", "TRUE", "1"])("answers 400 for outOfTarget=%s", async (value) => {
+    for (const path of ["/api/admin/prospects", "/api/admin/prospects/export.csv"]) {
+      const response = await call(`${path}?outOfTarget=${value}`);
+      expect(response.status).toBe(400);
+    }
+  });
+});
+
 describe("POST /api/admin/prospects/batch", () => {
   it("rejects a row without a name", async () => {
     const response = await importRows([{ name: "" }]);

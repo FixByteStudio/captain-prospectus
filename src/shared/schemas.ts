@@ -312,6 +312,13 @@ export const prospectFiltersSchema = z.object({
   assignedTo: z.optional(emailSchema),
   source: z.optional(sourceSchema),
   q: z.optional(searchQuerySchema),
+  /**
+   * Only `"true"` exists: the filter is on or absent, so `false` or any other
+   * spelling is a 400 rather than a second way to say "no filter". Prospects
+   * whose latest visit reported Hors cible and that no admin edit has reviewed
+   * since (docs/domains/prospecting.md).
+   */
+  outOfTarget: z.optional(z.literal("true")),
 });
 
 /** Query string, so every value arrives as text and has to be coerced. */
@@ -810,7 +817,7 @@ export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 /**
  * `GET /api/admin/prospects/export.csv`.
  *
- * The same five filters as the list screen — `prospectFiltersSchema` itself,
+ * The same filters as the list screen — `prospectFiltersSchema` itself,
  * not a copy of its fields — so an export can never filter differently from
  * the screen it was launched from. No `limit` or `offset`: an export is not
  * paged, it always exports the whole filtered set up to EXPORT_ROWS, so a URL

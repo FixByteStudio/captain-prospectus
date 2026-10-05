@@ -12,6 +12,7 @@ import { brusselsPeriod } from "../../shared/period";
 import {
   dueBeforeSchema,
   emailSchema,
+  prospectFiltersSchema,
   searchQuerySchema,
   sourceSchema,
   statusListSchema,
@@ -50,6 +51,8 @@ export type ProspectFilters = {
   source?: Source;
   /** Name substring search (G4, #176) — trimmed, 1–200 chars; blank never sent. */
   q?: string;
+  /** Hors cible signalé (GH #250): only ever `true`; absent means no filter. */
+  outOfTarget?: true;
 };
 
 /** One factory, so an invalidation can never miss a key by spelling it differently. */
@@ -93,6 +96,7 @@ export function toQueryString(filters: ProspectFilters): string {
   if (filters.assignedTo) params.set("assignedTo", filters.assignedTo);
   if (filters.source) params.set("source", filters.source);
   if (filters.q) params.set("q", filters.q);
+  if (filters.outOfTarget) params.set("outOfTarget", "true");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -124,6 +128,10 @@ export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
   if (source.success) filters.source = source.data;
   const q = searchQuerySchema.safeParse(params.get("q") ?? undefined);
   if (q.success) filters.q = q.data;
+  const outOfTarget = prospectFiltersSchema.shape.outOfTarget.safeParse(
+    params.get("outOfTarget") ?? undefined,
+  );
+  if (outOfTarget.success && outOfTarget.data) filters.outOfTarget = true;
   return filters;
 }
 

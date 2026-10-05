@@ -179,6 +179,9 @@ export const adminCopy = {
       anyStatus: "Tous les statuts",
       anyAgent: "Tous les agents",
       anySource: "Toutes les sources",
+      /** The Hors cible toggle (GH #250): the count joins the label only while it is on. */
+      outOfTarget: "Hors cible signalé",
+      outOfTargetCount: (n: number) => `Hors cible signalé\u00a0: ${n}`,
       /** A chip for a URL filter the Statut select cannot show (GH #114). */
       severalStatuses: (labels: string[]) => `Statut\u00a0: ${labels.join(", ")}`,
       /** `next_visit_at` strictly before that instant, named by its Brussels day. */
