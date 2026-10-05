@@ -4,9 +4,10 @@ import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { ADMIN_VISITS_PAGE_SIZE, type RefusalReason } from "../shared/constants";
-import { prospects, scripts, visits } from "./db/schema";
+import { agentPositions, prospects, scripts, visits } from "./db/schema";
 import type {
   AdminVisitsResponse,
+  AgentRoundResponse,
   AgentsResponse,
   AssignResult,
   DuplicatesResponse,
@@ -1243,6 +1244,7 @@ describe("authorization", () => {
     expect((await call("/api/me")).status).toBe(200);
     expect((await call("/api/admin/prospects")).status).toBe(403);
     expect((await call("/api/admin/agents")).status).toBe(403);
+    expect((await call(`/api/admin/agents/${AGENT}/round`)).status).toBe(403);
     expect((await importRows([{ name: "Chez Léa" }])).status).toBe(403);
     expect(
       (await post("/api/admin/prospects/assign", { ids: [crypto.randomUUID()], assignedTo: null }))
@@ -1477,3 +1479,116 @@ describe("GET /api/admin/visits", () => {
 function eqId(id: string) {
   return eq(prospects.id, id);
 }
+
+describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
+  const position = (capturedAt: number, receivedAt: number) => ({
+    agentEmail: AGENT,
+    lat: 50.85,
+    lng: 4.35,
+    accuracy: 10,
+    capturedAt,
+    receivedAt,
+  });
+
+  beforeEach(async () => {
+    await getDb(env.DB).delete(agentPositions);
+  });
+
+  it("serves the position and the remaining prospects, uncached", async () => {
+    const now = Date.now();
+    await getDb(env.DB)
+      .insert(agentPositions)
+      .values(position(now - 1_000, now));
+    const response = await call(`/api/admin/agents/${AGENT.toUpperCase()}/round`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await response.json()) as AgentRoundResponse;
+    expect(body.prospects).toEqual([]);
+    expect(body.position).toEqual({ lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: now - 1_000 });
+  });
+
+  it("lists exactly the agent's open, unmerged prospects", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const ids = {
+      open: crypto.randomUUID(),
+      converted: crypto.randomUUID(),
+      merged: crypto.randomUUID(),
+      other: crypto.randomUUID(),
+    };
+    const base = {
+      name: "Le Bistrot",
+      type: "restaurant" as const,
+      lat: 48.85,
+      lng: 2.35,
+      address: null,
+      phone: null,
+      website: null,
+      cuisine: null,
+      source: "csv" as const,
+      sourceRef: null,
+      createdBy: ADMIN,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.insert(prospects).values([
+      { ...base, id: ids.open, dedupeKey: "round:open", status: "assigned", assignedTo: AGENT },
+      {
+        ...base,
+        id: ids.converted,
+        dedupeKey: "round:conv",
+        status: "converted",
+        assignedTo: AGENT,
+      },
+      {
+        ...base,
+        id: ids.merged,
+        dedupeKey: "round:merged",
+        status: "assigned",
+        assignedTo: AGENT,
+        mergedInto: ids.open,
+      },
+      { ...base, id: ids.other, dedupeKey: "round:other", status: "assigned", assignedTo: ADMIN },
+    ]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.prospects.map((p) => p.id)).toEqual([ids.open]);
+  });
+
+  it("answers 200 with a null position for an admin's email", async () => {
+    const body = (await (
+      await call(`/api/admin/agents/${ADMIN}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.position).toBeNull();
+  });
+
+  it("serves capturedAt clamped to receivedAt", async () => {
+    const now = Date.now();
+    await getDb(env.DB)
+      .insert(agentPositions)
+      .values(position(now + 3_600_000, now));
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.position?.capturedAt).toBe(now);
+  });
+
+  it("serves null when there is no row or the row is not from today", async () => {
+    const empty = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(empty.position).toBeNull();
+    const old = Date.now() - 48 * 3_600_000;
+    await getDb(env.DB).insert(agentPositions).values(position(old, old));
+    const stale = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(stale.position).toBeNull();
+  });
+
+  it("answers 404 for an unknown email and 400 for a malformed one", async () => {
+    expect((await call("/api/admin/agents/nobody@example.com/round")).status).toBe(404);
+    expect((await call("/api/admin/agents/not-an-email/round")).status).toBe(400);
+  });
+});

@@ -60,6 +60,7 @@ import {
 import { cellAndNeighbours, cellOf, distanceMeters } from "../../shared/geo";
 import { isProbablySamePlace } from "../../shared/similarity";
 import {
+  agentEmailParamSchema,
   assignSchema,
   dashboardQuerySchema,
   mergeSchema,
@@ -78,11 +79,12 @@ import {
 } from "../../shared/schemas";
 import type {
   AdminVisitsResponse,
+  AgentRoundResponse,
+  AgentsResponse,
   OrphanCandidate,
   OrphanedVisit,
   OrphanRepairResult,
   OrphansResponse,
-  AgentsResponse,
   AssignResult,
   DashboardResponse,
   DuplicatesResponse,
@@ -96,6 +98,8 @@ import type {
 } from "../../shared/schemas";
 import { parseEmails, roleFor } from "../auth";
 import { validate } from "../validate";
+import { readAgentPosition } from "../agent-position";
+import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
 import { overpassCache, prospects, scripts, visits, visitsOrphaned } from "../db/schema";
 import {
@@ -187,6 +191,22 @@ adminRoutes.get("/agents", (c) => {
       role: roleFor(email, c.env.ADMIN_EMAILS),
     })),
   });
+});
+
+/**
+ * One agent's remaining round and last reading (ADR-0028). Never cached: a
+ * position is personal data and stale the minute it is served.
+ */
+adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema), async (c) => {
+  const { email } = c.req.valid("param");
+  if (!assignableEmails(c.env).includes(email)) return c.json({ error: "not_found" }, 404);
+  const db = getDb(c.env.DB);
+  const [rows, position] = await Promise.all([
+    openAssignedProspects(db, email),
+    readAgentPosition(db, email, Date.now()),
+  ]);
+  c.header("Cache-Control", "no-store");
+  return c.json<AgentRoundResponse>({ prospects: rows.map(toWireProspect), position });
 });
 
 /**

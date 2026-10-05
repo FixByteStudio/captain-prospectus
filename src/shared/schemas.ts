@@ -21,6 +21,7 @@
 import * as z from "zod/mini";
 import {
   ADMIN_VISITS_PAGE_SIZE,
+  AGENT_POSITION_ACCURACY_MAX_M,
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
   EXPORT_DEFAULT_WINDOW_MS,
@@ -412,6 +413,17 @@ export const mergeResultSchema = z.object({
 });
 export type MergeResult = z.infer<typeof mergeResultSchema>;
 
+/** The agent's latest reading, offered with a sync (ADR-0028). */
+export const agentPositionSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  /** Metres. */
+  accuracy: z.number().check(z.gte(0), z.lte(AGENT_POSITION_ACCURACY_MAX_M)),
+  /** The time the device took the fix, not the time the hook resolved. */
+  capturedAt: epochMsSchema,
+});
+export type AgentPosition = z.infer<typeof agentPositionSchema>;
+
 /**
  * Everyone a prospect can be assigned to. There is no users table (ADR-0006),
  * so this is the ADMIN_EMAILS and AGENT_EMAILS vars, not a query.
@@ -420,6 +432,15 @@ export const agentsResponseSchema = z.object({
   agents: z.array(z.object({ email: emailSchema, role: roleSchema })),
 });
 export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
+
+export const agentEmailParamSchema = z.object({ email: emailSchema });
+
+/** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
+export const agentRoundResponseSchema = z.object({
+  prospects: z.array(prospectSchema),
+  position: z.nullable(agentPositionSchema),
+});
+export type AgentRoundResponse = z.infer<typeof agentRoundResponseSchema>;
 
 /* ----------------------------------------------------------------------- sync */
 
@@ -468,6 +489,8 @@ export const syncRequestSchema = z.object({
     [],
   ),
   visits: z._default(z.array(visitSchema).check(z.maxLength(SYNC_VISITS_PER_REQUEST)), []),
+  /** An invalid value parses to undefined: it never fails the sync (ADR-0028, INVARIANT 5). */
+  position: z.catch(z.optional(agentPositionSchema), undefined),
 });
 export type SyncRequest = z.infer<typeof syncRequestSchema>;
 

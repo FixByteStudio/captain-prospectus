@@ -1,6 +1,6 @@
 # ADR-0028: The phone sends its last reading of the day with each sync
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-05
 - Deciders: owner
 - Amends: [ADR-0023](0023-retention-by-redaction.md) (a second table in the retention sweep)

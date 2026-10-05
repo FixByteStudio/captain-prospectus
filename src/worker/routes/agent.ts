@@ -7,8 +7,8 @@
  */
 import { Hono } from "hono";
 import { validator } from "hono/validator";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { MIN_CLIENT_VERSION, OPEN_STATUSES, VISIT_HISTORY_LIMIT } from "../../shared/constants";
+import { desc, eq, inArray } from "drizzle-orm";
+import { MIN_CLIENT_VERSION, VISIT_HISTORY_LIMIT } from "../../shared/constants";
 import { chunk } from "../../shared/chunk";
 import { dedupeKey } from "../../shared/dedupe";
 import { prospectIdParamSchema, syncRequestSchema } from "../../shared/schemas";
@@ -22,6 +22,9 @@ import type { OrphanReason } from "../../shared/constants";
 import { validate, validationFailed } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
 import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
+import { parseEmails } from "../auth";
+import { writeAgentPosition } from "../agent-position";
+import { openAssignedProspects } from "../round";
 import { deriveProspectStatus } from "./status";
 import { toWireScript } from "./wire";
 import type { AppEnv } from "../types";
@@ -82,7 +85,7 @@ const syncRequest = validator("json", (value: unknown, c) => {
 
 agentRoutes.post("/sync", syncRequest, async (c) => {
   const body: SyncRequest = c.req.valid("json");
-  const { email } = c.get("identity");
+  const { email, role } = c.get("identity");
   const db = getDb(c.env.DB);
   const now = Date.now();
 
@@ -284,19 +287,20 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
     await deriveProspectStatus(db, prospectId, now);
   }
 
+  // ---- 3b. The agent's latest reading (ADR-0028). Assignable agents only: an
+  // admin walking a round from the field route stores nothing.
+  if (body.position && role === "agent" && parseEmails(c.env.AGENT_EMAILS).includes(email)) {
+    // Its own try: a bad position never fails a sync (ADR-0028). Name only, since
+    // a Drizzle message carries the bound lat/lng/email.
+    try {
+      await writeAgentPosition(db, email, body.position, now);
+    } catch (err) {
+      console.error("agent position write failed", err instanceof Error ? err.name : "unknown");
+    }
+  }
+
   // ---- 4. Pull: the agent's open, live prospects and the active script.
-  // A merged prospect is gone as far as the round is concerned — that is the
-  // whole point of merging, so the agent stops walking to the same door twice.
-  const todayList = await db
-    .select()
-    .from(prospects)
-    .where(
-      and(
-        eq(prospects.assignedTo, email),
-        inArray(prospects.status, [...OPEN_STATUSES]),
-        isNull(prospects.mergedInto),
-      ),
-    );
+  const todayList = await openAssignedProspects(db, email);
 
   const [activeScript] = await db.select().from(scripts).where(eq(scripts.isActive, true)).limit(1);
 

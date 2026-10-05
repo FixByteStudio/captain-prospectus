@@ -139,9 +139,12 @@ the moment a live `/api/me` says who is really signed in
 {
   "clientVersion": 1,
   "prospects": [{ "id": "uuid", "name": "…", "type": "food_truck", "lat": 0, "lng": 0 }],
-  "visits": [{ "id": "uuid", "prospectId": "…", "visitedAt": 0, "outcome": "interested", "flyerGiven": true, "answers": {} }]
+  "visits": [{ "id": "uuid", "prospectId": "…", "visitedAt": 0, "outcome": "interested", "flyerGiven": true, "answers": {} }],
+  "position": { "lat": 0, "lng": 0, "accuracy": 0, "capturedAt": 0 }
 }
 ```
+`position` is optional and additive: the phone's latest reading of the day, kept by the server for the admin's round view ([ADR-0028](../adr/0028-agent-position-at-sync.md)). An invalid one is dropped; the visits still sync.
+
 Response
 ```json
 {

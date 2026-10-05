@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
-import { overpassCache, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import {
+  agentPositions,
+  overpassCache,
+  prospects,
+  scripts,
+  visits,
+  visitsOrphaned,
+} from "./db/schema";
 import {
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
@@ -212,9 +219,41 @@ describe("runRetention", () => {
   });
 
   it("reports the cutoff it used", () => {
-    const line = describeSweep({ redacted: 3, cutoff: Date.UTC(2026, 5, 25) });
+    const line = describeSweep({ redacted: 3, cutoff: Date.UTC(2026, 5, 25), positionsDeleted: 0 });
     expect(line).toContain("3 visit(s)");
     expect(line).toContain("2026-06-25");
+  });
+});
+
+describe("the agent position sweep (ADR-0028)", () => {
+  it("deletes a row not from today in Brussels and keeps today's", async () => {
+    const db = getDb(env.DB);
+    await db.delete(agentPositions);
+    // NOW is 12:00 UTC on 2026-09-23, so Brussels midnight is 22:00 UTC the day before.
+    const yesterday = Date.UTC(2026, 8, 22, 21, 0, 0);
+    const today = Date.UTC(2026, 8, 22, 22, 30, 0);
+    const row = (agentEmail: string, at: number) => ({
+      agentEmail,
+      lat: 50.85,
+      lng: 4.35,
+      accuracy: 10,
+      capturedAt: at,
+      receivedAt: at,
+    });
+    // Future phone clock: captured today, received yesterday, so the clamp puts it yesterday.
+    const skewed = {
+      ...row("skew@example.com", Date.UTC(2026, 8, 23, 6)),
+      receivedAt: Date.UTC(2026, 8, 22, 21),
+    };
+    await db
+      .insert(agentPositions)
+      .values([row("old@example.com", yesterday), row(AGENT, today), skewed]);
+
+    const result = await runRetention(db, NOW);
+
+    expect(result.positionsDeleted).toBe(2);
+    expect((await db.select().from(agentPositions)).map((r) => r.agentEmail)).toEqual([AGENT]);
+    expect(describeSweep(result)).toContain("deleted 2 agent position(s)");
   });
 });
 
@@ -225,6 +264,48 @@ describe("runRetention", () => {
  * Trigger that is not wired fails silently — no error, no request, just a table
  * that quietly keeps its positions for ever.
  */
+describe("the agent position sweep failing (ADR-0028)", () => {
+  it("still redacts expired visits and reports zero positions deleted", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("p-fail");
+    const real = getDb(env.DB);
+    await real.insert(visits).values({
+      id: "v-fail",
+      prospectId: "p-fail",
+      agentEmail: AGENT,
+      visitedAt: OLD,
+      clientVisitedAt: OLD,
+      receivedAt: OLD,
+      lat: 50.85,
+      lng: 4.35,
+      flyerGiven: false,
+      outcome: "interested",
+      notes: "secret",
+      answers: {},
+      clientVersion: 1,
+    });
+    const broken = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("agent_positions")) throw new Error("positions unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const result = await runRetention(getDb(broken), NOW);
+
+    expect(result.positionsDeleted).toBe(0);
+    expect(result.redacted).toBe(1);
+    expect(error).toHaveBeenCalledWith("agent position sweep failed", "Error");
+    error.mockRestore();
+  });
+});
+
 describe("the scheduled handler", () => {
   it("runs the sweep when the cron fires", async () => {
     const db = getDb(env.DB);
