@@ -1,4 +1,7 @@
 ---
+tracker_id: "263"
+remote: "https://github.com/FixByteStudio/captain-prospectus/issues/263"
+tracker_status: in-progress
 type: epic
 title: "An admin sees any agent's round"
 parent: initiative-dashboard-redesign
@@ -6,6 +9,7 @@ covers: [CAP-4, CAP-11]
 after: []
 assignee: ""
 risk: high
+status: in-progress
 ---
 
 # An admin sees any agent's round
