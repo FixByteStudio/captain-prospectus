@@ -1,7 +1,7 @@
 ---
 tracker_id: "247"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/247"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "Refusal reasons in the contract and the database"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "244"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/244"
-tracker_status: backlog
+tracker_status: done
 id: 15
 type: story
 title: "Script questions only where someone can answer"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "180"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/180"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Import rebuilt: the CSV path"

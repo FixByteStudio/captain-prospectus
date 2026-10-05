@@ -1,7 +1,7 @@
 ---
 tracker_id: "183"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/183"
-tracker_status: backlog
+tracker_status: done
 id: 9
 type: story
 title: "À rattacher rebuilt"

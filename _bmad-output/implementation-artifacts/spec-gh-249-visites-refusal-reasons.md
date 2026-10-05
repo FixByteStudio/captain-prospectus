@@ -23,20 +23,22 @@ deferred: []
 
 **Problem:** Refusal reasons are stored since #247 and asked on the field since #248, but the admin can't see or filter them: the Visites ledger, its feed and its CSV export ignore `visits.refusal_reason` (GH #249, epic #246 CAP-4, CAP-5).
 
-**Approach:** Return `refusalReason` on admin visit rows and show its French label beside Pas intéressé in the ledger. Add one `reason=` query param, shared by `GET /api/admin/visits` and `export.csv` (a reason value, or `none` = Sans raison), a "Raison du refus" select on Visites held in the URL, and a `refusal_reason` CSV column.
+**Approach** (superseded where it mentions `none`; see the Auto Run Result)**:** Return `refusalReason` on admin visit rows and show its French label beside Pas intéressé in the ledger. Add one `reason=` query param, shared by `GET /api/admin/visits` and `export.csv` (a reason value, or `none` = Sans raison), a "Raison du refus" select on Visites held in the URL, and a `refusal_reason` CSV column.
 
 ## Boundaries & Constraints
 
-**Always:** Additive API change only (docs/api.md Conventions); `reason` absent = today's behaviour. Query schema in `zod/mini` (INVARIANT 6), one shared piece for both routes, as `reversedRangeRefine` is shared. `none` = `outcome = 'not_interested' AND refusal_reason IS NULL` (epic assumption). A reason value = `refusal_reason = <value>`. `reason` combines with `since`, `from`, `to` (AND). Labels come from `REFUSAL_REASON_LABELS`; new French strings live in `copy/admin.ts` (INVARIANT 15). The select is the existing `prospects/Filter.tsx` (shadcn Select). CSV writes the English value, empty when null, like `status` on the prospect export.
+**Always** (superseded where it mentions `none`; see the Auto Run Result)**:** Additive API change only (docs/api.md Conventions); `reason` absent = today's behaviour. Query schema in `zod/mini` (INVARIANT 6), one shared piece for both routes, as `reversedRangeRefine` is shared. `none` = `outcome = 'not_interested' AND refusal_reason IS NULL` (epic assumption). A reason value = `refusal_reason = <value>`. `reason` combines with `since`, `from`, `to` (AND). Labels come from `REFUSAL_REASON_LABELS`; new French strings live in `copy/admin.ts` (INVARIANT 15). The select is the existing `prospects/Filter.tsx` (shadcn Select). CSV writes the English value, empty when null, like `status` on the prospect export.
 
 **Never:** No change to `RecentVisits` on Tableau de bord (it stays unscoped and shows no reason). No DB migration or index. No sync-contract change. No dashboard chart of reasons, no Hors cible filter (story 4). No field-route change.
 
 ## I/O & Edge-Case Matrix
 
+> **Superseded** by the owner decision in the Auto Run Result (2026-09-30): the `none` / Sans raison bucket was dropped, the filter offers the 7 reasons only, and `reason=none` is a 400. The text below is the original plan, kept as the build record (epic #246 retro, F3).
+
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
 | One reason | `reason=too_many_devices` | Only visits with that reason, in list and CSV alike | none |
-| Sans raison | `reason=none` | Only `not_interested` visits with a null reason; not `converted`/`follow_up`/etc. | none |
+| ~~Sans raison~~ (superseded: now the Unknown value row) | `reason=none` | Only `not_interested` visits with a null reason; not `converted`/`follow_up`/etc. | none |
 | Combined | `reason=no_need&from=&to=&since=` | Intersection of all bounds | none |
 | No param | none | Unchanged: every visit | none |
 | Unknown value | `reason=bogus` or `reason=` | 400 `validation`, both routes | Same shape as a bad `from` |
@@ -47,6 +49,8 @@ deferred: []
 </intent-contract>
 
 ## Code Map
+
+> **Superseded** by the owner decision in the Auto Run Result (2026-09-30): the `none` / Sans raison bucket was dropped, the filter offers the 7 reasons only, and `reason=none` is a 400. The text below is the original plan, kept as the build record (epic #246 retro, F3).
 
 - `src/shared/constants.ts:67` -- `REFUSAL_REASONS`, `RefusalReason`. Add a sentinel for Sans raison (e.g. `NO_REFUSAL_REASON = "none"`) only if it keeps the wire value in one home.
 - `src/shared/schemas.ts:527` -- `adminVisitSchema`: add `refusalReason: z.nullable(z.enum(REFUSAL_REASONS))`. `:569` `visitsSinceQuerySchema` and `:818` `visitsExportQuerySchema`: add `reason: z.optional(z.enum([...REFUSAL_REASONS, "none"]))` via one shared schema const. Doc comments on both.
@@ -108,6 +112,8 @@ deferred: []
   - `[false]` `[reject]` (intent) DOM narrowing is proven only through a stubbed server — the SQL narrowing is proven by the Worker tests against real D1; the DOM test proves the request carries `reason=`, which is the client's whole job.
 
 ## Design Notes
+
+> **Superseded** by the owner decision in the Auto Run Result (2026-09-30): the `none` / Sans raison bucket was dropped, the filter offers the 7 reasons only, and `reason=none` is a 400. The text below is the original plan, kept as the build record (epic #246 retro, F3).
 
 `none` rather than an empty value: an empty `reason=` must stay a 400 like any bad param, and "Sans raison" is a real filter the URL must carry. It means refusals without a reason, not every visit without one — a `converted` visit has no reason by construction, and listing it under "Sans raison" would answer a question nobody asked.
 

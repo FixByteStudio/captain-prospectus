@@ -1,7 +1,7 @@
 ---
 tracker_id: "175"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/175"
-tracker_status: in-progress
+tracker_status: done
 id: 1
 type: story
 title: "Admin screen primitives and shared states"

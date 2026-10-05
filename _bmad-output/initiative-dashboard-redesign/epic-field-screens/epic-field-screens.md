@@ -1,7 +1,7 @@
 ---
 tracker_id: "117"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/117"
-tracker_status: in-progress
+tracker_status: done
 type: epic
 title: "Agents work their round on the new field app"
 parent: initiative-dashboard-redesign
@@ -9,7 +9,7 @@ covers: [CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-11]
 after: []
 assignee: ""
 risk: high
-status: in-progress
+status: done
 ---
 
 # Agents work their round on the new field app

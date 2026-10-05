@@ -1,7 +1,7 @@
 ---
 tracker_id: "246"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/246"
-tracker_status: backlog
+tracker_status: done
 type: epic
 title: "A refusal carries its reason"
 parent: initiative-dashboard-redesign
@@ -9,6 +9,7 @@ covers: []
 after: []
 assignee: ""
 risk: medium
+status: done
 ---
 
 # A refusal carries its reason
@@ -59,6 +60,6 @@ Covers the refusal step on the field route, the visit contract and column, Visit
 - Decision: CAP-4 is the Visites ledger only. The admin side has no view of one prospect's visit history, and the spec was corrected (2026-09-30).
 - Decision: the Hors cible flag clears through a new nullable `prospects.out_of_target_reviewed_at`, stamped only by a direct admin PATCH. `updated_at` is not used because assign, merge and CSV import also change it (`admin.ts:709,758,978,1158`) (2026-09-30).
 - Decision: entry 1 is the tracer bullet: the contract and the storage. After it, 2 (field) and 3 (admin) run in parallel. 4 waits on 3 because both edit `src/worker/routes/admin.ts` and `docs/api.md` (2026-09-30).
-- Assumption: "Sans raison" in the Visites filter means Pas intéressé visits with a null reason, not every visit.
+- Assumption (superseded): "Sans raison" in the Visites filter means Pas intéressé visits with a null reason, not every visit. The owner dropped that bucket during #249 (2026-09-30); the filter offers the 7 reasons only.
 - Waits on epic-admin-screens because: the rebuilt Visites ledger (3.4) and Prospects filter bar (3.5). Both are merged.
 - Waits on epic-field-screens because: step 2 with the when step (4.14), which is merged.

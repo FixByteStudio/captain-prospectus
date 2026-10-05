@@ -1,7 +1,7 @@
 ---
 tracker_id: "248"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/248"
-tracker_status: backlog
+tracker_status: done
 id: 2
 type: story
 title: "Pas intéressé asks for a reason, not the script"

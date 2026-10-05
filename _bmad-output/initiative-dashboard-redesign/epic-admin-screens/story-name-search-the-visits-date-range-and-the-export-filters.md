@@ -1,7 +1,7 @@
 ---
 tracker_id: "176"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/176"
-tracker_status: in-progress
+tracker_status: done
 id: 2
 type: story
 title: "Name search, the visits date range and the export filters"

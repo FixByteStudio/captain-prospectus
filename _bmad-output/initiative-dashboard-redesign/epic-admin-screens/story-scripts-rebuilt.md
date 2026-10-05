@@ -1,7 +1,7 @@
 ---
 tracker_id: "184"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/184"
-tracker_status: backlog
+tracker_status: done
 id: 10
 type: story
 title: "Scripts rebuilt"

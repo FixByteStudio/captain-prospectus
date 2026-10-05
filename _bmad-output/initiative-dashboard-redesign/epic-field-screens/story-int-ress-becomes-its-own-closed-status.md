@@ -1,7 +1,7 @@
 ---
 tracker_id: "238"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/238"
-tracker_status: backlog
+tracker_status: done
 id: 13
 type: story
 title: "Intéressé becomes its own closed status"

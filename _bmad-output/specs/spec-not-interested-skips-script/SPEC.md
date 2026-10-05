@@ -31,7 +31,7 @@ This fixes a problem field agents hit, and it lets the team learn something. A r
   - **success:** The Visites ledger shows the French label next to Pas intéressé. Older visits with no reason show nothing, not "Refus sans raison".
 - **CAP-5**
   - **intent:** Admins can isolate and count refusals by reason.
-  - **success:** Visites has a "Raison du refus" filter (the 7 reasons plus "Sans raison") that works together with the period, and the live feed respects it. `GET /api/admin/visits` and `GET /api/admin/visits/export.csv` take the same `reason` filter, so the export's rows match the screen. The visits CSV gains a `refusal_reason` column (English value, empty when there is none).
+  - **success:** Visites has a "Raison du refus" filter (the 7 reasons) that works together with the period, and the live feed respects it. `GET /api/admin/visits` and `GET /api/admin/visits/export.csv` take the same `reason` filter, so the export's rows match the screen. The visits CSV gains a `refusal_reason` column (English value, empty when there is none).
 - **CAP-6**
   - **intent:** Agents and admins share one definition of the reasons and of what isn't one.
   - **success:** `docs/domains/prospecting.md` or `field-operations.md` holds the list and the rule from `refusal-reasons.md`. `docs/data-model.md` describes the column, and `docs/api.md` the new optional sync field. `docs/glossary.md` adds **Refusal reason / Raison du refus**.
