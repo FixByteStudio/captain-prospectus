@@ -612,6 +612,29 @@ function nameSearchFilter(q: string) {
 }
 
 /**
+ * "Hors cible signalé" (prospecting.md): the prospect's latest visit carries
+ * `out_of_target` and no admin edit has stamped `out_of_target_reviewed_at`
+ * after it. "Latest" orders as `deriveProspectStatus` does. The flag never
+ * reads `updated_at`, which assign, merge and import also move. The subselect
+ * walks `visits_prospect_visited_idx`, and `last_visit_at is not null` prunes
+ * prospects that were never visited before it runs.
+ */
+const OUT_OF_TARGET_FLAGGED = sql`(
+  ${prospects.lastVisitAt} is not null
+  and exists (
+    select 1 from ${visits}
+    where ${visits.id} = (
+      select v.id from visits v
+      where v.prospect_id = ${prospects.id}
+      order by v.visited_at desc, v.received_at desc, v.id desc
+      limit 1
+    )
+    and ${visits.refusalReason} = 'out_of_target'
+    and (${prospects.outOfTargetReviewedAt} is null or ${prospects.outOfTargetReviewedAt} <= ${visits.visitedAt})
+  )
+)`;
+
+/**
  * The `SQL[]` for `prospectFiltersSchema` (src/shared/schemas.ts), shared by
  * the list and the export so a filter added to one is never forgotten on the
  * other (Intent: "so the two cannot diverge").
@@ -622,8 +645,9 @@ function prospectFilters(query: {
   assignedTo?: string | null;
   source?: Source;
   q?: string;
+  outOfTarget?: "true";
 }): SQL[] {
-  const { status, dueBefore, assignedTo, source, q } = query;
+  const { status, dueBefore, assignedTo, source, q, outOfTarget } = query;
   return [
     // A merged prospect is not a row the admin manages any more.
     isNull(prospects.mergedInto),
@@ -634,14 +658,15 @@ function prospectFilters(query: {
     assignedTo ? eq(prospects.assignedTo, assignedTo) : undefined,
     source ? eq(prospects.source, source) : undefined,
     q ? nameSearchFilter(q) : undefined,
+    outOfTarget ? OUT_OF_TARGET_FLAGGED : undefined,
   ].filter((f) => f !== undefined);
 }
 
 adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c) => {
-  const { status, dueBefore, assignedTo, source, q, limit, offset } = c.req.valid("query");
+  const { limit, offset, ...filters } = c.req.valid("query");
   const db = getDb(c.env.DB);
 
-  const where = and(...prospectFilters({ status, dueBefore, assignedTo, source, q }));
+  const where = and(...prospectFilters(filters));
 
   const rows = await db
     .select()
@@ -845,11 +870,10 @@ adminRoutes.get(
   "/prospects/export.csv",
   validate("query", prospectsExportQuerySchema),
   async (c) => {
-    const { status, dueBefore, assignedTo, source, q } = c.req.valid("query");
     const db = getDb(c.env.DB);
     const now = Date.now();
 
-    const filters = prospectFilters({ status, dueBefore, assignedTo, source, q });
+    const filters = prospectFilters(c.req.valid("query"));
 
     // One row over the cap: see `capExport`.
     const rows = await db
@@ -931,12 +955,14 @@ adminRoutes.patch(
     const now = Date.now();
 
     // A status set here holds against any visit dated at or before now, however
-    // late that visit syncs (ADR-0025).
+    // late that visit syncs (ADR-0025). Any direct edit is also the admin's
+    // review of a Hors cible flag: this is the only writer of the column.
     const [row] = await db
       .update(prospects)
       .set({
         ...patch,
         ...(patch.status !== undefined && { statusSetAt: now }),
+        outOfTargetReviewedAt: now,
         updatedAt: now,
       })
       .where(eq(prospects.id, id))

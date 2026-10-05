@@ -14,6 +14,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Admin** | Admin | Person who imports, assigns, configures scripts | manager |
 | **Visit** | Visite | One physical attempt at a prospect. A revisit is a new visit | check-in (that's the action) |
 | **Outcome** | Résultat | Result of a visit: `no_contact`, `interested`, `not_interested`, `follow_up`, `converted` | result |
+| **Hors cible signalé** | Hors cible signalé | A prospect whose latest visit reported `out_of_target` and that no admin edit has reviewed since ([prospecting](domains/prospecting.md#refusal-reasons)) | to-fix item |
 | **Refusal reason** | Raison du refus | Why a `not_interested` visit was refused, from a fixed list of 7 values ([prospecting](domains/prospecting.md#refusal-reasons)) | complaint, objection |
 | **Status** | Statut | Lifecycle of a prospect: `new`, `assigned`, `follow_up`, `interested`, `converted`, `rejected` | state |
 | **Script** | Script | Versioned list of questions an agent asks during a visit | survey, form |

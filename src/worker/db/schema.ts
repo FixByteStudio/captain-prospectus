@@ -62,9 +62,11 @@ export const prospects = sqliteTable(
     mergedInto: text("merged_into").references((): AnySQLiteColumn => prospects.id),
 
     /**
-     * Reserved for the Hors cible review (epic #246): when a visit's refusal
-     * reason flags this prospect as out_of_target and an admin has reviewed it.
-     * Nothing writes it yet.
+     * When an admin last edited this prospect directly (PATCH /prospects/:id,
+     * fields or status) — the Hors cible review (docs/domains/prospecting.md).
+     * Flagged while the latest visit's reason is out_of_target and this is null
+     * or not after that visit's visited_at. Nothing else writes it: assign,
+     * merge and import must not, and nothing reads updated_at for the flag.
      */
     outOfTargetReviewedAt: integer("out_of_target_reviewed_at"),
 

@@ -288,3 +288,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-admin-offline-banner.md`
   summary: A network drop while the lazy admin chunk is still loading should show the offline sentence with « Réessayer » (EXPERIENCE.md State Patterns, Offline · Admin, last sentence).
   evidence: The fallback lives in `App.tsx` (entry chunk), so its string belongs in `copy/field`, not `copy/admin.ts`; grouped with GH #209 story 3, which renders in the same entry-chunk frame. Decision (owner, 2026-09-29): its strings go in `copy/field`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-250-prospects-flags-hors-cible.md`
+  summary: `docs/domains/prospecting.md` still says the prospects export has no download button, but Prospects has one (issue #256).
+  evidence: Pre-existing drift at `docs/domains/prospecting.md:134`; `copy.prospects.export.button` renders in `ProspectsScreen.tsx`.

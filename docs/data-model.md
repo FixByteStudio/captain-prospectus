@@ -26,7 +26,7 @@ erDiagram
     int last_visit_at
     int next_visit_at
     text merged_into FK "null = live; set = absorbed by another prospect"
-    int out_of_target_reviewed_at "reserved for the Hors cible review (epic #246); nothing writes it yet"
+    int out_of_target_reviewed_at "stamped by every admin PATCH of the prospect (the Hors cible review, prospecting.md); null = never reviewed"
     text created_by
     int created_at
     int updated_at
