@@ -77,12 +77,27 @@ erDiagram
     int is_active
     int created_at
   }
+  AGENT_POSITIONS {
+    text agent_email PK "verified Access email, no FK"
+    real lat
+    real lng
+    real accuracy "metres"
+    int captured_at "phone clock, as sent"
+    int received_at "server clock"
+  }
+
   OVERPASS_CACHE {
     text hash PK "versioned per provider"
     text body "raw provider answer"
     int created_at
   }
 ```
+
+`agent_positions` holds at most one row per assignable agent: the latest reading the phone
+offered at sync. It is the one upsert on an agent's behalf, allowed by
+[ADR-0028](adr/0028-agent-position-at-sync.md); it is served only while
+`min(captured_at, received_at)` is today in Brussels and the nightly retention sweep
+deletes the rest. No history, no index beyond the primary key.
 
 `overpass_cache` holds **both** map providers' raw answers (ADR-0020) and keeps the
 name of its first one. The hash is SHA-256 of a provider-specific query version plus

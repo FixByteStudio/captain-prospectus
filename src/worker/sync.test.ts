@@ -1,10 +1,10 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "./index";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
-import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { agentPositions, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
 import { OUTCOMES, OUTCOME_TO_STATUS } from "../shared/constants";
@@ -1154,5 +1154,144 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
 
     await sync({ visits: [visitAt(id, "converted", Date.now())] });
     expect((await prospect(id))?.status).toBe("converted");
+  });
+});
+
+describe("agent position at sync (ADR-0028)", () => {
+  const AGENT_ONLY = "agent@example.com";
+  const reading = (capturedAt: number, lat = 50.85) => ({
+    lat,
+    lng: 4.35,
+    accuracy: 15,
+    capturedAt,
+  });
+  const stored = () => getDb(env.DB).select().from(agentPositions);
+
+  beforeEach(async () => {
+    await getDb(env.DB).delete(agentPositions);
+  });
+  afterEach(() => {
+    env.DEV_USER_EMAIL = "admin@example.com";
+  });
+
+  it("stores nothing for a body with no position", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    expect((await sync({})).status).toBe(200);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("stores an agent's reading and never echoes it", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const before = Date.now();
+    const capturedAt = before - 5_000;
+    const response = await sync({ position: reading(capturedAt) });
+    const after = Date.now();
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty("position");
+    const rows = await stored();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      agentEmail: AGENT_ONLY,
+      lat: 50.85,
+      lng: 4.35,
+      accuracy: 15,
+      capturedAt,
+    });
+    expect(rows[0]?.receivedAt).toBeGreaterThanOrEqual(before);
+    expect(rows[0]?.receivedAt).toBeLessThanOrEqual(after);
+  });
+
+  it("still answers 200 with the visit accepted when the position write fails", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("22222222-2222-4222-8222-222222222222", AGENT_ONLY);
+    const visitId = crypto.randomUUID();
+    const realDb = env.DB;
+    const broken = new Proxy(realDb, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("agent_positions")) throw new Error("positions unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    env.DB = broken;
+    let response: Response;
+    try {
+      response = await sync({
+        position: reading(Date.now() - 5_000),
+        visits: [
+          {
+            id: visitId,
+            prospectId: "22222222-2222-4222-8222-222222222222",
+            visitedAt: Date.now(),
+            flyerGiven: true,
+            outcome: "no_contact",
+            answers: {},
+          },
+        ],
+      });
+    } finally {
+      env.DB = realDb;
+    }
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as SyncResponse).accepted.visits).toEqual([visitId]);
+    expect(error).toHaveBeenCalledWith("agent position write failed", "Error");
+    error.mockRestore();
+  });
+
+  it("drops an invalid position but still takes the visit", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    await seedProspect("11111111-1111-4111-8111-111111111111", AGENT_ONLY);
+    const visitId = crypto.randomUUID();
+    const response = await sync({
+      position: reading(Date.now(), 200),
+      visits: [
+        {
+          id: visitId,
+          prospectId: "11111111-1111-4111-8111-111111111111",
+          visitedAt: Date.now(),
+          flyerGiven: true,
+          outcome: "no_contact",
+          answers: {},
+        },
+      ],
+    });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as SyncResponse).accepted.visits).toEqual([visitId]);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("stores nothing when an admin syncs", async () => {
+    await sync({ position: reading(Date.now() - 5_000) });
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("keeps the row on an older or equal reading and replaces it on a newer one", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const t = Date.now() - 20_000;
+    await sync({ position: reading(t, 50.1) });
+    await sync({ position: reading(t - 5_000, 50.2) });
+    await sync({ position: reading(t, 50.3) });
+    expect((await stored())[0]?.lat).toBe(50.1);
+    await sync({ position: reading(t + 5_000, 50.4) });
+    expect((await stored())[0]?.lat).toBe(50.4);
+  });
+
+  it("stores a future-clock reading raw", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const future = Date.now() + 3_600_000;
+    await sync({ position: reading(future) });
+    expect((await stored())[0]?.capturedAt).toBe(future);
+  });
+
+  it("does not write a reading from before today", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    await sync({ position: reading(Date.now() - 48 * 3_600_000) });
+    expect(await stored()).toHaveLength(0);
   });
 });

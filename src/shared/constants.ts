@@ -123,6 +123,9 @@ export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 export const ADMIN_VISITS_PAGE_SIZE = 500;
 
+/** Coarsest fix worth keeping (metres): an IP-based one cannot order a walk (ADR-0028). */
+export const AGENT_POSITION_ACCURACY_MAX_M = 10_000;
+
 /**
  * Questions per script, and so answers per visit: a visit answers one script
  * version, once per question (docs/domains/scripts.md). Lowering it would

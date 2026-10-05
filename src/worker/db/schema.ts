@@ -243,6 +243,17 @@ export const overpassCache = sqliteTable("overpass_cache", {
   createdAt: integer("created_at").notNull(),
 });
 
+/** The agent's latest reading, one row each, swept nightly (ADR-0028). */
+export const agentPositions = sqliteTable("agent_positions", {
+  agentEmail: text("agent_email").primaryKey(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  accuracy: real("accuracy").notNull(),
+  /** Phone clock, as sent. */
+  capturedAt: integer("captured_at").notNull(),
+  receivedAt: integer("received_at").notNull(),
+});
+
 export type ProspectRow = typeof prospects.$inferSelect;
 export type NewProspectRow = typeof prospects.$inferInsert;
 export type VisitRow = typeof visits.$inferSelect;
@@ -250,4 +261,5 @@ export type NewVisitRow = typeof visits.$inferInsert;
 export type OrphanedVisitRow = typeof visitsOrphaned.$inferSelect;
 export type NewOrphanedVisitRow = typeof visitsOrphaned.$inferInsert;
 export type ScriptRow = typeof scripts.$inferSelect;
+export type AgentPositionRow = typeof agentPositions.$inferSelect;
 export type OverpassCacheRow = typeof overpassCache.$inferSelect;
