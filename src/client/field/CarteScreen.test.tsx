@@ -11,7 +11,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { copy, TYPE_LABELS } from "../copy";
-import type { TodayItem, TodayList } from "./today";
+import type { TodayItem, TodayList } from "../../shared/today";
 import type { RoundState } from "./useRound";
 
 const round = vi.hoisted(() => ({

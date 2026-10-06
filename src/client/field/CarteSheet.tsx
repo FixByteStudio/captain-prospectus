@@ -13,7 +13,7 @@ import { StopNumber } from "./StopNumber";
 import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { copy, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 export function CarteSheet({ item, index }: { item: TodayItem | null; index: number }) {
   return (

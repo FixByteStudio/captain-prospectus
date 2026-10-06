@@ -25,7 +25,7 @@ import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 import { mapPins, walkingPath } from "./round-map";
 
 const item = (over: Partial<TodayItem> = {}): TodayItem => ({

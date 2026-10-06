@@ -26,6 +26,16 @@ export const OUTCOMES = [
 ] as const;
 export type Outcome = (typeof OUTCOMES)[number];
 
+/**
+ * À relancer and Personne sur place share the when step (when-step.md,
+ * CAP-2); every other result has none. The one home for this rule — the
+ * today rule (`today.ts`), the visit draft and `VisitScreen.tsx` all import it
+ * rather than restating the outcome list.
+ */
+export function hasWhenStep(outcome: Outcome): boolean {
+  return outcome === "follow_up" || outcome === "no_contact";
+}
+
 export const PROSPECT_TYPES = [
   "restaurant",
   "fast_food",

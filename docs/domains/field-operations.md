@@ -1,6 +1,7 @@
 # Field operations
 
 ## Today list
+- One rule builds it, `buildTodayList` in `src/shared/today.ts`: the phone calls it with its outbox and queued visits. It is shared so the admin round view (epic 5) can call it with none and the position stored at sync, and show the same stops in the same order.
 - All prospects assigned to the agent with an open status.
 - Ordered by **greedy nearest-next** from the phone's current position; prospects without coordinates go last.
 - With epic 5, the latest reading the phone took today goes with each sync, so the admin round view (Terrain › Tournée du jour) can order the same stops; sync never takes a reading itself ([ADR-0028](../adr/0028-agent-position-at-sync.md)).
