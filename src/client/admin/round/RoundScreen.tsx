@@ -132,6 +132,7 @@ export function RoundScreen() {
                       pins={drawn.pins}
                       path={drawn.path}
                       position={drawn.point}
+                      fitPosition={false}
                     />
                   </Surface>
                 )}

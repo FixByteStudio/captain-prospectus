@@ -1135,8 +1135,10 @@ From `md` the list and the map sit side by side:
   coordinates keeps its number and draws no pin. With a stored position: pin 1
   gold, the dashed path and the position marker. Without one: card-coloured
   pins only, no path, no marker, so the map implies no next step it cannot
-  know. The map mounts for any loaded round (zero pins: the Brussels view, or
-  centred on the position when there is one) and remounts, so refits, when
+  know. The map fits the stops, not the position, so a reading far from them
+  never shrinks them: the marker is drawn wherever it falls. It mounts for any
+  loaded round (zero pins: the Brussels view, or centred on the position when
+  there is one) and remounts, so refits, when
   another agent is chosen. Below `md` it comes first at a fixed 280 px, then
   the list; from `md` the list is on the left and the map on the right, 80 % of
   the viewport tall and sticky.
