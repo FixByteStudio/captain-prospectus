@@ -8,7 +8,7 @@ a mitigation nobody has verified is worse than one nobody claimed.
 
 | Threat | Mitigation |
 |---|---|
-| Access bypass (Worker reached without Access) | JWT verified in the Worker (`src/worker/auth.ts`), fail-closed when Access is misconfigured. **Preview URLs are a manual dashboard step with no repo-side control** — [#38](https://github.com/FixbyteStudio/captain-prospectus/issues/38) |
+| Access bypass (Worker reached without Access) | JWT verified in the Worker (`src/worker/auth.ts`), fail-closed when Access is misconfigured. Preview URLs are disabled by `preview_urls: false` in `wrangler.jsonc`, which every deploy applies and `config.test.ts` asserts |
 | Header spoofing | Email taken from the verified JWT only |
 | Dev impersonation leaking to prod | `DEV_USER_EMAIL` ignored unless host is localhost; `/api/dev/*` needs both that variable and a localhost host, and it is the one route mounted before auth |
 | Agent reading other agents' data | Agent **reads** filter by the verified email. A visit against a prospect that isn't the sender's is quarantined in `visits_orphaned` and derives nothing until an admin repairs it. It is not refused, because INVARIANT 5 outranks the rule ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md), [#33](https://github.com/FixbyteStudio/captain-prospectus/issues/33)) |

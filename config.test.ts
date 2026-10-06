@@ -24,6 +24,13 @@ describe("wrangler.jsonc", () => {
     expect(assets.run_worker_first).not.toBe(true);
   });
 
+  it("turns preview URLs off, so no second host for the Worker can sit outside Access", () => {
+    // docs/security.md, "Access bypass". A preview URL is reachable without the
+    // Access policy unless someone remembers to cover it in the dashboard; the
+    // key must be present and false, not merely absent, so the deploy states it.
+    expect(readWranglerConfig().preview_urls).toBe(false);
+  });
+
   it("serves the SPA fallback for unknown paths", () => {
     const assets = readWranglerConfig().assets as { not_found_handling?: string };
     expect(assets.not_found_handling).toBe("single-page-application");
