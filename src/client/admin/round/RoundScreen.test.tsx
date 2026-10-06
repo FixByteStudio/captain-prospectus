@@ -3,12 +3,13 @@ import { useEffect } from "react";
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { Link, MemoryRouter } from "react-router";
 import type { AgentRoundResponse, Prospect } from "../../../shared/schemas";
 import { STATUS_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { createAdminQueryClient } from "../query-client";
 import { RoundScreen } from "./RoundScreen";
+import { REMEMBERED_AGENT_KEY } from "./remembered-agent";
 import { RoundMap } from "../../field/RoundMap";
 
 // Real Leaflet is RoundMap.test.tsx's job; here only what the screen feeds it.
@@ -99,6 +100,7 @@ function setup(
   return { asked, view };
 }
 
+beforeEach(() => localStorage.clear());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("RoundScreen", () => {
@@ -185,6 +187,83 @@ describe("RoundScreen", () => {
     view("/admin/tournee?agent=other@example.com");
     expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
     expect(asked).toEqual([]);
+  });
+
+  describe("remembered agent (GH #284)", () => {
+    const OTHER = "marc@example.com";
+    const round = { prospects: PROSPECTS, position: null };
+
+    it("remembers the agent picked in the Select, for the next visit", async () => {
+      const user = userEvent.setup();
+      const first = setup(round);
+      const { unmount } = first.view("/admin/tournee");
+      await user.click(await screen.findByRole("combobox", { name: t.agentLabel }));
+      await user.click(await screen.findByRole("option", { name: EMAIL }));
+      await screen.findAllByRole("listitem");
+      unmount();
+
+      const second = setup(round);
+      second.view("/admin/tournee");
+      expect(await screen.findAllByRole("listitem")).toHaveLength(3);
+      expect(second.asked).toEqual([`/api/admin/agents/${encodeURIComponent(EMAIL)}/round`]);
+    });
+
+    it("keeps the last pick when the plain link is followed without a remount", async () => {
+      const user = userEvent.setup();
+      const { asked } = setup(round, 200, 200, [EMAIL, OTHER]);
+      localStorage.setItem(REMEMBERED_AGENT_KEY, EMAIL);
+      render(
+        <MemoryRouter initialEntries={["/admin/tournee"]}>
+          <QueryClientProvider client={createAdminQueryClient()}>
+            <Link to="/admin/tournee">plain</Link>
+            <RoundScreen />
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+      await screen.findAllByRole("listitem");
+      await user.click(screen.getByRole("combobox", { name: t.agentLabel }));
+      await user.click(await screen.findByRole("option", { name: OTHER }));
+      await waitFor(() => expect(asked.at(-1)).toContain(encodeURIComponent(OTHER)));
+      await user.click(screen.getByRole("link", { name: "plain" }));
+      await waitFor(() => expect(screen.getByRole("combobox").textContent).toBe(OTHER));
+    });
+
+    it("lets ?agent= win over the remembered agent, and keeps the memory", async () => {
+      localStorage.setItem(REMEMBERED_AGENT_KEY, EMAIL);
+      const { asked, view } = setup(round, 200, 200, [EMAIL, OTHER]);
+      view(`/admin/tournee?agent=${OTHER}`);
+      await screen.findAllByRole("listitem");
+      expect(asked).toEqual([`/api/admin/agents/${encodeURIComponent(OTHER)}/round`]);
+      expect(localStorage.getItem(REMEMBERED_AGENT_KEY)).toBe(EMAIL);
+    });
+
+    it("shows the prompt when the remembered agent left the roster", async () => {
+      localStorage.setItem(REMEMBERED_AGENT_KEY, "gone@example.com");
+      const { asked, view } = setup(round);
+      view("/admin/tournee");
+      expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
+      expect(asked).toEqual([]);
+    });
+
+    it("works as before when storage throws", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+        throw new Error("blocked");
+      });
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new Error("blocked");
+      });
+      try {
+        const { view } = setup(round);
+        view("/admin/tournee");
+        expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
+        await user.click(await screen.findByRole("combobox", { name: t.agentLabel }));
+        await user.click(await screen.findByRole("option", { name: EMAIL }));
+        expect(await screen.findAllByRole("listitem")).toHaveLength(3);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
   });
 
   it("shows the load-failed alert with a retry, and no prompt, when the roster fails", async () => {
