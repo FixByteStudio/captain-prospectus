@@ -23,6 +23,7 @@ import { PAGE_SIZE } from "./pagination";
 import type {
   AdminVisit,
   AdminVisitsResponse,
+  AgentRoundResponse,
   AgentsResponse,
   AssignResult,
   DashboardResponse,
@@ -65,6 +66,7 @@ export const adminKeys = {
   visitsFeed: () => ["admin", "visits", "feed"] as const,
   scripts: () => ["admin", "scripts"] as const,
   orphans: () => ["admin", "visits", "orphans"] as const,
+  agentRound: (email: string) => ["admin", "agents", email, "round"] as const,
 };
 
 /**
@@ -162,6 +164,16 @@ export function useAgents() {
     // The roster comes from a Worker variable, not a table. It cannot change
     // while the page is open.
     staleTime: Infinity,
+  });
+}
+
+/** One agent's round and last position (ADR-0028). Idle until an agent is chosen; no polling. */
+export function useAgentRound(email: string | null) {
+  return useQuery({
+    queryKey: adminKeys.agentRound(email ?? ""),
+    queryFn: () =>
+      apiFetch<AgentRoundResponse>(`/api/admin/agents/${encodeURIComponent(email ?? "")}/round`),
+    enabled: email !== null,
   });
 }
 

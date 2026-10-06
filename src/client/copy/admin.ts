@@ -496,6 +496,21 @@ export const adminCopy = {
     },
   },
 
+  /** The admin round view (spec 5.5, design.md "The admin round view"). */
+  round: {
+    title: "Tournée du jour",
+    // French keeps 0 singular: "0 arrêt".
+    count: (n: number) => (n <= 1 ? `${n} arrêt` : `${n} arrêts`),
+    agentLabel: "Agent",
+    choosePlaceholder: "Choisir un agent",
+    choosePrompt: "Choisissez un agent pour voir sa tournée du jour.",
+    position: (date: string) => `Position du ${date}`,
+    noPosition: "Aucune position reçue aujourd'hui. La tournée est triée par nom.",
+    empty: "Aucun arrêt dans la tournée du jour de cet agent.",
+    loadFailed: "Impossible de charger la tournée. Réessayez.",
+    loading: "Chargement de la tournée…",
+  },
+
   orphans: {
     title: "Visites à rattacher",
     // The lede carries the correction for every row at once: the edge colour

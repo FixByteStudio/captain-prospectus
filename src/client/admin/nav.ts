@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Link as LinkIcon,
   MapPin,
+  Route,
   Store,
 } from "lucide-react";
 import type { OrphansResponse } from "../../shared/schemas";
@@ -33,12 +34,11 @@ export type NavGroup = {
 
 /**
  * The admin sidebar's groups and order — GH #63. nav.test.ts checks these
- * paths against a hand-copied list of the seven routes AdminApp.tsx renders
+ * paths against a hand-copied list of the eight routes AdminApp.tsx renders
  * under `/admin/*` today (the index included) — it does not read
  * AdminApp.tsx, so update both together if a route there ever changes.
  *
- * Pilotage holds Tableau de bord since GH #107. Tournée du jour is still not
- * here on purpose: it stays out until its screen ships.
+ * Pilotage holds Tableau de bord since GH #107.
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
@@ -59,6 +59,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { label: copy.nav.visits, path: "/admin/visites", icon: MapPin },
       { label: copy.nav.orphans, path: "/admin/a-rattacher", icon: LinkIcon, count: "orphans" },
       { label: copy.nav.scripts, path: "/admin/scripts", icon: FileText },
+      { label: copy.nav.round, path: "/admin/tournee", icon: Route },
     ],
   },
 ];

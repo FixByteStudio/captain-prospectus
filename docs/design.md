@@ -1097,6 +1097,32 @@ the shared `EmptyTile` with « Aucune visite à rattacher. », « Tout ce que le
 agents ont envoyé est arrivé à destination. » and one `outline` button to
 Visites.
 
+### The admin round view
+
+`/admin/tournee`, last in Terrain: where an agent's round stands today, without
+phoning them. An agent `Select` (nothing preselected, kept in `?agent=`), then
+a read-only list of that agent's stops from the stored position
+([ADR-0028](adr/0028-agent-position-at-sync.md)).
+
+```
+Tournée du jour                                   12 arrêts
+Agent [lea@example.com v]  Position du 24/09/2026 15:24
++---------------------------------------------------------+
+|#1 Pizza Roma                [Assigné]              120 m |
+|   Restaurant · 4 rue Neuve                               |
+|#2 Chez Marcel              [À relancer]            340 m |
++---------------------------------------------------------+
+```
+
+- Rows follow `buildTodayList(...).now` as it comes (`src/shared/today.ts`);
+  no second sort. Only today's stops: no Plus tard group.
+- Read-only: no Visiter, Y aller, swipe, expand or link on a row. Rows reuse
+  `StopNumber`, the status leading edge and the ledger status badge.
+- No position today: the same stops sorted by name, no distances, and the
+  notice « Aucune position reçue aujourd'hui. La tournée est triée par nom. »
+- With a position, a stop without coordinates is listed last with no distance.
+- The map pane is story 5.6.
+
 ## Principles
 
 1. The list is the product. Chrome yields to rows.
