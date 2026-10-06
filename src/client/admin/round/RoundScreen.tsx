@@ -15,19 +15,22 @@ import { Surface } from "../Surface";
 import { BADGE_SHAPE, STATUS_BADGE } from "../status";
 import { useAgentRound, useAgents } from "../queries";
 import { RoundMap } from "../../field/RoundMap";
+import { readRememberedAgent, rememberAgent } from "./remembered-agent";
 import { roundMap, roundStops } from "./round-list";
 
 const t = copy.round;
 
 /**
  * An agent's round for today, read-only (design.md "The admin round view").
- * The agent lives in `?agent=` so a reload or a shared link keeps the choice.
+ * The agent lives in `?agent=` so a reload or a shared link keeps the choice;
+ * without one, the agent last chosen on this browser is used (GH #284).
  */
 export function RoundScreen() {
   const [params, setParams] = useSearchParams();
   const agents = useAgents();
   const roster = agents.data?.agents ?? [];
-  const asked = params.get("agent");
+  // Read per render, not once: the sidebar link drops `?agent=` without remounting.
+  const asked = params.get("agent") ?? readRememberedAgent();
   // An agent outside the roster is ignored: the placeholder shows instead.
   const agent = asked && roster.some((a) => a.email === asked) ? asked : null;
   const round = useAgentRound(agent);
@@ -55,7 +58,10 @@ export function RoundScreen() {
         </Label>
         <Select
           value={agent ?? ""}
-          onValueChange={(email) => setParams({ agent: email }, { replace: true })}
+          onValueChange={(email) => {
+            rememberAgent(email);
+            setParams({ agent: email }, { replace: true });
+          }}
         >
           <SelectTrigger id="round-agent" size="sm" className="w-64">
             <SelectValue placeholder={t.choosePlaceholder} />

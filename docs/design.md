@@ -1100,8 +1100,9 @@ Visites.
 ### The admin round view
 
 `/admin/tournee`, last in Terrain: where an agent's round stands today, without
-phoning them. An agent `Select` (nothing preselected, kept in `?agent=`), then
-a read-only list of that agent's stops from the stored position
+phoning them. An agent `Select` (kept in `?agent=`, which wins; without one, the
+agent last chosen on this browser is restored from `localStorage`, and the URL
+stays plain), then a read-only list of that agent's stops from the stored position
 ([ADR-0028](adr/0028-agent-position-at-sync.md)).
 
 ```
