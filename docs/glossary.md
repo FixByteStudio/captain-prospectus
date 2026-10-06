@@ -25,6 +25,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Sync** | Synchronisation | One request that pushes pending local writes and pulls the agent's list | |
 | **Dedupe key** | — (internal) | Stable key that makes re-imports update instead of duplicate | |
 | **Today list** | Tournée du jour | The agent's open prospects, ordered by distance | route |
+| **Admin round view** | Tournée du jour | The admin's read-only view of one agent's Today list at `/admin/tournee`, ordered from that agent's stored agent position, or by name when there is none ([design](design.md#the-admin-round-view)) | tracking screen |
 | **Agent position** | Position | The latest reading the phone took today, sent with a sync; one per agent, shown only in the admin round view and gone overnight ([ADR-0028](adr/0028-agent-position-at-sync.md)) | location history, tracking |
 | **Carte** (screen) | Carte | The field tab at `/tournee/carte`: today's list drawn as numbered pins on a map | the `osm` import source below, which the admin side also labels "Carte" |
 | **Flyer** | Flyer | The leaflet handed over during a visit | prospectus, brochure |
