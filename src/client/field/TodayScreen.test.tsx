@@ -1,7 +1,7 @@
 /**
  * The round screen (spec-gh-118): single-open rows, the outbox badge seeded
  * from a real `outboxVisits` row, Plus tard rows that carry no link, and the
- * empty state — all offline, against the real Dexie table `today.ts` reads.
+ * empty state — all offline, against the real Dexie table `useRound.ts` reads.
  *
  * `useSyncState` is mocked (as `SyncIndicator.test.tsx` does) so nothing here
  * depends on the sync engine's timers; `useAgentPosition` runs for real and
