@@ -20,7 +20,8 @@ import { formatDistance } from "../format";
 import { cn } from "../lib/utils";
 import { STATUS_EDGE } from "../admin/status";
 import { StopNumber } from "./StopNumber";
-import { navigationUrl, visitPath, type TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
+import { navigationUrl, visitPath } from "./today";
 import { useSwipe } from "./useSwipe";
 
 /** A pending prospect has no server status to key an edge off yet. */

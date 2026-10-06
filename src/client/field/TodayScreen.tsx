@@ -19,7 +19,7 @@ import { NextStopCard } from "./NextStopCard";
 import { PositionDenied } from "./PositionDenied";
 import { dailyProgress } from "./progress";
 import { edgeFor, StopRow } from "./StopRow";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 import { useRound } from "./useRound";
 import { useSyncState } from "./useSync";
 

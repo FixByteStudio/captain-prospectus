@@ -6,7 +6,7 @@
  * numbering itself. `now` is `TodayList.now`, the same array `TodayScreen`
  * renders — one source for the round, shared through `useRound`.
  */
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 export type MapPin = {
   id: string;

@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Point } from "../../shared/geo";
 import { fieldDb, type StoredVisit } from "./db";
-import { buildTodayList, type TodayList } from "./today";
+import { buildTodayList, type TodayList } from "../../shared/today";
 import { useAgentPosition } from "./useAgentPosition";
 import { useSyncState } from "./useSync";
 

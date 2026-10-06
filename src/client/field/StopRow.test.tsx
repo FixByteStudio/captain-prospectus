@@ -14,7 +14,7 @@ import { copy } from "../copy";
 import { STATUS_EDGE } from "../admin/status";
 import { SWIPE_COMMIT } from "./swipe";
 import { edgeFor, StopRow } from "./StopRow";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 const item = (over: Partial<TodayItem> = {}): TodayItem => ({
   id: "11111111-1111-1111-1111-111111111111",

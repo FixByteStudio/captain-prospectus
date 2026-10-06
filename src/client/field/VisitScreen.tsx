@@ -34,7 +34,7 @@ import { Textarea } from "@/ui/textarea";
 import { apiFetch } from "../api";
 import { copy, REFUSAL_REASON_LABELS, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import { OUTCOMES, REFUSAL_REASONS, type Outcome } from "../../shared/constants";
+import { OUTCOMES, REFUSAL_REASONS, hasWhenStep, type Outcome } from "../../shared/constants";
 import { visitHistoryResponseSchema } from "../../shared/schemas";
 import { answerableQuestions } from "../../shared/answers";
 import type { Answers, Script } from "../../shared/schemas";
@@ -43,7 +43,6 @@ import {
   answeredCount,
   asksRefusalReason,
   emptyDraft,
-  hasWhenStep,
   toVisit,
   withOutcome,
   type VisitDraft,

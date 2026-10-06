@@ -9,18 +9,9 @@
  */
 import { answersSchemaFor } from "../../shared/answers";
 import { visitSchema, type Answers, type Script, type Visit } from "../../shared/schemas";
-import type { Outcome, RefusalReason } from "../../shared/constants";
+import { hasWhenStep, type Outcome, type RefusalReason } from "../../shared/constants";
 import type { Point } from "../../shared/geo";
 import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
-
-/**
- * À relancer and Personne sur place share the when step (when-step.md,
- * CAP-2); every other result has none. The one home for this rule — `today.ts`
- * and `VisitScreen.tsx` both import it rather than restating the outcome list.
- */
-export function hasWhenStep(outcome: Outcome): boolean {
-  return outcome === "follow_up" || outcome === "no_contact";
-}
 
 /**
  * Pas intéressé asks for a refusal reason instead of the script
