@@ -15,7 +15,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { agentPositions, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { DASHBOARD_PERIODS, MAX_REQUEST_BYTES, STATUSES } from "../shared/constants";
 import { brusselsPeriod } from "../shared/period";
 import { dedupeKey } from "../shared/dedupe";
@@ -74,6 +74,7 @@ async function postSeed(body: unknown): Promise<Response> {
 beforeEach(async () => {
   const db = getDb(env.DB);
   // Order matters: visits reference both of the others by foreign key.
+  await db.delete(agentPositions);
   await db.delete(visitsOrphaned);
   await db.delete(visits);
   await db.delete(prospects);
@@ -123,6 +124,35 @@ describe("POST /api/dev/seed", () => {
     expect(await response.json()).toMatchObject({ inserted: { orphans: 0 } });
     const [row] = await getDb(env.DB).select({ n: count() }).from(visitsOrphaned);
     expect(row?.n).toBe(0);
+  });
+
+  it("stores each position as a reading from today, one row per email however often it runs", async () => {
+    const positions = [
+      { email: "agent@example.com", lat: 50.85, lng: 4.35, accuracy: 15 },
+      { email: "admin@example.com", lat: 50.84, lng: 4.36, accuracy: 25 },
+    ];
+    expect((await postSeed(seedBody({ positions }))).status).toBe(200);
+    expect((await postSeed(seedBody({ positions }))).status).toBe(200);
+
+    const rows = await getDb(env.DB)
+      .select()
+      .from(agentPositions)
+      .orderBy(agentPositions.agentEmail);
+    expect(rows.map((r) => r.agentEmail)).toEqual(["admin@example.com", "agent@example.com"]);
+    expect(rows.every((r) => Math.abs(r.capturedAt - Date.now()) < 60_000)).toBe(true);
+  });
+
+  it("stores no position when the body has none", async () => {
+    await postSeed(seedBody());
+    const [row] = await getDb(env.DB).select({ n: count() }).from(agentPositions);
+    expect(row?.n).toBe(0);
+  });
+
+  it("rejects a position with an out-of-range latitude", async () => {
+    const response = await postSeed(
+      seedBody({ positions: [{ email: "agent@example.com", lat: 91, lng: 4.35, accuracy: 15 }] }),
+    );
+    expect(response.status).toBe(400);
   });
 
   /** INVARIANT 6: the body used to be cast to a type and inserted unchecked. */
