@@ -14,7 +14,8 @@ import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
 import { BADGE_SHAPE, STATUS_BADGE } from "../status";
 import { useAgentRound, useAgents } from "../queries";
-import { roundStops } from "./round-list";
+import { RoundMap } from "../../field/RoundMap";
+import { roundMap, roundStops } from "./round-list";
 
 const t = copy.round;
 
@@ -36,6 +37,7 @@ export function RoundScreen() {
   // The fetch time stands for "now": stable across renders, and the day the rule reads.
   const stops = round.data && agent ? roundStops(round.data, round.dataUpdatedAt) : null;
   const position = round.data?.position ?? null;
+  const drawn = stops ? roundMap(stops, position) : null;
 
   return (
     <section>
@@ -110,17 +112,30 @@ export function RoundScreen() {
               {data.position === null && stops && stops.length > 0 && (
                 <p className="text-muted-foreground mb-3">{t.noPosition}</p>
               )}
-              <Surface className="overflow-hidden">
-                {stops && stops.length === 0 ? (
-                  <p className="text-muted-foreground p-4">{t.empty}</p>
-                ) : (
-                  <ul className="divide-border divide-y">
-                    {stops?.map((stop, i) => (
-                      <RoundRow key={stop.id} stop={stop} index={i + 1} />
-                    ))}
-                  </ul>
+              <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
+                <Surface className="overflow-hidden md:col-start-1 md:row-start-1">
+                  {stops && stops.length === 0 ? (
+                    <p className="text-muted-foreground p-4">{t.empty}</p>
+                  ) : (
+                    <ul className="divide-border divide-y">
+                      {stops?.map((stop, i) => (
+                        <RoundRow key={stop.id} stop={stop} index={i + 1} />
+                      ))}
+                    </ul>
+                  )}
+                </Surface>
+                {/* A Leaflet container needs a definite height: 280 px on phones (story 5.6), viewport-tall and sticky from md so the map stays in view as the list scrolls. */}
+                {drawn && (
+                  <Surface className="order-first h-70 overflow-hidden md:sticky md:top-4 md:order-none md:col-start-2 md:row-start-1 md:h-[80dvh]">
+                    <RoundMap
+                      key={agent}
+                      pins={drawn.pins}
+                      path={drawn.path}
+                      position={drawn.point}
+                    />
+                  </Surface>
                 )}
-              </Surface>
+              </div>
             </>
           )}
         </ScreenState>

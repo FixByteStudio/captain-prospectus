@@ -97,8 +97,9 @@ export function RoundMap({
   path: readonly [number, number][];
   position: Point | null;
   /** Asks the caller for a fresh reading (`useAgentPosition`'s own `refresh`,
-   * passed through by `CarteScreen`). */
-  recentre: () => void;
+   * passed through by `CarteScreen`). Left `undefined`, there is no re-centre
+   * button — the admin round view has no reading to ask for. */
+  recentre?: () => void;
   /**
    * Selects a stop by id (spec-gh-122): when set, every marker becomes
    * tappable and keyboard-reachable, named `copy.carte.pinLabel`. Left
@@ -321,6 +322,7 @@ export function RoundMap({
   }, [position]);
 
   const handleRecentre = () => {
+    if (!recentre) return;
     recentre();
     pendingRecentre.current = true;
     if (recentreTimer.current !== null) window.clearTimeout(recentreTimer.current);
@@ -373,19 +375,21 @@ export function RoundMap({
         role="application"
         aria-label={copy.carte.label}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-map"
-        onClick={handleRecentre}
-        aria-label={copy.carte.recentre}
-        // `z-10`: above the isolated map div as a whole (see `isolate` above).
-        // `bottom-9` clears Leaflet's own bottom-right attribution line so
-        // neither paints over the other.
-        className="bg-card absolute right-3.5 bottom-9 z-10 shadow-md"
-      >
-        <LocateFixedIcon aria-hidden="true" />
-      </Button>
+      {recentre && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-map"
+          onClick={handleRecentre}
+          aria-label={copy.carte.recentre}
+          // `z-10`: above the isolated map div as a whole (see `isolate` above).
+          // `bottom-9` clears Leaflet's own bottom-right attribution line so
+          // neither paints over the other.
+          className="bg-card absolute right-3.5 bottom-9 z-10 shadow-md"
+        >
+          <LocateFixedIcon aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
 }

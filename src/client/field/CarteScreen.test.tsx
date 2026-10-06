@@ -287,7 +287,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(props.position).toBe(round.current.point);
     expect(typeof props.onSelect).toBe("function");
 
-    props.recentre();
+    props.recentre?.();
     expect(round.current.refresh).toHaveBeenCalledTimes(1);
   });
 

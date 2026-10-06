@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect } from "react";
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +9,28 @@ import { STATUS_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { createAdminQueryClient } from "../query-client";
 import { RoundScreen } from "./RoundScreen";
+import { RoundMap } from "../../field/RoundMap";
+
+// Real Leaflet is RoundMap.test.tsx's job; here only what the screen feeds it.
+const mapMounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../field/RoundMap", () => ({
+  RoundMap: vi.fn(() => {
+    useEffect(() => {
+      mapMounts.count += 1;
+    }, []);
+    return <div data-testid="round-map" />;
+  }),
+}));
+
+function lastMapProps(): Record<string, unknown> {
+  const calls = vi.mocked(RoundMap).mock.calls;
+  return (calls.at(-1)?.[0] ?? {}) as Record<string, unknown>;
+}
+
+beforeEach(() => {
+  mapMounts.count = 0;
+  vi.mocked(RoundMap).mockClear();
+});
 
 const t = copy.round;
 const EMAIL = "lea@example.com";
@@ -45,14 +68,19 @@ const PROSPECTS = [
   prospect("near", "Madeleine", 50.8501, 4.3501),
 ];
 
-function setup(round: AgentRoundResponse, roundStatus = 200, rosterStatus = 200) {
+function setup(
+  round: AgentRoundResponse,
+  roundStatus = 200,
+  rosterStatus = 200,
+  roster: string[] = [EMAIL],
+) {
   const asked: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://admin");
       if (url.pathname === "/api/admin/agents") {
-        return json({ agents: [{ email: EMAIL, role: "agent" }] }, rosterStatus);
+        return json({ agents: roster.map((email) => ({ email, role: "agent" })) }, rosterStatus);
       }
       asked.push(url.pathname);
       return json(round, roundStatus);
@@ -190,5 +218,102 @@ describe("RoundScreen", () => {
     expect(items).toHaveLength(2);
     expect(within(items[0] as HTMLElement).getByText(STATUS_LABELS.assigned)).toBeTruthy();
     expect(within(items[1] as HTMLElement).getByText(STATUS_LABELS.follow_up)).toBeTruthy();
+  });
+
+  describe("map pane", () => {
+    const POS = { lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: CAPTURED };
+
+    it("is absent before an agent is chosen", async () => {
+      const { view } = setup({ prospects: PROSPECTS, position: null });
+      view("/admin/tournee");
+      await screen.findByText(t.choosePrompt);
+      expect(screen.queryByTestId("round-map")).toBeNull();
+    });
+
+    it("is absent when the round fails to load", async () => {
+      const { view } = setup({ prospects: [], position: null }, 500);
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findByText(t.loadFailed);
+      expect(screen.queryByTestId("round-map")).toBeNull();
+    });
+
+    it("with a position: list numbers, uncoordinated stop has no pin, gold 1, path, position", async () => {
+      const { view } = setup({ prospects: PROSPECTS, position: POS });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findAllByRole("listitem");
+      const props = lastMapProps();
+      expect(props.pins).toEqual([
+        expect.objectContaining({ name: "Madeleine", index: 1, next: true }),
+        expect.objectContaining({ name: "Zeste", index: 2, next: false }),
+      ]);
+      expect(props.path).toEqual([
+        [50.8501, 4.3501],
+        [50.9, 4.4],
+      ]);
+      expect(props.position).toEqual({ lat: 50.85, lng: 4.35 });
+      expect(props).not.toHaveProperty("recentre");
+      expect(props).not.toHaveProperty("onSelect");
+    });
+
+    it("without a position: numbering follows the name order, no gold, no path, no position", async () => {
+      const { view } = setup({ prospects: PROSPECTS, position: null });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findAllByRole("listitem");
+      const props = lastMapProps();
+      expect(props.pins).toEqual([
+        expect.objectContaining({ name: "Madeleine", index: 2, next: false }),
+        expect.objectContaining({ name: "Zeste", index: 3, next: false }),
+      ]);
+      expect(props.path).toEqual([]);
+      expect(props.position).toBeNull();
+    });
+
+    it("without a position: a coordinated first stop by name is not gold", async () => {
+      const { view } = setup({
+        prospects: [prospect("a", "Alpha", 50.8, 4.3), prospect("z", "Zeste", 50.9, 4.4)],
+        position: null,
+      });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findAllByRole("listitem");
+      expect(lastMapProps().pins).toEqual([
+        expect.objectContaining({ name: "Alpha", index: 1, next: false }),
+        expect.objectContaining({ name: "Zeste", index: 2, next: false }),
+      ]);
+    });
+
+    it("zero pins with a stored position: map mounted, centred on the position", async () => {
+      const { view } = setup({ prospects: [], position: POS });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findByText(t.empty);
+      const props = lastMapProps();
+      expect(props.pins).toEqual([]);
+      expect(props.path).toEqual([]);
+      expect(props.position).toEqual({ lat: 50.85, lng: 4.35 });
+    });
+
+    it("mounts for a loaded round with zero pins", async () => {
+      const { view } = setup({ prospects: [], position: null });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findByText(t.empty);
+      expect(screen.getByTestId("round-map")).toBeTruthy();
+      expect(lastMapProps().pins).toEqual([]);
+    });
+
+    it("remounts when another agent is chosen", async () => {
+      const user = userEvent.setup();
+      const other = "marc@example.com";
+      const { view } = setup({ prospects: PROSPECTS, position: null }, 200, 200, [EMAIL, other]);
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findByTestId("round-map");
+      expect(mapMounts.count).toBe(1);
+      await user.click(screen.getByRole("combobox", { name: t.agentLabel }));
+      await user.click(await screen.findByRole("option", { name: other }));
+      // Passes even without `key`: the uncached switch goes through the skeleton.
+      await waitFor(() => expect(mapMounts.count).toBe(2));
+      // Back to a cached round: no skeleton in between, so only the key remounts it.
+      await user.click(screen.getByRole("combobox", { name: t.agentLabel }));
+      await user.click(await screen.findByRole("option", { name: EMAIL }));
+      await waitFor(() => expect(mapMounts.count).toBe(3));
+    });
   });
 });

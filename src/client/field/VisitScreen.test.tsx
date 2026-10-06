@@ -1464,7 +1464,7 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(props?.position).toEqual({ lat: 50.85, lng: 4.35 });
     // Its pin selects nothing; re-centre asks the round's own reading again.
     expect(props?.onSelect).toBeUndefined();
-    props?.recentre();
+    props?.recentre?.();
     expect(round.refresh).toHaveBeenCalledOnce();
     // The landmark is named by its heading.
     expect(screen.getByRole("complementary", { name: copy.visit.previousVisits })).toBe(pane);

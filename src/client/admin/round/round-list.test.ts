@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentRoundResponse, Prospect } from "../../../shared/schemas";
 import { buildTodayList } from "../../../shared/today";
-import { roundStops } from "./round-list";
+import { roundMap, roundStops } from "./round-list";
 
 const NOW = Date.UTC(2026, 9, 6, 10, 0);
 
@@ -54,5 +54,57 @@ describe("roundStops", () => {
     };
     const stops = roundStops({ prospects: [...PROSPECTS, later], position: POSITION }, NOW);
     expect(stops.map((s) => s.id)).not.toContain("later");
+  });
+});
+
+describe("roundMap", () => {
+  const stops = roundStops({ prospects: PROSPECTS, position: null }, NOW);
+  const at = { lat: 50.85, lng: 4.35 };
+
+  it("with a position: list numbers, gold first pin, path, point", () => {
+    const ordered = roundStops(
+      { prospects: PROSPECTS, position: { ...at, accuracy: 5, capturedAt: NOW } },
+      NOW,
+    );
+    const map = roundMap(ordered, at);
+    expect(map.pins.map((p) => [p.name, p.index, p.next])).toEqual([
+      ["Madeleine", 1, true],
+      ["Zeste", 2, false],
+    ]);
+    expect(map.path).toHaveLength(2);
+    expect(map.point).toEqual(at);
+  });
+
+  it("without a position: no gold, empty path, null point", () => {
+    const map = roundMap(stops, null);
+    expect(map.pins.every((p) => !p.next)).toBe(true);
+    expect(map.path).toEqual([]);
+    expect(map.point).toBeNull();
+  });
+
+  it("a stop without coordinates keeps its number and draws no pin", () => {
+    const map = roundMap(stops, null);
+    expect(map.pins.map((p) => [p.name, p.index])).toEqual([
+      ["Madeleine", 2],
+      ["Zeste", 3],
+    ]);
+  });
+
+  it("with a position: the path is the pins' coordinates in order, not the position", () => {
+    const ordered = roundStops(
+      { prospects: PROSPECTS, position: { ...at, accuracy: 5, capturedAt: NOW } },
+      NOW,
+    );
+    expect(roundMap(ordered, at).path).toEqual([
+      [50.8501, 4.3501],
+      [50.9, 4.4],
+    ]);
+  });
+
+  it("without a position: a coordinated first stop is not gold", () => {
+    const first = [prospect("a", "Alpha", 50.8, 4.3), prospect("z", "Zeste", 50.9, 4.4)];
+    const list = roundStops({ prospects: first, position: null }, NOW);
+    const map = roundMap(list, null);
+    expect(map.pins[0]).toEqual(expect.objectContaining({ name: "Alpha", index: 1, next: false }));
   });
 });
