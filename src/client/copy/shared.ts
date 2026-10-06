@@ -37,6 +37,7 @@ export const sharedCopy = {
     import: "Import",
     duplicates: "Doublons",
     orphans: "À rattacher",
+    round: "Tournée du jour",
 
     /** The band's meta subtitle, naming the current tab (spec-gh-65). */
     subtitle: {

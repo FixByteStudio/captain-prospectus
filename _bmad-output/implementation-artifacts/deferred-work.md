@@ -296,3 +296,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-adr-0028-agent-position-at-sync.md`
   summary: Decide whether CLAUDE.md invariant 2 ("agents only insert") gains a one-line pointer to ADR-0028's `agent_positions` upsert.
   evidence: ADR-0028 argues the row is the agent's own state, not shared data, but an agent reading only CLAUDE.md could flag story 5.2's upsert as a violation; CLAUDE.md is agent-context, so not edited in this story.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-admin-tournee-du-jour-agent-picker-and-ordered-list.md`
+  summary: Give "Admin round view" (admin Tournée du jour) its own row in docs/glossary.md, beside Today list.
+  evidence: The Agent position row already says "shown only in the admin round view", and design.md, field-operations.md and the code (`RoundScreen`, `copy.round`) use the term, but the glossary defines only the agent's Today list.

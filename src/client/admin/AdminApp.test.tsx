@@ -102,6 +102,12 @@ describe("AdminApp", () => {
     expect(sidebarLink(copy.nav.prospects).getAttribute("aria-current")).toBeNull();
   });
 
+  it("registers /admin/tournee: the round screen opens, asking for an agent", async () => {
+    renderAdmin("/admin/tournee");
+
+    expect(screen.getByRole("heading", { level: 2, name: copy.round.title })).toBeTruthy();
+  });
+
   it("answers an unknown admin path with « Page introuvable. » inside the frame (#90)", () => {
     renderAdmin("/admin/inconnu");
 

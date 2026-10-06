@@ -11,7 +11,7 @@ import {
 } from "./nav";
 
 /**
- * The seven routes AdminApp.tsx renders under `/admin/*` today, the index
+ * The eight routes AdminApp.tsx renders under `/admin/*` today, the index
  * included, copied here by hand — this file never reads AdminApp.tsx, so
  * update both together if a route there ever changes.
  */
@@ -23,6 +23,7 @@ const ADMIN_APP_ROUTES = [
   "/admin/visites",
   "/admin/a-rattacher",
   "/admin/scripts",
+  "/admin/tournee",
 ];
 
 describe("NAV_GROUPS", () => {
@@ -40,7 +41,7 @@ describe("NAV_GROUPS", () => {
       },
       {
         label: "Terrain",
-        paths: ["/admin/visites", "/admin/a-rattacher", "/admin/scripts"],
+        paths: ["/admin/visites", "/admin/a-rattacher", "/admin/scripts", "/admin/tournee"],
       },
     ]);
   });
