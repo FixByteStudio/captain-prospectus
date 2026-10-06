@@ -958,6 +958,12 @@ export const devSeedSchema = z
     script: scriptCreateSchema,
     /** `false` quarantines nothing, for the blank seed. Absent means true. */
     orphans: z.optional(z.boolean()),
+    /** Readings taken "now", so the admin round view has a position to draw. */
+    positions: z.optional(
+      z
+        .array(z.extend(z.omit(agentPositionSchema, { capturedAt: true }), { email: emailSchema }))
+        .check(z.maxLength(10)),
+    ),
   })
   .check((ctx) => {
     // A merge target is resolved by name within this one body, so a name that

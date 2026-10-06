@@ -15,6 +15,7 @@ import { CLIENT_VERSION } from "../../shared/constants";
 import { dedupeKey } from "../../shared/dedupe";
 import { devSeedSchema } from "../../shared/schemas";
 import type { DevSeed, DevSeedResult } from "../../shared/schemas";
+import { writeAgentPosition } from "../agent-position";
 import { isLocalHost } from "../auth";
 import { validate } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
@@ -226,6 +227,13 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
         .returning({ id: visitsOrphaned.id });
       insertedOrphans += inserted.length;
     }
+  }
+
+  // 8. Readings taken now, through the sync's own writer: newest wins, so a
+  // re-seed on the same day moves the dot rather than adding a row (ADR-0028).
+  // Not an admin rule check: the seed may show a position production would not store.
+  for (const { email, ...reading } of body.positions ?? []) {
+    await writeAgentPosition(db, email, { ...reading, capturedAt: now }, now);
   }
 
   return c.json<DevSeedResult>({
