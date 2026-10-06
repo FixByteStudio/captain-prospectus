@@ -1,7 +1,7 @@
 ---
 tracker_id: "268"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/268"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Admin Tournée du jour: agent picker and ordered list"

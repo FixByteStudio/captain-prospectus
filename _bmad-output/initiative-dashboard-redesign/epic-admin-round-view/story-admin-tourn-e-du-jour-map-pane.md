@@ -1,7 +1,7 @@
 ---
 tracker_id: "269"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/269"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Admin Tournée du jour: map pane"

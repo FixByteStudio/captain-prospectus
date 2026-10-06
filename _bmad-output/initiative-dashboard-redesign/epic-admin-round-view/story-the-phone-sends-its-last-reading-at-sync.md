@@ -1,7 +1,7 @@
 ---
 tracker_id: "266"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/266"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "The phone sends its last reading at sync"

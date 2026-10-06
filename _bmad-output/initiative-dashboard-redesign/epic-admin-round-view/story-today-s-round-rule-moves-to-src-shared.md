@@ -1,7 +1,7 @@
 ---
 tracker_id: "267"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/267"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Today's round rule moves to src/shared"

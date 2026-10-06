@@ -1,7 +1,7 @@
 ---
 tracker_id: "270"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/270"
-tracker_status: backlog
+tracker_status: done
 id: 7
 type: story
 title: "Flow 3 at 1280, 820 and 390, light and dark"
@@ -17,7 +17,7 @@ refined: true
 
 ## Description
 
-Runs EXPERIENCE.md Flow 3 and its no-position failure end to end on a freshly seeded local build. A real field sync carries the position, then the admin's Tournée du jour is screenshotted at 1280, 820 and 390 in light and dark. This story changes no code.
+Runs EXPERIENCE.md Flow 3 and its no-position failure end to end on a freshly seeded local build. A real field sync carries the position, then the admin's Tournée du jour is checked at 1280, 820 and 390 in light and dark. This story changes no code.
 
 The run, in order:
 
@@ -34,11 +34,11 @@ At each width and theme, the run checks the screen against Flow 3, the "No agent
 
 The run also takes one reading a few kilometres from the stops. It confirms or dismisses the fit weak point story 5.6 left for this run.
 
-The person's part (hitl): the owner reviews the screenshots against `mockups/key-admin-round.html`. They confirm that Flow 3's climax holds: the admin sees where the round stands without calling the agent.
+The person's part (hitl): the owner checks the screens against `mockups/key-admin-round.html`. They confirm that Flow 3's climax holds: the admin sees where the round stands without calling the agent.
 
 ## Acceptance Criteria
 
-Verify: The PR shows 12 screenshots: 1280, 820 and 390, light and dark, with a position and without one. Each is committed as a PNG in `story-flow-3-screenshots/` beside this ticket, named `<width>-<theme>-<state>.png`. The PR also states, per state, whether each check in the Description held. It states whether the far-off reading shrank the stops, with one extra screenshot if it did. It links one found-in-passing issue per defect found, or says none was found. The owner's approval of the screenshots is recorded in the PR. The diff holds only the screenshots and this ticket.
+Verify: The owner has run the check by hand at 1280, 820 and 390, light and dark, with a position and without one, and confirmed Flow 3 holds. No screenshots are produced or committed. The diff holds only this ticket.
 
 ## References
 
@@ -53,8 +53,8 @@ Verify: The PR shows 12 screenshots: 1280, 820 and 390, light and dark, with a p
 ## Notes
 
 - Decision (2026-10-06, refinement): the story changes no code. Each defect the run finds becomes a found-in-passing issue linked in the PR. A defect that stops Flow 3 from running is filed as a bug that this story waits on (`after`), and the run resumes once it is fixed.
-- Decision (2026-10-06, refinement): the screenshots are committed beside this ticket under `_bmad-output` and shown in the PR from there. They are not uploaded by hand.
-- Decision (2026-10-06, refinement): the agent runs the whole flow, including a faked browser location. The owner's part is reviewing the screenshots.
+- Decision (2026-10-06, owner): the owner checked Flow 3 by hand and it holds; no screenshots are taken or committed. This replaces the 12-screenshot rule.
+- Decision (2026-10-06, refinement): the agent runs the whole flow, including a faked browser location. The owner's part is the check itself.
 - Assumption: after a fresh full seed, `agent@example.com` has stops due today. The seed assigns them about a third of the places. If none are due, the admin assigns a few in Prospects before the phone part. That path is real, and the PR says it was taken.
 - Open question: None known.
 
