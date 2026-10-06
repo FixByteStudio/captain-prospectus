@@ -370,6 +370,13 @@ describe("RoundScreen", () => {
       expect(props.position).toEqual({ lat: 50.85, lng: 4.35 });
     });
 
+    it("asks the map to fit the stops, not the position", async () => {
+      const { view } = setup({ prospects: PROSPECTS, position: POS });
+      view(`/admin/tournee?agent=${EMAIL}`);
+      await screen.findByText("Madeleine");
+      expect(lastMapProps().fitPosition).toBe(false);
+    });
+
     it("mounts for a loaded round with zero pins", async () => {
       const { view } = setup({ prospects: [], position: null });
       view(`/admin/tournee?agent=${EMAIL}`);
