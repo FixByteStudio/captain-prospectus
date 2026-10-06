@@ -1114,6 +1114,15 @@ Agent [lea@example.com v]  Position du 24/09/2026 15:24
 +---------------------------------------------------------+
 ```
 
+From `md` the list and the map sit side by side:
+
+```
++----------------------------+ +----------------------------+
+|#1 Pizza Roma     120 m     | |  (map, sticky)             |
+|#2 Chez Marcel    340 m     | |   (1)--(2)   (o)           |
++----------------------------+ +----------------------------+
+```
+
 - Rows follow `buildTodayList(...).now` as it comes (`src/shared/today.ts`);
   no second sort. Only today's stops: no Plus tard group.
 - Read-only: no Visiter, Y aller, swipe, expand or link on a row. Rows reuse
@@ -1121,7 +1130,16 @@ Agent [lea@example.com v]  Position du 24/09/2026 15:24
 - No position today: the same stops sorted by name, no distances, and the
   notice « Aucune position reçue aujourd'hui. La tournée est triée par nom. »
 - With a position, a stop without coordinates is listed last with no distance.
-- The map pane is story 5.6.
+- The map pane sits beside the list (the field's `RoundMap`, no re-centre
+  button, pins decorative). Pins carry the list's numbers; a stop without
+  coordinates keeps its number and draws no pin. With a stored position: pin 1
+  gold, the dashed path and the position marker. Without one: card-coloured
+  pins only, no path, no marker, so the map implies no next step it cannot
+  know. The map mounts for any loaded round (zero pins: the Brussels view, or
+  centred on the position when there is one) and remounts, so refits, when
+  another agent is chosen. Below `md` it comes first at a fixed 280 px, then
+  the list; from `md` the list is on the left and the map on the right, 80 % of
+  the viewport tall and sticky.
 
 ## Principles
 

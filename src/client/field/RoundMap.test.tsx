@@ -45,6 +45,11 @@ afterEach(() => {
 });
 
 describe("RoundMap", () => {
+  it("renders no re-centre button when `recentre` is not given", () => {
+    render(<RoundMap pins={[pin()]} path={[]} position={null} />);
+    expect(screen.queryByRole("button", { name: copy.carte.recentre })).toBeNull();
+  });
+
   it("draws one marker per pin: gold 34px only for `next`, card 28px for the rest", () => {
     const pins = [
       pin({ index: 1, lat: 1, lng: 2, next: true }),
