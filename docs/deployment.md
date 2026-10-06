@@ -25,9 +25,10 @@ A staging environment is not planned for v1 (two agents, low risk). If added: a 
      from `ctx.access`, which Static Assets do not forward ([ADR-0006](adr/0006-cloudflare-access-auth.md)).
 5. **Worker variables** in `wrangler.jsonc`: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `ADMIN_EMAILS`. Redeploy.
 6. **Verify**: open the URL in a private window → Access login → app loads → `GET /api/me` shows the right role. Call `/api/me` with `curl` and no cookie → must be 401/redirect.
-7. **Check nothing bypasses Access.** Preview URLs have their own toggle in the same
-   **Domains & Routes** panel (they share one account-wide "Cloudflare Workers Preview URLs"
-   policy); enable it, or disable preview URLs. Verify no other route reaches the Worker unprotected.
+7. **Check nothing bypasses Access.** Preview URLs are disabled by `preview_urls: false` in
+   `wrangler.jsonc`, asserted in `config.test.ts` ([security](security.md)), so the first deploy
+   already applies it. In the same **Domains & Routes** panel, confirm the preview URLs toggle
+   reads off. Verify no other route reaches the Worker unprotected.
 8. **GitHub secrets** for CI deploys: `CLOUDFLARE_API_TOKEN` (scoped: Workers Scripts Edit, D1 Edit, on this account only) and `CLOUDFLARE_ACCOUNT_ID`.
 9. **The backup bucket** ([ADR-0023](adr/0023-retention-by-redaction.md), closing
    [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)):

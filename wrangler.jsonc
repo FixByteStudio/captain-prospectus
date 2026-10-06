@@ -18,6 +18,10 @@
     "run_worker_first": ["/api/*"],
   },
 
+  // MUST stay false: a preview URL is a second host for this Worker that the
+  // Access policy may not cover. Applied on every deploy; asserted in config.test.ts.
+  "preview_urls": false,
+
   // Free; the release checklist ("Workers logs show no new errors") depends on it.
   "observability": { "enabled": true },
 

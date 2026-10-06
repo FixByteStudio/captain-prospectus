@@ -301,3 +301,7 @@
   summary: Give "Admin round view" (admin Tournée du jour) its own row in docs/glossary.md, beside Today list.
   evidence: The Agent position row already says "shown only in the admin round view", and design.md, field-operations.md and the code (`RoundScreen`, `copy.round`) use the term, but the glossary defines only the agent's Today list.
   closed_by: GH #271 (epic #263 sweep) — `docs/glossary.md` has an Admin round view row after Today list.
+
+- source_spec: none
+  summary: GH #7, `pnpm lint` fails on stray local artifacts (`.chrome-profile/`, screenshots) that `.gitignore` and `.prettierignore` do not cover.
+  evidence: Split from the GH #38 run (owner decision, 2026-10-06): two independent PRs. Suggested fix is in the issue body.
