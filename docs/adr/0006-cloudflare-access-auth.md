@@ -1,6 +1,6 @@
 # ADR-0006: Cloudflare Access for authentication
 
-- Status: accepted
+- Status: superseded by [ADR-0029](0029-own-login-instead-of-cloudflare-access.md)
 - Date: 2026-09-21
 
 ## Context
