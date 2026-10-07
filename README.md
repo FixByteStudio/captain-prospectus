@@ -8,7 +8,7 @@ B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a
   <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white" alt="Vite 8" /></a>
   <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare_Workers-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" /></a>
   <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1" /></a>
-  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-Coopyleft%20%28AGPL--3.0%20based%29-e0a12b?labelColor=0e3a5f" alt="license: Coopyleft" /></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-AGPL--3.0-e0a12b?labelColor=0e3a5f" alt="license: AGPL-3.0" /></a>
   <a href="https://join.captain.food"><img src="https://img.shields.io/badge/join.captain.food-%E2%9A%93%20come%20aboard-e8613a?labelColor=0e3a5f" alt="join the crew" /></a>
 </p>
 
@@ -54,4 +54,4 @@ Vite + React PWA · Hono on a single Cloudflare Worker · D1 (SQLite) + Drizzle 
 
 ## License
 
-[license: Coopyleft](https://github.com/TheCaptainCompany/captain-food/blob/main/LICENSE.md)
+[AGPL-3.0](LICENSE.md)
