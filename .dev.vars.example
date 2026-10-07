@@ -1,10 +1,15 @@
 # Copy to .dev.vars (git-ignored) for local development.
 #
 # Impersonates a signed-in user. Honoured ONLY when the request host is
-# localhost or 127.0.0.1 — see docs/domains/identity-access.md and ADR-0006.
+# localhost, 127.0.0.1 or [::1] — see docs/domains/identity-access.md and
+# ADR-0029. The role comes from the users table, which `pnpm db:seed:local`
+# fills with admin@example.com (admin) and agent@example.com (agent); an email
+# with no active row there gets a 401.
 DEV_USER_EMAIL="admin@example.com"
 
-# Comma-separated admin emails. Anyone else who signs in is an agent.
+# Comma-separated admin emails. No longer decides a local role (users does):
+# it only feeds the Access JWT fallback and the roster readers, until those
+# move to users too.
 ADMIN_EMAILS="admin@example.com"
 
 # Comma-separated. Who the admin's assign menu offers, besides the admins.

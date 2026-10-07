@@ -36,7 +36,7 @@ admins, throttling and the CSRF check are later entries of the own-login epic.
 | Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
 
 ## Local development
-`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost` or `127.0.0.1`.
+`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
 Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.

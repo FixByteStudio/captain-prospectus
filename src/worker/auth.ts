@@ -2,7 +2,9 @@
  * Who is calling — docs/domains/identity-access.md.
  *
  * Session first (ADR-0029): a `__Host-` cookie whose token's HMAC is a live
- * `sessions` row of an active user. Then, on localhost only, DEV_USER_EMAIL.
+ * `sessions` row of an active user. Then, on a local host only (localhost,
+ * 127.0.0.1, [::1]), DEV_USER_EMAIL, whose role is its active `users` row's;
+ * without one the caller gets a 401.
  * Then, until the cutover's phase 3, the Cloudflare Access JWT (ADR-0006) —
  * isolated in `identityFromAccess` so removing it is deleting one function.
  *
@@ -110,6 +112,16 @@ export async function identityFromSession(env: Bindings, req: Request): Promise<
   return row ?? null;
 }
 
+/** DEV_USER_EMAIL's `users` row, or null when it has none or is inactive. */
+async function identityFromDevUser(env: Bindings, devUserEmail: string): Promise<Identity | null> {
+  const [row] = await getDb(env.DB)
+    .select({ email: users.email, role: users.role })
+    .from(users)
+    .where(and(eq(users.email, devUserEmail.trim().toLowerCase()), eq(users.active, true)))
+    .limit(1);
+  return row ?? null;
+}
+
 function readAccessToken(req: Request): string | null {
   // Browsers navigating the SPA send the Access session as a cookie.
   return req.headers.get(ACCESS_JWT_HEADER) || readCookie(req.headers.get("Cookie"), ACCESS_COOKIE);
@@ -151,13 +163,20 @@ export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
     return next();
   }
 
-  // Local development only. Honoured solely on localhost, so a production
-  // request can never reach this branch even if the variable were set. After
-  // the session, so a developer signed in through /login is who it says.
+  // Local development only. Honoured solely on a local host (localhost,
+  // 127.0.0.1, [::1], as isLocalHost decides), so a production request can
+  // never reach this branch even if the variable were set. After the session,
+  // so a developer signed in through /login is who it says.
   const url = new URL(c.req.url);
   if (isLocalHost(url.hostname) && c.env.DEV_USER_EMAIL) {
-    const email = c.env.DEV_USER_EMAIL.toLowerCase();
-    c.set("identity", { email, role: roleFor(email, c.env.ADMIN_EMAILS) });
+    const dev = await identityFromDevUser(c.env, c.env.DEV_USER_EMAIL);
+    // No row, or a deactivated one, is a deactivated user: 401, not Access.
+    if (!dev) {
+      throw unauthorized(
+        "DEV_USER_EMAIL has no active users row. Set it to admin@example.com or agent@example.com after pnpm db:seed:local.",
+      );
+    }
+    c.set("identity", dev);
     return next();
   }
 
