@@ -1,6 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker from "./index";
+import { seedTestUsers } from "../../test/users";
 import {
   and,
   count,
@@ -15,7 +16,15 @@ import {
   sql,
 } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { agentPositions, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import {
+  agentPositions,
+  prospects,
+  scripts,
+  sessions,
+  users,
+  visits,
+  visitsOrphaned,
+} from "./db/schema";
 import { DASHBOARD_PERIODS, MAX_REQUEST_BYTES, STATUSES } from "../shared/constants";
 import { brusselsPeriod } from "../shared/period";
 import { dedupeKey } from "../shared/dedupe";
@@ -97,6 +106,44 @@ describe("POST /api/dev/seed", () => {
 
     const [script] = await db.select().from(scripts).where(eq(scripts.isActive, true));
     expect(script?.version).toBe(1);
+  });
+
+  /**
+   * DEV_USER_EMAIL's role is its users row's (ADR-0029), so a fresh local
+   * database needs both rows before the app opens. test/setup-worker.ts has
+   * already seeded them, hence the wipe; the seed puts them back.
+   */
+  it("inserts the two local users once, and never changes an existing row", async () => {
+    const db = getDb(env.DB);
+    await db.delete(sessions);
+    await db.delete(users);
+
+    const first = await seed(seedBody());
+    expect(first.inserted.users).toBe(2);
+    const rows = await db
+      .select({ email: users.email, role: users.role, active: users.active })
+      .from(users)
+      .orderBy(users.email);
+    expect(rows).toEqual([
+      { email: "admin@example.com", role: "admin", active: true },
+      { email: "agent@example.com", role: "agent", active: true },
+    ]);
+
+    // A row deactivated or re-roled since is left as it is.
+    try {
+      await db.update(users).set({ active: false }).where(eq(users.email, "agent@example.com"));
+      await db.update(users).set({ role: "agent" }).where(eq(users.email, "admin@example.com"));
+      const again = await seed(seedBody());
+      expect(again.inserted.users).toBe(0);
+      const [agent] = await db.select().from(users).where(eq(users.email, "agent@example.com"));
+      expect(agent?.active).toBe(false);
+      const [admin] = await db.select().from(users).where(eq(users.email, "admin@example.com"));
+      expect(admin?.role).toBe("agent");
+    } finally {
+      await db.update(users).set({ active: true }).where(eq(users.email, "agent@example.com"));
+      await db.update(users).set({ role: "admin" }).where(eq(users.email, "admin@example.com"));
+      await seedTestUsers();
+    }
   });
 
   it("derives status new when nothing is assigned", async () => {
@@ -424,7 +471,7 @@ describe("POST /api/dev/seed — the dashboard's data", () => {
         .orderBy(prospects.id);
     const updatedBefore = await stamps();
     const again = await seed();
-    expect(again.inserted).toEqual({ prospects: 0, visits: 0, orphans: 0 });
+    expect(again.inserted).toEqual({ prospects: 0, visits: 0, orphans: 0, users: 0 });
     expect(await tableCounts()).toEqual(before);
     // The admin list orders by updated_at; a no-op re-seed must not reshuffle it.
     expect(await stamps()).toEqual(updatedBefore);

@@ -12,6 +12,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { chunk } from "../../shared/chunk";
 import { CLIENT_VERSION } from "../../shared/constants";
+import type { Role } from "../../shared/constants";
 import { dedupeKey } from "../../shared/dedupe";
 import { devSeedSchema } from "../../shared/schemas";
 import type { DevSeed, DevSeedResult } from "../../shared/schemas";
@@ -19,13 +20,19 @@ import { writeAgentPosition } from "../agent-position";
 import { isLocalHost } from "../auth";
 import { validate } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
-import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
+import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
 import type { NewOrphanedVisitRow, NewProspectRow, NewVisitRow } from "../db/schema";
 import { FIXED_STORIES, seedDayStart, seedHistory, seedId } from "../dev-seed-history";
 import type { AppEnv } from "../types";
 import { deriveProspectStatus } from "./status";
 
 const HOUR = 3_600_000;
+
+/** The local users, matching `.dev.vars.example`'s DEV_USER_EMAIL choices. */
+const DEV_USERS: readonly { email: string; role: Role }[] = [
+  { email: "admin@example.com", role: "admin" },
+  { email: "agent@example.com", role: "agent" },
+];
 
 export const devRoutes = new Hono<AppEnv>();
 
@@ -63,6 +70,15 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   const body = c.req.valid("json");
   const db = getDb(c.env.DB);
   const now = Date.now();
+
+  // 0. The two local users DEV_USER_EMAIL may name; requireIdentity reads the
+  // role from here (ADR-0029). An existing row, deactivated or re-roled since,
+  // is left as it is.
+  const insertedUsers = await db
+    .insert(users)
+    .values(DEV_USERS.map(({ email, role }) => ({ email, role, active: true, createdAt: now })))
+    .onConflictDoNothing()
+    .returning({ email: users.email });
 
   // 1. The prospects. Ids are hashed from the dedupe key, like every seeded id.
   const seeds: Seed[] = body.prospects.map((input) => ({
@@ -238,7 +254,12 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
 
   return c.json<DevSeedResult>({
     seeded: rows.length,
-    inserted: { prospects: insertedProspects, visits: insertedVisits, orphans: insertedOrphans },
+    inserted: {
+      prospects: insertedProspects,
+      visits: insertedVisits,
+      orphans: insertedOrphans,
+      users: insertedUsers.length,
+    },
   });
 });
 

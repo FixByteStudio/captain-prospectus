@@ -7,6 +7,8 @@ import { sessions, users } from "./db/schema";
 import { SESSION_COOKIE, hmacHex } from "./session";
 import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
+import { testSessionCookie } from "../../test/session";
+import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 
 /**
  * Own login (ADR-0029, GH #299): break-glass, the session cookie, and the
@@ -14,7 +16,8 @@ import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
  * Access JWT, then 401.
  *
  * Requests go to a non-local host, so DEV_USER_EMAIL (bound in
- * vitest.config.ts) is ignored unless a test says otherwise.
+ * vitest.config.ts) is ignored unless a test says otherwise. Each test wipes
+ * `users`, then puts back the two rows test/setup-worker.ts seeds.
  */
 
 const HOST = "https://captain.example";
@@ -80,6 +83,7 @@ const db = () => getDb(env.DB);
 beforeEach(async () => {
   await db().delete(sessions);
   await db().delete(users);
+  await seedTestUsers();
 });
 
 afterEach(() => {
@@ -107,7 +111,7 @@ describe("POST /api/auth/login — break-glass", () => {
     expect(setCookie).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
     expect(setCookie).not.toMatch(/Domain=/i);
 
-    const [user] = await db().select().from(users);
+    const [user] = await db().select().from(users).where(eq(users.email, OWNER));
     expect(user).toMatchObject({ email: OWNER, role: "admin", active: true });
 
     const token = tokenFrom(response);
@@ -151,7 +155,7 @@ describe("POST /api/auth/login — break-glass", () => {
     expect(JSON.parse(bodies[0] ?? "{}")).toMatchObject({ error: "unauthorized" });
     expect(wrongEmail.headers.get("Set-Cookie")).toBeNull();
     expect(await db().select().from(sessions)).toHaveLength(0);
-    expect(await db().select().from(users)).toHaveLength(0);
+    expect(await db().select().from(users).where(eq(users.email, OWNER))).toHaveLength(0);
   });
 
   it("does not trim the passphrase", async () => {
@@ -234,9 +238,23 @@ describe("requireIdentity", () => {
     expect(await response.json()).toEqual({ email: OWNER, role: "admin" });
   });
 
-  it("still honours DEV_USER_EMAIL on localhost with no session", async () => {
-    const response = await me(undefined, "http://localhost");
-    expect(await response.json()).toEqual({ email: "admin@example.com", role: "admin" });
+  it("signs in through a test session cookie on a non-local host", async () => {
+    const response = await me({ Cookie: await testSessionCookie(TEST_AGENT) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+  });
+
+  it("prefers a session for one user over DEV_USER_EMAIL naming another", async () => {
+    env.DEV_USER_EMAIL = TEST_ADMIN;
+    const response = await me({ Cookie: await testSessionCookie(TEST_AGENT) }, "http://localhost");
+    expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+  });
+
+  it("refuses a test session cookie once its expiry has passed", async () => {
+    const response = await me({
+      Cookie: await testSessionCookie(TEST_AGENT, { expiresAt: Date.now() - 1 }),
+    });
+    expect(response.status).toBe(401);
   });
 
   it("accepts a signed Access JWT alone, as a header or as the CF_Authorization cookie", async () => {
@@ -381,5 +399,72 @@ describe("log hygiene", () => {
     for (const secret of [BREAK_GLASS, token, hash, PEPPER]) {
       expect(logged).not.toContain(secret);
     }
+  });
+});
+
+describe("requireIdentity — DEV_USER_EMAIL on a local host (GH #300)", () => {
+  const LOCAL = "http://localhost";
+
+  it("takes the seeded admin's role from users", async () => {
+    env.DEV_USER_EMAIL = TEST_ADMIN;
+    const response = await me(undefined, LOCAL);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+  });
+
+  it("takes the seeded agent's role from users, and admin routes answer 403", async () => {
+    env.DEV_USER_EMAIL = TEST_AGENT;
+    const response = await me(undefined, LOCAL);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+    expect((await call("/api/admin/prospects", undefined, LOCAL)).status).toBe(403);
+  });
+
+  it("lowercases DEV_USER_EMAIL before the lookup", async () => {
+    env.DEV_USER_EMAIL = "Agent@Example.COM";
+    expect(await (await me(undefined, LOCAL)).json()).toEqual({ email: TEST_AGENT, role: "agent" });
+  });
+
+  it("takes the role from the row, not from ADMIN_EMAILS", async () => {
+    // vitest.config.ts lists admin@example.com in ADMIN_EMAILS.
+    await db().update(users).set({ role: "agent" }).where(eq(users.email, TEST_ADMIN));
+    env.DEV_USER_EMAIL = TEST_ADMIN;
+    expect(await (await me(undefined, LOCAL)).json()).toEqual({ email: TEST_ADMIN, role: "agent" });
+  });
+
+  it.each(["http://127.0.0.1", "http://[::1]"])(
+    "honours it on %s as on localhost",
+    async (host) => {
+      env.DEV_USER_EMAIL = TEST_AGENT;
+      const response = await me(undefined, host);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+    },
+  );
+
+  it("answers 401 to an email with no users row", async () => {
+    env.DEV_USER_EMAIL = "nobody@example.com";
+    const response = await me(undefined, LOCAL);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "unauthorized" });
+  });
+
+  it("answers 401 to an inactive row", async () => {
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    env.DEV_USER_EMAIL = TEST_AGENT;
+    expect((await me(undefined, LOCAL)).status).toBe(401);
+  });
+
+  it("does not fall through to a valid Access JWT when the row is missing", async () => {
+    const access = await fakeAccess();
+    configureAccess(access);
+    env.DEV_USER_EMAIL = "nobody@example.com";
+    const jwt = await access.sign(TEST_AGENT);
+    expect((await me({ "Cf-Access-Jwt-Assertion": jwt }, LOCAL)).status).toBe(401);
+  });
+
+  it("is ignored off a local host", async () => {
+    env.DEV_USER_EMAIL = TEST_ADMIN;
+    expect((await me()).status).toBe(401);
   });
 });

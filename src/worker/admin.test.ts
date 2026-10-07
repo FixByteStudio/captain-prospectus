@@ -22,8 +22,9 @@ import type {
 /**
  * Admin routes against a real D1, built by the real migrations.
  *
- * DEV_USER_EMAIL is bound in vitest.config.ts to an address that ADMIN_EMAILS
- * also lists, so these run as an admin exactly as localhost development does.
+ * DEV_USER_EMAIL is bound in vitest.config.ts to the admin row that
+ * test/setup-worker.ts seeds, so these run as an admin exactly as localhost
+ * development does.
  */
 
 const ADMIN = "admin@example.com";
@@ -1238,7 +1239,7 @@ describe("authorization", () => {
   });
 
   it("answers 403 on every admin route when the caller is an agent", async () => {
-    // ADMIN_EMAILS does not list this address, so roleFor() makes them an agent.
+    // The seeded users row for this address is an agent.
     env.DEV_USER_EMAIL = AGENT;
 
     expect((await call("/api/me")).status).toBe(200);
