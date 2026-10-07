@@ -96,7 +96,7 @@ import type {
   Script,
   ScriptsResponse,
 } from "../../shared/schemas";
-import { parseEmails, roleFor } from "../auth";
+import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
 import { readAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
@@ -173,24 +173,12 @@ function toWireProspect(row: ProspectRow): Prospect {
 /* ------------------------------------------------------------------- people */
 
 /**
- * Everyone a prospect can be assigned to.
- *
- * There is no users table (ADR-0006): identity comes from Cloudflare Access and
- * the role from ADMIN_EMAILS. AGENT_EMAILS lists the rest, so the assign menu
- * has something to show before anyone has been assigned anything. Admins are
- * included — in a two-person field team an admin may well walk a round.
+ * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
+ * Admins are included — in a two-person field team an admin may well walk a round.
  */
-function assignableEmails(env: AppEnv["Bindings"]): string[] {
-  return [...new Set([...parseEmails(env.ADMIN_EMAILS), ...parseEmails(env.AGENT_EMAILS)])].sort();
-}
-
-adminRoutes.get("/agents", (c) => {
-  return c.json<AgentsResponse>({
-    agents: assignableEmails(c.env).map((email) => ({
-      email,
-      role: roleFor(email, c.env.ADMIN_EMAILS),
-    })),
-  });
+adminRoutes.get("/agents", async (c) => {
+  const roster = await activeRoster(getDb(c.env.DB));
+  return c.json<AgentsResponse>({ agents: roster });
 });
 
 /**
@@ -199,8 +187,8 @@ adminRoutes.get("/agents", (c) => {
  */
 adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema), async (c) => {
   const { email } = c.req.valid("param");
-  if (!assignableEmails(c.env).includes(email)) return c.json({ error: "not_found" }, 404);
   const db = getDb(c.env.DB);
+  if (!(await activeRosterMember(db, email))) return c.json({ error: "not_found" }, 404);
   const [rows, position] = await Promise.all([
     openAssignedProspects(db, email),
     readAgentPosition(db, email, Date.now()),
@@ -216,10 +204,10 @@ adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema)
  * prospect disappears from every agent's sync pull, which matches on the exact
  * email, while the admin list still shows it as assigned and handled. One typo
  * and a restaurant is never visited again. So the assignee has to be on the
- * roster, and `null` — unassign — is always allowed.
+ * roster (an active user), and `null` — unassign — is always allowed.
  */
-function unknownAssignee(email: string | null, env: AppEnv["Bindings"]): boolean {
-  return email !== null && !assignableEmails(env).includes(email);
+async function unknownAssignee(email: string | null, db: Db): Promise<boolean> {
+  return email !== null && !(await activeRosterMember(db, email));
 }
 
 /* ---------------------------------------------------------------- dashboard */
@@ -255,6 +243,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     agentConverted,
     due,
     agentsToday,
+    roster,
   ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
@@ -339,6 +328,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .select({ n: sql<number>`count(distinct ${visits.agentEmail})`.mapWith(Number) })
       .from(visits)
       .where(and(gte(visits.receivedAt, todayStart), lt(visits.receivedAt, to))),
+    activeRoster(db),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -379,7 +369,12 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     },
     visitsByDay: byDay,
     pipeline: pipelineOf(pipelineRows),
-    agents: agentRows(assignableEmails(c.env), agentVisits, agentOpen, agentConverted),
+    agents: agentRows(
+      roster.map((r) => r.email),
+      agentVisits,
+      agentOpen,
+      agentConverted,
+    ),
     followUpsDue: due[0]?.n ?? 0,
     flyersGiven: visitCounts[0]?.flyersGiven ?? 0,
     agentsActiveToday: agentsToday[0]?.n ?? 0,
@@ -394,8 +389,9 @@ function pipelineOf(rows: { status: Status; n: number }[]): DashboardResponse["p
 }
 
 /**
- * The roster with zeros, plus any other email with a visit in the period or a
- * live prospect assigned now (docs/api.md › The dashboard).
+ * One row per roster email, zeros included. An email off the roster (a
+ * deactivated user) has no row, though their visits stay in the totals
+ * (docs/api.md › The dashboard).
  */
 function agentRows(
   roster: string[],
@@ -404,22 +400,24 @@ function agentRows(
   convertedRows: { email: string; n: number }[],
 ): DashboardResponse["agents"] {
   const byEmail = new Map<string, DashboardResponse["agents"][number]>();
-  const row = (email: string) => {
-    let r = byEmail.get(email);
-    if (!r) {
-      r = { email, visits: 0, converted: 0, followUp: 0, openProspects: 0 };
-      byEmail.set(email, r);
-    }
-    return r;
-  };
-  for (const email of roster) row(email);
-  for (const v of visitRows) row(v.email).visits = v.n;
-  for (const o of openRows) {
-    const r = row(o.email);
-    r.followUp = o.followUp;
-    r.openProspects = o.n;
+  for (const email of roster) {
+    byEmail.set(email, { email, visits: 0, converted: 0, followUp: 0, openProspects: 0 });
   }
-  for (const c of convertedRows) row(c.email).converted = c.n;
+  for (const v of visitRows) {
+    const r = byEmail.get(v.email);
+    if (r) r.visits = v.n;
+  }
+  for (const o of openRows) {
+    const r = byEmail.get(o.email);
+    if (r) {
+      r.followUp = o.followUp;
+      r.openProspects = o.n;
+    }
+  }
+  for (const c of convertedRows) {
+    const r = byEmail.get(c.email);
+    if (r) r.converted = c.n;
+  }
   return [...byEmail.values()].sort(
     (a, b) => b.visits - a.visits || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0),
   );
@@ -964,7 +962,10 @@ adminRoutes.patch(
     const { id } = c.req.valid("param");
     const patch = c.req.valid("json");
 
-    if (patch.assignedTo !== undefined && unknownAssignee(patch.assignedTo, c.env)) {
+    if (
+      patch.assignedTo !== undefined &&
+      (await unknownAssignee(patch.assignedTo, getDb(c.env.DB)))
+    ) {
       return c.json(
         { error: "unknown_assignee", message: "Cette adresse ne figure pas parmi les agents." },
         400,
@@ -1004,7 +1005,7 @@ adminRoutes.patch(
 adminRoutes.post("/prospects/assign", validate("json", assignSchema), async (c) => {
   const { ids, assignedTo } = c.req.valid("json");
 
-  if (unknownAssignee(assignedTo, c.env)) {
+  if (await unknownAssignee(assignedTo, getDb(c.env.DB))) {
     return c.json(
       { error: "unknown_assignee", message: "Cette adresse ne figure pas parmi les agents." },
       400,

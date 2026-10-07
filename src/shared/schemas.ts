@@ -447,8 +447,7 @@ export const agentPositionSchema = z.object({
 export type AgentPosition = z.infer<typeof agentPositionSchema>;
 
 /**
- * Everyone a prospect can be assigned to. There is no users table (ADR-0006),
- * so this is the ADMIN_EMAILS and AGENT_EMAILS vars, not a query.
+ * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
  */
 export const agentsResponseSchema = z.object({
   agents: z.array(z.object({ email: emailSchema, role: roleSchema })),

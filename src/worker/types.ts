@@ -15,11 +15,7 @@ export type Bindings = Omit<
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   ADMIN_EMAILS?: string;
-  /**
-   * Comma-separated. Not a permission — Access decides who gets in, and
-   * ADMIN_EMAILS decides who is an admin. This is only who the assign menu
-   * offers, because ADR-0006 leaves us without a users table to query.
-   */
+  /** Read by nothing since GH #303: the roster is the active `users` rows (ADR-0029). */
   AGENT_EMAILS?: string;
   /** Local development only; honoured only on localhost. See ADR-0006. */
   DEV_USER_EMAIL?: string;

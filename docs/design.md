@@ -374,7 +374,7 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   in the mockup, so the five columns fit at 1280 px; full width below.
   A `Card` holding shadcn `Table`: the head row on `secondary` in
   `text-overline` — Agent, Visites, Convertis, À relancer, Prospects ouverts —
-  then one 44px row per agent. There is no users table (ADR-0006), so the
+  then one 44px row per agent. The
   agent cell is a 26px `secondary` circle with the email's uppercase initial,
   then the email; at ≥ lg the email takes the width the figures leave and
   truncates with an ellipsis, its full address in a `title`, so a long one

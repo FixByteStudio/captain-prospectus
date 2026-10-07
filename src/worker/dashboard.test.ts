@@ -7,6 +7,7 @@ import { DASHBOARD_PERIODS, OUTCOMES, type Outcome, type Status } from "../share
 import { DAY_MS, brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
 import type { DashboardResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
+import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * `GET /api/admin/dashboard` against a real D1 (GH #107).
@@ -102,6 +103,7 @@ beforeEach(async () => {
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
   await db.delete(scripts);
+  await resetTestUsers();
 });
 
 describe("GET /api/admin/dashboard", () => {
@@ -651,6 +653,10 @@ describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
 
 describe("Pipeline and Activité par agent (GH #112)", () => {
   const OTHER = "other@example.com";
+  // OTHER is a second active agent unless a test deactivates them.
+  beforeEach(async () => {
+    await seedUser(OTHER, "agent");
+  });
   const zeros = (email: string) => ({
     email,
     visits: 0,
@@ -734,12 +740,20 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
   );
 
   it.each(DASHBOARD_PERIODS)(
-    "lists an off-roster assignee of a live converted prospect at period %i",
+    "gives a deactivated user no row while their visits stay in the totals at period %i (GH #303)",
     async (period) => {
-      await seedProspect("converted", null, null, OTHER);
+      const { from } = brusselsPeriod(Date.now(), period);
+      await seedUser(OTHER, "agent", false);
+      const assigned = await seedProspect("assigned", null, null, OTHER);
+      await seedVisits(await seedProspect("assigned"), [from], "interested", OTHER);
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.agents).toContainEqual(zeros(OTHER));
+      expect(body.agents.map((a) => a.email)).toEqual([ADMIN, AGENT]);
+      expect(body.visits.value).toBe(1);
+      // Two open prospects: the deactivated user's still counts.
+      expect(body.openProspects).toBe(2);
+      const [row] = await getDb(env.DB).select().from(prospects).where(eq(prospects.id, assigned));
+      expect(row?.assignedTo).toBe(OTHER);
     },
   );
 
@@ -753,6 +767,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
       expect(body.agents).toEqual([
         zeros(ADMIN),
         { email: AGENT, visits: 0, converted: 0, followUp: 2, openProspects: 2 },
+        zeros(OTHER),
       ]);
     },
   );
@@ -810,7 +825,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         converted: 0,
         rejected: 0,
       });
-      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT)]);
+      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT), zeros(OTHER)]);
     },
   );
 });

@@ -8,12 +8,11 @@
 DEV_USER_EMAIL="admin@example.com"
 
 # Comma-separated admin emails. No longer decides a local role (users does):
-# it only feeds the Access JWT fallback and the roster readers, until those
-# move to users too.
+# it only feeds the Access JWT fallback.
 ADMIN_EMAILS="admin@example.com"
 
-# Comma-separated. Who the admin's assign menu offers, besides the admins.
-# The local seed assigns to admin@example.com and agent@example.com.
+# Comma-separated. Read by nothing since GH #303 (the roster is the active
+# users rows); goes with epic-access-removed.
 AGENT_EMAILS="agent@example.com"
 
 # Google Places API key (ADR-0020). Optional: without it the map import's
