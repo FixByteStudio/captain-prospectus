@@ -86,6 +86,27 @@ export const meResponseSchema = z.object({
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 
+/* ------------------------------------------------------------- /api/auth/login */
+
+/**
+ * ADR-0029: one route, discriminated on the credential, never on the role.
+ * Only `passphrase` exists so far (break-glass); `code` and `passkey` are later
+ * additive members.
+ *
+ * The email is trimmed and lowercased but not format-checked: it is only ever
+ * compared with a stored address, and a refusal must read the same whichever
+ * part was wrong. The passphrase is kept as typed — a trim here would change
+ * what the exact comparison sees.
+ */
+export const passphraseLoginSchema = z.object({
+  kind: z.literal("passphrase"),
+  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(320)),
+  passphrase: z.string().check(z.minLength(1), z.maxLength(200)),
+});
+
+export const loginRequestSchema = z.discriminatedUnion("kind", [passphraseLoginSchema]);
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+
 /* -------------------------------------------------------------------- scripts */
 
 /** The types whose answer is one of `options`, so `options` must be there. */

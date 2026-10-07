@@ -46,6 +46,10 @@ export default defineConfig({
                 DEV_USER_EMAIL: "admin@example.com",
                 ADMIN_EMAILS: "admin@example.com",
                 AGENT_EMAILS: "agent@example.com",
+                // Own login (ADR-0029), test values only.
+                AUTH_PEPPER: "test-pepper",
+                BREAK_GLASS: "test-break-glass",
+                OWNER_EMAIL: "owner@example.com",
               },
             },
           }),

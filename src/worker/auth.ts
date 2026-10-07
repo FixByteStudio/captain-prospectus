@@ -1,7 +1,12 @@
 /**
- * Identity from Cloudflare Access — ADR-0006, docs/domains/identity-access.md.
+ * Who is calling — docs/domains/identity-access.md.
  *
- * INVARIANT 10: identity comes from the verified JWT only. The
+ * Session first (ADR-0029): a `__Host-` cookie whose token's HMAC is a live
+ * `sessions` row of an active user. Then, on localhost only, DEV_USER_EMAIL.
+ * Then, until the cutover's phase 3, the Cloudflare Access JWT (ADR-0006) —
+ * isolated in `identityFromAccess` so removing it is deleting one function.
+ *
+ * INVARIANT 10: identity comes from the server only. The
  * Cf-Access-Authenticated-User-Email header is never trusted as proof: it is
  * spoofable if the Worker is ever reachable without Access in front of it.
  *
@@ -11,9 +16,13 @@
  */
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
+import { and, eq, gt } from "drizzle-orm";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Role } from "../shared/constants";
-import type { AppEnv } from "./types";
+import { getDb } from "./db/client";
+import { sessions, users } from "./db/schema";
+import { SESSION_COOKIE, hmacHex, readCookie } from "./session";
+import type { AppEnv, Bindings, Identity } from "./types";
 
 export type { Identity, AppEnv } from "./types";
 
@@ -47,20 +56,6 @@ export function isLocalHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
-function readToken(req: Request): string | null {
-  const header = req.headers.get(ACCESS_JWT_HEADER);
-  if (header) return header;
-
-  // Browsers navigating the SPA send the Access session as a cookie.
-  const cookie = req.headers.get("Cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-    if (name === ACCESS_COOKIE) return rest.join("=") || null;
-  }
-  return null;
-}
-
 export function roleFor(email: string, adminEmails: string | undefined): Role {
   return parseEmails(adminEmails).includes(email.toLowerCase()) ? "admin" : "agent";
 }
@@ -73,37 +68,64 @@ export function parseEmails(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function unauthorized(message: string): HTTPException {
+export function unauthorized(message: string): HTTPException {
   return new HTTPException(401, {
     res: Response.json({ error: "unauthorized", message }, { status: 401 }),
   });
 }
 
-/** Verifies Access on every /api request and puts the identity on the context. */
-export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
-  const url = new URL(c.req.url);
+/** A missing AUTH_PEPPER must fail closed, never fall through to open access. */
+export function misconfigured(): HTTPException {
+  return new HTTPException(500, {
+    res: Response.json(
+      { error: "misconfigured", message: "Sign-in is not configured on this Worker." },
+      { status: 500 },
+    ),
+  });
+}
 
-  // Local development only. Honoured solely on localhost, so a production
-  // request can never reach this branch even if the variable were set.
-  if (isLocalHost(url.hostname) && c.env.DEV_USER_EMAIL) {
-    const email = c.env.DEV_USER_EMAIL.toLowerCase();
-    c.set("identity", { email, role: roleFor(email, c.env.ADMIN_EMAILS) });
-    return next();
-  }
+/**
+ * The session cookie's identity, or null: no cookie, no pepper, an unknown or
+ * expired token, or a deactivated user. The role is the `users` row's, never
+ * the cookie's. Without AUTH_PEPPER no token can be hashed, so the lookup is
+ * skipped rather than guessed.
+ */
+export async function identityFromSession(env: Bindings, req: Request): Promise<Identity | null> {
+  const token = readCookie(req.headers.get("Cookie"), SESSION_COOKIE);
+  if (!token || !env.AUTH_PEPPER) return null;
 
-  const teamDomain = c.env.ACCESS_TEAM_DOMAIN;
-  const aud = c.env.ACCESS_AUD;
-  if (!teamDomain || !aud) {
-    // Misconfiguration must fail closed, never fall through to open access.
-    throw new HTTPException(500, {
-      res: Response.json(
-        { error: "misconfigured", message: "Access is not configured on this Worker." },
-        { status: 500 },
+  const tokenHash = await hmacHex(env.AUTH_PEPPER, token);
+  const [row] = await getDb(env.DB)
+    .select({ email: users.email, role: users.role })
+    .from(sessions)
+    .innerJoin(users, eq(users.email, sessions.userEmail))
+    .where(
+      and(
+        eq(sessions.tokenHash, tokenHash),
+        gt(sessions.expiresAt, Date.now()),
+        eq(users.active, true),
       ),
-    });
-  }
+    )
+    .limit(1);
+  return row ?? null;
+}
 
-  const token = readToken(c.req.raw);
+function readAccessToken(req: Request): string | null {
+  // Browsers navigating the SPA send the Access session as a cookie.
+  return req.headers.get(ACCESS_JWT_HEADER) || readCookie(req.headers.get("Cookie"), ACCESS_COOKIE);
+}
+
+/**
+ * The Cloudflare Access fallback, ADR-0029 phase 1 and 2 only: null when Access
+ * is not configured, a 401 when it is and the JWT is missing or invalid.
+ * Phase 3 deletes this function, `jose` and the Access vars.
+ */
+async function identityFromAccess(env: Bindings, req: Request): Promise<Identity | null> {
+  const teamDomain = env.ACCESS_TEAM_DOMAIN;
+  const aud = env.ACCESS_AUD;
+  if (!teamDomain || !aud) return null;
+
+  const token = readAccessToken(req);
   if (!token) throw unauthorized("Sign in again to continue.");
 
   let email: string;
@@ -118,9 +140,34 @@ export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
   } catch {
     throw unauthorized("Your session has expired. Sign in again to sync.");
   }
+  return { email, role: roleFor(email, env.ADMIN_EMAILS) };
+}
 
-  c.set("identity", { email, role: roleFor(email, c.env.ADMIN_EMAILS) });
-  return next();
+/** Puts the caller's identity on the context, or answers 401. */
+export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
+  const session = await identityFromSession(c.env, c.req.raw);
+  if (session) {
+    c.set("identity", session);
+    return next();
+  }
+
+  // Local development only. Honoured solely on localhost, so a production
+  // request can never reach this branch even if the variable were set. After
+  // the session, so a developer signed in through /login is who it says.
+  const url = new URL(c.req.url);
+  if (isLocalHost(url.hostname) && c.env.DEV_USER_EMAIL) {
+    const email = c.env.DEV_USER_EMAIL.toLowerCase();
+    c.set("identity", { email, role: roleFor(email, c.env.ADMIN_EMAILS) });
+    return next();
+  }
+
+  const access = await identityFromAccess(c.env, c.req.raw);
+  if (access) {
+    c.set("identity", access);
+    return next();
+  }
+
+  throw unauthorized("Sign in to continue.");
 });
 
 /** Admin-only routes. Runs after requireIdentity. */

@@ -186,6 +186,23 @@ export const copy = {
     reconnect: "Se reconnecter",
   },
 
+  /** `/login` (docs/design.md › The login page, ADR-0029). The admin form
+   * only for now; the code form and its switch come with one-time codes. */
+  login: {
+    title: "Connexion",
+    adminLede: "Connectez-vous avec votre adresse e-mail et votre phrase de passe.",
+    email: "Adresse e-mail",
+    passphrase: "Phrase de passe",
+    submit: "Se connecter",
+    emailRequired: "Saisissez votre adresse e-mail.",
+    passphraseRequired: "Saisissez votre phrase de passe.",
+    /** One sentence whichever part was wrong (ADR-0029). */
+    adminRefused: "Adresse e-mail ou phrase de passe incorrecte.",
+    unreachable: "Connexion impossible. Vérifiez le réseau et réessayez.",
+    failed: "Connexion impossible pour le moment. Réessayez dans un instant.",
+    offline: "Hors ligne. Connectez-vous dès que le réseau revient.",
+  },
+
   /** The service worker has a new build waiting (registerType: "prompt"). */
   update: {
     available: "Une nouvelle version est disponible.",

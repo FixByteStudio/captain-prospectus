@@ -32,6 +32,15 @@ export type Bindings = Omit<
    * before. A deployment with no billing account loses nothing.
    */
   GOOGLE_PLACES_KEY?: string;
+  /**
+   * Own login (ADR-0029), all set by the owner or CI and never in the repo.
+   * AUTH_PEPPER and BREAK_GLASS are secrets; OWNER_EMAIL is a var kept out of
+   * wrangler.jsonc. Optional so a Worker without them fails closed rather
+   * than failing to type: no pepper → 500, no owner or break-glass → 401.
+   */
+  AUTH_PEPPER?: string;
+  BREAK_GLASS?: string;
+  OWNER_EMAIL?: string;
 };
 
 export type Identity = { email: string; role: Role };

@@ -174,6 +174,12 @@ afterEach(async () => {
 });
 
 describe("App routing", () => {
+  it("renders /login outside the identity gate, without asking /api/me", async () => {
+    renderApp("/login");
+    expect(await screen.findByText(copy.login.title)).toBeTruthy();
+    expect(stub.identityCalls).toBe(0);
+  });
+
   it("marks main busy while /api/me is still in flight", () => {
     stub.identityPending = true;
     const { container } = renderApp("/");
