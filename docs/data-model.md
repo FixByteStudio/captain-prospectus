@@ -91,7 +91,32 @@ erDiagram
     text body "raw provider answer"
     int created_at
   }
+
+  USERS ||--o{ SESSIONS : "signed in on"
+  USERS {
+    text email PK "lowercased"
+    text name "nullable"
+    text role "admin | agent"
+    int active "boolean, default 1"
+    text passphrase_hash "HMAC hex, admins only, nullable"
+    int created_at
+  }
+  SESSIONS {
+    text token_hash PK "HMAC-SHA-256 hex of the cookie token"
+    text user_email FK
+    int created_at
+    int last_seen_at "written at creation only, for now"
+    int expires_at "created_at + 30 d admin / 90 d agent, fixed"
+  }
 ```
+
+`users` and `sessions` are our own login ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+A user is deactivated, never deleted. The browser holds a random 32-byte token in the
+`__Host-cp_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`); only its
+HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. A session
+counts while `expires_at` is in the future and its user is `active`; the role is read from
+`users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
+are later entries of the own-login epic.
 
 `agent_positions` holds at most one row per assignable agent: the latest reading the phone
 offered at sync. It is the one upsert on an agent's behalf, allowed by
@@ -144,7 +169,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 - **`client_version` records the sync contract version of the build that sent the visit.** It makes
   "have all phones upgraded?" a SQL query instead of a log search, which is the gate for raising
   `MIN_CLIENT_VERSION` (`sync-contract-change` skill).
-- **No users table.** Identity is the email asserted by Cloudflare Access ([ADR-0006](adr/0006-cloudflare-access-auth.md)). Role comes from the `ADMIN_EMAILS` variable.
+- **Identity is a session first, Access second.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Until the cutover ends, a verified Access JWT still does, with the role from `ADMIN_EMAILS` ([identity-access](domains/identity-access.md)). Stored rows identify a user by email either way.
 - **A merge is soft.** `merged_into` points at the survivor; nothing is deleted and no visit is
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own
   status and its own dedupe key, which is what makes a merge reversible
@@ -171,6 +196,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(is_active)` unique **where `is_active = 1`** | "exactly one active script at a time" |
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
+| `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
 
 SQLite uses one index per table reference, so a filtered *and* sorted admin list
 (`status=X` ordered by `updated_at`) filters on the index and then sorts the

@@ -13,6 +13,7 @@ import {
   OUTCOMES,
   PROSPECT_TYPES,
   REFUSAL_REASONS,
+  ROLES,
   SOURCES,
   STATUSES,
 } from "../../shared/constants";
@@ -254,6 +255,39 @@ export const agentPositions = sqliteTable("agent_positions", {
   receivedAt: integer("received_at").notNull(),
 });
 
+/**
+ * Who may sign in, and as what (ADR-0029). The email is the key because every
+ * stored row already identifies a user by it. Deactivated, never deleted.
+ */
+export const users = sqliteTable("users", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  name: text("name"),
+  role: text("role", { enum: ROLES }).notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  /** HMAC-SHA-256 hex under AUTH_PEPPER; admins only. */
+  passphraseHash: text("passphrase_hash"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/**
+ * One row per signed-in device (ADR-0029). Only the HMAC of the cookie's token
+ * is stored, so a leaked table opens no session.
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => users.email),
+    createdAt: integer("created_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (t) => [index("sessions_user_email_idx").on(t.userEmail)],
+);
+
 export type ProspectRow = typeof prospects.$inferSelect;
 export type NewProspectRow = typeof prospects.$inferInsert;
 export type VisitRow = typeof visits.$inferSelect;
@@ -263,3 +297,5 @@ export type NewOrphanedVisitRow = typeof visitsOrphaned.$inferInsert;
 export type ScriptRow = typeof scripts.$inferSelect;
 export type AgentPositionRow = typeof agentPositions.$inferSelect;
 export type OverpassCacheRow = typeof overpassCache.$inferSelect;
+export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;

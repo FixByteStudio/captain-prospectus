@@ -1,11 +1,29 @@
 # Identity & access
 
-See [ADR-0006](../adr/0006-cloudflare-access-auth.md).
+See [ADR-0029](../adr/0029-own-login-instead-of-cloudflare-access.md), which supersedes
+[ADR-0006](../adr/0006-cloudflare-access-auth.md) in three phases. We are in phase 1: our own
+login ships while Cloudflare Access still fronts the hostname.
 
-- Login is handled by **Cloudflare Access** (email one-time PIN) in front of the Worker.
-- The Worker **verifies** the `Cf-Access-Jwt-Assertion` JWT (signature via the team's JWKS, issuer, audience). The email header alone is never trusted.
-- Identity = verified email, lowercased.
-- Role: `admin` if the email is in `ADMIN_EMAILS`, otherwise `agent`. The Access policy decides who is allowed in at all.
+The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.ts`):
+
+1. **A session.** The `__Host-cp_session` cookie's token, hashed with `AUTH_PEPPER`, names a
+   `sessions` row that has not expired and whose user is `active`. The role is the `users` row's.
+   Without `AUTH_PEPPER` this step is skipped, never guessed.
+2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
+   through `/login` is who the session says.
+3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker
+   **verifies** `Cf-Access-Jwt-Assertion` (or the `CF_Authorization` cookie) against the team's
+   JWKS, issuer and audience. Identity = the verified email, lowercased; role `admin` if it is in
+   `ADMIN_EMAILS`, otherwise `agent`. The email header alone is never trusted. Phase 3 deletes this
+   step.
+4. Otherwise **401**. A Worker with neither a session nor Access configured answers 401, not 500.
+
+**Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
+surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
+admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
+repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
+`POST /api/auth/logout` deletes the device's session. Codes for agents, generated passphrases for
+admins, throttling and the CSRF check are later entries of the own-login epic.
 
 ## Permissions
 | Action | Agent | Admin |

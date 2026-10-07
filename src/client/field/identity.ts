@@ -89,12 +89,13 @@ export function resolveIdentity(result: IdentityFetchResult, cached: unknown): I
 
   // A 401 is the Worker having been reached and having answered "this
   // session is no longer valid" — `requireIdentity` in src/worker/auth.ts
-  // returns it when the Access token is missing or fails to verify. That is
-  // exactly the "stolen phone" mitigation in docs/security.md (an admin
-  // removes the email from the Access policy); falling back to the cache here
-  // would erase that mitigation. Any other ApiError (a 500 from a
-  // misconfigured Worker, say) is not a statement about *this* identity, so
-  // it falls through to the cache like a genuine network failure would.
+  // returns it when there is no valid session and no valid Access token —
+  // including a Worker with Access not configured at all (spec-gh-299). That
+  // is exactly the "stolen phone" mitigation in docs/security.md; falling
+  // back to the cache here would erase that mitigation. Any other ApiError (a
+  // 5xx, such as sign-in on a Worker without AUTH_PEPPER) is not a statement
+  // about *this* identity, so it falls through to the cache like a genuine
+  // network failure would.
   if (result.error instanceof ApiError && result.error.status === 401) {
     return { kind: "error", message: result.error.message, revoked: true };
   }

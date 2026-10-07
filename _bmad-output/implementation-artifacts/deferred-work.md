@@ -305,3 +305,6 @@
 - source_spec: none
   summary: GH #7, `pnpm lint` fails on stray local artifacts (`.chrome-profile/`, screenshots) that `.gitignore` and `.prettierignore` do not cover.
   evidence: Split from the GH #38 run (owner decision, 2026-10-06): two independent PRs. Suggested fix is in the issue body.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-299-break-glass-session.md`
+  summary: A deactivated user still gets in through the Access JWT fallback, because `identityFromAccess` never reads `users`.
+  evidence: `src/worker/auth.ts` identityFromAccess derives the role from ADMIN_EMAILS only; harmless until an entry adds deactivation (CAP-1), which must also make the fallback refuse an inactive `users` row.
