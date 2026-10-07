@@ -1,11 +1,19 @@
 # API
 
-Base path `/api`. JSON in, JSON out. Every route requires a verified Access identity. Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
+Base path `/api`. JSON in, JSON out. Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie first, then (until the Access cutover ends) a verified Access JWT ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
 
 ## Common
 | Route | Role | Purpose |
 |---|---|---|
 | `GET /api/me` | any | `{email, role}` |
+
+## Sign-in
+Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Nothing on these routes is logged: not the passphrase, the token or a hash.
+
+| Route | Purpose |
+|---|---|
+| `POST /api/auth/login` | `loginRequestSchema`, a `zod/mini` union on `kind`. Only `{kind: "passphrase", email, passphrase}` exists so far, and only break-glass answers it: `email` (trimmed, lowercased) equal to `OWNER_EMAIL` and `passphrase` (as typed) equal to `BREAK_GLASS`, compared as HMAC digests with `timingSafeEqual`. Success creates or reactivates `OWNER_EMAIL` as an active admin, opens a session and answers **200** `{email, role}` (`MeResponse`) with `Set-Cookie: __Host-cp_session=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=<lifetime>` — 30 days for an admin, 90 for an agent, fixed. A wrong email and a wrong passphrase get the same **401** `unauthorized`, as does a Worker without `OWNER_EMAIL` or `BREAK_GLASS`. Any other `kind`, a missing field or a non-JSON body is **400**. No `AUTH_PEPPER` is **500** `misconfigured` |
+| `POST /api/auth/logout` | Deletes the cookie's session if there is one, clears the cookie (`Max-Age=0`), **204**. Works without a session |
 
 ## Local development only
 | Route | Purpose |
@@ -46,7 +54,7 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 | Code | Meaning |
 |---|---|
 | 400 | Invalid body |
-| 401 | No or invalid Access token |
+| 401 | No valid session and no valid Access token — including a Worker with Access not configured, which used to be a 500. Also a refused sign-in |
 | 403 | Authenticated but wrong role |
 | 404 | Unknown resource |
 | 413 | Body over `MAX_REQUEST_BYTES`, refused before it is parsed — so before the 426 check and before validation. `error: "too_large"` |
