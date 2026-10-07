@@ -13,10 +13,15 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
    through `/login` is who the session says.
 3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker
    **verifies** `Cf-Access-Jwt-Assertion` (or the `CF_Authorization` cookie) against the team's
-   JWKS, issuer and audience. Identity = the verified email, lowercased; role `admin` if it is in
+   JWKS, issuer and audience. Identity = the verified email, lowercased. If that email has a `users` row, an inactive
+   one is a **401** and an active one's `role` is the role; with no row, `admin` if it is in
    `ADMIN_EMAILS`, otherwise `agent`. The email header alone is never trusted. Phase 3 deletes this
    step.
 4. Otherwise **401**. A Worker with neither a session nor Access configured answers 401, not 500.
+
+Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
+`PATCH /api/admin/users/:email` ([api](../api.md#admin)). The assign menu and the position gate still read
+`ADMIN_EMAILS`/`AGENT_EMAILS` until GH #303.
 
 **Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active

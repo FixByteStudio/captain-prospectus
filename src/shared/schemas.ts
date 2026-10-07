@@ -70,6 +70,7 @@ const shortText = z.string().check(z.trim(), z.maxLength(200));
 const longText = z.string().check(z.trim(), z.maxLength(2000));
 /** `shortText` that may not be empty. Mini's `.check()` clones and appends. */
 const shortTextRequired = shortText.check(z.minLength(1));
+const countSchema = z.int().check(z.nonnegative());
 
 export const statusSchema = z.enum(STATUSES);
 export const outcomeSchema = z.enum(OUTCOMES);
@@ -456,6 +457,44 @@ export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
 
 export const agentEmailParamSchema = z.object({ email: emailSchema });
 
+/* ------------------------------------------------------------ /api/admin/users */
+
+/** One row of the Agents list: every user, active or not (ADR-0029). */
+export const userSchema = z.object({
+  email: emailSchema,
+  /** Null for a row created before names were asked for, e.g. the owner's break-glass row. */
+  name: z.nullable(z.string()),
+  role: roleSchema,
+  active: z.boolean(),
+  /** Sessions that have not expired. */
+  sessions: countSchema,
+  /** Prospects assigned to them that are still open and not merged away. */
+  openProspects: countSchema,
+});
+export type User = z.infer<typeof userSchema>;
+
+export const usersResponseSchema = z.object({ users: z.array(userSchema) });
+export type UsersResponse = z.infer<typeof usersResponseSchema>;
+
+/** POST /api/admin/users. */
+export const userCreateSchema = z.object({
+  // emailSchema validates before it lowercases, so trim first: an admin pastes
+  // addresses with stray spaces.
+  email: z.pipe(z.string().check(z.trim()), emailSchema),
+  name: shortTextRequired,
+  role: roleSchema,
+});
+export type UserCreate = z.infer<typeof userCreateSchema>;
+
+/** PATCH /api/admin/users/:email: what is absent stays as it is. */
+export const userUpdateSchema = z
+  .object({
+    role: z.optional(roleSchema),
+    active: z.optional(z.boolean()),
+  })
+  .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
+export type UserUpdate = z.infer<typeof userUpdateSchema>;
+
 /** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
 export const agentRoundResponseSchema = z.object({
   prospects: z.array(prospectSchema),
@@ -645,7 +684,6 @@ export const dashboardQuerySchema = z.object({
   period: z._default(z.pipe(z.coerce.number(), dashboardPeriodSchema), DASHBOARD_DEFAULT_PERIOD),
 });
 
-const countSchema = z.int().check(z.nonnegative());
 const rateSchema = z.number().check(z.nonnegative());
 
 /**

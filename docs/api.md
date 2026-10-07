@@ -32,6 +32,9 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue, flyersGiven, agentsActiveToday, followUpsDueSoon: {value, dueBefore}}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents/:email/round` | `agentRoundResponseSchema` `{prospects, position}`: the agent's open prospects (the sync pull's query) and their latest reading `{lat, lng, accuracy, capturedAt}` (`capturedAt` clamped to receipt) or `null` when none from today. An admin's email answers 200 with `position: null`, since admins' positions are never stored. **404** for an email that is not assignable, **400** for a malformed one. `Cache-Control: no-store` ([ADR-0028](adr/0028-agent-position-at-sync.md)) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
+| `GET /api/admin/users` | `usersResponseSchema` `{users: [{email, name, role, active, sessions, openProspects}]}` — every user, active or not, ordered by name then email; names compare ignoring case and accents (French collation), unnamed rows last. `sessions` counts unexpired sessions; `openProspects` counts prospects assigned to them with status `new`, `assigned` or `follow_up` and not merged ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)) |
+| `POST /api/admin/users` | `userCreateSchema` `{email, name, role}` → **201** with the list row. The email is trimmed and lowercased, the name required. Created active, with no passphrase. **409** `email_taken` for an existing email, active or not |
+| `PATCH /api/admin/users/:email` | `userUpdateSchema` `{role?, active?}`, at least one → **204**. What is absent stays. Deactivating deletes the user's sessions in the same batch; reactivating leaves none. **404** for an unknown email. **409** `last_admin` when the change would leave no active admin, decided inside the write and counting active admin `users` rows only, not `ADMIN_EMAILS`-only Access admins; nothing is written. No user is ever deleted |
 | `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&q=&outOfTarget=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue`; with the dashboard's `followUpsDueSoon.dueBefore`, exactly `followUpsDueSoon.value`. `q` is a substring of `name`, folded ASCII-only. `outOfTarget=true` (the only accepted value, anything else is **400**) keeps the prospects flagged Hors cible: the latest visit carries `out_of_target` and `out_of_target_reviewed_at` is null or not after that visit's `visited_at` ([prospecting](domains/prospecting.md#refusal-reasons)); `total` counts that combined set |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
 | `PATCH /api/admin/prospects/:id` | Edit fields, `assignedTo`, `status`, `nextVisitAt` → the updated prospect. A `status` set here holds until a visit made after it ([prospecting](domains/prospecting.md#prospect-lifecycle)). Any PATCH also stamps `out_of_target_reviewed_at`, the only writer of that column ([Hors cible](domains/prospecting.md#refusal-reasons)) |
@@ -57,6 +60,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | 401 | No valid session and no valid Access token — including a Worker with Access not configured, which used to be a 500. Also a refused sign-in |
 | 403 | Authenticated but wrong role, or a request other than `GET` or `HEAD` whose `Origin` is missing or foreign (`forbidden_origin`) |
 | 404 | Unknown resource |
+| 409 | A conflict with current data: `email_taken` (the email already has a `users` row) or `last_admin` (the change would leave no active admin) |
 | 413 | Body over `MAX_REQUEST_BYTES`, refused before it is parsed — so before the 426 check and before validation. `error: "too_large"` |
 | 426 | `clientVersion` no longer supported: update the app. Checked **before** body validation, so an old build is told to update rather than that its data is invalid |
 | 429 | Too many failed logins from this IP (`too_many_attempts`); `Retry-After` says when to try again |
@@ -351,11 +355,14 @@ page.
   the two cannot read each other's rows.
 
 ## Who can be assigned
-There is no users table (ADR-0006). `GET /api/admin/agents` returns the union of
+Users are managed through `/api/admin/users` (above), but the assign menu still reads the vars until GH #303. `GET /api/admin/agents` returns the union of
 the `ADMIN_EMAILS` and `AGENT_EMAILS` vars with each address's role, so the
 assign menu has something to offer before anyone has been assigned anything.
 Neither var grants access — Cloudflare Access decides who gets in — so
-`AGENT_EMAILS` has to be kept in step with the Access policy by hand.
+`AGENT_EMAILS` has to be kept in step with the Access policy by hand. A `users`
+row now overrides the vars on the Access path: inactive is refused, an active
+row's role wins. An Access user with no row is not listed by
+`GET /api/admin/users`; to remove one, `POST` them then `PATCH` `{active: false}`.
 
 ## Conventions
 - Timestamps: epoch ms integers.
