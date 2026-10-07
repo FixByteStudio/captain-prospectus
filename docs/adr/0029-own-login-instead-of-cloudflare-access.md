@@ -48,34 +48,41 @@ remove Cloudflare Access.
 
 1. **Users.** `users` holds the email (primary key, lowercased, because stored rows already key on
    it), a name, the role (`admin` | `agent`), `active`, and an admin's passphrase hash. Admins
-   manage it from an Agents page. A user is deactivated, never deleted. A deactivated agent's
-   prospects stay assigned and are flagged for the admin. The last active admin cannot be
-   deactivated or demoted.
+   manage it from an Agents page. A user is deactivated, never deleted, and leaves the assign
+   menu. A deactivated agent's prospects stay assigned; the deactivation dialog gives their count
+   and a fourth À traiter row, "Prospects sans agent actif", leads to reassigning them. The last
+   active admin cannot be deactivated or demoted.
 2. **Agents sign in with a one-time code** that an admin generates: 8 characters of Crockford
    base32 (40 bits), valid for 15 minutes, usable once, typed into the app rather than opened as a
-   link. It enrols that device.
-3. **Admins sign in with a generated passphrase**, shown once and regenerable, never chosen by the
-   admin. An admin can also enrol a device with a code made from another of their signed-in
+   link. It enrols that device. A user has at most one live code: a new one deletes the unused
+   ones.
+3. **Admins sign in with email and a generated passphrase**, shown once and regenerable, never
+   chosen by the admin: 20 Crockford base32 characters in five groups of four (100 bits), read
+   through the same normaliser as codes. The email field is there for password managers. An admin can also enrol a device with a code made from another of their signed-in
    devices.
 4. **Every secret is stored as HMAC-SHA-256** under an `AUTH_PEPPER` secret: codes, passphrases and
    session tokens. None is stored or logged in clear. No slow hash.
 5. **One `/login` and one route.** `POST /api/auth/login` takes a `zod/mini` union discriminated on
-   `kind`: `code` or `passphrase`. `kind` names the credential, never the role; the role always
+   `kind`: `code`, or `passphrase` with the email. A wrong email and a wrong passphrase get the
+   same error. `kind` names the credential, never the role; the role always
    comes from `users`. A later `kind: "passkey"` is an additive change. The page shows the code
    field by default and an "Accès administrateur" switch ([design.md](../design.md) owns the layout).
 6. **Sessions live in D1.** A random token sits in a `__Host-` cookie (`HttpOnly`, `Secure`,
    `SameSite=Strict`, `Path=/`), and `sessions` holds its hash, the user, a device label,
-   `last_seen_at` and the expiry. Expiry slides: 90 days idle for an agent, 30 for an admin.
+   `created_at`, `last_seen_at` and the expiry. The label is a summary parsed from the
+   User-Agent (device family and browser), never the raw string; the Agents page lists each
+   user's sessions with label, enrolment date and last seen. Expiry slides: 90 days idle for an agent, 30 for an admin.
    `last_seen_at` is written at most once an hour per session. Every `/api` request looks up the
    session and its active user, so deleting a row signs that device out on its next request.
    Deactivating a user deletes its sessions and unused codes. A lost phone revokes one device, not
    the agent.
 7. **Break-glass.** An `OWNER_EMAIL` var and a `BREAK_GLASS` secret, set by the owner or CI and
-   never in the repo. Typed in the passphrase field and compared with
+   never in the repo. Typed in the passphrase form as `OWNER_EMAIL` plus `BREAK_GLASS`, compared with
    `crypto.subtle.timingSafeEqual`, it creates or reactivates `OWNER_EMAIL` as an active admin and
    opens a session. It also creates the first admin.
 8. **Brute force.** A `login_attempts` counter in D1, per IP and 15-minute window: after 10 failures
-   that IP is refused until the window ends. Not the rate-limiting binding (see Context).
+   that IP gets 429 with `Retry-After` until the window ends, and `/login` says when to retry or
+   to change network. Not the rate-limiting binding (see Context).
 9. **CSRF.** `SameSite=Strict`, plus an `Origin` check on every `/api` request that is not a `GET`.
 10. **Local dev** keeps `DEV_USER_EMAIL`, localhost only. The role is read from `users`, which the
     seed fills.
@@ -84,7 +91,8 @@ remove Cloudflare Access.
 12. **Cutover in three phases** (expand/contract):
     1. Ship the login while Access still fronts the hostname. The Worker accepts a session and falls
        back to the Access JWT. The owner signs in through break-glass and creates the agents.
-    2. The owner gives each agent a code, the agents enrol, and the owner revokes the Access tokens
+    2. The owner gives each agent a code and the agents enrol. Once the Agents page shows every
+       active user as "Inscrit" (at least one live session), the owner revokes the Access tokens
        and deletes the Access application.
     3. A PR removes the JWT check, `jose`, and the `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`,
        `ADMIN_EMAILS` and `AGENT_EMAILS` vars.
