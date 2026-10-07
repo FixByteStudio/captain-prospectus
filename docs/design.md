@@ -226,9 +226,9 @@ sequence rather than compared. Figures are formatted for fr-FR: "1 284",
 
 ## Layout
 
-The admin side has a navy sidebar (GH #63): **Pilotage** (Tableau de bord),
-**Prospects** (Prospects, Import, Doublons) and **Terrain** (Visites, À
-rattacher, Scripts), each item a 36px row
+The admin side has a navy sidebar (GH #63): **Pilotage** (Tableau de bord,
+Agents), **Prospects** (Prospects, Import, Doublons) and **Terrain** (Visites,
+À rattacher, Scripts), each item a 36px row
 with an icon and a label, group labels in the overline style. The current item
 is a gold fill with navy text and a `primary-edge` inset; item text otherwise
 stays `band-foreground` in every state, including the `band-accent` hover
@@ -383,19 +383,28 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   The table scrolls sideways inside its card at 390 px. With no
   agent, the card says "Aucun agent pour l'instant."
 - **À traiter** (GH #113). The 3:2 row's right part; under the table below
-  lg. A `Card` titled in `text-heading` with three rows split by `border`
-  lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`), the
-  label with a meta line under it, the count in semibold tabular figures, and
-  a small `secondary` Button. Relances dues, "À relancer aujourd'hui ou plus
-  tôt", "Voir" to Prospects filtered `status=follow_up&dueBefore={to}` — the
-  dashboard's own boundary, so the list totals the count; Visites à
-  rattacher, "Conservées, pas encore comptées", "Rattacher" to À rattacher;
-  Doublons, "Semblent désigner le même endroit", "{n} paires", "Fusionner" to
-  Doublons. The last two counts come from the sidebar's own queries, with no
-  request of their own; Visites à rattacher counts the whole queue (the page
-  plus `remaining`). At 0 the count turns `muted-foreground` and
-  the button is disabled, not a link; so is a row whose query is loading or
-  has failed, which shows "—" rather than a guessed 0.
+  lg. A `Card` titled in `text-heading` with four rows split by `border`
+  lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`,
+  `UserX`), the label with a meta line under it, the count in semibold
+  tabular figures, and a small `secondary` Button. Relances dues, "À relancer
+  aujourd'hui ou plus tôt", "Voir" to Prospects filtered
+  `status=follow_up&dueBefore={to}` — the dashboard's own boundary, so the
+  list totals the count; Visites à rattacher, "Conservées, pas encore
+  comptées", "Rattacher" to À rattacher; Doublons, "Semblent désigner le même
+  endroit", "{n} paires", "Fusionner" to Doublons; Prospects sans agent actif
+  (ADR-0029), "Assignés à un agent désactivé", "Réassigner" to Prospects
+  filtered to inactive agents, where the toolbar shows the filter as the chip
+  "Agent : désactivé" (§ One toolbar slot) and the list totals the count.
+  Like the other filters it lives in the URL, under the name the story that
+  adds it gives in [api.md](api.md); the Agent select reads "Agent désactivé"
+  while it is on, and the chip's × or another choice there clears it.
+  Visites à rattacher and Doublons come from the sidebar's own queries, with
+  no request of their own; Prospects sans agent actif comes with the
+  dashboard's figures, a field that same story adds to [api.md › The
+  dashboard](api.md#the-dashboard). Visites à rattacher
+  counts the whole queue (the page plus `remaining`). At 0 the count turns
+  `muted-foreground` and the button is disabled, not a link; so is a row whose
+  query is loading or has failed, which shows "—" rather than a guessed 0.
 - **Dernières visites** (GH #113). The last row, full width. A `Card` with
   "Tout voir ›" to Visites on the right of its title, then shadcn `Table`:
   Heure, Prospect, Résultat, Flyer, Agent, on a `secondary` head row in
@@ -1144,6 +1153,118 @@ From `md` the list and the map sit side by side:
   the list; from `md` the list is on the left and the map on the right, 80 % of
   the viewport tall and sticky.
 
+### Agents
+
+`/admin/agents`, second in Pilotage (Lucide `Users`): who may sign in, with
+which role, and on which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+Adding an agent is one form here, with no deploy. Built on the #175
+primitives: a `ScreenHeader`, a `ScreenState` gate and one `Surface` holding
+the rows.
+
+```
+│ Agents                                     [Ajouter un utilisateur] │
+│ Qui peut se connecter, et avec quel rôle.                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ Utilisateur          Rôle            Inscription         Appareils  │
+│ › Léa Dupont         Agent           Inscrit                  2   ⋮ │
+│   lea@example.com                                                   │
+│     iPhone · Safari  Inscrit le 24/09  Vu le 07/10 15:24 [Révoquer] │
+│ › Marc Peeters       Agent           Pas encore inscrit       0   ⋮ │
+│ › Sam Owner          Admin           Inscrit                  1   ⋮ │
+├─────────────────────────────────────────────────────────────────────┤
+  › Désactivés (1)
+```
+
+- **Header.** "Agents", lede "Qui peut se connecter, et avec quel rôle.", and
+  one `default` Button, "Ajouter un utilisateur".
+- **Adding opens a `Dialog`** titled "Ajouter un utilisateur", a shadcn
+  `form` (ADR-0018) whose resolver is a `z.pick` of the shared schema:
+  "Adresse e-mail", "Nom", and "Rôle" as a `Select` of "Agent" (the default)
+  and "Admin" (the [glossary](glossary.md)'s word); "Ajouter" and "Annuler". Its messages: "Saisissez une
+  adresse e-mail valide." and "Saisissez un nom." The address is trimmed and
+  lowercased before it is sent, as `users.email` is. The new row appears at
+  once as "Pas encore inscrit", with the toast "Utilisateur ajouté."; the next
+  step is its "Générer un code". An address that already has a user is
+  refused with "Cette adresse a déjà un compte. S'il est désactivé,
+  réactivez-le sous Désactivés." Users are never deleted, so a typo is fixed
+  by deactivating the wrong row.
+- **One row per active user**, by name. Utilisateur is the name, the email
+  under it in meta. Rôle is plain text, "Agent" or "Admin".
+  Inscription is a badge: "Inscrit" (`tint-success`) when the user has at
+  least one live session, "Pas encore inscrit" (`secondary`) otherwise — the
+  word phase 2 of the cutover waits on for every row. Appareils is the count
+  of live sessions in tabular figures. The signed-in admin's own row carries
+  "Vous" in meta after the email.
+- **The row expands to its devices.** A chevron before the name opens one
+  line per session under the row: the device label ("iPhone · Safari"),
+  "Inscrit le 24/09/2026" and "Vu le 07/10/2026 15:24" in meta, and a ghost
+  "Révoquer" that signs that device out on its next request, with no
+  confirmation — a new code re-enrols it — and a toast "Appareil
+  déconnecté." The device this page is open on reads "Cet appareil" instead
+  of a Révoquer button: "Se déconnecter" in the avatar menu is how it signs
+  out. With no session, the expanded row says "Aucun appareil inscrit." A
+  session whose User-Agent gave no summary is labelled "Appareil inconnu".
+- **The row menu** (`DropdownMenu`, `MoreVertical`) holds, in order:
+  "Générer un code"; "Nouvelle phrase de passe", on the signed-in admin's own
+  row only; "Passer admin" or "Passer agent"; and, after a
+  separator, "Désactiver" in `destructive`. On the last active admin's row,
+  "Passer agent" and "Désactiver" are disabled with "Il faut au moins un
+  administrateur actif." in meta under them; should the server still refuse
+  (another admin acted first), that sentence is the error toast. A role
+  change applies at once, with the toast "Rôle modifié."; an admin who makes
+  themselves an agent lands on the round, since `/admin` no longer answers
+  them. Any other failed action on this page — add, revoke, role change,
+  code, passphrase, deactivate, reactivate — keeps the screen as it was and
+  toasts "L'action n'a pas abouti. Réessayez."
+- **The code `Dialog`.** Titled "Code pour {nom}". The eight characters in
+  `text-display`, tabular, split 4 + 4 by a space ("K7QM 2XPA" — the
+  normaliser ignores spaces), with "Valable jusqu'à {heure}, une seule fois."
+  under it, `{heure}` the code's expiry as the server returns it, in Brussels
+  time, so a wrong device clock cannot misstate it. Then "Ce code ne sera
+  plus affiché. En générer un autre annule celui-ci." in meta, a `secondary`
+  "Copier" (toast "Code copié.", or "Copie impossible. Recopiez-le à la
+  main." when the clipboard refuses; the code stays on screen either way) and
+  a `default` "Terminé". Closing it any way
+  is fine: the code still works until it expires or is used. An admin enrols
+  another of their own devices with the same item on their own row.
+- **The passphrase `Dialog`.** Only ever for the signed-in admin's own
+  passphrase, so the secret is shown to its owner alone; another admin first
+  enrols with a code, then makes their own. Since the old passphrase stops
+  working at once, the item asks first in an `AlertDialog`: "Remplacer votre
+  phrase de passe ?", "L'ancienne cessera de fonctionner dès que la nouvelle
+  s'affiche.", "Annuler" and "Remplacer". Then a `Dialog` titled "Votre phrase de passe",
+  the twenty characters in five groups of four ("K7QM 2XPA 9DWE R4TN 8BCH") in
+  `text-display`, tabular. Under it: "Enregistrez-la dans votre gestionnaire
+  de mots de passe : elle ne sera plus affichée. L'ancienne ne fonctionne
+  plus." Then "Copier" (toast "Phrase de passe copiée.") and "Terminé".
+- **Deactivating asks first**, in an `AlertDialog`: "Désactiver {nom} ?",
+  then one of "{n} prospects restent assignés à {nom}. Réassignez-les depuis
+  « Prospects sans agent actif » au Tableau de bord.", "1 prospect reste
+  assigné à {nom}. Réassignez-le depuis « Prospects sans agent actif » au
+  Tableau de bord." or "Aucun prospect n'est assigné à {nom}.", and always
+  "Ses appareils seront déconnectés et son code annulé. Vous pourrez le
+  réactiver." "Annuler" and a `destructive` "Désactiver"; done, the toast
+  says "Utilisateur désactivé." The count is the user's prospects still
+  assigned, refetched when the dialog opens; the story that adds the users
+  routes names its field in [api.md](api.md). Deactivating your own row
+  (allowed when another admin is active) signs you out.
+- **Désactivés.** Under the `Surface`, a ghost Button "Désactivés ({n})" with
+  a chevron and `aria-expanded` shows a second list of the same columns,
+  names in `muted-foreground`, no devices (deactivation deleted them), and
+  one action per row, a `secondary` "Réactiver". A reactivated user returns
+  to the active list as "Pas encore inscrit" and needs a new code; the toast
+  says "Utilisateur réactivé." The button
+  is absent when no user is deactivated.
+- **Below 768px** the table becomes a list of rows, as on Prospects
+  (`useIsMobile()`): name and badge on the first line, email and role on the
+  second, the device count and the row menu on the right. A device line
+  wraps under its label: dates on one line, "Révoquer" on the right. The
+  Désactivés list takes the same shape.
+- **Loading and failure** go through `ScreenState`: skeleton rows with a
+  visually hidden "Chargement des utilisateurs…", or "Impossible de charger
+  les utilisateurs." with "Réessayer". There is no empty state: the admin
+  reading the page is always a row.
+
 ## Principles
 
 1. The list is the product. Chrome yields to rows.
@@ -1218,6 +1339,99 @@ the built manifest rather than by reading it.
 because it is a 246 kB PNG wrapped in an SVG, and the service worker precaches
 every svg it finds under `public/` — one file larger than the whole field JS
 chunk, for a tab icon the `.ico` already serves.
+
+## The login page
+
+`/login` is where everyone signs in: an agent with a one-time code, an admin
+with an email and a passphrase ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+It serves both sides but ships in the field shell, since a phone with a
+revoked session must reach it offline-installed. So the field rules hold:
+its strings live in `copy/field`, its inputs and labels are native, its
+targets are 48 px and its text `text-base`
+([ADR-0015](adr/0015-native-controls-on-the-field-route.md),
+[ADR-0026](adr/0026-budget-the-field-precache-not-the-entry-chunk.md)), and every byte counts toward
+the 1,000 KiB precache.
+
+```
+┌────────────────────────────────┐     ┌────────────────────────────────┐
+│ ⎈ Captain Prospectus     (band)│     │ ⎈ Captain Prospectus     (band)│
+│                                │     │                                │
+│ Connexion                      │     │ Connexion                      │
+│ Entrez le code que vous a      │     │ Connectez-vous avec votre      │
+│ donné un administrateur.       │     │ adresse e-mail et votre…       │
+│                                │     │                                │
+│ Code                           │     │ Adresse e-mail                 │
+│ [ K7QM 2XPA               ]    │     │ [ sam@example.com         ]    │
+│                                │     │ Phrase de passe                │
+│ [        Se connecter       ]  │     │ [ ••••••••••••••••••••••  ]    │
+│                                │     │                                │
+│     Accès administrateur       │     │ [        Se connecter       ]  │
+└────────────────────────────────┘     │        Retour au code          │
+                                       └────────────────────────────────┘
+```
+
+- **One column, one card.** The field band with the mark and the app name,
+  no tab bar and no sync strip; under it a `Card` at most 24rem wide,
+  centred, a 16px gutter on a phone. "Connexion" in `text-title`, a one-line
+  lede, the fields, a full-width `default` Button "Se connecter", and under it
+  the switch.
+- **The code form is the default.** Lede "Entrez le code que vous a donné un
+  administrateur." One field, "Code": `type="text"`,
+  `autocomplete="one-time-code"`, `autocapitalize="characters"`, spellcheck
+  off, no `maxlength`. Whatever the agent types is kept as typed — spaces,
+  hyphens, lowercase, an O for a 0 — because the server's normaliser reads
+  it; the client never rewrites or rejects it.
+- **"Accès administrateur" swaps the form.** A ghost Button under the card's
+  primary action, never a switch control: it replaces the code form in place
+  with the admin one, whose own ghost Button "Retour au code" swaps back. The
+  swap clears a refused sign-in's Alert but keeps the lockout Alert, since
+  the lock is per connection, and moves focus to the first field.
+  It is screen state, not a URL.
+- **The admin form** has the lede "Connectez-vous avec votre adresse e-mail
+  et votre phrase de passe." and two fields: "Adresse e-mail" (`type="email"`,
+  `autocomplete="username"`) and "Phrase de passe" (`type="password"`,
+  `autocomplete="current-password"`), so a password manager offers to save
+  the generated passphrase and fills both next time. Break-glass is this
+  same form; nothing on screen names it.
+- **Validation** is a shadcn `form` over react-hook-form like every other
+  form (ADR-0018), with a `z.pick` of the login schema as resolver; it only
+  checks that a field is filled: "Saisissez votre code.", "Saisissez votre
+  adresse e-mail.", "Saisissez votre phrase de passe."
+- **A refused sign-in** (401) shows a destructive `Alert` above the button
+  and keeps what was typed. For a code: "Ce code ne fonctionne pas. Il a
+  peut-être expiré ou déjà servi : demandez-en un nouveau." For the admin
+  form, one sentence whichever part was wrong: "Adresse e-mail ou phrase de
+  passe incorrecte." A request that never reached the server says
+  "Connexion impossible. Vérifiez le réseau et réessayez."; any other
+  failure (a 5xx) says "Connexion impossible pour le moment. Réessayez dans
+  un instant.", and a 426 shows the band's usual update prompt instead. While
+  a request is in flight the button holds a `Spinner` and is disabled.
+- **Lockout** (429): the Alert reads "Trop de tentatives depuis cette
+  connexion. Réessayez à {heure}, ou changez de réseau.", `{heure}` being
+  `Retry-After` added to now, as a Brussels time ("15:24"). The button stays
+  disabled until that time, then re-enables on its own and the Alert goes —
+  no reload needed. The fields stay editable. Without a usable `Retry-After`
+  it reads "Trop de tentatives depuis cette connexion. Réessayez dans
+  quelques minutes, ou changez de réseau." and re-enables after 15 minutes.
+  The lock is screen state: a reload forgets it, and the next attempt simply
+  gets the 429 again.
+- **Offline** (`useOnline()`): a standing `Alert` above the form, "Hors
+  ligne. Connectez-vous dès que le réseau revient.", and the button disabled;
+  the fields stay editable, and the Alert goes when the network returns.
+  There is one Alert slot: offline wins it over a lockout or a refusal, which
+  shows again once back online if it still holds.
+- **Nothing waiting is lost.** When the outbox on this device holds visits —
+  a phone sent here by a 401 — a meta line under the lede says so: "1 visite
+  non envoyée est gardée sur ce téléphone. Elle partira après la connexion."
+  or "{n} visites non envoyées sont gardées sur ce téléphone. Elles partiront
+  après la connexion." The page only reads the outbox, never clears it
+  ([field-operations](domains/field-operations.md#offline-sync)). While the
+  outbox is being read, or if it cannot be, the line is simply absent.
+- **After signing in**, the role from the server picks the landing: an agent
+  to the round, an admin to `/admin`. Always the landing, never the page the
+  401 interrupted: no return path means no redirect parameter to validate. A
+  device that already has a session and opens `/login` goes straight to its
+  landing.
 
 ## The field side
 

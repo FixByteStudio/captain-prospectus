@@ -12,6 +12,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Prospect** | Prospect | A business we want to canvass (restaurant, café, food truck…) | lead, venue, entity |
 | **Agent** | Agent | Field person doing visits | rep, user, worker |
 | **Admin** | Admin | Person who imports, assigns, configures scripts | manager |
+| **User** | Utilisateur | Anyone who may sign in: an admin or an agent, one row of `users` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Never a synonym for agent | account, member |
 | **Visit** | Visite | One physical attempt at a prospect. A revisit is a new visit | check-in (that's the action) |
 | **Outcome** | Résultat | Result of a visit: `no_contact`, `interested`, `not_interested`, `follow_up`, `converted` | result |
 | **Hors cible signalé** | Hors cible signalé | A prospect whose latest visit reported `out_of_target` and that no admin edit has reviewed since ([prospecting](domains/prospecting.md#refusal-reasons)) | to-fix item |
