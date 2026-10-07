@@ -221,17 +221,18 @@ the same response, additively.
   `new + assigned + follow_up` equals `openProspects`. The screen computes each
   share from the pipeline's own total, and shows 0 % when that total is 0.
 - **Activité par agent** (`agents`, GH #112): one row for each email on the
-  roster (`ADMIN_EMAILS` ∪ `AGENT_EMAILS`), zeros included, plus any other
-  email with a visit in the period or a live prospect assigned now; sorted
+  roster (the active `users` rows), zeros included; a deactivated user has no
+  row, though their visits stay in the totals; sorted
   by `visits` descending, then `email`. `visits` is that agent's rows among
-  Visites; every visitor has a row, so the column always sums to
-  `visits.value`. `converted` is the distinct prospects
+  Visites, so the column sums to `visits.value` less the visits of anyone off
+  the roster (no active `users` row: deactivated, or an Access user with none). `converted` is the distinct prospects
   (`coalesce(merged_into, id)`) they visited with outcome `converted` in the
   period. Its column can differ from Convertis either way: a manual
-  conversion has no visitor and is credited to nobody, and one prospect
+  conversion has no visitor and is credited to nobody, an off-the-roster visitor
+  has no row, and one prospect
   converted by two agents counts for both. `followUp` and `openProspects` are the live `follow_up` and
   `OPEN_STATUSES` prospects assigned to them now, snapshots like
-  `openProspects`; an unassigned prospect is in no row. Each figure is one
+  `openProspects`; a prospect unassigned or assigned off the roster is in no row. Each figure is one
   grouped statement.
 - **Relances dues** (`followUpsDue`, GH #113): live `follow_up` prospects
   whose `next_visit_at` is before `to`, Brussels midnight tomorrow — due today
@@ -355,14 +356,17 @@ page.
   the two cannot read each other's rows.
 
 ## Who can be assigned
-Users are managed through `/api/admin/users` (above), but the assign menu still reads the vars until GH #303. `GET /api/admin/agents` returns the union of
-the `ADMIN_EMAILS` and `AGENT_EMAILS` vars with each address's role, so the
-assign menu has something to offer before anyone has been assigned anything.
-Neither var grants access — Cloudflare Access decides who gets in — so
-`AGENT_EMAILS` has to be kept in step with the Access policy by hand. A `users`
-row now overrides the vars on the Access path: inactive is refused, an active
-row's role wins. An Access user with no row is not listed by
-`GET /api/admin/users`; to remove one, `POST` them then `PATCH` `{active: false}`.
+The roster is the active `users` rows (ADR-0029), managed through
+`/api/admin/users` (above). `GET /api/admin/agents` returns them, each with its
+own role, sorted by email; admins are included since an admin may walk a round.
+The same rows decide who `PATCH /prospects/:id` and `POST /prospects/assign`
+accept (**400** `unknown_assignee` for a deactivated or unknown email;
+`assignedTo: null` is always allowed), whose round `GET /agents/:email/round`
+serves (**404** otherwise), the dashboard's agent rows, and whose position a
+sync stores. Deactivating a user leaves their prospects assigned to them.
+An Access-fallback user with no `users` row can sign in but is off the roster
+and not listed by `GET /api/admin/users` until an admin `POST`s them.
+`ADMIN_EMAILS` is read only by the Access-JWT fallback; `AGENT_EMAILS` by nothing.
 
 ## Conventions
 - Timestamps: epoch ms integers.

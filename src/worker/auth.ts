@@ -21,7 +21,7 @@ import { HTTPException } from "hono/http-exception";
 import { and, eq, gt } from "drizzle-orm";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Role } from "../shared/constants";
-import { getDb } from "./db/client";
+import { getDb, type Db } from "./db/client";
 import { sessions, users } from "./db/schema";
 import { SESSION_COOKIE, hmacHex, readCookie } from "./session";
 import type { AppEnv, Bindings, Identity } from "./types";
@@ -68,6 +68,31 @@ export function parseEmails(value: string | undefined): string[] {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+}
+
+/**
+ * The roster: active `users` rows, ordered by email (ADR-0029). Who may be
+ * assigned, walk a round or appear on the dashboard; not who may sign in.
+ */
+export async function activeRoster(db: Db): Promise<{ email: string; role: Role }[]> {
+  return db
+    .select({ email: users.email, role: users.role })
+    .from(users)
+    .where(eq(users.active, true))
+    .orderBy(users.email);
+}
+
+/** The active row for one email, or undefined: the same definition of "on the roster". */
+export async function activeRosterMember(
+  db: Db,
+  email: string,
+): Promise<{ email: string; role: Role } | undefined> {
+  const [row] = await db
+    .select({ email: users.email, role: users.role })
+    .from(users)
+    .where(and(eq(users.email, email.toLowerCase()), eq(users.active, true)))
+    .limit(1);
+  return row;
 }
 
 export function unauthorized(message: string): HTTPException {

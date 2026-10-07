@@ -314,3 +314,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
   summary: Login throttling is per IP only; a distributed attack (many IPs or IPv6 prefixes) is not limited per account or globally.
   evidence: CAP-7 asks for per-IP throttling only; a per-email or global window would be a new owner decision.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
+  summary: The admin client caches `GET /api/admin/agents` with `staleTime: Infinity` under a comment saying the roster is a Worker var, so an open tab keeps the old assign menu after a user is created or deactivated.
+  evidence: `src/client/admin/queries.ts:160-167`; since GH #303 the roster is `users` rows. The Agents page story (entry 7) should invalidate `adminKeys.agents()` on user mutations and fix the comment.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
+  summary: The Prospects screen's agent filter is built from `GET /api/admin/agents`, so a deactivated user's still-assigned prospects cannot be filtered by them.
+  evidence: `src/client/admin/prospects/Toolbar.tsx:114` via `ProspectsScreen.tsx:133`; story #303 removes deactivated users from the menu, and entry 11 (prospects with no active agent) is the natural place to give them a filter.

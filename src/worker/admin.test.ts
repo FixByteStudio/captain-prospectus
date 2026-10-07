@@ -18,6 +18,7 @@ import type {
   ScriptsResponse,
 } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
+import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * Admin routes against a real D1, built by the real migrations.
@@ -70,6 +71,7 @@ beforeEach(async () => {
   await db.delete(visits);
   await db.delete(prospects);
   await db.delete(scripts);
+  await resetTestUsers();
 });
 
 describe("GET /api/admin/agents", () => {
@@ -82,6 +84,67 @@ describe("GET /api/admin/agents", () => {
       { email: ADMIN, role: "admin" },
       { email: AGENT, role: "agent" },
     ]);
+  });
+
+  it("lists active users only, with their own role, sorted by email (GH #303)", async () => {
+    await seedUser("zoe@example.com", "admin");
+    await seedUser("bob@example.com", "agent");
+    await seedUser("gone@example.com", "agent", false);
+    const body = (await (await call("/api/admin/agents")).json()) as AgentsResponse;
+    expect(body.agents).toEqual([
+      { email: ADMIN, role: "admin" },
+      { email: AGENT, role: "agent" },
+      { email: "bob@example.com", role: "agent" },
+      { email: "zoe@example.com", role: "admin" },
+    ]);
+  });
+});
+
+describe("a deactivated user leaves the roster (GH #303)", () => {
+  const GONE = "gone@example.com";
+
+  it("assigns, then refuses new assignments and a round, but keeps the prospects", async () => {
+    await seedUser(GONE, "agent");
+    await importRows([{ name: "Chez Léa", lat: 50.84, lng: 4.35 }]);
+    await importRows([{ name: "Le Zinc", lat: 50.85, lng: 4.36 }]);
+    const db = getDb(env.DB);
+    const [first, second] = await db.select().from(prospects);
+    if (!first || !second) throw new Error("the import wrote nothing");
+
+    expect(
+      (await post("/api/admin/prospects/assign", { ids: [first.id], assignedTo: GONE })).status,
+    ).toBe(200);
+    expect((await call(`/api/admin/agents/${GONE}/round`)).status).toBe(200);
+    // PATCH accepts a users-only email while it is active, then unassigns so
+    // the checks below start from `second` unassigned.
+    const patched = await patch(`/api/admin/prospects/${second.id}`, { assignedTo: GONE });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { assignedTo: string | null }).assignedTo).toBe(GONE);
+    expect((await patch(`/api/admin/prospects/${second.id}`, { assignedTo: null })).status).toBe(
+      200,
+    );
+
+    await seedUser(GONE, "agent", false);
+
+    const refused = await post("/api/admin/prospects/assign", {
+      ids: [second.id],
+      assignedTo: GONE,
+    });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toBe("unknown_assignee");
+    expect((await patch(`/api/admin/prospects/${second.id}`, { assignedTo: GONE })).status).toBe(
+      400,
+    );
+    expect((await call(`/api/admin/agents/${GONE}/round`)).status).toBe(404);
+
+    const rows = await db.select().from(prospects);
+    expect(rows.find((r) => r.id === first.id)?.assignedTo).toBe(GONE);
+    expect(rows.find((r) => r.id === second.id)?.assignedTo).toBeNull();
+
+    // Unassigning stays allowed.
+    expect(
+      (await post("/api/admin/prospects/assign", { ids: [first.id], assignedTo: null })).status,
+    ).toBe(200);
   });
 });
 

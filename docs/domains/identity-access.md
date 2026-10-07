@@ -20,8 +20,8 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
 4. Otherwise **401**. A Worker with neither a session nor Access configured answers 401, not 500.
 
 Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
-`PATCH /api/admin/users/:email` ([api](../api.md#admin)). The assign menu and the position gate still read
-`ADMIN_EMAILS`/`AGENT_EMAILS` until GH #303.
+`PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
+dashboard rows, position gate) is the active `users` rows.
 
 **Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active

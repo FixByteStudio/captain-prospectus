@@ -46,11 +46,10 @@
     // ACCESS_TEAM_DOMAIN is the full origin, e.g. https://acme.cloudflareaccess.com
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
-    // Comma-separated. Everyone else who passes Access is an agent.
+    // Comma-separated. Feeds only the Access-JWT fallback; everyone else there is an agent.
     "ADMIN_EMAILS": "",
-    // Comma-separated. Not a permission: only who the assign menu offers,
-    // since ADR-0006 leaves us without a users table. Keep it in step with
-    // the Access policy.
+    // Comma-separated. Read by nothing since GH #303 (the roster is the active
+    // users rows); goes with epic-access-removed.
     "AGENT_EMAILS": "",
   },
 
