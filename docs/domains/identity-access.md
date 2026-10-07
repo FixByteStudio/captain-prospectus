@@ -22,8 +22,12 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
 admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
 repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
-`POST /api/auth/logout` deletes the device's session. Codes for agents, generated passphrases for
-admins, throttling and the CSRF check are later entries of the own-login epic.
+`POST /api/auth/logout` deletes the device's session. Codes for agents and generated passphrases for
+admins are later entries of the own-login epic.
+
+After 10 failed logins from one IP in a 15-minute window, that IP's logins get 429 until the window
+ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
+foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
 
 ## Permissions
 | Action | Agent | Admin |

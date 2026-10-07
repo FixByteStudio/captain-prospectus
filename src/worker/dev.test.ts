@@ -1,6 +1,5 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
 import { seedTestUsers } from "../../test/users";
 import {
   and,
@@ -35,6 +34,7 @@ import type {
   DevSeedResult,
   DuplicatesResponse,
 } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * The one route mounted before auth (src/worker/index.ts). The gate is pinned
@@ -42,10 +42,7 @@ import type {
  */
 
 async function callAt(origin: string, path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`${origin}${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`${origin}${path}`, init);
 }
 
 async function call(path: string, init?: RequestInit): Promise<Response> {

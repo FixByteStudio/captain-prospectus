@@ -6,7 +6,15 @@
  * migration that is already on main.
  */
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import {
   ORPHAN_REASONS,
@@ -286,6 +294,22 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at").notNull(),
   },
   (t) => [index("sessions_user_email_idx").on(t.userEmail)],
+);
+
+/**
+ * Failed logins per IP and fixed 15-minute window (CAP-7, login-throttle.ts).
+ * The IP is personal data, so only its HMAC under AUTH_PEPPER is stored.
+ */
+export const loginAttempts = sqliteTable(
+  "login_attempts",
+  {
+    /** HMAC-SHA-256 hex of CF-Connecting-IP, or of "unknown" without it. */
+    ipHash: text("ip_hash").notNull(),
+    /** Epoch ms, a multiple of the window length. */
+    windowStart: integer("window_start").notNull(),
+    failures: integer("failures").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.ipHash, t.windowStart] })],
 );
 
 export type ProspectRow = typeof prospects.$inferSelect;

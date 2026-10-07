@@ -1,6 +1,6 @@
 # API
 
-Base path `/api`. JSON in, JSON out. Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie first, then (until the Access cutover ends) a verified Access JWT ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
+Base path `/api`. JSON in, JSON out. Any request other than `GET` or `HEAD` whose `Origin` header is missing or is not the request URL's own origin gets **403** `forbidden_origin`, on every route including `/api/auth/*` and `/api/dev/*`. It runs right after the body cap, so an oversized cross-site body still gets 413 (CAP-8, `src/worker/origin.ts`). Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie first, then (until the Access cutover ends) a verified Access JWT ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
 
 ## Common
 | Route | Role | Purpose |
@@ -12,7 +12,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 
 | Route | Purpose |
 |---|---|
-| `POST /api/auth/login` | `loginRequestSchema`, a `zod/mini` union on `kind`. Only `{kind: "passphrase", email, passphrase}` exists so far, and only break-glass answers it: `email` (trimmed, lowercased) equal to `OWNER_EMAIL` and `passphrase` (as typed) equal to `BREAK_GLASS`, compared as HMAC digests with `timingSafeEqual`. Success creates or reactivates `OWNER_EMAIL` as an active admin, opens a session and answers **200** `{email, role}` (`MeResponse`) with `Set-Cookie: __Host-cp_session=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=<lifetime>` — 30 days for an admin, 90 for an agent, fixed. A wrong email and a wrong passphrase get the same **401** `unauthorized`, as does a Worker without `OWNER_EMAIL` or `BREAK_GLASS`. Any other `kind`, a missing field or a non-JSON body is **400**. No `AUTH_PEPPER` is **500** `misconfigured` |
+| `POST /api/auth/login` | `loginRequestSchema`, a `zod/mini` union on `kind`. Only `{kind: "passphrase", email, passphrase}` exists so far, and only break-glass answers it: `email` (trimmed, lowercased) equal to `OWNER_EMAIL` and `passphrase` (as typed) equal to `BREAK_GLASS`, compared as HMAC digests with `timingSafeEqual`. Success creates or reactivates `OWNER_EMAIL` as an active admin, opens a session and answers **200** `{email, role}` (`MeResponse`) with `Set-Cookie: __Host-cp_session=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=<lifetime>` — 30 days for an admin, 90 for an agent, fixed. A wrong email and a wrong passphrase get the same **401** `unauthorized`, as does a Worker without `OWNER_EMAIL` or `BREAK_GLASS`. Any other `kind`, a missing field or a non-JSON body is **400**. No `AUTH_PEPPER` is **500** `misconfigured`. Throttled per IP (`CF-Connecting-IP`, an IPv6 address by its /64; without the header, one shared `unknown` bucket): every 400 or 401 counts as a failure in a fixed 15-minute window, a success does not reset the count, and from the 10th failure on every login from that IP, valid or not, gets **429** `too_many_attempts` with `Retry-After` (seconds until the window ends). The lock is checked before the body and the credential |
 | `POST /api/auth/logout` | Deletes the cookie's session if there is one, clears the cookie (`Max-Age=0`), **204**. Works without a session |
 
 ## Local development only
@@ -55,10 +55,11 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 |---|---|
 | 400 | Invalid body |
 | 401 | No valid session and no valid Access token — including a Worker with Access not configured, which used to be a 500. Also a refused sign-in |
-| 403 | Authenticated but wrong role |
+| 403 | Authenticated but wrong role, or a request other than `GET` or `HEAD` whose `Origin` is missing or foreign (`forbidden_origin`) |
 | 404 | Unknown resource |
 | 413 | Body over `MAX_REQUEST_BYTES`, refused before it is parsed — so before the 426 check and before validation. `error: "too_large"` |
 | 426 | `clientVersion` no longer supported: update the app. Checked **before** body validation, so an old build is told to update rather than that its data is invalid |
+| 429 | Too many failed logins from this IP (`too_many_attempts`); `Retry-After` says when to try again |
 | 501 | Route declared but not implemented yet (see the roadmap) |
 | 503 | Either D1's daily free-tier limit (`quota`) or a map provider with no key (`places_unconfigured`). Nothing was lost; the `error` code says which |
 | 502 | A map provider failed or timed out — `overpass_failed` or `places_failed` |

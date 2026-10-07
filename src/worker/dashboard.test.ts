@@ -1,12 +1,12 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
 import { getDb } from "./db/client";
 import { eq, sql } from "drizzle-orm";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { DASHBOARD_PERIODS, OUTCOMES, type Outcome, type Status } from "../shared/constants";
 import { DAY_MS, brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
 import type { DashboardResponse } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * `GET /api/admin/dashboard` against a real D1 (GH #107).
@@ -30,10 +30,7 @@ const wall = new Intl.DateTimeFormat("en-GB", {
 });
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function dashboard(query = ""): Promise<DashboardResponse> {

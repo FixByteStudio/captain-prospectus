@@ -71,6 +71,13 @@
       "when": 1791382193787,
       "tag": "0009_complex_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791395420731,
+      "tag": "0010_cute_jackpot",
+      "breakpoints": true
     }
   ]
 }

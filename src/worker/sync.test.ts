@@ -1,6 +1,5 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
@@ -15,6 +14,7 @@ import {
 } from "../shared/constants";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * Routes against a real D1, built by the real migrations.
@@ -25,10 +25,7 @@ import { MAX_VALIDATION_ISSUES } from "./validate";
 const AGENT = "admin@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function sync(body: Partial<SyncRequest>): Promise<Response> {
