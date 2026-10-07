@@ -166,7 +166,8 @@ const totals = { seeded: 0, prospects: 0, visits: 0, orphans: 0 };
 for (let i = 0; i < all.length; i += ROWS_PER_REQUEST) {
   const response = await fetch(`${URL_BASE}/api/dev/seed`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // The Worker refuses a POST without its own Origin (src/worker/origin.ts).
+    headers: { "Content-Type": "application/json", Origin: new URL(URL_BASE).origin },
     // The readings ride the first request: the route writes them last, once.
     body: JSON.stringify({
       prospects: all.slice(i, i + ROWS_PER_REQUEST),

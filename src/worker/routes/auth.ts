@@ -5,12 +5,16 @@
  * Only break-glass exists so far: `OWNER_EMAIL` plus `BREAK_GLASS` in the
  * passphrase form opens an admin session. Nothing here logs — not the
  * passphrase, not the token, not a hash (docs/security.md).
+ *
+ * Every login goes through loginThrottle first (CAP-7), so later login kinds
+ * share its per-IP counter.
  */
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { loginRequestSchema, type MeResponse } from "../../shared/schemas";
 import { misconfigured, unauthorized } from "../auth";
 import { getDb } from "../db/client";
+import { loginThrottle } from "../login-throttle";
 import { sessions, users } from "../db/schema";
 import {
   SESSION_COOKIE,
@@ -30,7 +34,7 @@ export const authRoutes = new Hono<AppEnv>();
 /** One body for every refusal, so it never tells which part was wrong. */
 const REFUSED = "Wrong email or passphrase.";
 
-authRoutes.post("/login", validate("json", loginRequestSchema), async (c) => {
+authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), async (c) => {
   const pepper = c.env.AUTH_PEPPER;
   if (!pepper) throw misconfigured();
 

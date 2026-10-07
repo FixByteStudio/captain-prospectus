@@ -16,6 +16,7 @@ import { getDb } from "./db/client";
 import { isD1DailyLimitError } from "./errors";
 import { describeSweep, runRetention } from "./retention";
 import { describeEviction, evictMapCache } from "./map-cache";
+import { requireSameOrigin } from "./origin";
 import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
 import { authRoutes } from "./routes/auth";
@@ -56,6 +57,12 @@ app.use(
       ),
   }),
 );
+
+/**
+ * CAP-8: a non-GET request from another origin is refused. Above the /dev and
+ * /auth mounts for the same ordering reason as the body cap.
+ */
+app.use("/*", requireSameOrigin);
 
 /** Local-only; the route itself 404s off localhost. Mounted before auth. */
 app.route("/dev", devRoutes);

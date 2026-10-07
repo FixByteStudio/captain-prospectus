@@ -1,6 +1,5 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { overpassCache, prospects, visits } from "./db/schema";
@@ -14,6 +13,7 @@ import {
 import { polygonHash } from "./overpass";
 import { PLACES_CACHE_TTL_MS, PLACES_MAX_RESULTS } from "../shared/constants";
 import type { AreaSearchResponse } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * The Google Places map import — ADR-0020, docs/domains/ingestion.md.
@@ -34,10 +34,7 @@ const CENTER: [number, number] = [50.8467, 4.3525];
 const RADIUS = 300;
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 function search(body: unknown = { center: CENTER, radius: RADIUS }): Promise<Response> {

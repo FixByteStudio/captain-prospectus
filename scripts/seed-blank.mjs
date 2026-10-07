@@ -46,7 +46,8 @@ const prospects = NAMES.map(([name, type], i) => ({
 
 const response = await fetch(`${URL_BASE}/api/dev/seed`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  // The Worker refuses a POST without its own Origin (src/worker/origin.ts).
+  headers: { "Content-Type": "application/json", Origin: new URL(URL_BASE).origin },
   body: JSON.stringify({ prospects, script, orphans: false }),
 }).catch((error) => {
   console.error(`Could not reach ${URL_BASE}. Is \`pnpm dev\` running?`);

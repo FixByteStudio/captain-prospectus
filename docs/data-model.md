@@ -108,6 +108,11 @@ erDiagram
     int last_seen_at "written at creation only, for now"
     int expires_at "created_at + 30 d admin / 90 d agent, fixed"
   }
+  LOGIN_ATTEMPTS {
+    text ip_hash PK "HMAC-SHA-256 hex of CF-Connecting-IP (IPv6 by /64), or of unknown"
+    int window_start PK "epoch ms, a multiple of 15 min"
+    int failures
+  }
 ```
 
 `users` and `sessions` are our own login ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
@@ -117,6 +122,13 @@ HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. 
 counts while `expires_at` is in the future and its user is `active`; the role is read from
 `users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
 are later entries of the own-login epic.
+
+`login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
+`src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
+is stored, and an IPv6 address counts by its /64. Each login reserves a failure with an upsert
+that adds one only while the row is under 10, and gives it back unless the login answers 400 or
+401; a row at 10 refuses the IP until the window ends. Nothing deletes old rows yet: the nightly sweep is a later entry of
+the own-login epic.
 
 `agent_positions` holds at most one row per assignable agent: the latest reading the phone
 offered at sync. It is the one upsert on an agent's behalf, allowed by

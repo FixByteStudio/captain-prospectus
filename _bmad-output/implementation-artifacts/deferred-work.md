@@ -308,3 +308,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-299-break-glass-session.md`
   summary: A deactivated user still gets in through the Access JWT fallback, because `identityFromAccess` never reads `users`.
   evidence: `src/worker/auth.ts` identityFromAccess derives the role from ADMIN_EMAILS only; harmless until an entry adds deactivation (CAP-1), which must also make the fallback refuse an inactive `users` row.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
+  summary: The seed scripts' Origin header has no automated check, so pnpm db:seed:local could break without CI noticing.
+  evidence: scripts/seed.mjs and scripts/seed-blank.mjs have no tests; worker tests reach /api/dev/seed through test/worker-fetch.ts, which adds the Origin itself.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
+  summary: Login throttling is per IP only; a distributed attack (many IPs or IPv6 prefixes) is not limited per account or globally.
+  evidence: CAP-7 asks for per-IP throttling only; a per-email or global window would be a new owner decision.

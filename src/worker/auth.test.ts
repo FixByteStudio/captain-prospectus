@@ -1,14 +1,15 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import worker from "./index";
 import { getDb } from "./db/client";
-import { sessions, users } from "./db/schema";
+import { loginAttempts, sessions, users } from "./db/schema";
+import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
 import { SESSION_COOKIE, hmacHex } from "./session";
 import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
 import { testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * Own login (ADR-0029, GH #299): break-glass, the session cookie, and the
@@ -36,10 +37,7 @@ const ORIGINAL = {
 };
 
 async function call(path: string, init?: RequestInit, host = HOST): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`${host}${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`${host}${path}`, init);
 }
 
 function login(body: unknown): Promise<Response> {
@@ -81,6 +79,7 @@ const cookie = (token: string) => ({ Cookie: `${SESSION_COOKIE}=${token}` });
 const db = () => getDb(env.DB);
 
 beforeEach(async () => {
+  await db().delete(loginAttempts);
   await db().delete(sessions);
   await db().delete(users);
   await seedTestUsers();
@@ -399,6 +398,165 @@ describe("log hygiene", () => {
     for (const secret of [BREAK_GLASS, token, hash, PEPPER]) {
       expect(logged).not.toContain(secret);
     }
+  });
+});
+
+describe("login throttle (CAP-7)", () => {
+  const IP_A = "203.0.113.7";
+  const IP_B = "198.51.100.23";
+  const VALID = { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS };
+  const WRONG = { kind: "passphrase", email: OWNER, passphrase: "wrong" };
+  // One minute into a window, so 14 minutes of it remain.
+  const NOW = 1_000 * LOGIN_WINDOW_MS + 60_000;
+
+  function loginFrom(ip: string | null, body: unknown): Promise<Response> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (ip) headers["CF-Connecting-IP"] = ip;
+    return call("/api/auth/login", { method: "POST", headers, body: JSON.stringify(body) });
+  }
+
+  async function fail(ip: string | null, times: number): Promise<void> {
+    for (let i = 0; i < times; i++) {
+      expect((await loginFrom(ip, WRONG)).status).toBe(401);
+    }
+  }
+
+  beforeEach(() => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+  });
+
+  it("refuses the 11th login from one IP with 429 and Retry-After, even a valid one", async () => {
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+
+    const response = await loginFrom(IP_A, VALID);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe(String(14 * 60));
+    expect(await response.json()).toMatchObject({ error: "too_many_attempts" });
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await db().select().from(sessions)).toEqual([]);
+  });
+
+  it("still lets another IP sign in", async () => {
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_B, VALID)).status).toBe(200);
+  });
+
+  it("refuses a locked IP before validating the body", async () => {
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_A, { kind: "nope" })).status).toBe(429);
+  });
+
+  it("counts a malformed body as a failure", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      expect((await loginFrom(IP_A, { kind: "nope" })).status).toBe(400);
+    }
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("counts afresh once the window ends", async () => {
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    vi.spyOn(Date, "now").mockReturnValue(NOW - 60_000 + LOGIN_WINDOW_MS);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(200);
+  });
+
+  it("puts requests without CF-Connecting-IP in one shared bucket", async () => {
+    await fail(null, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(null, VALID)).status).toBe(429);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(200);
+  });
+
+  it("counts the 401 a Worker without OWNER_EMAIL answers", async () => {
+    env.OWNER_EMAIL = undefined;
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("does not reset the count on a success", async () => {
+    await fail(IP_A, 5);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(200);
+    expect(await db().select({ failures: loginAttempts.failures }).from(loginAttempts)).toEqual([
+      { failures: 5 },
+    ]);
+  });
+
+  it("stores the IP only as its HMAC", async () => {
+    await fail(IP_A, 1);
+    await fail(null, 1);
+    const rows = await db().select().from(loginAttempts);
+    expect(rows.map((r) => r.ipHash).sort()).toEqual(
+      [await hmacHex(PEPPER, IP_A), await hmacHex(PEPPER, "unknown")].sort(),
+    );
+    expect(JSON.stringify(rows)).not.toContain(IP_A);
+    expect(rows.every((r) => r.windowStart === NOW - 60_000)).toBe(true);
+  });
+
+  it("steps aside without AUTH_PEPPER, so the route still answers 500", async () => {
+    env.AUTH_PEPPER = undefined;
+    expect((await loginFrom(IP_A, VALID)).status).toBe(500);
+    expect(await db().select().from(loginAttempts)).toEqual([]);
+  });
+
+  it("lets at most 10 of a parallel burst reach the credential", async () => {
+    const responses = await Promise.all(
+      Array.from({ length: 2 * LOGIN_MAX_FAILURES }, () => loginFrom(IP_A, WRONG)),
+    );
+    const statuses = responses.map((r) => r.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(LOGIN_MAX_FAILURES);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(LOGIN_MAX_FAILURES);
+  });
+
+  it("does not count the 429s a locked IP keeps getting", async () => {
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    await loginFrom(IP_A, WRONG);
+    await loginFrom(IP_A, VALID);
+    expect(await db().select({ failures: loginAttempts.failures }).from(loginAttempts)).toEqual([
+      { failures: LOGIN_MAX_FAILURES },
+    ]);
+  });
+
+  it("counts every address of one IPv6 /64 in one bucket", async () => {
+    for (let i = 1; i <= LOGIN_MAX_FAILURES; i++) {
+      expect((await loginFrom(`2001:db8:1:2::${i.toString(16)}`, WRONG)).status).toBe(401);
+    }
+    expect((await loginFrom("2001:0db8:0001:0002:ffff:0:0:1", VALID)).status).toBe(429);
+    expect((await loginFrom("2001:db8:1:3::1", VALID)).status).toBe(200);
+  });
+
+  it("logs neither the IP nor the credential", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    await fail(IP_A, LOGIN_MAX_FAILURES);
+    await loginFrom(IP_A, VALID);
+    await loginFrom(IP_B, VALID);
+
+    const logged = JSON.stringify(calls);
+    for (const secret of [IP_A, IP_B, BREAK_GLASS, await hmacHex(PEPPER, IP_A)]) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+});
+
+describe("throttleKey", () => {
+  it("keeps an IPv4 address whole and maps an IPv4-mapped IPv6 address to it", () => {
+    expect(throttleKey("203.0.113.7")).toBe("203.0.113.7");
+    expect(throttleKey("::ffff:203.0.113.7")).toBe("203.0.113.7");
+  });
+
+  it("cuts IPv6 to its /64, however it is written", () => {
+    const key = "2001:db8:1:2::/64";
+    expect(throttleKey("2001:db8:1:2::a")).toBe(key);
+    expect(throttleKey("2001:0DB8:0001:0002:ffff:0:0:1")).toBe(key);
+    expect(throttleKey("2001:db8:1:2:3:4:5:6")).toBe(key);
+    expect(throttleKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(throttleKey("::1")).toBe("0:0:0:0::/64");
+  });
+
+  it("puts a missing address in the unknown bucket", () => {
+    expect(throttleKey(undefined)).toBe("unknown");
   });
 });
 

@@ -1,11 +1,11 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { CSV_ATTRIBUTION } from "../shared/csv";
 import { EXPORT_ROWS } from "../shared/constants";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * CSV exports — docs/backlog/001 and 002.
@@ -18,10 +18,7 @@ const ADMIN = "admin@example.com";
 const AGENT = "agent@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function seedProspect(over: Partial<Record<string, unknown>> = {}): Promise<string> {

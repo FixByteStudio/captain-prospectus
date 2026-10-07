@@ -1,6 +1,5 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { ADMIN_VISITS_PAGE_SIZE, type RefusalReason } from "../shared/constants";
@@ -18,6 +17,7 @@ import type {
   Script,
   ScriptsResponse,
 } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * Admin routes against a real D1, built by the real migrations.
@@ -31,10 +31,7 @@ const ADMIN = "admin@example.com";
 const AGENT = "agent@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 function post(path: string, body: unknown): Promise<Response> {
