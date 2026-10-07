@@ -21,6 +21,7 @@ import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
 import { authRoutes } from "./routes/auth";
 import { devRoutes } from "./routes/dev";
+import { identityRoutes } from "./routes/identity";
 import { meRoutes } from "./routes/me";
 import type { AppEnv, Bindings } from "./types";
 
@@ -77,6 +78,7 @@ app.route("/me", meRoutes);
 app.route("/agent", agentRoutes);
 app.use("/admin/*", requireAdmin);
 app.route("/admin", adminRoutes);
+app.route("/admin", identityRoutes);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 

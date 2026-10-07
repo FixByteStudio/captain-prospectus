@@ -129,7 +129,8 @@ function readAccessToken(req: Request): string | null {
 
 /**
  * The Cloudflare Access fallback, ADR-0029 phase 1 and 2 only: null when Access
- * is not configured, a 401 when it is and the JWT is missing or invalid.
+ * is not configured, a 401 when it is and the JWT is missing, invalid or its
+ * email's `users` row is inactive; an active row's role wins over ADMIN_EMAILS.
  * Phase 3 deletes this function, `jose` and the Access vars.
  */
 async function identityFromAccess(env: Bindings, req: Request): Promise<Identity | null> {
@@ -152,7 +153,16 @@ async function identityFromAccess(env: Bindings, req: Request): Promise<Identity
   } catch {
     throw unauthorized("Your session has expired. Sign in again to sync.");
   }
-  return { email, role: roleFor(email, env.ADMIN_EMAILS) };
+  // A `users` row outranks the vars: inactive is refused, active decides the
+  // role. ADMIN_EMAILS decides only for an email with no row.
+  const [row] = await getDb(env.DB)
+    .select({ role: users.role, active: users.active })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (!row) return { email, role: roleFor(email, env.ADMIN_EMAILS) };
+  if (!row.active) throw unauthorized("This account is deactivated. Ask an admin.");
+  return { email, role: row.role };
 }
 
 /** Puts the caller's identity on the context, or answers 401. */
