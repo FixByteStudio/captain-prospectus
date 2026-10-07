@@ -16,3 +16,10 @@ AGENT_EMAILS="agent@example.com"
 # In production this is a SECRET — `wrangler secret put GOOGLE_PLACES_KEY` —
 # never a var in wrangler.jsonc.
 # GOOGLE_PLACES_KEY="AIza..."
+
+# Own login (ADR-0029). Local values only — production ones are set by the
+# owner or CI, never in the repo. Rotating AUTH_PEPPER signs everyone out.
+AUTH_PEPPER="dev-pepper-change-me"
+# Break-glass: type OWNER_EMAIL + BREAK_GLASS in /login's passphrase form.
+BREAK_GLASS="dev-break-glass-change-me"
+OWNER_EMAIL="admin@example.com"
