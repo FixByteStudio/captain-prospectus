@@ -100,7 +100,7 @@ verify = "On pnpm dev, an admin regenerates their passphrase, the old one gets 4
 covers = ["CAP-3", "CAP-4"]
 after = [8]
 hitl = false
-risk = "medium"
+risk = "high"
 
 [[entry]]
 id = 10
