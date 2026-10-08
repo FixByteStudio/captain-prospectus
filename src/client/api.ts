@@ -10,10 +10,19 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** Seconds from a 429's Retry-After; null when absent or unusable. */
+    readonly retryAfter: number | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/** Retry-After as delta-seconds; an HTTP-date or junk is not usable. */
+function retryAfterSeconds(header: string | null): number | null {
+  if (header === null || !/^\s*\d+\s*$/.test(header)) return null;
+  const seconds = Number(header);
+  return seconds > 0 ? seconds : null;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -32,6 +41,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       response.status,
       body.error ?? "error",
       body.message ?? "Une erreur est survenue. Réessayez.",
+      response.status === 429 ? retryAfterSeconds(response.headers.get("Retry-After")) : null,
     );
   }
   // 204 has no body (PATCH /api/admin/users/:email); parsing it would throw.

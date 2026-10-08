@@ -40,6 +40,7 @@ export const adminCopy = {
     notEnrolled: "Pas encore inscrit",
     you: "Vous",
     menu: (name: string) => `Actions pour ${name}`,
+    generateCode: "Générer un code",
     makeAdmin: "Passer admin",
     makeAgent: "Passer agent",
     deactivate: "Désactiver",
@@ -73,6 +74,17 @@ export const adminCopy = {
       always: "Ses appareils seront déconnectés et son code annulé. Vous pourrez le réactiver.",
       cancel: "Annuler",
       confirm: "Désactiver",
+    },
+
+    /** Shown once; `time` is the server's expiry in Brussels time. */
+    codeDialog: {
+      title: (name: string) => `Code pour ${name}`,
+      validUntil: (time: string) => `Valable jusqu'à ${time}, une seule fois.`,
+      once: "Ce code ne sera plus affiché. En générer un autre annule celui-ci.",
+      copy: "Copier",
+      done: "Terminé",
+      copied: "Code copié.",
+      copyFailed: "Copie impossible. Recopiez-le à la main.",
     },
 
     toast: {

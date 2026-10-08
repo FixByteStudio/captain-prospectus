@@ -3,20 +3,25 @@
  *
  * Mounted under /api/admin, behind `requireAdmin` (index.ts). Users are
  * deactivated, never deleted; the last active admin can be neither demoted nor
- * deactivated.
+ * deactivated. A one-time code is generated here and shown once; only its HMAC
+ * is stored, and nothing here logs it.
  */
 import { Hono } from "hono";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { OPEN_STATUSES } from "../../shared/constants";
+import { normaliseCredential } from "../../shared/credential";
 import {
   agentEmailParamSchema,
   userCreateSchema,
   userUpdateSchema,
+  type LoginCodeResponse,
   type User,
   type UsersResponse,
 } from "../../shared/schemas";
 import { getDb, type Db } from "../db/client";
-import { prospects, sessions, users } from "../db/schema";
+import { loginCodes, prospects, sessions, users } from "../db/schema";
+import { LOGIN_CODE_TTL_MS, hmacHex, newLoginCode } from "../session";
+import { misconfigured } from "../auth";
 import { validate } from "../validate";
 import type { AppEnv } from "../types";
 
@@ -105,19 +110,17 @@ identityRoutes.patch(
       .set(set)
       .where(and(eq(users.email, email), guard))
       .returning({ email: users.email });
-    // Sessions go only with a deactivation, and only if the update landed.
+    // Sessions and unused codes go only with a deactivation, and only if the
+    // update landed.
+    const nowInactive = sql`EXISTS (SELECT 1 FROM ${users} WHERE ${users.email} = ${email} AND ${users.active} = 0)`;
     const [updated] =
       body.active === false
         ? await db.batch([
             update,
+            db.delete(sessions).where(and(eq(sessions.userEmail, email), nowInactive)),
             db
-              .delete(sessions)
-              .where(
-                and(
-                  eq(sessions.userEmail, email),
-                  sql`EXISTS (SELECT 1 FROM ${users} WHERE ${users.email} = ${email} AND ${users.active} = 0)`,
-                ),
-              ),
+              .delete(loginCodes)
+              .where(and(eq(loginCodes.userEmail, email), isNull(loginCodes.usedAt), nowInactive)),
           ])
         : [await update];
 
@@ -133,3 +136,42 @@ identityRoutes.patch(
     return c.body(null, 204);
   },
 );
+
+/**
+ * A one-time code for the user's next device, the admin's own row included.
+ * Any older unused code is deleted in the same batch, so only the newest works.
+ * The insert reads the row as it is when it runs: a user deactivated meanwhile
+ * gets no code.
+ */
+identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchema), async (c) => {
+  const pepper = c.env.AUTH_PEPPER;
+  if (!pepper) throw misconfigured();
+  const { email } = c.req.valid("param");
+  const db = getDb(c.env.DB);
+
+  const code = newLoginCode();
+  const codeHash = await hmacHex(pepper, normaliseCredential(code));
+  const now = Date.now();
+  const expiresAt = now + LOGIN_CODE_TTL_MS;
+
+  const [, inserted] = await db.batch([
+    db.delete(loginCodes).where(and(eq(loginCodes.userEmail, email), isNull(loginCodes.usedAt))),
+    db
+      .insert(loginCodes)
+      .select(
+        sql`SELECT ${codeHash}, ${users.email}, ${now}, ${expiresAt}, NULL FROM ${users} WHERE ${users.email} = ${email} AND ${users.active} = 1`,
+      )
+      .returning({ email: loginCodes.userEmail }),
+  ]);
+
+  if (inserted.length === 0) {
+    const [row] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (!row) return c.json({ error: "not_found" }, 404);
+    return c.json({ error: "user_inactive", message: "This user is deactivated." }, 409);
+  }
+  return c.json<LoginCodeResponse>({ code, expiresAt }, 201);
+});

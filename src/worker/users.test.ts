@@ -2,14 +2,16 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { prospects, sessions, users } from "./db/schema";
+import { loginCodes, prospects, sessions, users } from "./db/schema";
 import { fakeAccess } from "../../test/access-jwt";
 import { testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
 import { workerFetch } from "../../test/worker-fetch";
 import type { Status } from "../shared/constants";
-import type { User } from "../shared/schemas";
+import { CROCKFORD } from "../shared/credential";
+import type { LoginCodeResponse, User } from "../shared/schemas";
+import { LOGIN_CODE_TTL_MS } from "./session";
 
 /** Admin user management (GH #302, ADR-0029) and the Access fallback's row check. */
 
@@ -44,6 +46,13 @@ function patch(email: string, body: unknown, cookie: string, headers?: Record<st
   });
 }
 
+function generate(email: string, cookie: string, headers?: Record<string, string>) {
+  return call(`/api/admin/users/${encodeURIComponent(email)}/code`, cookie, {
+    method: "POST",
+    headers,
+  });
+}
+
 async function addProspect(assignedTo: string, status: Status, mergedInto: string | null = null) {
   const id = crypto.randomUUID();
   await db()
@@ -66,6 +75,7 @@ async function addProspect(assignedTo: string, status: Status, mergedInto: strin
 
 beforeEach(async () => {
   await db().delete(sessions);
+  await db().delete(loginCodes);
   await db().delete(prospects);
   await db().delete(users);
   await seedTestUsers();
@@ -205,6 +215,36 @@ describe("PATCH /api/admin/users/:email", () => {
     expect(row).toMatchObject({ role: "agent", active: false });
   });
 
+  it("deactivates, deleting the user's unused codes but not the used ones", async () => {
+    const cookie = await adminCookie();
+    expect((await generate(TEST_AGENT, cookie)).status).toBe(201);
+    await db().insert(loginCodes).values({
+      codeHash: "spent",
+      userEmail: TEST_AGENT,
+      createdAt: 1,
+      expiresAt: 2,
+      usedAt: 1,
+    });
+    expect((await generate(TEST_ADMIN, cookie)).status).toBe(201);
+
+    expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
+    const rows = await db().select().from(loginCodes);
+    expect(rows.map((r) => [r.userEmail, r.codeHash === "spent"])).toEqual(
+      expect.arrayContaining([
+        [TEST_AGENT, true],
+        [TEST_ADMIN, false],
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("keeps the codes when the last-admin guard refuses the deactivation", async () => {
+    const cookie = await adminCookie();
+    expect((await generate(TEST_ADMIN, cookie)).status).toBe(201);
+    expect((await patch(TEST_ADMIN, { active: false }, cookie)).status).toBe(409);
+    expect(await db().select().from(loginCodes)).toHaveLength(1);
+  });
+
   it("reactivates without a session", async () => {
     const cookie = await adminCookie();
     await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
@@ -303,6 +343,74 @@ describe("PATCH /api/admin/users/:email", () => {
     const cookie = await adminCookie();
     expect((await patch("ghost@x.be", { active: false }, cookie)).status).toBe(404);
     expect((await patch(TEST_AGENT, {}, cookie)).status).toBe(400);
+  });
+});
+
+describe("POST /api/admin/users/:email/code", () => {
+  it("answers 201 with an 8-character Crockford code that expires in 15 minutes", async () => {
+    const before = Date.now();
+    const response = await generate(TEST_AGENT, await adminCookie());
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as LoginCodeResponse;
+    expect(body.code).toMatch(new RegExp(`^[${CROCKFORD}]{8}$`));
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+
+    const [row] = await db().select().from(loginCodes);
+    expect(row).toMatchObject({ userEmail: TEST_AGENT, expiresAt: body.expiresAt, usedAt: null });
+  });
+
+  it("deletes the user's older unused codes and keeps other users' codes", async () => {
+    const cookie = await adminCookie();
+    await generate(TEST_ADMIN, cookie);
+    await generate(TEST_AGENT, cookie);
+    await generate(TEST_AGENT, cookie);
+    const rows = await db().select().from(loginCodes);
+    expect(rows.filter((r) => r.userEmail === TEST_AGENT)).toHaveLength(1);
+    expect(rows.filter((r) => r.userEmail === TEST_ADMIN)).toHaveLength(1);
+  });
+
+  it("generates a code on the signed-in admin's own row", async () => {
+    expect((await generate(TEST_ADMIN, await adminCookie())).status).toBe(201);
+  });
+
+  it("answers 409 user_inactive for a deactivated user and 404 for no row, storing nothing", async () => {
+    const cookie = await adminCookie();
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    const inactive = await generate(TEST_AGENT, cookie);
+    expect(inactive.status).toBe(409);
+    expect(await inactive.json()).toMatchObject({ error: "user_inactive" });
+    const unknown = await generate("ghost@x.be", cookie);
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ error: "not_found" });
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+
+  it("fails closed with 500 misconfigured without AUTH_PEPPER, storing nothing", async () => {
+    // No pepper means no session can be read, so the admin is DEV_USER_EMAIL on localhost.
+    const pepper = env.AUTH_PEPPER;
+    env.AUTH_PEPPER = undefined;
+    try {
+      const response = await workerFetch(
+        `http://localhost/api/admin/users/${encodeURIComponent(TEST_AGENT)}/code`,
+        { method: "POST" },
+      );
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ error: "misconfigured" });
+    } finally {
+      env.AUTH_PEPPER = pepper;
+    }
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+
+  it("answers 403 to an agent and to a foreign Origin", async () => {
+    const agent = await testSessionCookie(TEST_AGENT);
+    expect((await generate(TEST_AGENT, agent)).status).toBe(403);
+    const foreign = await generate(TEST_AGENT, await adminCookie(), {
+      Origin: "https://evil.example",
+    });
+    expect(foreign.status).toBe(403);
+    expect(await db().select().from(loginCodes)).toEqual([]);
   });
 });
 

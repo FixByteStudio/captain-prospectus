@@ -91,8 +91,8 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 
 /**
  * ADR-0029: one route, discriminated on the credential, never on the role.
- * Only `passphrase` exists so far (break-glass); `code` and `passkey` are later
- * additive members.
+ * `passphrase` (break-glass) and `code` (a one-time code) exist; `passkey` is a
+ * later additive member.
  *
  * The email is trimmed and lowercased but not format-checked: it is only ever
  * compared with a stored address, and a refusal must read the same whichever
@@ -105,7 +105,19 @@ export const passphraseLoginSchema = z.object({
   passphrase: z.string().check(z.minLength(1), z.maxLength(200)),
 });
 
-export const loginRequestSchema = z.discriminatedUnion("kind", [passphraseLoginSchema]);
+/**
+ * A one-time code, sent as typed: the server normalises it (shared/credential.ts),
+ * so the client never rewrites or rejects what the agent entered.
+ */
+export const codeLoginSchema = z.object({
+  kind: z.literal("code"),
+  code: z.string().check(z.minLength(1), z.maxLength(200)),
+});
+
+export const loginRequestSchema = z.discriminatedUnion("kind", [
+  passphraseLoginSchema,
+  codeLoginSchema,
+]);
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 /* -------------------------------------------------------------------- scripts */
@@ -493,6 +505,13 @@ export const userUpdateSchema = z
   })
   .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
 export type UserUpdate = z.infer<typeof userUpdateSchema>;
+
+/** POST /api/admin/users/:email/code: the only time the code is ever shown. */
+export const loginCodeResponseSchema = z.object({
+  code: z.string(),
+  expiresAt: epochMsSchema,
+});
+export type LoginCodeResponse = z.infer<typeof loginCodeResponseSchema>;
 
 /** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
 export const agentRoundResponseSchema = z.object({

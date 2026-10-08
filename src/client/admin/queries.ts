@@ -37,6 +37,7 @@ import type {
   Question,
   Script,
   ScriptsResponse,
+  LoginCodeResponse,
   User,
   UserCreate,
   UserUpdate,
@@ -214,6 +215,21 @@ export function useUpdateUser() {
     onSuccess: () => {
       void invalidate();
     },
+  });
+}
+
+/**
+ * A one-time code for a user's next device. The list does not change, so
+ * nothing is invalidated; gcTime 0 drops the code from the cache once the
+ * dialog is done with it, since it is shown once.
+ */
+export function useGenerateCode() {
+  return useMutation({
+    gcTime: 0,
+    mutationFn: (email: string) =>
+      apiFetch<LoginCodeResponse>(`/api/admin/users/${encodeURIComponent(email)}/code`, {
+        method: "POST",
+      }),
   });
 }
 

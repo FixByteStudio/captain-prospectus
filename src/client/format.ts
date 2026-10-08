@@ -21,6 +21,17 @@ export function formatBrusselsDate(epochMs: number): string {
   return brusselsDate.format(new Date(epochMs));
 }
 
+const brusselsTime = new Intl.DateTimeFormat("fr-FR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Brussels",
+});
+
+/** "15:24" as Brussels reads it, whatever the device's zone or clock setting. */
+export function formatBrusselsTime(epochMs: number): string {
+  return brusselsTime.format(new Date(epochMs));
+}
+
 /*
  * A Brussels calendar day arrives as "YYYY-MM-DD" (GH #110). Read and written
  * in UTC, so the date shown is the date sent, whatever the browser's zone.
