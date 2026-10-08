@@ -55,6 +55,7 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith("/api/admin/users")) return json({ users: [] });
       if (url.startsWith("/api/admin/dashboard")) return json(DASHBOARD);
       if (url.startsWith("/api/admin/prospects/duplicates"))
         return json({ pairs: [], truncated: false });
@@ -100,6 +101,12 @@ describe("AdminApp", () => {
     expect(await screen.findByText("278")).toBeTruthy();
     expect(sidebarLink(copy.nav.dashboard).getAttribute("aria-current")).toBe("page");
     expect(sidebarLink(copy.nav.prospects).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("registers /admin/agents: the Agents screen opens", async () => {
+    renderAdmin("/admin/agents");
+
+    expect(await screen.findByRole("heading", { level: 2, name: copy.agents.title })).toBeTruthy();
   });
 
   it("registers /admin/tournee: the round screen opens, asking for an agent", async () => {

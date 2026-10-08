@@ -11,12 +11,13 @@ import {
 } from "./nav";
 
 /**
- * The eight routes AdminApp.tsx renders under `/admin/*` today, the index
+ * The nine routes AdminApp.tsx renders under `/admin/*` today, the index
  * included, copied here by hand — this file never reads AdminApp.tsx, so
  * update both together if a route there ever changes.
  */
 const ADMIN_APP_ROUTES = [
   "/admin",
+  "/admin/agents",
   "/admin/prospects",
   "/admin/import",
   "/admin/doublons",
@@ -33,7 +34,7 @@ describe("NAV_GROUPS", () => {
     ).toEqual([
       {
         label: "Pilotage",
-        paths: ["/admin"],
+        paths: ["/admin", "/admin/agents"],
       },
       {
         label: "Prospects",

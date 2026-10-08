@@ -31,6 +31,7 @@ export const sharedCopy = {
 
   nav: {
     dashboard: "Tableau de bord",
+    agents: "Agents",
     prospects: "Prospects",
     visits: "Visites",
     scripts: "Scripts",

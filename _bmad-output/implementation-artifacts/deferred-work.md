@@ -320,3 +320,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
   summary: The Prospects screen's agent filter is built from `GET /api/admin/agents`, so a deactivated user's still-assigned prospects cannot be filtered by them.
   evidence: `src/client/admin/prospects/Toolbar.tsx:114` via `ProspectsScreen.tsx:133`; story #303 removes deactivated users from the menu, and entry 11 (prospects with no active agent) is the natural place to give them a filter.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-304-agents-page.md`
+  summary: Opening the Agents deactivation AlertDialog from a modal DropdownMenu item may leave `pointer-events: none` on body after it closes (known Radix interaction), freezing the page.
+  evidence: Unverified (would be medium). Settle it on `pnpm dev`: open Désactiver from a row menu, cancel, then click anywhere on the page; if clicks are dead, use `modal={false}` on the row DropdownMenu.
