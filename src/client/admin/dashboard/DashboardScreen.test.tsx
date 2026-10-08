@@ -5,9 +5,9 @@
  * per test, so no answer leaks between them.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import type { AdminVisit, DashboardResponse } from "../../../shared/schemas";
@@ -62,7 +62,14 @@ function answer(
       ...rate,
     },
     visitsByDay: days(period),
-    pipeline: { new: 1000, assigned: 1, follow_up: 283, converted: 50, rejected: 166 },
+    pipeline: {
+      new: 1000,
+      assigned: 1,
+      follow_up: 283,
+      interested: 150,
+      converted: 50,
+      rejected: 166,
+    },
     agents: [
       {
         email: "lea@example.com",
@@ -231,14 +238,15 @@ describe("DashboardScreen", () => {
 
     const panel = within(await findCard(copy.dashboard.pipeline.title));
     // formatCount groups with a narrow no-break space; the normalizer folds it.
-    expect(panel.getByText("1 500 prospects")).toBeTruthy();
+    expect(panel.getByText("1 650 prospects")).toBeTruthy();
     const rows = panel.getAllByRole("listitem").map((li) => li.textContent);
     expect(rows).toEqual([
-      "Nouveau1\u202f00066,7\u00a0%",
+      "Nouveau1\u202f00060,6\u00a0%",
       "Assigné10,1\u00a0%",
-      "À relancer28318,9\u00a0%",
-      "Converti503,3\u00a0%",
-      "Refusé16611,1\u00a0%",
+      "À relancer28317,2\u00a0%",
+      "Intéressé1509,1\u00a0%",
+      "Converti503,0\u00a0%",
+      "Refusé16610,1\u00a0%",
     ]);
   });
 
@@ -246,7 +254,14 @@ describe("DashboardScreen", () => {
     stubFetch((period) =>
       json({
         ...answer(period),
-        pipeline: { new: 0, assigned: 0, follow_up: 0, converted: 0, rejected: 0 },
+        pipeline: {
+          new: 0,
+          assigned: 0,
+          follow_up: 0,
+          interested: 0,
+          converted: 0,
+          rejected: 0,
+        },
       }),
     );
     renderScreen();
@@ -254,7 +269,7 @@ describe("DashboardScreen", () => {
     const element = await findCard(copy.dashboard.pipeline.title);
     const panel = within(element);
     expect(panel.getByText("0 prospect")).toBeTruthy();
-    expect(panel.getAllByText("0,0 %")).toHaveLength(5);
+    expect(panel.getAllByText("0,0 %")).toHaveLength(6);
     for (const fill of element.querySelectorAll<HTMLElement>("li [aria-hidden] > div")) {
       expect(fill.style.width).toBe("0%");
     }
@@ -378,9 +393,8 @@ describe("DashboardScreen", () => {
     // Not capped by the endpoint (manual conversions), so the bar is.
     const rate = within(card(copy.dashboard.conversionRate));
     expect(rate.getByText("32 convertis sur 5 prospects visités")).toBeTruthy();
-    // The indicator's transform, not aria-valuenow: the vendored Progress
-    // never forwards `value` to the Radix root (#147).
     expect(indicator(copy.dashboard.conversionRate)).toBe("translateX(-0%)");
+    expect(rate.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
   });
 
   it("keeps the rows' shape when nothing is open or visited (I/O matrix, open split zero and rate null)", async () => {
@@ -562,6 +576,32 @@ describe("DashboardScreen", () => {
     expect(within(card(copy.dashboard.openProspects)).getByText("1 284")).toBeTruthy();
   });
 
+  // GH #209 (GH #85): offline, the shell's banner says the figures are stale,
+  // so the screen's own Alert stands down and the figures stay.
+  it("drops the load-failed Alert while offline and keeps the figures", async () => {
+    let fail = false;
+    stubFetch((period) => (fail ? json({ error: "error" }, 500) : json(answer(period))));
+    const client = renderScreen();
+    await screen.findByText("300");
+
+    fail = true;
+    await client.refetchQueries();
+    expect(await screen.findByText(copy.dashboard.loadFailed)).toBeTruthy();
+
+    try {
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+      expect(screen.queryByText(copy.dashboard.loadFailed)).toBeNull();
+      expect(screen.getByText("300")).toBeTruthy();
+    } finally {
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+        onlineManager.setOnline(true);
+      });
+    }
+  });
+
   it("offers « Réessayer » when loading fails, and it refetches (I/O matrix, load fails)", async () => {
     const user = userEvent.setup();
     let fail = true;
@@ -606,6 +646,7 @@ function visit(n: number, over: Partial<AdminVisit> = {}): AdminVisit {
     outcome: "interested",
     followUpAt: null,
     notes: null,
+    refusalReason: null,
     ...over,
   };
 }

@@ -50,6 +50,34 @@
       "when": 1790383140681,
       "tag": "0006_visits_visited_index",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790768354791,
+      "tag": "0007_refusal_reasons",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791233284791,
+      "tag": "0008_wandering_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791382193787,
+      "tag": "0009_complex_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791395420731,
+      "tag": "0010_cute_jackpot",
+      "breakpoints": true
     }
   ]
 }

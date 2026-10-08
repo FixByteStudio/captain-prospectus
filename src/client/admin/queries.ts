@@ -12,6 +12,7 @@ import { brusselsPeriod } from "../../shared/period";
 import {
   dueBeforeSchema,
   emailSchema,
+  prospectFiltersSchema,
   searchQuerySchema,
   sourceSchema,
   statusListSchema,
@@ -22,6 +23,7 @@ import { PAGE_SIZE } from "./pagination";
 import type {
   AdminVisit,
   AdminVisitsResponse,
+  AgentRoundResponse,
   AgentsResponse,
   AssignResult,
   DashboardResponse,
@@ -38,7 +40,7 @@ import type {
   OrphansResponse,
   OrphanRepairResult,
 } from "../../shared/schemas";
-import type { DashboardPeriod, Source, Status } from "../../shared/constants";
+import type { DashboardPeriod, RefusalReason, Source, Status } from "../../shared/constants";
 
 export type ProspectFilters = {
   /** Any of these. The API reads them comma-separated (docs/api.md). */
@@ -49,6 +51,8 @@ export type ProspectFilters = {
   source?: Source;
   /** Name substring search (G4, #176) — trimmed, 1–200 chars; blank never sent. */
   q?: string;
+  /** Hors cible signalé (GH #250): only ever `true`; absent means no filter. */
+  outOfTarget?: true;
 };
 
 /** One factory, so an invalidation can never miss a key by spelling it differently. */
@@ -62,6 +66,7 @@ export const adminKeys = {
   visitsFeed: () => ["admin", "visits", "feed"] as const,
   scripts: () => ["admin", "scripts"] as const,
   orphans: () => ["admin", "visits", "orphans"] as const,
+  agentRound: (email: string) => ["admin", "agents", email, "round"] as const,
 };
 
 /**
@@ -92,6 +97,7 @@ export function toQueryString(filters: ProspectFilters): string {
   if (filters.assignedTo) params.set("assignedTo", filters.assignedTo);
   if (filters.source) params.set("source", filters.source);
   if (filters.q) params.set("q", filters.q);
+  if (filters.outOfTarget) params.set("outOfTarget", "true");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -123,6 +129,10 @@ export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
   if (source.success) filters.source = source.data;
   const q = searchQuerySchema.safeParse(params.get("q") ?? undefined);
   if (q.success) filters.q = q.data;
+  const outOfTarget = prospectFiltersSchema.shape.outOfTarget.safeParse(
+    params.get("outOfTarget") ?? undefined,
+  );
+  if (outOfTarget.success && outOfTarget.data) filters.outOfTarget = true;
   return filters;
 }
 
@@ -154,6 +164,16 @@ export function useAgents() {
     // The roster comes from a Worker variable, not a table. It cannot change
     // while the page is open.
     staleTime: Infinity,
+  });
+}
+
+/** One agent's round and last position (ADR-0028). Idle until an agent is chosen; no polling. */
+export function useAgentRound(email: string | null) {
+  return useQuery({
+    queryKey: adminKeys.agentRound(email ?? ""),
+    queryFn: () =>
+      apiFetch<AgentRoundResponse>(`/api/admin/agents/${encodeURIComponent(email ?? "")}/round`),
+    enabled: email !== null,
   });
 }
 
@@ -321,8 +341,11 @@ const FEED_POLL_MS = 15_000;
  * every period's entry. A period change is a fresh mount of this hook
  * (`VisitsScreenBody` is keyed by `period`), so the cursor, `seeded` and
  * `held` all start over rather than carry state across a re-seed.
+ *
+ * `reason` narrows it to one refusal reason (GH #249) the same way: sent on
+ * every poll, part of the scoped key, and a change is a fresh mount.
  */
-export function useVisitsFeed(period?: DashboardPeriod) {
+export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) {
   const since = useRef(0);
   /**
    * Whether a first answer has landed. Without this the opening page arrives
@@ -355,7 +378,10 @@ export function useVisitsFeed(period?: DashboardPeriod) {
   const [mountedAt] = useState(() => Date.now());
 
   const query = useQuery({
-    queryKey: period !== undefined ? [...adminKeys.visitsFeed(), period] : adminKeys.visitsFeed(),
+    queryKey:
+      period !== undefined || reason !== undefined
+        ? [...adminKeys.visitsFeed(), period ?? null, reason ?? null]
+        : adminKeys.visitsFeed(),
     queryFn: () => {
       const params = new URLSearchParams({ since: String(since.current) });
       if (period !== undefined) {
@@ -365,6 +391,7 @@ export function useVisitsFeed(period?: DashboardPeriod) {
         params.set("from", String(bounds.from));
         params.set("to", String(bounds.to - 1));
       }
+      if (reason !== undefined) params.set("reason", reason);
       return apiFetch<AdminVisitsResponse>(`/api/admin/visits?${params}`);
     },
     refetchInterval: FEED_POLL_MS,

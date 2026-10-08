@@ -22,7 +22,7 @@ export function EmptyState({
   if (!filtered) {
     return (
       <EmptyTile icon={<Building2Icon aria-hidden="true" />}>
-        <p className="text-foreground font-medium">{copy.prospects.empty}</p>
+        <p className="text-muted-foreground">{copy.prospects.empty}</p>
         <Button asChild size="sm">
           <Link to="/admin/import">{copy.prospects.importCta}</Link>
         </Button>

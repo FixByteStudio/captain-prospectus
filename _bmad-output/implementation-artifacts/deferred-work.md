@@ -262,3 +262,61 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-206-admin-loading-states.md`
   summary: Admin screens show a load-failed Alert while offline, where EXPERIENCE.md asks them to keep their values under an offline banner.
   evidence: No admin offline banner exists in `src/client`; the gap is app-wide. GH #209.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-140-visit-history-offline.md`
+  summary: Online, when the history fetch fails (403 after reassignment, 5xx, bad body), a visited prospect with nothing cached reads « …au retour du réseau. », which blames a network the device has.
+  evidence: `VisitScreen.tsx` swallows every fetch failure, and `VisitHistory` picks the empty state from `lastVisitAt` alone. Before #140 the same case said « Première visite », which was worse. A correct message needs the fetch state (pending / failed / done) passed down, plus a new copy string.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-140-visit-history-offline.md`
+  summary: The visit form renders the history's empty state before Dexie answers, because `useLiveQuery` defaults `history` to `[]` and `prospect` to undefined, so a prospect with cached history flashes an empty-state line first.
+  evidence: The `useLiveQuery` defaults in `VisitScreen.tsx`. The flash predates #140 (it said « Première visite »). The admin side fixed the same class of flash in #222/#223; the field side needs a "not loaded yet" state that renders no empty line.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-147-progress-value.md`
+  summary: The MapStep and PreviewStep import progress bars have no accessible name (GH #231).
+  evidence: Radix does not name the progressbar root, and both call sites pass no aria-label (MapStep.tsx:312, PreviewStep.tsx:131). DailyProgress and ConversionBar each set one.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-161-agent-activity-overflow.md`
+  summary: Check Activité par agent's lg truncation (`lg:w-full lg:max-w-0 lg:min-w-40` on a th) in Firefox and Safari at 1024 and 1280 px.
+  evidence: maybe-false, would be medium. Measured in Chromium only. If an engine ignores min-width on a table cell, the agent column collapses to its initial between 1024 and ~1210 px. Opening the dashboard at 1024 in Firefox and WebKit would prove it.
+
+- source_spec: none
+  summary: The blocking admin « Votre session a expiré » dialog (EXPERIENCE.md State Patterns, Session expired · Admin) is not built (GH #209, story 2 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own.
+
+- source_spec: none
+  summary: The admin « Hors ligne. Cette page a besoin du réseau… » page after an offline reload (EXPERIENCE.md State Patterns, Offline, after a reload) is not built (GH #209, story 3 of 3).
+  evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own. Decision (owner, 2026-09-29): the page renders in the field band from the entry chunk, so its strings go in `copy/field`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-admin-offline-banner.md`
+  summary: A network drop while the lazy admin chunk is still loading should show the offline sentence with « Réessayer » (EXPERIENCE.md State Patterns, Offline · Admin, last sentence).
+  evidence: The fallback lives in `App.tsx` (entry chunk), so its string belongs in `copy/field`, not `copy/admin.ts`; grouped with GH #209 story 3, which renders in the same entry-chunk frame. Decision (owner, 2026-09-29): its strings go in `copy/field`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-250-prospects-flags-hors-cible.md`
+  summary: `docs/domains/prospecting.md` still says the prospects export has no download button, but Prospects has one (issue #256).
+  evidence: Pre-existing drift at `docs/domains/prospecting.md:134`; `copy.prospects.export.button` renders in `ProspectsScreen.tsx`.
+  closed_by: GH #251 (epic #246 sweep) — the Export section now describes the button and the cap warning; closes #256.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-adr-0028-agent-position-at-sync.md`
+  summary: Decide whether CLAUDE.md invariant 2 ("agents only insert") gains a one-line pointer to ADR-0028's `agent_positions` upsert.
+  evidence: ADR-0028 argues the row is the agent's own state, not shared data, but an agent reading only CLAUDE.md could flag story 5.2's upsert as a violation; CLAUDE.md is agent-context, so not edited in this story.
+  closed_by: not taken — the owner decided on 2026-10-06 (GH #271, epic #263 sweep) to leave CLAUDE.md as it is; ADR-0028 carries the argument.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-admin-tournee-du-jour-agent-picker-and-ordered-list.md`
+  summary: Give "Admin round view" (admin Tournée du jour) its own row in docs/glossary.md, beside Today list.
+  evidence: The Agent position row already says "shown only in the admin round view", and design.md, field-operations.md and the code (`RoundScreen`, `copy.round`) use the term, but the glossary defines only the agent's Today list.
+  closed_by: GH #271 (epic #263 sweep) — `docs/glossary.md` has an Admin round view row after Today list.
+
+- source_spec: none
+  summary: GH #7, `pnpm lint` fails on stray local artifacts (`.chrome-profile/`, screenshots) that `.gitignore` and `.prettierignore` do not cover.
+  evidence: Split from the GH #38 run (owner decision, 2026-10-06): two independent PRs. Suggested fix is in the issue body.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-299-break-glass-session.md`
+  summary: A deactivated user still gets in through the Access JWT fallback, because `identityFromAccess` never reads `users`.
+  evidence: `src/worker/auth.ts` identityFromAccess derives the role from ADMIN_EMAILS only; harmless until an entry adds deactivation (CAP-1), which must also make the fallback refuse an inactive `users` row.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
+  summary: The seed scripts' Origin header has no automated check, so pnpm db:seed:local could break without CI noticing.
+  evidence: scripts/seed.mjs and scripts/seed-blank.mjs have no tests; worker tests reach /api/dev/seed through test/worker-fetch.ts, which adds the Origin itself.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
+  summary: Login throttling is per IP only; a distributed attack (many IPs or IPv6 prefixes) is not limited per account or globally.
+  evidence: CAP-7 asks for per-IP throttling only; a per-email or global window would be a new owner decision.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
+  summary: The admin client caches `GET /api/admin/agents` with `staleTime: Infinity` under a comment saying the roster is a Worker var, so an open tab keeps the old assign menu after a user is created or deactivated.
+  evidence: `src/client/admin/queries.ts:160-167`; since GH #303 the roster is `users` rows. The Agents page story (entry 7) should invalidate `adminKeys.agents()` on user mutations and fix the comment.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
+  summary: The Prospects screen's agent filter is built from `GET /api/admin/agents`, so a deactivated user's still-assigned prospects cannot be filtered by them.
+  evidence: `src/client/admin/prospects/Toolbar.tsx:114` via `ProspectsScreen.tsx:133`; story #303 removes deactivated users from the menu, and entry 11 (prospects with no active agent) is the natural place to give them a filter.

@@ -157,10 +157,23 @@ describe("seedHistory", () => {
     expect(convertedShare).toBeLessThan(0.07);
   });
 
+  it("ends a walk on a closing outcome, and never visits after an Intéressé", () => {
+    for (let i = 0; i < 200; i++) {
+      const rows = seedHistory(subject({ dedupeKey: `geo:p-${i}:50.850:4.350` }), now);
+      rows.slice(0, -1).forEach((row) => {
+        expect(["interested", "converted", "not_interested"]).not.toContain(row.outcome);
+      });
+    }
+    for (const steps of FIXED_STORIES) {
+      steps.slice(0, -1).forEach((step) => expect(step.outcome).not.toBe("interested"));
+    }
+    expect(FIXED_STORIES.some((steps) => steps.at(-1)?.outcome === "interested")).toBe(true);
+  });
+
   it("sets a follow-up on the outcomes that call for one, and only those", () => {
     for (let i = 0; i < 200; i++) {
       for (const row of seedHistory(subject({ dedupeKey: `geo:p-${i}:50.850:4.350` }), now)) {
-        const wantsOne = ["no_contact", "interested", "follow_up"].includes(row.outcome);
+        const wantsOne = ["no_contact", "follow_up"].includes(row.outcome);
         expect(row.followUpAt !== null).toBe(wantsOne);
       }
     }

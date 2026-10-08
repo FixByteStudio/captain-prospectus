@@ -17,14 +17,15 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import Dexie from "dexie";
-import { copy, OUTCOME_HINTS, STATUS_LABELS } from "../copy";
+import { copy, OUTCOME_HINTS, REFUSAL_REASON_LABELS, STATUS_LABELS } from "../copy";
 import type { Prospect, Script } from "../../shared/schemas";
-import { OUTCOMES, type Outcome } from "../../shared/constants";
+import { OUTCOMES, REFUSAL_REASONS, type Outcome } from "../../shared/constants";
+import { brusselsMidnightDaysFromNow, periodDates } from "../../shared/period";
 import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 
@@ -146,7 +147,11 @@ async function toStep2(user: ReturnType<typeof userEvent.setup>, outcome: Outcom
   await renderVisit({ expectContinue: true });
   await user.click(outcomeRadio(outcome));
   await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-  await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+  // À relancer's and Personne sur place's step 2 is the when step alone,
+  // named for it (SPEC CAP-6).
+  const stepName =
+    outcome === "no_contact" || outcome === "follow_up" ? copy.visit.when : copy.visit.questions;
+  await screen.findByText(copy.visit.step(2, 2, stepName));
 }
 
 /** The save confirmation (GH #125), open. Sheet or Dialog, both `role="dialog"`. */
@@ -350,34 +355,123 @@ describe("VisitScreen — step 1", () => {
     expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 
-  it("shows Relancer le only for À relancer, and drops it when the outcome changes", async () => {
+  it("no script: Personne sur place shows the when step on the single screen, opened on Aujourd'hui", async () => {
     const user = userEvent.setup();
     await renderVisit({ expectContinue: false });
 
-    await user.click(outcomeRadio("follow_up"));
-    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
-    expect(date.type).toBe("date");
-    await user.type(date, "2026-10-01");
-
-    await user.click(outcomeRadio("interested"));
-    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
-
-    // `withOutcome` dropped the value with the control: coming back starts empty.
-    await user.click(outcomeRadio("follow_up"));
-    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe("");
+    await user.click(outcomeRadio("no_contact"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      true,
+    );
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).type).toBe("date");
   });
 
-  it("requires a follow-up date before Continuer, and focuses it when missing", async () => {
+  it("step 2, À relancer: no script questions, only the when step and Notes; no when choice blocks and focuses Aujourd'hui", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(outcomeRadio("follow_up"));
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    // Named for the when step, like Personne sur place (SPEC CAP-6).
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+    expect(screen.queryByRole("radio", { name: copy.visit.yes })).toBeNull();
+    expect(screen.getByLabelText(copy.visit.notes)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.whenRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("step 2, À relancer: a required question never blocks the save, and no answers are sent", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    expect(screen.queryByText(copy.visit.answerRequired)).toBeNull();
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.answers).toEqual({});
+    expect(visit?.followUpAt).toBe(brusselsMidnightDaysFromNow(visit?.visitedAt ?? 0, 0));
+  });
+
+  it("shows the when step only for À relancer, opened on nothing, and the date only with Choisir une date", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      false,
+    );
+    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
+    expect(date.type).toBe("date");
+    await user.type(date, "2026-10-01");
+
+    await user.click(outcomeRadio("interested"));
+    expect(screen.queryByRole("radio", { name: copy.visit.whenToday })).toBeNull();
+    expect(screen.queryByLabelText(copy.visit.followUpAt)).toBeNull();
+
+    // `withOutcome` reset the when choice with the control: coming back
+    // starts unticked, not carrying "Choisir une date" over.
+    await user.click(outcomeRadio("follow_up"));
+    expect(screen.getByRole("radio", { name: copy.visit.whenDate })).toHaveProperty(
+      "checked",
+      false,
+    );
+  });
+
+  it("blocks Enregistrer with no when choice, and focuses the radios", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.whenRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks Enregistrer with Choisir une date and no date typed, and focuses it", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(await screen.findByText(copy.visit.followUpRequired)).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.followUpAt));
-    expect(screen.getByRole("button", { name: copy.visit.continue })).toBeTruthy();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks a date that is not after today, with the input floor set to tomorrow", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    const date = screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement;
+    expect(date.min).toBe(periodDates(brusselsMidnightDaysFromNow(Date.now(), 0), 2)[1]);
+    await user.type(date, "2020-01-01");
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.followUpNotAfterToday)).toBeTruthy();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 
   it("focuses the first unanswered required question when step 2's save is blocked, and queues nothing", async () => {
@@ -421,25 +515,34 @@ describe("VisitScreen — step 1", () => {
     expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
   });
 
-  it("keeps the outcome, flyer and date intact when Résultat is tapped from step 2", async () => {
+  it("offline with a visited prospect and nothing cached, says the history will come back, not a first visit (#140)", async () => {
+    asPhone();
+    await fieldDb.prospects.update(PROSPECT.id, { lastVisitAt: 1_700_000_000_000 });
+    await renderVisit({ expectContinue: false });
+
+    expect(await screen.findByText(copy.visit.historyOffline)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.noPreviousVisits)).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("keeps the outcome and flyer intact when Résultat is tapped from step 2, and the when step's own choice too", async () => {
     await setMeta(fieldDb, "script", SCRIPT);
     const user = userEvent.setup();
     await renderVisit({ expectContinue: true });
 
     await user.click(screen.getByRole("checkbox", { name: new RegExp(copy.visit.flyerGiven) }));
     await user.click(outcomeRadio("follow_up"));
-    await user.type(screen.getByLabelText(copy.visit.followUpAt), "2026-10-01");
 
     await user.click(screen.getByRole("button", { name: copy.visit.continue }));
-    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.questions))).toBeTruthy();
+    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.when))).toBeTruthy();
+
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenDate }));
+    await user.type(screen.getByLabelText(copy.visit.followUpAt), "2026-10-01");
 
     await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
 
     expect(screen.getByText(copy.visit.step(1, 2, copy.visit.outcome))).toBeTruthy();
     expect(outcomeRadio("follow_up").checked).toBe(true);
-    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe(
-      "2026-10-01",
-    );
     expect(
       (
         screen.getByRole("checkbox", {
@@ -447,6 +550,213 @@ describe("VisitScreen — step 1", () => {
         }) as HTMLInputElement
       ).checked,
     ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    expect(await screen.findByText(copy.visit.step(2, 2, copy.visit.when))).toBeTruthy();
+    expect(screen.getByRole("radio", { name: copy.visit.whenDate })).toHaveProperty(
+      "checked",
+      true,
+    );
+    expect((screen.getByLabelText(copy.visit.followUpAt) as HTMLInputElement).value).toBe(
+      "2026-10-01",
+    );
+  });
+});
+
+/** refusal-reasons.md, CAP-1/CAP-2. */
+describe("VisitScreen — the refusal reason step", () => {
+  it("no script: Pas intéressé still reads « Continuer » and lands on step 2 with the radios in order", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("not_interested"));
+    expect(await screen.findByRole("button", { name: copy.visit.continue })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+
+    const radios = screen
+      .getAllByRole("radio")
+      .filter((el) => (el as HTMLInputElement).name === "refusalReason");
+    expect(radios.map((el) => (el as HTMLInputElement).value)).toEqual([...REFUSAL_REASONS]);
+    for (const reason of REFUSAL_REASONS) {
+      expect(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[reason] })).toBeTruthy();
+    }
+    expect(screen.getByLabelText(copy.visit.notes)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+    const view = within(await confirmation());
+    expect(view.getByText(REFUSAL_REASON_LABELS.no_need)).toBeTruthy();
+    // No script, so no Questions row (design.md, "Saving asks once").
+    expect(view.queryByText(copy.visit.questions)).toBeNull();
+  });
+
+  it("no script: blocks Enregistrer with no reason, then Autre with blank notes, each focused on step 2", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(await screen.findByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalReasonRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[REFUSAL_REASONS[0]] }),
+    );
+
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalOtherNeedsNote)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.notes));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("with a script cached, Pas intéressé's step 2 shows the radios in place of the questions", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+
+    expect(screen.queryByRole("radio", { name: copy.visit.yes })).toBeNull();
+    expect(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.too_many_devices }),
+    ).toBeTruthy();
+  });
+
+  it("blocks Enregistrer with no reason ticked, and focuses the first radio", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalReasonRequired)).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: REFUSAL_REASON_LABELS[REFUSAL_REASONS[0]] }),
+    );
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+  });
+
+  it("blocks Autre with blank notes, focuses Notes, and another reason clears the message", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.refusalOtherNeedsNote)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText(copy.visit.notes));
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
+
+    // A reason that needs no note takes the message away.
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    expect(screen.queryByText(copy.visit.refusalOtherNeedsNote)).toBeNull();
+  });
+
+  it("saves Autre with a note, queuing the reason and no script answers", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.other }));
+    await user.type(screen.getByLabelText(copy.visit.notes), "Déménage");
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBe("other");
+    expect(visit?.notes).toBe("Déménage");
+    expect(visit?.answers).toEqual({});
+  });
+
+  it("the save summary's « Raison du refus » row shows the picked label, absent for other outcomes", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    const view = within(await confirmation());
+    expect(view.getByText(copy.visit.refusalReason)).toBeTruthy();
+    expect(view.getByText(REFUSAL_REASON_LABELS.no_need)).toBeTruthy();
+  });
+
+  it("a reason picked and then abandoned for Intéressé is not sent, and Intéressé's own answers are", async () => {
+    await setMeta(fieldDb, "script", SCRIPT);
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: true });
+
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.no_need }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.questions));
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await confirmSave(user);
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBeNull();
+    expect(visit?.answers).toEqual({ delivery: true });
+  });
+
+  it("an answer typed under Intéressé is neither counted nor sent once the result is Pas intéressé", async () => {
+    const user = userEvent.setup();
+    await toStep2(user, "interested");
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+    await user.click(outcomeRadio("not_interested"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.refusalReason));
+    await user.click(screen.getByRole("radio", { name: REFUSAL_REASON_LABELS.wait_and_see }));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    const view = within(await confirmation());
+    expect(view.getByText(copy.visit.confirm.answers(0))).toBeTruthy();
+    await user.click(view.getByRole("button", { name: copy.visit.confirm.save }));
+
+    await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.refusalReason).toBe("wait_and_see");
+    expect(visit?.answers).toEqual({});
+  });
+
+  it("an over-long note on another result still reads « trop longues », not the Autre message", async () => {
+    const user = userEvent.setup();
+    await renderVisit({ expectContinue: false });
+    await user.click(outcomeRadio("interested"));
+    await user.click(screen.getByLabelText(copy.visit.notes));
+    await user.paste("x".repeat(2001));
+    await user.click(screen.getByRole("button", { name: copy.visit.save }));
+
+    expect(await screen.findByText(copy.visit.notesTooLong)).toBeTruthy();
+    expect(screen.queryByText(copy.visit.refusalOtherNeedsNote)).toBeNull();
+    expect(await fieldDb.outboxVisits.count()).toBe(0);
   });
 });
 
@@ -459,9 +769,6 @@ describe("VisitScreen — step 2 (Questions)", () => {
     const no = screen.getByRole("radio", { name: copy.visit.no }) as HTMLInputElement;
     const group = yes.closest('[role="radiogroup"]') as HTMLElement;
     expect(group.className).toContain("grid-cols-2");
-    // The Personne sur place callout is for no_contact only: above required
-    // questions it would tell the agent they may skip what save then blocks.
-    expect(screen.queryByText(copy.visit.questionsOptional)).toBeNull();
 
     // The tile's gold fill is a `has-[:checked]:` utility (DESIGN.md
     // choice-selected) — present on both tiles, but a CSS-conditional class
@@ -658,19 +965,24 @@ describe("VisitScreen — step 2 (Questions)", () => {
     expect(visit?.scriptId).toBe(SCRIPT2.id);
   });
 
-  it("personne sur place: shows the callout at the top of step 2, and saves with nothing answered", async () => {
+  it("personne sur place: replaces the script's questions with the when radios, opened on Aujourd'hui, and saves with nothing answered", async () => {
     const user = userEvent.setup();
     await toStep2(user, "no_contact");
 
-    const alert = screen.getByText(copy.visit.questionsOptional).closest('[role="note"]');
-    if (!alert) throw new Error("no callout rendered");
-    const heading = screen.getByText(copy.visit.questions);
-    // The callout comes before the Questions heading in document order.
-    expect(alert.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The script's own questions are not asked at all — nobody was there.
+    expect(screen.queryByText(copy.visit.questions)).toBeNull();
+    expect(screen.getByRole("radio", { name: copy.visit.whenToday })).toHaveProperty(
+      "checked",
+      true,
+    );
 
     await confirmSave(user);
 
     await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.answers).toEqual({});
+    // "Aujourd'hui" sends today's Brussels midnight (when-step.md).
+    expect(visit?.followUpAt).toBe(brusselsMidnightDaysFromNow(visit?.visitedAt ?? 0, 0));
   });
 
   it("no script: Notes sits inline on the single step, and save queues the typed notes", async () => {
@@ -893,19 +1205,28 @@ describe("VisitScreen — save confirmation", () => {
   it("with no script, no flyer and no note, those rows are absent", async () => {
     const user = userEvent.setup();
     await renderVisit({ expectContinue: false });
-    await user.click(outcomeRadio("not_interested"));
+    await user.click(outcomeRadio("interested"));
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     const view = within(await confirmation());
-    expect(view.getByText("Pas intéressé")).toBeTruthy();
+    expect(view.getByText("Intéressé")).toBeTruthy();
     expect(view.queryByText(copy.visit.questions)).toBeNull();
     expect(view.queryByText(copy.visit.confirm.flyer)).toBeNull();
     expect(view.queryByText(copy.visit.notes)).toBeNull();
+    expect(view.queryByText(copy.visit.refusalReason)).toBeNull();
   });
 
-  it("counts only answered questions: personne sur place with none reads 0 réponse", async () => {
+  it("counts no answers for a when-step result: typed under Intéressé, then À relancer, reads 0 réponse", async () => {
     const user = userEvent.setup();
-    await toStep2(user, "no_contact");
+    // An answer typed under Intéressé is not sent with À relancer, so the
+    // sheet must not count it either.
+    await toStep2(user, "interested");
+    await user.click(screen.getByRole("radio", { name: copy.visit.yes }));
+    await user.click(screen.getByRole("button", { name: copy.visit.backToOutcome }));
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("button", { name: copy.visit.continue }));
+    await screen.findByText(copy.visit.step(2, 2, copy.visit.when));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenToday }));
     await user.click(screen.getByRole("button", { name: copy.visit.save }));
 
     expect(within(await confirmation()).getByText(copy.visit.confirm.answers(0))).toBeTruthy();
@@ -1062,6 +1383,7 @@ function onRound(over: Partial<TodayItem> = {}) {
       address: null,
       status: "assigned",
       nextVisitAt: null,
+      lastVisitAt: null,
       pending: false,
       distanceM: null,
       visitQueued: false,
@@ -1142,7 +1464,7 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(props?.position).toEqual({ lat: 50.85, lng: 4.35 });
     // Its pin selects nothing; re-centre asks the round's own reading again.
     expect(props?.onSelect).toBeUndefined();
-    props?.recentre();
+    props?.recentre?.();
     expect(round.refresh).toHaveBeenCalledOnce();
     // The landmark is named by its heading.
     expect(screen.getByRole("complementary", { name: copy.visit.previousVisits })).toBe(pane);
@@ -1240,6 +1562,14 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(
       within(screen.getByRole("complementary")).getByText(copy.visit.noPreviousVisits),
     ).toBeTruthy();
+  });
+
+  it("says the history will come back, in the pane, for a visited prospect with nothing cached (#140)", async () => {
+    await fieldDb.prospects.update(PROSPECT.id, { lastVisitAt: 1_700_000_000_000 });
+    await renderVisit({ expectContinue: false });
+    const pane = screen.getByRole("complementary");
+    expect(await within(pane).findByText(copy.visit.historyOffline)).toBeTruthy();
+    expect(within(pane).queryByText(copy.visit.noPreviousVisits)).toBeNull();
   });
 
   it("saves from the tablet layout: one outbox row with the answers and scriptId (#142)", async () => {

@@ -24,6 +24,13 @@ describe("wrangler.jsonc", () => {
     expect(assets.run_worker_first).not.toBe(true);
   });
 
+  it("turns preview URLs off, so no second host for the Worker can sit outside Access", () => {
+    // docs/security.md, "Access bypass". A preview URL is reachable without the
+    // Access policy unless someone remembers to cover it in the dashboard; the
+    // key must be present and false, not merely absent, so the deploy states it.
+    expect(readWranglerConfig().preview_urls).toBe(false);
+  });
+
   it("serves the SPA fallback for unknown paths", () => {
     const assets = readWranglerConfig().assets as { not_found_handling?: string };
     expect(assets.not_found_handling).toBe("single-page-application");
@@ -65,7 +72,7 @@ describe("service worker", () => {
     // own navigate/strip code, so this only asserts the two are wired
     // together rather than re-deriving the regex here.
     expect(config).toContain(
-      'import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker"',
+      'import { RECONNECT_MARKER_PATTERN } from "./src/client/field/reconnect-marker.ts"',
     );
     expect(config).toMatch(/navigateFallbackDenylist:\s*\[[^\]]*RECONNECT_MARKER_PATTERN/);
   });
@@ -79,7 +86,7 @@ describe("service worker", () => {
     // so this only asserts the two are wired together rather than
     // re-deriving the regex here (same shape as the reconnect-marker test).
     expect(config).toContain(
-      'import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout"',
+      'import { ACCESS_PATH_PATTERN } from "./src/client/admin/access-logout.ts"',
     );
     expect(config).toMatch(/navigateFallbackDenylist:\s*\[[^\]]*ACCESS_PATH_PATTERN/);
   });

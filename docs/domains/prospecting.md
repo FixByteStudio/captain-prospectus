@@ -7,24 +7,31 @@ stateDiagram-v2
   [*] --> new: import
   [*] --> assigned: agent adds in field
   new --> assigned: admin assigns
-  assigned --> follow_up: visit (no_contact / interested / follow_up)
+  assigned --> follow_up: visit (no_contact / follow_up)
+  assigned --> interested: visit (interested)
   assigned --> converted: visit (converted)
   assigned --> rejected: visit (not_interested)
   follow_up --> follow_up: revisit
+  follow_up --> interested: visit (interested)
   follow_up --> converted: visit (converted)
   follow_up --> rejected: visit (not_interested)
   rejected --> assigned: admin reopens
+  interested --> follow_up: newer visit (no_contact / follow_up)
+  interested --> converted: newer visit (converted)
+  interested --> rejected: newer visit (not_interested)
+  interested --> assigned: admin reopens
   assigned --> new: admin unassigns
 ```
 
 | Visit outcome | Resulting status |
 |---|---|
 | `no_contact` | `follow_up` |
-| `interested` | `follow_up` |
+| `interested` | `interested` |
 | `follow_up` | `follow_up` |
 | `not_interested` | `rejected` |
 | `converted` | `converted` |
 
+- **Intéressé** means open to the discussion, not yet signed up to the waitlist; **Converti** means already signed up to it. They stay apart because the conversion rate counts only `converted` ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)). `follow_up` means only "go back": a `no_contact` or `follow_up` outcome. The two are told apart by who was at the door: **Personne sur place** (`no_contact`) means closed, or nobody at all to speak to; **À relancer** (`follow_up`) means someone was there but the boss is busy, away, or not interested right now while keeping the door open for a later discussion. Neither asks the script ([field-operations](field-operations.md#rules)).
 - Status transitions caused by visits are **computed by the server** when a visit is received ([ADR-0011](../adr/0011-server-derived-prospect-status.md)).
 - Only the **latest visit by `visited_at`** moves the status. A late-syncing older visit is stored but does not overwrite a newer outcome. On a tie the visit received last decides, and inside one sync the greater `visits.id`, so the same visit always does.
 - Only the **assignee's** visit moves the status. A visit written by any other agent is
@@ -40,8 +47,36 @@ stateDiagram-v2
 - `next_visit_at` = `follow_up_at` of the latest visit, if any.
 - Admin can override status manually (reopen, close). The admin's status holds against any visit made at or before the change, however late that visit syncs; only a visit made after it moves the status again. The visit still updates `last_visit_at` ([ADR-0025](../adr/0025-admin-status-outlives-older-visits.md)).
 
+## Refusal reasons
+
+A `not_interested` visit may carry a `refusalReason`, from a fixed list of 7 values (`REFUSAL_REASONS`). It is **stored only on `not_interested`**; sent with another outcome, or missing (an older build), it is stored null — either way the visit is accepted and the status is still `OUTCOME_TO_STATUS[outcome]`, so a missing or misplaced reason never refuses the visit (INVARIANT 5). A value outside the list is refused with a 400, as for any invalid enum value, so a new reason value ships to the server before any phone build sends it, and rolling the server back below a build phones already have blocks their sync (the outbox keeps the visits until it is fixed). `visits_orphaned` mirrors the column so a repair carries it through unchanged.
+
+The rule: a refusal reason is something the pitch can't answer at the door. If the pitch has a ready answer, the agent gives it, and it is not a reason.
+
+| Value | What it tells the admin |
+|---|---|
+| `too_many_devices` | effort: one more device on the counter |
+| `wait_and_see` | trust: pre-launch, no restaurants yet |
+| `fee_distrust` | "free" isn't believed (HubRise, the cost-sharing fallback) |
+| `no_need` | happy as they are |
+| `out_of_target` | the base is wrong: closed, or no longer a food business. Flags the prospect for an admin to fix |
+| `no_reason_given` | nothing to learn |
+| `other` | the rest; the phone requires a note that says what (not enforced server-side) |
+
+**Hors cible signalé.** An admin screen lists the prospects that need fixing. A prospect is flagged while its **latest visit** (ordered `visited_at`, `received_at`, `id` descending, as the status is) has `refusal_reason = 'out_of_target'` and `out_of_target_reviewed_at` is null or **not after** that visit's `visited_at`. A direct admin `PATCH /prospects/:id` (fields or status) stamps `out_of_target_reviewed_at` with the current time and is the only writer. Assigning, unassigning, merging and CSV or map imports do not, and the flag never reads `updated_at`, which they all move. A newer visit with another outcome or reason unflags the prospect, since its latest visit no longer carries the reason; a newer `out_of_target` visit flags it again after a review. Merged prospects are never listed. The review is compared to the visit's `visited_at`, so a visit dated before an admin edit but synced after it is not flagged. The Prospects list and its export take `outOfTarget=true`, and the toolbar toggle "Hors cible signalé" shows the filtered `total` while it is on.
+
+Not refusals — sent as a different outcome instead:
+
+| Heard at the door | Where it goes | Why |
+|---|---|---|
+| "Pas le temps, là" | `follow_up` | a timing problem, not a no |
+| "Faut voir avec le patron" | `follow_up` | the decision-maker wasn't asked |
+| "Contre les commissions" | not a reason | 0 % commission on dishes is the pitch |
+| "Déjà sur Uber Eats / Deliveroo" | not a reason | there's no exclusivity; the real no behind it is effort or trust |
+| "On ne livre pas" | not a reason | delivery isn't live; click and collect and QR at the table are for these places |
+
 ## Open vs closed
-Open (appear on an agent's list): `new`, `assigned`, `follow_up`. Closed: `converted`, `rejected`.
+Open (appear on an agent's list): `new`, `assigned`, `follow_up`. Closed: `interested`, `converted`, `rejected`. An Intéressé lead waits off every round, visible to an admin who filters for it, until a newer visit or an admin moves it ([ADR-0027](../adr/0027-interested-is-its-own-closed-status.md)).
 
 ## Assignment
 - A prospect has zero or one `assigned_to` agent (email).
@@ -69,7 +104,7 @@ Known limits, accepted for v1; the admin can merge manually later (roadmap M5):
 - An import overwrites a field **only when it carries a value for it**. A column left unmapped sends nothing, and the stored value stays as it was — otherwise forgetting to map the phone column would erase every phone number in the base. The spreadsheet is authoritative about what it says, not about what it omits. Clearing a field on purpose is what `PATCH` is for. `name` and `type` are the exceptions: name is required, and type carries a default, so neither can arrive empty to mean "unchanged".
 - An import never reports "skipped": a row matching an existing key is an update, which is the point of re-importing. The result is `{created, updated}`.
 - Duplicate rows **within one import request** collapse to one before they reach the database; the last one wins. SQLite refuses an `ON CONFLICT DO UPDATE` that would touch the same row twice in one statement.
-- Assignment moves status along exactly two edges: `new → assigned` when a prospect is assigned, `assigned → new` when it is unassigned. A prospect whose status came from a visit (`follow_up`, `converted`, `rejected`) keeps it.
+- Assignment moves status along exactly two edges: `new → assigned` when a prospect is assigned, `assigned → new` when it is unassigned. A prospect whose status came from a visit (`follow_up`, `interested`, `converted`, `rejected`) keeps it.
 - Prospects are never hard-deleted once they have visits.
 
 ## Merging
@@ -90,9 +125,9 @@ A rename slips past the dedupe key, so the same place ends up as two prospects a
 ## Export
 
 `GET /api/admin/prospects/export.csv` hands the ledger to a spreadsheet, filtered
-exactly as the list screen filters it — status, due date, assignee, source and
-name search (`q`) alike, drawn from the one filter schema the list uses so the
+exactly as the list screen filters it — status, due date, assignee, source,
+name search (`q`) and Hors cible signalé alike, drawn from the one filter schema the list uses so the
 two cannot diverge — and excluding merged prospects like every other list.
 Timestamps become ISO-8601 and the file carries the OSM attribution on its
-last line (`docs/api.md`). There is no download button yet — the endpoint
-ships first, the screen needs a design pass.
+last line (`docs/api.md`). Prospects has the download button: it exports the
+filtered list as shown and warns when the file is cut at the export cap.

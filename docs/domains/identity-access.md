@@ -1,11 +1,38 @@
 # Identity & access
 
-See [ADR-0006](../adr/0006-cloudflare-access-auth.md).
+See [ADR-0029](../adr/0029-own-login-instead-of-cloudflare-access.md), which supersedes
+[ADR-0006](../adr/0006-cloudflare-access-auth.md) in three phases. We are in phase 1: our own
+login ships while Cloudflare Access still fronts the hostname.
 
-- Login is handled by **Cloudflare Access** (email one-time PIN) in front of the Worker.
-- The Worker **verifies** the `Cf-Access-Jwt-Assertion` JWT (signature via the team's JWKS, issuer, audience). The email header alone is never trusted.
-- Identity = verified email, lowercased.
-- Role: `admin` if the email is in `ADMIN_EMAILS`, otherwise `agent`. The Access policy decides who is allowed in at all.
+The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.ts`):
+
+1. **A session.** The `__Host-cp_session` cookie's token, hashed with `AUTH_PEPPER`, names a
+   `sessions` row that has not expired and whose user is `active`. The role is the `users` row's.
+   Without `AUTH_PEPPER` this step is skipped, never guessed.
+2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
+   through `/login` is who the session says.
+3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker
+   **verifies** `Cf-Access-Jwt-Assertion` (or the `CF_Authorization` cookie) against the team's
+   JWKS, issuer and audience. Identity = the verified email, lowercased. If that email has a `users` row, an inactive
+   one is a **401** and an active one's `role` is the role; with no row, `admin` if it is in
+   `ADMIN_EMAILS`, otherwise `agent`. The email header alone is never trusted. Phase 3 deletes this
+   step.
+4. Otherwise **401**. A Worker with neither a session nor Access configured answers 401, not 500.
+
+Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
+`PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
+dashboard rows, position gate) is the active `users` rows.
+
+**Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
+surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
+admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
+repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
+`POST /api/auth/logout` deletes the device's session. Codes for agents and generated passphrases for
+admins are later entries of the own-login epic.
+
+After 10 failed logins from one IP in a 15-minute window, that IP's logins get 429 until the window
+ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
+foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
 
 ## Permissions
 | Action | Agent | Admin |
@@ -15,9 +42,10 @@ See [ADR-0006](../adr/0006-cloudflare-access-auth.md).
 | Import, edit, assign prospects | | ✓ |
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |
+| Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
 
 ## Local development
-`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost` or `127.0.0.1`.
+`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
 Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.

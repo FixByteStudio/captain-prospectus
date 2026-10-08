@@ -10,6 +10,7 @@ export const STATUS_FILL: Readonly<Record<Status, string>> = {
   new: "bg-status-new",
   assigned: "bg-status-assigned",
   follow_up: "bg-warn",
+  interested: "bg-status-interested",
   converted: "bg-success",
   rejected: "bg-destructive",
 };

@@ -1,0 +1,141 @@
+        As a customer, I ask to be forgotten, confirm it, can change my mind inside the window, and
+        can see what was erased and what the law made us keep (GDPR Art. 17; PROP-20260829-150752).
+        This activity is the LAUNCH GATE, not a feature: the founder decided ERASURE-LAUNCH-GATE "A —
+        Erasure ships first", so the first real order in Tours waits on it.
+      steps:
+        RequestErasure: { $ref: 'api.yaml#/mutations/requestErasure' }   # ask to be forgotten; refused with a typed reason while an order is in flight
+        ConfirmErasure: { $ref: 'api.yaml#/mutations/confirmErasure' }   # the second round-trip an irreversible act needs
+        KeepMyAccount: { $ref: 'api.yaml#/mutations/cancelErasure' }     # re-login-cancels -- the subject's own way back, never an admin resurrection
+        TrackErasure: { $ref: 'api.yaml#/queries/erasureStatus' }        # what is happening, and afterwards what was retained and under which instrument
+    RaiseAClaim:
+      description: As a customer, I raise a claim/dispute about a delivered order and can reopen a decided one (#151).
+      steps:
+        OpenClaim: { $ref: 'api.yaml#/mutations/openReclamation' }
+        AttachEvidence: { $ref: 'api.yaml#/mutations/attachReclamationEvidence' }   # attach an evidence photo to my claim (#156)
+        ReopenClaim: { $ref: 'api.yaml#/mutations/reopenReclamation' }
+        ReviewMyClaims: { $ref: 'api.yaml#/queries/myReclamations' }   # my own claims list (#154)
+        ViewClaim: { $ref: 'api.yaml#/queries/reclamation' }   # claim detail (#154)
+
+restaurant_owner:
+  description: >
+    Owns a restaurant ACCOUNT (HubRise restaurant). Manages the account, its locations, and the catalog.
+    May also act as a manager, but that is a separate role.
+  personaRole: RESTAURANT_ACCOUNT
+  locale: fr-FR   # expected language (V0 launches in Tours, France)
+  goals:
+    - Run multiple locations under one account.
+    - Keep the catalog accurate across locations.
+  frustrations:
+    - Commission fees across locations.
+    - Maintaining consistency between locations.
+  activities:
+    ManageAccount:
+      description: As an owner, I manage my restaurant account.
+      steps:
+        RegisterAccount: { $ref: 'api.yaml#/mutations/registerRestaurantAccount' }
+        UpdateAccount: { $ref: 'api.yaml#/mutations/updateRestaurantAccount' }
+        DeleteAccount: { $ref: 'api.yaml#/mutations/deleteRestaurantAccount' }
+    ManageLocations:
+      description: As an owner, I add and maintain the locations under my account.
+      steps:
+        AddLocation: { $ref: 'api.yaml#/mutations/registerRestaurant' }
+        # Between adding and going live (ADR-20260728-011344 D2): a location cannot be activated
+        # without a storefront address, and the address is the owner's to choose -- not something the
+        # registration invents on their behalf. Renaming later reuses the same step.
+        ChooseStorefrontAddress: { $ref: 'api.yaml#/mutations/configureRestaurantSlug' }
+        ActivateLocation: { $ref: 'api.yaml#/mutations/activateRestaurant' }
+        DeactivateLocation: { $ref: 'api.yaml#/mutations/deactivateRestaurant' }
+        UpdateLocationProfile: { $ref: 'api.yaml#/mutations/updateRestaurant' }
+        RemoveLocation: { $ref: 'api.yaml#/mutations/removeRestaurant' }
+        ViewAllLocations: { $ref: 'api.yaml#/queries/restaurantLocationsByAccount' }
+    ClaimListing:
+      description: As an owner, I claim my pre-listed restaurant (proven via Google Business Profile) and point Google's "Order online" button at my page.
+      steps:
+        FindMyListing: { $ref: 'api.yaml#/queries/restaurant' }
+        ClaimIt: { $ref: 'api.yaml#/mutations/claimRestaurantListing' }
+        OptOut: { $ref: 'api.yaml#/mutations/optOutRestaurantListing' }
+        ConfigureGoogleOrderButton: { $ref: 'api.yaml#/mutations/configureGbpOrderLink' }
+        VerifyGoogleOrderButton: { $ref: 'api.yaml#/mutations/verifyGbpOrderLink' }
+    ManageCatalog:
+      description: As an owner, I build and maintain the catalog.
+      steps:
+        ViewCatalog: { $ref: 'api.yaml#/queries/catalog' }
+        CreateCatalog: { $ref: 'api.yaml#/mutations/createCatalog' }
+        ChooseCatalogRoute: { $ref: 'api.yaml#/mutations/configureCatalogSlug' }
+        AddProduct: { $ref: 'api.yaml#/mutations/addProduct' }
+        UpdateProduct: { $ref: 'api.yaml#/mutations/updateProduct' }
+        RemoveProduct: { $ref: 'api.yaml#/mutations/removeProduct' }
+        AddCategory: { $ref: 'api.yaml#/mutations/addCatalogCategory' }
+        UpdateCategory: { $ref: 'api.yaml#/mutations/updateCatalogCategory' }
+        RemoveCategory: { $ref: 'api.yaml#/mutations/removeCatalogCategory' }
+        AddOptionList: { $ref: 'api.yaml#/mutations/addOptionList' }
+        UpdateOptionList: { $ref: 'api.yaml#/mutations/updateOptionList' }
+        RemoveOptionList: { $ref: 'api.yaml#/mutations/removeOptionList' }
+        UpdateStock: { $ref: 'api.yaml#/mutations/updateOfferStock' }
+        ImportCatalog: { $ref: 'api.yaml#/mutations/importCatalog' }
+
+restaurant_manager:
+  description: >
+    Runs a SINGLE location (HubRise location): handles the live order queue. Assigned by the owner; can
+    only manage the location they are assigned to.
+  personaRole: RESTAURANT
+  locale: fr-FR   # expected language (V0 launches in Tours, France)
+  goals:
+    - Process incoming orders quickly and accurately.
+    - Keep the kitchen's acceptance mode in sync with capacity.
+  frustrations:
+    - Inaccurate order details.
+    - Managing peak order times.
+  activities:
+    ManageOrders:
+      description: As a manager, I work the incoming order queue for my location.
+      steps:
+        ViewIncomingOrders: { $ref: 'api.yaml#/queries/orders' }
+        AcceptOrder: { $ref: 'api.yaml#/mutations/acceptOrder' }
+        RejectOrder: { $ref: 'api.yaml#/mutations/rejectOrder' }
+        StartPreparation: { $ref: 'api.yaml#/mutations/startPreparation' }
+        MarkOrderReady: { $ref: 'api.yaml#/mutations/markOrderReady' }
+        MarkCollected: { $ref: 'api.yaml#/mutations/markOrderDelivered' }   # COLLECTION hand-over at pickup
+        SetAcceptanceMode: { $ref: 'api.yaml#/mutations/changeOrderAcceptanceMode' }
+        CancelOrder: { $ref: 'api.yaml#/mutations/cancelOrderByRestaurant' }
+        ThankRiderOrCaptain: { $ref: 'api.yaml#/mutations/tipOrder' }   # restaurant tips the courier / Captain (ADR-012)
+        ReviewPendingRefunds: { $ref: 'api.yaml#/queries/pendingRefunds' }   # my orders' refund queue (status REQUESTED = awaiting my decision)
+        ApproveRefund: { $ref: 'api.yaml#/mutations/approveRefund' }   # decide a pending refund on my own orders (RefundProcess)
+        DenyRefund: { $ref: 'api.yaml#/mutations/denyRefund' }
+    TrackDeliveries:
+      description: As a manager, I track the couriers delivering my ready orders (ADR-0031).
+      steps:
+        ViewDeliveries: { $ref: 'api.yaml#/queries/restaurantDeliveries' }
+        CancelDelivery: { $ref: 'api.yaml#/mutations/cancelDelivery' }
+        EscalateDelivery: { $ref: 'api.yaml#/mutations/escalateDelivery' }   # skip the current channel, advance the ranked dispatch walk (#60)
+        ResolveDeliveryIssue: { $ref: 'api.yaml#/mutations/resolveDeliveryIssue' }   # acknowledge a rider's reported issue from the board's pinned card (#639 part C step 3-i)
+        ReviewDeliverySatisfaction: { $ref: 'api.yaml#/queries/restaurantDeliverySatisfaction' }   # #62 customers' delay verdicts → self-dispatch-vs-Captain decision
+    HandleOrderConversation:
+      description: As a manager, I reply on my orders' conversations, keep internal staff notes, and moderate the thread (#129).
+      steps:
+        ReplyToCustomer: { $ref: 'api.yaml#/mutations/postMessage' }
+        ReadInternalNotes: { $ref: 'api.yaml#/queries/orderConversationInternalNotes' }
+        EscalateToAdmin: { $ref: 'api.yaml#/mutations/escalateToAdmin' }   # pull an admin in with a reason (#129)
+        MuteParticipant: { $ref: 'api.yaml#/mutations/muteParticipant' }   # mute a disruptive role, reason required (#129)
+        UnmuteParticipant: { $ref: 'api.yaml#/mutations/unmuteParticipant' }   # lift a mute (#129)
+    ManageTeam:
+      description: As a MANAGER, I see my restaurant's roster and invitation list, invite a colleague by email, and withdraw an unaccepted invitation -- self-service staff onboarding, ships dark behind RUN_RESTAURANT_INVITATION (#639 part C step 6-iv, ADR-20260905-101349 §2/§3, PROP-20260831-180622 §8.2/§8.4). The OPERATOR authority sees the roster but never this activity's Invite/Revoke controls (§8.2, resolver-data condition on viewerAuthority, not a persona split).
+      steps:
+        ViewRoster: { $ref: 'api.yaml#/queries/restaurantRoster' }
+        ViewInvitations: { $ref: 'api.yaml#/queries/restaurantInvitations' }
+        InviteMember: { $ref: 'api.yaml#/mutations/inviteRestaurantMember' }
+        RevokeInvitation: { $ref: 'api.yaml#/mutations/revokeRestaurantInvitation' }
+    HandleClaims:
+      description: As a manager, I decide customers' claims on my orders — resolving or rejecting each (#151).
+      steps:
+        WorkClaimsQueue: { $ref: 'api.yaml#/queries/restaurantReclamations' }   # my orders' claims queue (status OPEN = outstanding) (#154)
+        ResolveClaim: { $ref: 'api.yaml#/mutations/resolveReclamation' }
+        RejectClaim: { $ref: 'api.yaml#/mutations/rejectReclamation' }
+
+rider:
+  description: A courier who delivers orders from restaurants to customers.
+  personaRole: RIDER
+  locale: fr-FR   # expected language (V0 launches in Tours, France)
+  goals:
+    - Deliver orders promptly.
+    - Maintain a good rating.

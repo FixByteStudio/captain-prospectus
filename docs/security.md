@@ -8,10 +8,12 @@ a mitigation nobody has verified is worse than one nobody claimed.
 
 | Threat | Mitigation |
 |---|---|
-| Access bypass (Worker reached without Access) | JWT verified in the Worker (`src/worker/auth.ts`), fail-closed when Access is misconfigured. **Preview URLs are a manual dashboard step with no repo-side control** — [#38](https://github.com/FixbyteStudio/captain-prospectus/issues/38) |
-| Header spoofing | Email taken from the verified JWT only |
-| Dev impersonation leaking to prod | `DEV_USER_EMAIL` ignored unless host is localhost; `/api/dev/*` needs both that variable and a localhost host, and it is the one route mounted before auth |
+| Access bypass (Worker reached without Access) | Identity is a D1 session or a JWT verified in the Worker (`src/worker/auth.ts`); with neither, every `/api` route outside `/api/auth/*` and `/api/dev/*` answers 401, including when Access is not configured. A missing `AUTH_PEPPER` skips the session lookup and makes sign-in answer 500, never open access. Preview URLs are disabled by `preview_urls: false` in `wrangler.jsonc`, which every deploy applies and `config.test.ts` asserts |
+| Header spoofing | Email taken from the D1 session or the verified JWT only, never a header or a client claim |
+| Dev impersonation leaking to prod | `DEV_USER_EMAIL` ignored unless host is localhost, `127.0.0.1` or `[::1]`, and even there it must name an active `users` row, which also gives the role; `/api/dev/*` needs both that variable and a localhost host, and it and `/api/auth/*` (sign-in and sign-out) are the only routes mounted before auth |
 | Agent reading other agents' data | Agent **reads** filter by the verified email. A visit against a prospect that isn't the sender's is quarantined in `visits_orphaned` and derives nothing until an admin repairs it. It is not refused, because INVARIANT 5 outranks the rule ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md), [#33](https://github.com/FixbyteStudio/captain-prospectus/issues/33)) |
+| Cross-site request forgery | The session cookie is `SameSite=Strict`, and any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or not the Worker's own gets 403, on every route (`src/worker/origin.ts`) |
+| Guessing codes or passphrases | After 10 failed logins from one IP in a fixed 15-minute window, every login from it gets 429 until the window ends, checked before the credential. Each try reserves its failure in one conditional upsert before the check, so a parallel burst gets no more than 10 through. Counted in D1 `login_attempts` under an HMAC of the IP (an IPv6 address by its /64), never the IP in clear; requests without `CF-Connecting-IP` share one bucket (`src/worker/login-throttle.ts`) |
 | Malformed or oversized payloads | zod validation, array size caps, and a `MAX_REQUEST_BYTES` body cap enforced Worker-wide in `src/worker/index.ts` before anything parses the body |
 | SQL injection | Drizzle parameterised queries only; no string-built SQL |
 | XSS through imported data (names, notes) | React escaping; no `dangerouslySetInnerHTML` |
@@ -34,13 +36,15 @@ it — a payload the server always refuses is an outbox that never drains (INVAR
 
 ## Personal data
 - **Prospect data** is mostly public business info, but may include a contact person's name or phone. Keep it to what the business needs.
-- **Agent location** is personal data. One reading (`getCurrentPosition`, never `watchPosition`) is written to the visit at check-in and to a field prospect when it is added — that reading is what reaches the server and is stored. The today list also takes a reading to order the round by distance; that one stays in memory for the ordering only and is never persisted or sent. Neither case tracks in the background. Agents are told this.
+- **Agent location** is personal data. One reading (`getCurrentPosition`, never `watchPosition`) is written to the visit at check-in and to a field prospect when it is added — that reading is what reaches the server and is stored. The today list also takes a reading to order the round by distance. Once epic 5's phone side ships, the latest reading taken today goes with each sync and is kept, one per agent, for the admin round view until the night's sweep ([ADR-0028](adr/0028-agent-position-at-sync.md)); the owner tells the agents before that release. Nothing tracks in the background. Agents are told this.
 - **Retention**: a visit is kept for ever; its **position and notes are nulled after
   90 days** (`RETENTION_DAYS`), measured on `received_at` because a phone's clock can be
   wrong. A daily Cron Trigger runs the sweep
   ([ADR-0023](adr/0023-retention-by-redaction.md), `src/worker/retention.ts`). The fact of
   a visit is business history; where the agent was standing is not. A consequence worth
   knowing: a visit older than 90 days can no longer be checked against where it was made.
+  An agent's latest position of the day (`agent_positions`) is served only for that Brussels
+  day and deleted by the next morning's sweep ([ADR-0028](adr/0028-agent-position-at-sync.md)).
 - No third-party analytics, and the data stays in the Cloudflare account. Backups go to R2, not to a GitHub artifact (ADR-0023, [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)); the bucket is one-time setup in [deployment.md](deployment.md).
 - The Worker's unhandled-error log (`onError`, `src/worker/index.ts`) carries only error names and the route, never a message or bound values — Drizzle's own message is `Failed query: <sql>\nparams: <values>`, which can be a visit note or an agent's email (`src/worker/errors.ts`).
 

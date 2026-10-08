@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Link as LinkIcon,
   MapPin,
+  Route,
   Store,
 } from "lucide-react";
 import type { OrphansResponse } from "../../shared/schemas";
@@ -33,12 +34,11 @@ export type NavGroup = {
 
 /**
  * The admin sidebar's groups and order — GH #63. nav.test.ts checks these
- * paths against a hand-copied list of the seven routes AdminApp.tsx renders
+ * paths against a hand-copied list of the eight routes AdminApp.tsx renders
  * under `/admin/*` today (the index included) — it does not read
  * AdminApp.tsx, so update both together if a route there ever changes.
  *
- * Pilotage holds Tableau de bord since GH #107. Tournée du jour is still not
- * here on purpose: it stays out until its screen ships.
+ * Pilotage holds Tableau de bord since GH #107.
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
@@ -59,6 +59,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { label: copy.nav.visits, path: "/admin/visites", icon: MapPin },
       { label: copy.nav.orphans, path: "/admin/a-rattacher", icon: LinkIcon, count: "orphans" },
       { label: copy.nav.scripts, path: "/admin/scripts", icon: FileText },
+      { label: copy.nav.round, path: "/admin/tournee", icon: Route },
     ],
   },
 ];
@@ -116,12 +117,6 @@ export function breadcrumbFor(pathname: string): Breadcrumb {
   return { group: null, page: null };
 }
 
-/** True for the platforms that label the palette shortcut "⌘K" instead of
- * "Ctrl K" — iOS/iPadOS report "Mac" too since Safari 13 (spec-gh-64). */
-function isApplePlatform(userAgent: string): boolean {
-  return /Mac|iPhone|iPad|iPod/.test(userAgent);
-}
-
 /**
  * ⌘K or Ctrl+K, whatever the case (Caps Lock sends "K"), and nothing else:
  * - `key` is typed `string` on `KeyboardEvent`, but Chrome's autofill fires a
@@ -143,10 +138,4 @@ export function isPaletteShortcut(event: {
   if (typeof event.key !== "string") return false;
   if (event.shiftKey || event.altKey || event.repeat) return false;
   return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
-}
-
-/** The search button's shortcut hint, read from `navigator.userAgent` at the
- * call site so this stays a pure, testable function. */
-export function shortcutHint(userAgent: string): string {
-  return isApplePlatform(userAgent) ? "⌘K" : "Ctrl K";
 }

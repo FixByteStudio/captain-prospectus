@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge Report</title>
+<style>
+  :root {
+    --bg: #f6f1e7; --paper: #fffdf8; --ink: #2a2521; --muted: #6f655b;
+    --line: #e2d8c8; --seal: #9e2b25; --seal-dark: #6f1d19; --ok: #2f6b3a; --no: #8a3a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1815; --paper: #25211d; --ink: #efe7da; --muted: #a89c8d;
+      --line: #3a342d; --seal: #c0463d; --seal-dark: #8e2d27; --ok: #7cc28a; --no: #e08a73;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 Georgia, "Times New Roman", serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  .sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 32px 24px; }
+  header { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 20px; }
+  header .t { flex: 1 1 280px; min-width: 0; }
+  .kicker { font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 6px 0 8px; font-size: 28px; line-height: 1.2; }
+  h2 { font: 700 13px/1.2 system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 28px 0 10px; }
+  p { margin: 0 0 10px; }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin: 6px 0; }
+  .seal { flex: 0 0 auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 12px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .wrap { overflow-x: auto; }
+  .lock::marker { content: "■  "; color: var(--ok); }
+  .kill::marker { content: "✕  "; color: var(--no); }
+  .crack::marker { content: "△  "; color: var(--muted); }
+  q { font-style: italic; }
+  .cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  .who { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  .who b { display: block; }
+  .who small { color: var(--muted); font-family: system-ui, sans-serif; }
+  .who p { margin: 6px 0 0; font-size: 14px; }
+  footer { margin-top: 24px; color: var(--muted); font: 13px/1.4 system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+<div class="sheet">
+  <header>
+    <div class="t">
+      <div class="kicker">Captain Prospectus · Forge · 29 Sept 2026</div>
+      <h1>A visited stop leaves the round</h1>
+      <p>Started as <q>a stop is done means it's done</q>. It came out as one after-save rule per visit result, a new closed status for Intéressé, and outcome definitions written into the specs. It answers action item 1 of the epic #117 retrospective.</p>
+    </div>
+    <svg class="seal" width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="Seal: Hardened">
+      <defs>
+        <path id="ring" d="M75,75 m-50,0 a50,50 0 1,1 100,0 a50,50 0 1,1 -100,0"/>
+      </defs>
+      <path fill="var(--seal)" d="M75 6 l9 8 12-3 5 11 12 2 1 12 10 7-4 11 7 10-8 9 2 12-11 5-2 12-12 1-7 10-11-4-10 7-9-8-12 2-5-11-12-2-1-12-10-7 4-11-7-10 8-9-2-12 11-5 2-12 12-1 7-10 11 4z"/>
+      <circle cx="75" cy="75" r="58" fill="none" stroke="var(--seal-dark)" stroke-width="2"/>
+      <circle cx="75" cy="75" r="40" fill="none" stroke="var(--seal-dark)" stroke-width="1.5"/>
+      <text font-family="system-ui, sans-serif" font-size="9" letter-spacing="2.5" fill="#fbe9e4">
+        <textPath href="#ring" startOffset="2%">FORGED · TESTED · DECIDED · FORGED · TESTED ·</textPath>
+      </text>
+      <text x="75" y="80" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="15" fill="#fff4ef" letter-spacing="1">HARDENED</text>
+    </svg>
+  </header>
+
+  <h2>Outcome</h2>
+  <p>This idea has been <b>hardened</b>. After Enregistrer, a visited stop leaves Tournée du jour before and after the sync, unless the agent chooses <i>Aujourd'hui</i> on À relancer or Personne sur place.</p>
+  <div class="wrap">
+  <table>
+    <thead><tr><th>Result</th><th>After Enregistrer</th><th>Comes back</th></tr></thead>
+    <tbody>
+      <tr><td>Personne sur place</td><td>Step 2: <i>Aujourd'hui</i> (default, goes to the end of the round) or <i>Choisir une date</i> (from tomorrow), plus Notes</td><td>Today, or on the date</td></tr>
+      <tr><td>Intéressé</td><td>Out, with a new closed status <code>interested</code></td><td>Not until a future feature decides</td></tr>
+      <tr><td>À relancer</td><td>Nothing ticked: <i>Aujourd'hui</i> (end of the round) or <i>Choisir une date</i> (from tomorrow)</td><td>Today, or on the date (Plus tard)</td></tr>
+      <tr><td>Pas intéressé · Converti</td><td>Out</td><td>Never</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Locked decisions</h2>
+  <ul>
+    <li class="lock">A new closed status, <b>Intéressé</b>, with <code>interested → interested</code>. It needs an ADR. There is no backfill, because nothing is deployed.</li>
+    <li class="lock">À relancer and Personne sur place share one step: <q>Aujourd'hui</q> / <q>Choisir une date</q>, same labels. <q>Aujourd'hui</q> sends today's date for both, so the sync contract is unchanged. The picker disables past days and today.</li>
+    <li class="lock">Personne sur place opens on <q>Aujourd'hui</q>, and the radios replace its script questions. À relancer opens with nothing ticked and keeps its questions. Saving it unticked shows <q>Choisissez quand relancer : aujourd'hui ou une date.</q></li>
+    <li class="lock">Hints: Intéressé is <q>Ouvert à la discussion, pas encore inscrit sur la liste d'attente.</q> Converti is <q>Déjà inscrit sur la liste d'attente.</q></li>
+    <li class="lock">Glossary: <b>Waitlist</b> (the sign-up; joining it is a conversion) and <b>Channel</b> (how a prospect joins: today the WhatsApp group or the waitlist). Hints name the commitment, never the channel.</li>
+  </ul>
+
+  <h2>Rejected, and why</h2>
+  <ul>
+    <li class="kill">"Done means done" for every result, including Personne sur place. The owner's own flow needed a same-day revisit.</li>
+    <li class="kill">"Out today, back tomorrow" for Intéressé. Those leads wait for a dedicated feature.</li>
+    <li class="kill">Mapping Intéressé to Converti, which inflates the conversion rate, or to Pas intéressé, which files warm leads as refusals.</li>
+    <li class="kill"><q>Aujourd'hui</q> sending no date: it breaks the required date for À relancer and forces a breaking sync-contract change.</li>
+    <li class="kill">Defaulting À relancer to <q>Aujourd'hui</q>: a hurried agent files <q>come back Thursday</q> as today.</li>
+    <li class="kill">A post-save dialog: a new component stacked on the save sheet, plus one more screen.</li>
+    <li class="kill">The hint <q>pas encore dans le canal</q>. It needs training to decode, "Canal" is a place in Brussels, and it names the channel rather than the commitment.</li>
+  </ul>
+
+  <h2>Weak points that survived</h2>
+  <ul>
+    <li class="crack">A stop that leaves before the sync loses its "Pas encore envoyé" row badge. Only the band's pending count still shows the unsent visit.</li>
+    <li class="crack">Intéressé leads now leave every agent's round, and nothing works them until the future feature ships.</li>
+    <li class="crack">The phone must never reason in statuses. The chosen result drives only the phone's next step (invariant 3), and the implementation has to hold that line.</li>
+  </ul>
+
+  <h2>Who pressure-tested it</h2>
+  <div class="cast">
+    <div class="who"><b>🎨 Sally</b><small>UX Designer · installed agent</small><p>Argued for Léa at the closed door: every extra screen is a tap she'll resent.</p></div>
+    <div class="who"><b>📋 John</b><small>Product Manager · installed agent</small><p>Pointed out that Intéressé, the hottest lead, was the only result without an answer.</p></div>
+    <div class="who"><b>🏗️ Winston</b><small>System Architect · installed agent</small><p>Made the case that only a new status is honest, and for one form, one validator and one save path.</p></div>
+    <div class="who"><b>😤 Grumbal</b><small>The Adversary · custom persona</small><p>Raised the question of the existing rows until it was settled that nothing is deployed.</p></div>
+    <div class="who"><b>🧓 Karim</b><small>Canvasser · generated voice</small><p>Kept the note field alive, got the hint wording to name the commitment, and on the reopening showed how a pre-ticked <q>today</q> would swallow a Thursday meeting.</p></div>
+    <div class="who"><b>🔌 Ines</b><small>Integration reviewer · generated voice</small><p>Found that À relancer's date is required on the wire, which decided what <q>Aujourd'hui</q> sends.</p></div>
+  </div>
+
+  <footer>Workspace: _bmad-output/forge/done-stop-leaves-the-round/ · summary in forged-idea.md · decision trail in .memlog.md</footer>
+</div>
+</main>
+</body>
+</html>

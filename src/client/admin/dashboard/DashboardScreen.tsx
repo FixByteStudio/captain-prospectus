@@ -7,6 +7,7 @@ import {
 } from "../../../shared/constants";
 import { copy } from "../../copy";
 import { formatCount, formatPercent, formatPoints } from "../../format";
+import { useOnline } from "../../hooks/use-online";
 import { cn } from "../../lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import { Button } from "../../ui/button";
@@ -56,10 +57,16 @@ export function DashboardScreen() {
   // The sidebar's own queries: no request of its own (GH #113).
   const duplicates = queueCount(useDuplicates(), (d) => d.pairs.length);
   const orphanCount = queueCount(useOrphans(), orphanTotal);
+  // GH #209 (GH #85): the admin offline banner already says data is stale,
+  // so a failed refetch while offline is treated like not-errored here too —
+  // no second Alert, panels keep whatever they hold.
+  const online = useOnline();
+  const dashboardFailed = dashboard.isError && online;
   // A failed refetch keeps its last figures (TanStack v5 keeps `data` on
-  // error), so the panels stay under the Alert. Skeletons only when there is
-  // nothing yet and nothing has failed.
-  const showPanels = data !== undefined || !dashboard.isError;
+  // error), so the panels stay under the Alert. Skeletons when there is
+  // nothing yet — including a first load that failed while offline, since
+  // `dashboardFailed` reads as not-errored there too.
+  const showPanels = data !== undefined || !dashboardFailed;
   const row = { busy: dashboard.isFetching, dimmed: dashboard.isPlaceholderData };
 
   return (
@@ -72,10 +79,10 @@ export function DashboardScreen() {
 
       {/* Outside the aria-busy grid, so it is announced rather than hidden. */}
       <p role="status" className="sr-only">
-        {!data && !dashboard.isError ? copy.dashboard.loading : ""}
+        {!data && !dashboardFailed ? copy.dashboard.loading : ""}
       </p>
 
-      {dashboard.isError && (
+      {dashboardFailed && (
         <Alert variant="destructive">
           <AlertTitle>{copy.dashboard.loadFailed}</AlertTitle>
           <AlertDescription>

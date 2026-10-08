@@ -10,6 +10,8 @@ description: Pre-merge and post-deploy checklist for a Captain Prospectus releas
 - [ ] Migration reviewed by `migration-guard`; safe for the currently deployed Worker.
 - [ ] Sync contract change? Followed `sync-contract-change`.
 - [ ] Security-relevant? Reviewed by `security-reviewer`.
+- [ ] Changes what the phone sends about an agent's location? The owner has told the agents
+      first ([ADR-0028](../../../docs/adr/0028-agent-position-at-sync.md), `docs/security.md`).
 - [ ] Docs and ADRs updated; roadmap ticked.
 - [ ] No new paid service or dependency (ADR-0002).
 - [ ] `wrangler.jsonc`: `assets.run_worker_first` is still `["/api/*"]`, never `true` — `true` bills

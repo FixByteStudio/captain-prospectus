@@ -92,13 +92,15 @@ export function RoundMap({
   position,
   recentre,
   onSelect,
+  fitPosition = true,
 }: {
   pins: readonly MapPin[];
   path: readonly [number, number][];
   position: Point | null;
   /** Asks the caller for a fresh reading (`useAgentPosition`'s own `refresh`,
-   * passed through by `CarteScreen`). */
-  recentre: () => void;
+   * passed through by `CarteScreen`). Left `undefined`, there is no re-centre
+   * button — the admin round view has no reading to ask for. */
+  recentre?: () => void;
   /**
    * Selects a stop by id (spec-gh-122): when set, every marker becomes
    * tappable and keyboard-reachable, named `copy.carte.pinLabel`. Left
@@ -106,6 +108,14 @@ export function RoundMap({
    * (epic-117 context) reuses this component with no selection of its own.
    */
   onSelect?: (id: string) => void;
+  /**
+   * Whether the auto-fit counts the position (#287). The admin round view sets
+   * it false: a reading far from the stops would zoom the map out until they
+   * are small, and the marker is context there, not the subject. The marker is
+   * still drawn, and with no pins the map still centres on it. The re-centre
+   * paths below are the agent's own and always count it.
+   */
+  fitPosition?: boolean;
 }) {
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<L.Map | null>(null);
@@ -241,7 +251,13 @@ export function RoundMap({
     // array identity on every render even when nothing in the round changed —
     // redrawing anyway would `clearLayers()` the pin an agent just gave
     // keyboard focus to, dropping it right back to the map container.
-    const drawKey = JSON.stringify({ pins, path, position, selectable: Boolean(onSelect) });
+    const drawKey = JSON.stringify({
+      pins,
+      path,
+      position,
+      selectable: Boolean(onSelect),
+      fitPosition,
+    });
     if (drawKey === lastDrawnKey.current) return;
     lastDrawnKey.current = drawKey;
 
@@ -291,14 +307,14 @@ export function RoundMap({
 
     if (!userMoved.current) {
       const points: [number, number][] = pins.map((pin): [number, number] => [pin.lat, pin.lng]);
-      if (position) points.push([position.lat, position.lng]);
+      if (position && (fitPosition || pins.length === 0)) points.push([position.lat, position.lng]);
       const key = pointsKey(points);
       if (key !== lastFitKey.current) {
         lastFitKey.current = key;
         applyFit(instance, points);
       }
     }
-  }, [pins, path, position, onSelect]);
+  }, [pins, path, position, onSelect, fitPosition]);
 
   // A re-centre tap asks for a fresh reading (`handleRecentre` below); when it
   // lands here as a prop change, pan straight to it. `useAgentPosition` never
@@ -321,6 +337,7 @@ export function RoundMap({
   }, [position]);
 
   const handleRecentre = () => {
+    if (!recentre) return;
     recentre();
     pendingRecentre.current = true;
     if (recentreTimer.current !== null) window.clearTimeout(recentreTimer.current);
@@ -373,19 +390,21 @@ export function RoundMap({
         role="application"
         aria-label={copy.carte.label}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-map"
-        onClick={handleRecentre}
-        aria-label={copy.carte.recentre}
-        // `z-10`: above the isolated map div as a whole (see `isolate` above).
-        // `bottom-9` clears Leaflet's own bottom-right attribution line so
-        // neither paints over the other.
-        className="bg-card absolute right-3.5 bottom-9 z-10 shadow-md"
-      >
-        <LocateFixedIcon aria-hidden="true" />
-      </Button>
+      {recentre && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-map"
+          onClick={handleRecentre}
+          aria-label={copy.carte.recentre}
+          // `z-10`: above the isolated map div as a whole (see `isolate` above).
+          // `bottom-9` clears Leaflet's own bottom-right attribution line so
+          // neither paints over the other.
+          className="bg-card absolute right-3.5 bottom-9 z-10 shadow-md"
+        >
+          <LocateFixedIcon aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
 }

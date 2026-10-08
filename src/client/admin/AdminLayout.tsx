@@ -1,7 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
+import { copy } from "../copy";
+import { useOnline } from "../hooks/use-online";
 import { AdminSidebar } from "./AdminSidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "../ui/sidebar";
+import { OfflineBanner } from "./OfflineBanner";
 import { TopBar } from "./TopBar";
 
 /**
@@ -27,6 +30,21 @@ function useDesktopOpen() {
 }
 
 /**
+ * True once the network has come back after a drop, until it drops again:
+ * EXPERIENCE.md:216 announces the offline banner "once when it goes" too, and
+ * a banner simply leaving the live region is not announced.
+ */
+function useReconnected(online: boolean) {
+  const [reconnected, setReconnected] = useState(false);
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online !== wasOnline.current) setReconnected(online);
+    wasOnline.current = online;
+  }, [online]);
+  return reconnected;
+}
+
+/**
  * The admin frame: a navy sidebar (full / icon rail / Sheet drawer, GH #63)
  * and a 56px top bar (the sidebar toggle plus `TopBar`'s breadcrumb, search,
  * notifications, theme toggle and avatar, GH #64).
@@ -45,6 +63,8 @@ export function AdminLayout({
 }) {
   const [open, setOpen] = useDesktopOpen();
   const { pathname } = useLocation();
+  const online = useOnline();
+  const reconnected = useReconnected(online);
 
   return (
     <SidebarProvider open={open} onOpenChange={setOpen}>
@@ -54,7 +74,16 @@ export function AdminLayout({
           <SidebarTrigger />
           <TopBar pathname={pathname} email={email} />
         </header>
-        {banner}
+        {/* Offline takes the update prompt's slot; they never both apply
+            (EXPERIENCE.md § State Patterns, "New build available"). The
+            aria-live region is always mounted, empty online, so a screen
+            reader announces the banner arriving and leaving rather than
+            missing an element that showed up already filled (GH #209). */}
+        <div aria-live="polite" data-slot="offline-region">
+          {!online && <OfflineBanner />}
+          {reconnected && <p className="sr-only">{copy.offline.reconnected}</p>}
+        </div>
+        {online && banner}
         <main className="px-4 pt-6 pb-page">{children}</main>
       </SidebarInset>
     </SidebarProvider>

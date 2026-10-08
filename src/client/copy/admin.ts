@@ -14,11 +14,19 @@ const PAGER = {
 };
 
 export const adminCopy = {
+  /** The admin shell's offline banner (GH #209, EXPERIENCE.md § State Patterns). */
+  offline: {
+    banner:
+      "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau.",
+    /** Read out, never shown, when the banner goes (EXPERIENCE.md § Accessibility). */
+    reconnected: "Connexion rétablie.",
+  },
+
   /** The top bar's search button and its inert CommandDialog (GH #64). */
   search: {
     // Reused verbatim as the ≥768px button's text and, below 768px, as the
     // icon-only button's aria-label (spec's Always list).
-    button: "Rechercher un prospect…",
+    button: "Rechercher…",
     // The palette makes no request yet — this is its only content besides
     // the input, so it doubles as the dialog's sr-only description.
     unavailable:
@@ -171,6 +179,9 @@ export const adminCopy = {
       anyStatus: "Tous les statuts",
       anyAgent: "Tous les agents",
       anySource: "Toutes les sources",
+      /** The Hors cible toggle (GH #250): the count joins the label only while it is on. */
+      outOfTarget: "Hors cible signalé",
+      outOfTargetCount: (n: number) => `Hors cible signalé\u00a0: ${n}`,
       /** A chip for a URL filter the Statut select cannot show (GH #114). */
       severalStatuses: (labels: string[]) => `Statut\u00a0: ${labels.join(", ")}`,
       /** `next_visit_at` strictly before that instant, named by its Brussels day. */
@@ -463,6 +474,13 @@ export const adminCopy = {
     /** The 25-row pager over the held feed (GH #178). */
     pager: { ...PAGER, nav: "Pagination des visites" },
 
+    /** Narrows the ledger and its export to one refusal reason (GH #249). */
+    reasonFilter: {
+      label: "Raison du refus",
+      any: "Toutes les raisons",
+      empty: "Aucune visite pour cette raison sur la période.",
+    },
+
     /**
      * The export button (GH #178) — a warning toast, not a blocking dialog,
      * when the server flags `x-truncated`. Its own cap, `EXPORT_ROWS`, is a
@@ -476,6 +494,21 @@ export const adminCopy = {
         `L'export s'arrête à ${cap} visites. Choisissez une période plus courte pour tout obtenir.`,
       failed: "L'export a échoué. Réessayez.",
     },
+  },
+
+  /** The admin round view (spec 5.5, design.md "The admin round view"). */
+  round: {
+    title: "Tournée du jour",
+    // French keeps 0 singular: "0 arrêt".
+    count: (n: number) => (n <= 1 ? `${n} arrêt` : `${n} arrêts`),
+    agentLabel: "Agent",
+    choosePlaceholder: "Choisir un agent",
+    choosePrompt: "Choisissez un agent pour voir sa tournée du jour.",
+    position: (date: string) => `Position du ${date}`,
+    noPosition: "Aucune position reçue aujourd'hui. La tournée est triée par nom.",
+    empty: "Aucun arrêt dans la tournée du jour de cet agent.",
+    loadFailed: "Impossible de charger la tournée. Réessayez.",
+    loading: "Chargement de la tournée…",
   },
 
   orphans: {

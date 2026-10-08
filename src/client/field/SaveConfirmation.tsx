@@ -17,9 +17,9 @@ import { buttonVariants } from "@/ui/button-variants";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { copy, OUTCOME_LABELS } from "../copy/field";
+import { copy, OUTCOME_LABELS, REFUSAL_REASON_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import type { Outcome } from "../../shared/constants";
+import type { Outcome, RefusalReason } from "../../shared/constants";
 
 export type SaveSummary = {
   name: string;
@@ -28,6 +28,9 @@ export type SaveSummary = {
   /** `null` when the visit has no questions: the row is absent, not "0". */
   answerCount: number | null;
   notes: string;
+  /** Pas intéressé's picked reason (refusal-reasons.md); null for every
+   * other outcome, where the row is absent. */
+  refusalReason: RefusalReason | null;
 };
 
 type Props = {
@@ -161,6 +164,13 @@ function Body({
             <span className="tabular-nums">{copy.visit.confirm.answers(summary.answerCount)}</span>
           </Row>
         )}
+        {summary.refusalReason !== null && (
+          <Row label={copy.visit.refusalReason}>
+            <Badge variant="secondary" className="bg-card text-sm">
+              {REFUSAL_REASON_LABELS[summary.refusalReason]}
+            </Badge>
+          </Row>
+        )}
         {summary.notes !== "" && (
           <div className="py-2.5">
             <dt className="text-muted-foreground">{copy.visit.notes}</dt>
@@ -181,11 +191,16 @@ function Body({
       )}
 
       {/* Enregistrer first in the DOM, so it is also first for the keyboard;
-          on a dialog it is drawn on the right, where a confirm sits. */}
-      <div className={cn("flex gap-2", stacked ? "flex-col" : "flex-row-reverse")}>
+          on a dialog it is drawn on the right, where a confirm sits. Stacked
+          buttons skip flex-1: its 0% basis on the column axis would override
+          h-touch and shrink them to their text. cn() stays on each button:
+          its merge is what drops the base text-sm for touch's text-base. */}
+      <div
+        className={cn("flex gap-2", stacked ? "flex-col" : "flex-row-reverse [&>button]:flex-1")}
+      >
         <button
           type="button"
-          className={cn(buttonVariants({ size: "touch" }), "flex-1")}
+          className={cn(buttonVariants({ size: "touch" }))}
           disabled={saving}
           onClick={onConfirm}
         >
@@ -193,7 +208,7 @@ function Body({
         </button>
         <button
           type="button"
-          className={cn(buttonVariants({ variant: "secondary", size: "touch" }), "flex-1")}
+          className={cn(buttonVariants({ variant: "secondary", size: "touch" }))}
           disabled={saving}
           onClick={onEdit}
         >

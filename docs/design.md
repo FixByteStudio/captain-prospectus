@@ -96,15 +96,18 @@ var(--card))`).
 | Nouveau (`new`) | `muted-foreground` | `secondary` |
 | Assigné (`assigned`) | `foreground` | `tint-assigned`: 7 % ink, i.e. 12 % of the 55 % edge, kept opaque |
 | À relancer (`follow_up`) | `warn` | `tint-warn` |
+| Intéressé (`interested`, status) | `success` | `tint-interested`: 7 % success, i.e. 12 % of the 55 % edge, kept opaque |
 | Converti (`converted`) | `success` | `tint-success` |
 | Refusé (`rejected`) | `destructive` | `tint-destructive`: 12 % light, 10 % dark |
 | Personne sur place (`no_contact`) | `muted-foreground` | `secondary` |
-| Intéressé (`interested`) | `outcome-interested` | `tint-outcome-interested` |
+| Intéressé (`interested`, outcome) | `outcome-interested` | `tint-outcome-interested` |
 | Pas intéressé (`not_interested`) | `foreground` | `tint-outcome-not-interested` |
 
 `converted` has its own `success` token and is **always green**. A gold
 `converted` would sit 7° in hue from the mustard that means `follow_up`, and
-the two would stop being separable.
+the two would stop being separable. Intéressé (`interested`) uses the same
+green at partial strength — a 55 % edge and a regular-weight label — so it
+never reads as a win, and the label always tells the two apart.
 
 ### The six rules
 
@@ -169,6 +172,7 @@ reading a word.
 | `new` | `status-new` — 16% ink | `muted-foreground` |
 | `assigned` | `status-assigned` — 55% ink | `foreground` |
 | `follow_up` | `status-follow-up` — `warn` | `warn` |
+| `interested` | `status-interested` — 55% `success` | `success`, regular weight |
 | `converted` | `status-converted` — `success` | `success` |
 | `rejected` | `status-rejected` — `destructive` | `destructive` |
 
@@ -222,9 +226,9 @@ sequence rather than compared. Figures are formatted for fr-FR: "1 284",
 
 ## Layout
 
-The admin side has a navy sidebar (GH #63): **Pilotage** (Tableau de bord),
-**Prospects** (Prospects, Import, Doublons) and **Terrain** (Visites, À
-rattacher, Scripts), each item a 36px row
+The admin side has a navy sidebar (GH #63): **Pilotage** (Tableau de bord,
+Agents), **Prospects** (Prospects, Import, Doublons) and **Terrain** (Visites,
+À rattacher, Scripts), each item a 36px row
 with an icon and a label, group labels in the overline style. The current item
 is a gold fill with navy text and a `primary-edge` inset; item text otherwise
 stays `band-foreground` in every state, including the `band-accent` hover
@@ -258,6 +262,18 @@ content. The avatar is initials on `primary` with a `primary-edge` ring,
 opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a real
 anchor to `/cdn-cgi/access/logout` rather than a router link — see
 [identity-access.md](domains/identity-access.md) for why.
+
+`AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
+two mutually exclusive things (GH #209): the update prompt when a build
+waits, or — while `useOnline()` reports offline — a full-width `Alert`
+reading "Hors ligne. Les données affichées ne changent plus et se
+rafraîchiront au retour du réseau.", gone as soon as the browser reports back
+online. Offline wins the slot, since a build cannot be fetched offline. Each
+screen's own load-failed Alert (`ScreenState`, `DashboardScreen`) stands down
+for the same reason while offline, and panels keep whatever data they last
+held rather than each repeating the banner's sentence. The banner sits in an
+always-mounted `aria-live="polite"` region, so it is announced when it appears,
+and when it goes the region reads out a hidden "Connexion rétablie."
 
 Safe-area insets go on `.safe-top` (the band) and `.safe-bottom` (the field's
 bottommost fixed element — the tab bar below 768px, GH #66), never on `body`,
@@ -348,35 +364,47 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
   meta on the right. One row per status in `STATUSES` order, zeros included:
   the `STATUS_LABELS` label on the left; on the right the count in semibold
   tabular figures — `muted-foreground` for Nouveau, `foreground` for Assigné,
-  `warn`, `success`, `destructive` for the others — and its share in meta, one
-  decimal. Under each, a 6px `secondary` track with a fill of that share in
-  `status-new`, `status-assigned`, `warn`, `success` or `destructive`. The
-  share is of the pipeline's own total; a total of 0 shows "0 prospect", 0,0 %
-  and empty tracks. The bars are decorative, the text carries the figures.
+  `warn`, `success` (Intéressé and Converti), `destructive` for the others —
+  and its share in meta, one decimal. Under each, a 6px `secondary` track with
+  a fill of that share in `status-new`, `status-assigned`, `warn`,
+  `status-interested`, `success` or `destructive`. The share is of the
+  pipeline's own total; a total of 0 shows "0 prospect", 0,0 % and empty
+  tracks. The bars are decorative, the text carries the figures.
 - **Activité par agent** (GH #112). A row under that, 3:2 with À traiter at ≥ lg, as
   in the mockup, so the five columns fit at 1280 px; full width below.
   A `Card` holding shadcn `Table`: the head row on `secondary` in
   `text-overline` — Agent, Visites, Convertis, À relancer, Prospects ouverts —
-  then one 44px row per agent. There is no users table (ADR-0006), so the
+  then one 44px row per agent. The
   agent cell is a 26px `secondary` circle with the email's uppercase initial,
-  then the email. Numbers are right-aligned tabular figures; Convertis is
+  then the email; at ≥ lg the email takes the width the figures leave and
+  truncates with an ellipsis, its full address in a `title`, so a long one
+  never pushes the figures out. Numbers are right-aligned tabular figures; Convertis is
   `success` semibold and À relancer `warn` semibold. Rows are not links.
   The table scrolls sideways inside its card at 390 px. With no
   agent, the card says "Aucun agent pour l'instant."
 - **À traiter** (GH #113). The 3:2 row's right part; under the table below
-  lg. A `Card` titled in `text-heading` with three rows split by `border`
-  lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`), the
-  label with a meta line under it, the count in semibold tabular figures, and
-  a small `secondary` Button. Relances dues, "À relancer aujourd'hui ou plus
-  tôt", "Voir" to Prospects filtered `status=follow_up&dueBefore={to}` — the
-  dashboard's own boundary, so the list totals the count; Visites à
-  rattacher, "Conservées, pas encore comptées", "Rattacher" to À rattacher;
-  Doublons, "Semblent désigner le même endroit", "{n} paires", "Fusionner" to
-  Doublons. The last two counts come from the sidebar's own queries, with no
-  request of their own; Visites à rattacher counts the whole queue (the page
-  plus `remaining`). At 0 the count turns `muted-foreground` and
-  the button is disabled, not a link; so is a row whose query is loading or
-  has failed, which shows "—" rather than a guessed 0.
+  lg. A `Card` titled in `text-heading` with four rows split by `border`
+  lines: a 40px `secondary` icon tile (Lucide `Clock`, `Link`, `Copy`,
+  `UserX`), the label with a meta line under it, the count in semibold
+  tabular figures, and a small `secondary` Button. Relances dues, "À relancer
+  aujourd'hui ou plus tôt", "Voir" to Prospects filtered
+  `status=follow_up&dueBefore={to}` — the dashboard's own boundary, so the
+  list totals the count; Visites à rattacher, "Conservées, pas encore
+  comptées", "Rattacher" to À rattacher; Doublons, "Semblent désigner le même
+  endroit", "{n} paires", "Fusionner" to Doublons; Prospects sans agent actif
+  (ADR-0029), "Assignés à un agent désactivé", "Réassigner" to Prospects
+  filtered to inactive agents, where the toolbar shows the filter as the chip
+  "Agent : désactivé" (§ One toolbar slot) and the list totals the count.
+  Like the other filters it lives in the URL, under the name the story that
+  adds it gives in [api.md](api.md); the Agent select reads "Agent désactivé"
+  while it is on, and the chip's × or another choice there clears it.
+  Visites à rattacher and Doublons come from the sidebar's own queries, with
+  no request of their own; Prospects sans agent actif comes with the
+  dashboard's figures, a field that same story adds to [api.md › The
+  dashboard](api.md#the-dashboard). Visites à rattacher
+  counts the whole queue (the page plus `remaining`). At 0 the count turns
+  `muted-foreground` and the button is disabled, not a link; so is a row whose
+  query is loading or has failed, which shows "—" rather than a guessed 0.
 - **Dernières visites** (GH #113). The last row, full width. A `Card` with
   "Tout voir ›" to Visites on the right of its title, then shadcn `Table`:
   Heure, Prospect, Résultat, Flyer, Agent, on a `secondary` head row in
@@ -430,7 +458,10 @@ list; a change replaces the URL rather than pushing a history entry, and
 clears the selection. The search box itself holds its own text and writes the
 URL ~300ms after the last keystroke, so a fast typist does not mint a request
 per letter; an outside URL change (Effacer les filtres, Back, the sidebar)
-resets the box from the URL. A filter the selects cannot show — several
+resets the box from the URL. After the selects, an outline `Toggle`
+"Hors cible signalé" (`outOfTarget=true`, GH #250) narrows the list to places
+agents reported closed or off-target and no admin has fixed since; while on, its
+label carries the filtered total ("Hors cible signalé : 3"). A filter the selects cannot show — several
 statuses, or a due date — stays in the slot as a `secondary` Badge chip
 ("Statut : Nouveau, Assigné, À relancer", "Relance avant le
 28 septembre 2026", a Brussels day) with a ghost × that drops just that filter;
@@ -542,7 +573,8 @@ together.
 - **The empty state is healthy, not a failure**: an icon tile
   (`CopyCheckIcon`), « Aucun doublon détecté. », one sentence, and one
   `outline` button to Prospects — the same shape as every other empty state
-  in the app, reusing the shared `EmptyTile` (`src/client/admin/EmptyTile.tsx`).
+  in the app, reusing the shared `EmptyTile` (`src/client/admin/EmptyTile.tsx`),
+  which centres icon, text and button in the card.
 
 ### The script editor
 
@@ -853,6 +885,47 @@ Four more, from ADR-0020:
   because « Google n'a pas répondu » would send the admin to refresh a page that
   will never work.
 
+#### A place that looks already listed
+
+The same restaurant can come from OpenStreetMap and from Google under two ids, and
+the dedupe key cannot see it ([ingestion](domains/ingestion.md#duplicates-across-providers)).
+The server compares every answer with the list; the panel shows what it found:
+
+```
+┌─────────────────────────────┐
+│ 3               2           │
+│ 3 lieux trouvés 2 semblent  │
+│                 déjà dans…  │
+├─────────────────────────────┤
+▌Le Bouchon        Restaurant │  ← warn edge
+▌12 rue des Bouchers          │
+▌Semble déjà dans la liste :  │
+▌Le Bouchon                   │
+│Pizza Vera   Restauration r. │  ← status-new edge
+▌Sans nom                Bar  │  ← status-rejected edge
+├─────────────────────────────┤
+│ ☐ Importer aussi les 2 lieux│
+│   qui semblent déjà dans la │
+│   liste                     │
+│   Un doublon importé se     │
+│   fusionne ensuite…         │
+│ [Retour] [Importer 1 prosp.]│
+└─────────────────────────────┘
+```
+
+- **A third kind of row, on the same edge.** `status-new` imports, `status-rejected`
+  cannot, and `warn` means "look first": the colour `follow_up` already uses for
+  "someone owes this a look". The edge never speaks alone: the row names the listed
+  prospect it looks like, so the admin can judge the match without leaving the screen.
+- **Out by default, in with one box.** The import count and the button leave the
+  flagged places out. One checkbox under the list takes them all back, and the
+  button's count follows it. It is not a checkbox per row: the list stays a ledger
+  (no checkboxes-as-chrome), and a wrong call is cheap either way. A place left out
+  can be imported by searching again, and one imported by mistake is what the
+  Doublons screen merges.
+- **The opt-in belongs to one answer.** A new search starts unchecked again. Ticking
+  the box for one area must not quietly apply to the next.
+
 ### The live feed
 
 The roadmap sketched this as shadcn `card` + `badge` + `scroll-area`. **It is a
@@ -862,6 +935,7 @@ spine.
 
 ```
 │ Visites            312 visites  [7 j|30 j|90 j]  [Exporter en CSV] │
+│                    Raison du refus [Toutes les raisons ▾]          │
 │ Les visites arrivent ici dès qu'un agent synchronise.               │
 │                                                                     │
 │ RELANCES DUES     TAUX DE          FLYERS REMIS    AGENTS EN        │
@@ -870,7 +944,7 @@ spine.
 │ Avant le 4 oct.   38 convertis…    Sur la période  Aujourd'hui      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 16:42  Le Bouchon          Intéressé      flyer  agent@…            │
-│ 16:31  Chez Marcel         Pas intéressé         agent@…            │
+│ 16:31  Chez Marcel         Pas intéressé  Pas besoin…  agent@…      │
 │ 15:58  Pizza Vera          À relancer     flyer  agent@…            │
 │        « rappeler après 18 h »                                      │
 │ 15:12  Le Comptoir         Converti       flyer  agent@…            │
@@ -916,6 +990,14 @@ period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
   cap the server answers `x-truncated: true`; the button shows a warning toast
   naming the cap and suggesting a shorter period, the same rule Prospects'
   export (#179) follows.
+- **Raison du refus narrows the ledger and its export alike** (GH #249) — the
+  shared `prospects/Filter` select beside the period, held in the URL
+  (`?reason=`, one of the 7 refusal reasons; any other value reads as Toutes
+  les raisons). A change reseeds the feed exactly as a period
+  change does, and every poll and the export carry the same `reason=`. A
+  refused visit shows its reason's label, muted, right after Pas intéressé;
+  a refusal without one shows nothing extra. The strip stays on the whole
+  period, since its figures are not refusals.
 
 Six rules the ledger itself still encodes:
 
@@ -925,8 +1007,8 @@ Six rules the ledger itself still encodes:
   rather than have missed it. `sonner` stays for things the admin *did*.
 - **The edge is the outcome's consequence, not the outcome.** A row's leading
   edge uses `STATUS_EDGE[OUTCOME_TO_STATUS[outcome]]`, so the column scans as
-  "what does this leave me to do" — `À relancer` mustard, `Converti` green,
-  `Refusé` red. The outcome's own French label sits in its column, because
+  "what does this leave me to do" — `À relancer` mustard, `Intéressé` faded
+  green, `Converti` green, `Refusé` red. The outcome's own French label sits in its column, because
   colour never carries the information alone.
 - **Time is the spine.** The feed orders by `received_at`, not `visited_at` —
   the server's clock, not the phone's, because a phone's clock can be wrong
@@ -946,7 +1028,8 @@ Six rules the ledger itself still encodes:
   visit was made against.
 
 Empty, it is an invitation like every other empty screen: « Aucune visite reçue.
-Les visites apparaissent ici dès qu'un agent synchronise. »
+Les visites apparaissent ici dès qu'un agent synchronise. », in the shared
+`EmptyTile` with an inbox icon and no button.
 
 ### The repair queue
 
@@ -1023,46 +1106,164 @@ the shared `EmptyTile` with « Aucune visite à rattacher. », « Tout ce que le
 agents ont envoyé est arrivé à destination. » and one `outline` button to
 Visites.
 
-#### A place that looks already listed
+### The admin round view
 
-The same restaurant can come from OpenStreetMap and from Google under two ids, and
-the dedupe key cannot see it ([ingestion](domains/ingestion.md#duplicates-across-providers)).
-The server compares every answer with the list; the panel shows what it found:
+`/admin/tournee`, last in Terrain: where an agent's round stands today, without
+phoning them. An agent `Select` (kept in `?agent=`, which wins; without one, the
+agent last chosen on this browser is restored from `localStorage`, and the URL
+stays plain), then a read-only list of that agent's stops from the stored position
+([ADR-0028](adr/0028-agent-position-at-sync.md)).
 
 ```
-┌─────────────────────────────┐
-│ 3               2           │
-│ 3 lieux trouvés 2 semblent  │
-│                 déjà dans…  │
-├─────────────────────────────┤
-▌Le Bouchon        Restaurant │  ← warn edge
-▌12 rue des Bouchers          │
-▌Semble déjà dans la liste :  │
-▌Le Bouchon                   │
-│Pizza Vera   Restauration r. │  ← status-new edge
-▌Sans nom                Bar  │  ← status-rejected edge
-├─────────────────────────────┤
-│ ☐ Importer aussi les 2 lieux│
-│   qui semblent déjà dans la │
-│   liste                     │
-│   Un doublon importé se     │
-│   fusionne ensuite…         │
-│ [Retour] [Importer 1 prosp.]│
-└─────────────────────────────┘
+Tournée du jour                                   12 arrêts
+Agent [lea@example.com v]  Position du 24/09/2026 15:24
++---------------------------------------------------------+
+|#1 Pizza Roma                [Assigné]              120 m |
+|   Restaurant · 4 rue Neuve                               |
+|#2 Chez Marcel              [À relancer]            340 m |
++---------------------------------------------------------+
 ```
 
-- **A third kind of row, on the same edge.** `status-new` imports, `status-rejected`
-  cannot, and `warn` means "look first": the colour `follow_up` already uses for
-  "someone owes this a look". The edge never speaks alone: the row names the listed
-  prospect it looks like, so the admin can judge the match without leaving the screen.
-- **Out by default, in with one box.** The import count and the button leave the
-  flagged places out. One checkbox under the list takes them all back, and the
-  button's count follows it. It is not a checkbox per row: the list stays a ledger
-  (no checkboxes-as-chrome), and a wrong call is cheap either way. A place left out
-  can be imported by searching again, and one imported by mistake is what the
-  Doublons screen merges.
-- **The opt-in belongs to one answer.** A new search starts unchecked again. Ticking
-  the box for one area must not quietly apply to the next.
+From `md` the list and the map sit side by side:
+
+```
++----------------------------+ +----------------------------+
+|#1 Pizza Roma     120 m     | |  (map, sticky)             |
+|#2 Chez Marcel    340 m     | |   (1)--(2)   (o)           |
++----------------------------+ +----------------------------+
+```
+
+- Rows follow `buildTodayList(...).now` as it comes (`src/shared/today.ts`);
+  no second sort. Only today's stops: no Plus tard group.
+- Read-only: no Visiter, Y aller, swipe, expand or link on a row. Rows reuse
+  `StopNumber`, the status leading edge and the ledger status badge.
+- No position today: the same stops sorted by name, no distances, and the
+  notice « Aucune position reçue aujourd'hui. La tournée est triée par nom. »
+- With a position, a stop without coordinates is listed last with no distance.
+- The map pane sits beside the list (the field's `RoundMap`, no re-centre
+  button, pins decorative). Pins carry the list's numbers; a stop without
+  coordinates keeps its number and draws no pin. With a stored position: pin 1
+  gold, the dashed path and the position marker. Without one: card-coloured
+  pins only, no path, no marker, so the map implies no next step it cannot
+  know. The map fits the stops, not the position, so a reading far from them
+  never shrinks them: the marker is drawn wherever it falls. It mounts for any
+  loaded round (zero pins: the Brussels view, or centred on the position when
+  there is one) and remounts, so refits, when
+  another agent is chosen. Below `md` it comes first at a fixed 280 px, then
+  the list; from `md` the list is on the left and the map on the right, 80 % of
+  the viewport tall and sticky.
+
+### Agents
+
+`/admin/agents`, second in Pilotage (Lucide `Users`): who may sign in, with
+which role, and on which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+Adding an agent is one form here, with no deploy. Built on the #175
+primitives: a `ScreenHeader`, a `ScreenState` gate and one `Surface` holding
+the rows.
+
+```
+│ Agents                                     [Ajouter un utilisateur] │
+│ Qui peut se connecter, et avec quel rôle.                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ Utilisateur          Rôle            Inscription         Appareils  │
+│ › Léa Dupont         Agent           Inscrit                  2   ⋮ │
+│   lea@example.com                                                   │
+│     iPhone · Safari  Inscrit le 24/09  Vu le 07/10 15:24 [Révoquer] │
+│ › Marc Peeters       Agent           Pas encore inscrit       0   ⋮ │
+│ › Sam Owner          Admin           Inscrit                  1   ⋮ │
+├─────────────────────────────────────────────────────────────────────┤
+  › Désactivés (1)
+```
+
+- **Header.** "Agents", lede "Qui peut se connecter, et avec quel rôle.", and
+  one `default` Button, "Ajouter un utilisateur".
+- **Adding opens a `Dialog`** titled "Ajouter un utilisateur", a shadcn
+  `form` (ADR-0018) whose resolver is a `z.pick` of the shared schema:
+  "Adresse e-mail", "Nom", and "Rôle" as a `Select` of "Agent" (the default)
+  and "Admin" (the [glossary](glossary.md)'s word); "Ajouter" and "Annuler". Its messages: "Saisissez une
+  adresse e-mail valide." and "Saisissez un nom." The address is trimmed and
+  lowercased before it is sent, as `users.email` is. The new row appears at
+  once as "Pas encore inscrit", with the toast "Utilisateur ajouté."; the next
+  step is its "Générer un code". An address that already has a user is
+  refused with "Cette adresse a déjà un compte. S'il est désactivé,
+  réactivez-le sous Désactivés." Users are never deleted, so a typo is fixed
+  by deactivating the wrong row.
+- **One row per active user**, by name. Utilisateur is the name, the email
+  under it in meta. Rôle is plain text, "Agent" or "Admin".
+  Inscription is a badge: "Inscrit" (`tint-success`) when the user has at
+  least one live session, "Pas encore inscrit" (`secondary`) otherwise — the
+  word phase 2 of the cutover waits on for every row. Appareils is the count
+  of live sessions in tabular figures. The signed-in admin's own row carries
+  "Vous" in meta after the email.
+- **The row expands to its devices.** A chevron before the name opens one
+  line per session under the row: the device label ("iPhone · Safari"),
+  "Inscrit le 24/09/2026" and "Vu le 07/10/2026 15:24" in meta, and a ghost
+  "Révoquer" that signs that device out on its next request, with no
+  confirmation — a new code re-enrols it — and a toast "Appareil
+  déconnecté." The device this page is open on reads "Cet appareil" instead
+  of a Révoquer button: "Se déconnecter" in the avatar menu is how it signs
+  out. With no session, the expanded row says "Aucun appareil inscrit." A
+  session whose User-Agent gave no summary is labelled "Appareil inconnu".
+- **The row menu** (`DropdownMenu`, `MoreVertical`) holds, in order:
+  "Générer un code"; "Nouvelle phrase de passe", on the signed-in admin's own
+  row only; "Passer admin" or "Passer agent"; and, after a
+  separator, "Désactiver" in `destructive`. On the last active admin's row,
+  "Passer agent" and "Désactiver" are disabled with "Il faut au moins un
+  administrateur actif." in meta under them; should the server still refuse
+  (another admin acted first), that sentence is the error toast. A role
+  change applies at once, with the toast "Rôle modifié."; an admin who makes
+  themselves an agent lands on the round, since `/admin` no longer answers
+  them. Any other failed action on this page — add, revoke, role change,
+  code, passphrase, deactivate, reactivate — keeps the screen as it was and
+  toasts "L'action n'a pas abouti. Réessayez."
+- **The code `Dialog`.** Titled "Code pour {nom}". The eight characters in
+  `text-display`, tabular, split 4 + 4 by a space ("K7QM 2XPA" — the
+  normaliser ignores spaces), with "Valable jusqu'à {heure}, une seule fois."
+  under it, `{heure}` the code's expiry as the server returns it, in Brussels
+  time, so a wrong device clock cannot misstate it. Then "Ce code ne sera
+  plus affiché. En générer un autre annule celui-ci." in meta, a `secondary`
+  "Copier" (toast "Code copié.", or "Copie impossible. Recopiez-le à la
+  main." when the clipboard refuses; the code stays on screen either way) and
+  a `default` "Terminé". Closing it any way
+  is fine: the code still works until it expires or is used. An admin enrols
+  another of their own devices with the same item on their own row.
+- **The passphrase `Dialog`.** Only ever for the signed-in admin's own
+  passphrase, so the secret is shown to its owner alone; another admin first
+  enrols with a code, then makes their own. Since the old passphrase stops
+  working at once, the item asks first in an `AlertDialog`: "Remplacer votre
+  phrase de passe ?", "L'ancienne cessera de fonctionner dès que la nouvelle
+  s'affiche.", "Annuler" and "Remplacer". Then a `Dialog` titled "Votre phrase de passe",
+  the twenty characters in five groups of four ("K7QM 2XPA 9DWE R4TN 8BCH") in
+  `text-display`, tabular. Under it: "Enregistrez-la dans votre gestionnaire
+  de mots de passe : elle ne sera plus affichée. L'ancienne ne fonctionne
+  plus." Then "Copier" (toast "Phrase de passe copiée.") and "Terminé".
+- **Deactivating asks first**, in an `AlertDialog`: "Désactiver {nom} ?",
+  then one of "{n} prospects restent assignés à {nom}. Réassignez-les depuis
+  « Prospects sans agent actif » au Tableau de bord.", "1 prospect reste
+  assigné à {nom}. Réassignez-le depuis « Prospects sans agent actif » au
+  Tableau de bord." or "Aucun prospect n'est assigné à {nom}.", and always
+  "Ses appareils seront déconnectés et son code annulé. Vous pourrez le
+  réactiver." "Annuler" and a `destructive` "Désactiver"; done, the toast
+  says "Utilisateur désactivé." The count is the user's prospects still
+  assigned, refetched when the dialog opens; the story that adds the users
+  routes names its field in [api.md](api.md). Deactivating your own row
+  (allowed when another admin is active) signs you out.
+- **Désactivés.** Under the `Surface`, a ghost Button "Désactivés ({n})" with
+  a chevron and `aria-expanded` shows a second list of the same columns,
+  names in `muted-foreground`, no devices (deactivation deleted them), and
+  one action per row, a `secondary` "Réactiver". A reactivated user returns
+  to the active list as "Pas encore inscrit" and needs a new code; the toast
+  says "Utilisateur réactivé." The button
+  is absent when no user is deactivated.
+- **Below 768px** the table becomes a list of rows, as on Prospects
+  (`useIsMobile()`): name and badge on the first line, email and role on the
+  second, the device count and the row menu on the right. A device line
+  wraps under its label: dates on one line, "Révoquer" on the right. The
+  Désactivés list takes the same shape.
+- **Loading and failure** go through `ScreenState`: skeleton rows with a
+  visually hidden "Chargement des utilisateurs…", or "Impossible de charger
+  les utilisateurs." with "Réessayer". There is no empty state: the admin
+  reading the page is always a row.
 
 ## Principles
 
@@ -1138,6 +1339,99 @@ the built manifest rather than by reading it.
 because it is a 246 kB PNG wrapped in an SVG, and the service worker precaches
 every svg it finds under `public/` — one file larger than the whole field JS
 chunk, for a tab icon the `.ico` already serves.
+
+## The login page
+
+`/login` is where everyone signs in: an agent with a one-time code, an admin
+with an email and a passphrase ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+It serves both sides but ships in the field shell, since a phone with a
+revoked session must reach it offline-installed. So the field rules hold:
+its strings live in `copy/field`, its inputs and labels are native, its
+targets are 48 px and its text `text-base`
+([ADR-0015](adr/0015-native-controls-on-the-field-route.md),
+[ADR-0026](adr/0026-budget-the-field-precache-not-the-entry-chunk.md)), and every byte counts toward
+the 1,000 KiB precache.
+
+```
+┌────────────────────────────────┐     ┌────────────────────────────────┐
+│ ⎈ Captain Prospectus     (band)│     │ ⎈ Captain Prospectus     (band)│
+│                                │     │                                │
+│ Connexion                      │     │ Connexion                      │
+│ Entrez le code que vous a      │     │ Connectez-vous avec votre      │
+│ donné un administrateur.       │     │ adresse e-mail et votre…       │
+│                                │     │                                │
+│ Code                           │     │ Adresse e-mail                 │
+│ [ K7QM 2XPA               ]    │     │ [ sam@example.com         ]    │
+│                                │     │ Phrase de passe                │
+│ [        Se connecter       ]  │     │ [ ••••••••••••••••••••••  ]    │
+│                                │     │                                │
+│     Accès administrateur       │     │ [        Se connecter       ]  │
+└────────────────────────────────┘     │        Retour au code          │
+                                       └────────────────────────────────┘
+```
+
+- **One column, one card.** The field band with the mark and the app name,
+  no tab bar and no sync strip; under it a `Card` at most 24rem wide,
+  centred, a 16px gutter on a phone. "Connexion" in `text-title`, a one-line
+  lede, the fields, a full-width `default` Button "Se connecter", and under it
+  the switch.
+- **The code form is the default.** Lede "Entrez le code que vous a donné un
+  administrateur." One field, "Code": `type="text"`,
+  `autocomplete="one-time-code"`, `autocapitalize="characters"`, spellcheck
+  off, no `maxlength`. Whatever the agent types is kept as typed — spaces,
+  hyphens, lowercase, an O for a 0 — because the server's normaliser reads
+  it; the client never rewrites or rejects it.
+- **"Accès administrateur" swaps the form.** A ghost Button under the card's
+  primary action, never a switch control: it replaces the code form in place
+  with the admin one, whose own ghost Button "Retour au code" swaps back. The
+  swap clears a refused sign-in's Alert but keeps the lockout Alert, since
+  the lock is per connection, and moves focus to the first field.
+  It is screen state, not a URL.
+- **The admin form** has the lede "Connectez-vous avec votre adresse e-mail
+  et votre phrase de passe." and two fields: "Adresse e-mail" (`type="email"`,
+  `autocomplete="username"`) and "Phrase de passe" (`type="password"`,
+  `autocomplete="current-password"`), so a password manager offers to save
+  the generated passphrase and fills both next time. Break-glass is this
+  same form; nothing on screen names it.
+- **Validation** is a shadcn `form` over react-hook-form like every other
+  form (ADR-0018), with a `z.pick` of the login schema as resolver; it only
+  checks that a field is filled: "Saisissez votre code.", "Saisissez votre
+  adresse e-mail.", "Saisissez votre phrase de passe."
+- **A refused sign-in** (401) shows a destructive `Alert` above the button
+  and keeps what was typed. For a code: "Ce code ne fonctionne pas. Il a
+  peut-être expiré ou déjà servi : demandez-en un nouveau." For the admin
+  form, one sentence whichever part was wrong: "Adresse e-mail ou phrase de
+  passe incorrecte." A request that never reached the server says
+  "Connexion impossible. Vérifiez le réseau et réessayez."; any other
+  failure (a 5xx) says "Connexion impossible pour le moment. Réessayez dans
+  un instant.", and a 426 shows the band's usual update prompt instead. While
+  a request is in flight the button holds a `Spinner` and is disabled.
+- **Lockout** (429): the Alert reads "Trop de tentatives depuis cette
+  connexion. Réessayez à {heure}, ou changez de réseau.", `{heure}` being
+  `Retry-After` added to now, as a Brussels time ("15:24"). The button stays
+  disabled until that time, then re-enables on its own and the Alert goes —
+  no reload needed. The fields stay editable. Without a usable `Retry-After`
+  it reads "Trop de tentatives depuis cette connexion. Réessayez dans
+  quelques minutes, ou changez de réseau." and re-enables after 15 minutes.
+  The lock is screen state: a reload forgets it, and the next attempt simply
+  gets the 429 again.
+- **Offline** (`useOnline()`): a standing `Alert` above the form, "Hors
+  ligne. Connectez-vous dès que le réseau revient.", and the button disabled;
+  the fields stay editable, and the Alert goes when the network returns.
+  There is one Alert slot: offline wins it over a lockout or a refusal, which
+  shows again once back online if it still holds.
+- **Nothing waiting is lost.** When the outbox on this device holds visits —
+  a phone sent here by a 401 — a meta line under the lede says so: "1 visite
+  non envoyée est gardée sur ce téléphone. Elle partira après la connexion."
+  or "{n} visites non envoyées sont gardées sur ce téléphone. Elles partiront
+  après la connexion." The page only reads the outbox, never clears it
+  ([field-operations](domains/field-operations.md#offline-sync)). While the
+  outbox is being read, or if it cannot be, the line is simply absent.
+- **After signing in**, the role from the server picks the landing: an agent
+  to the round, an admin to `/admin`. Always the landing, never the page the
+  401 interrupted: no return path means no redirect parameter to validate. A
+  device that already has a session and opens `/login` goes straight to its
+  landing.
 
 ## The field side
 
@@ -1236,10 +1530,14 @@ too.
 
 **Pas encore envoyé.** A stop whose visit is sitting in `outboxVisits`, or a
 field prospect still in `outboxProspects`, carries a `warn`-tinted badge with
-that text on its row. It is read-only knowledge of the outbox: it never hides
-the stop, changes its status or moves it in the walking order (invariants 2,
-3) — the row looks exactly like any other until a sync replaces `prospects`
-and the badge is simply not there any more.
+that text on its row. It is read-only knowledge of the outbox: it never invents
+a status (invariants 2, 3) — but the outcome the agent picked does place the
+stop before the sync confirms it (`docs/domains/field-operations.md` › Today
+list): a closed result (Intéressé, Converti, Pas intéressé) leaves the round
+immediately, and À relancer or Personne sur place moves it to Plus tard or to
+the end of today's round depending on the when choice. The badge itself still
+looks exactly like any other until a sync replaces `prospects` and it is
+simply not there any more.
 
 **Plus tard** is follow-ups not yet due, each a plain `<li>` — no button, no
 link, name and "À relancer le {date}" only. They "can't be visited from here"
@@ -1264,8 +1562,9 @@ blocks the first paint on Leaflet loading; ADR-0026 still precaches the chunk
 regardless, so it is already on the phone and Carte works the first time it is
 opened offline. Built from the same `useRound()` the round itself reads: same
 rules and the same prospect data as Tournée, though each screen takes its own
-one-shot position reading (`useAgentPosition` has no shared state), so the two
-are read moments apart, not literally the same call.
+one-shot position reading (no screen reads another's; the latest reading is also
+kept in module memory, for the next sync only, per ADR-0028), so the two are read
+moments apart, not literally the same call.
 
 Below 768px the map carries a selected stop in a persistent sheet; from 768px
 the sheet is replaced by a list pane, the map's own left-hand twin
@@ -1390,21 +1689,23 @@ else is allowed to compete.
 │  ├────────────────────────────┤  │
 │  │ [ic] Intéressé          (x)│  │  ← gold: chosen, never a status
 │  │     Ouvert à la discussion,│  │
-│  │     pas encore d'accord.   │  │
+│  │     pas encore inscrit sur │  │
+│  │     la liste d'attente.    │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] Pas intéressé      ( )│  │
 │  │     Refus clair.           │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] À relancer         ( )│  │
 │  │     Un rendez-vous à       │  │
-│  │     reprendre. Indiquez la │  │
-│  │     date.                  │  │
+│  │     reprendre.             │  │
 │  ├────────────────────────────┤  │
 │  │ [ic] Converti           ( )│  │
-│  │     Accord obtenu.         │  │
+│  │     Déjà inscrit sur la    │  │
+│  │     liste d'attente.       │  │
 │  └────────────────────────────┘  │
 │                                  │
-│  Relancer le   [ 29/09/2026 ]    │  only when the outcome is « À relancer »
+│  Quand ?                         │  only for À relancer / Personne sur place
+│  ( ) Aujourd'hui  ( ) Choisir…   │  when-step.md; date shown once chosen
 │                                  │
 │  Notes                           │
 │  ┌────────────────────────────┐  │
@@ -1479,12 +1780,15 @@ with it, so the questions do not join it — they follow it.
 │  │ [ic] Converti           ( )│  │ │  └────────────────────────────┘  │
 │  └────────────────────────────┘  │ │                                  │
 │                                  │ │  Satisfaction ?                  │
-│  Relancer le   [ 29/09/2026 ]    │ │  ┌──┐┌──┐┌──┐┌──┐┌──┐            │
-├──────────────────────────────────┤ │  │1 ││2 ││3 ││4 ││5 │            │
-│  [        Continuer          ]   │ │  └──┘└──┘└──┘└──┘└──┘            │
-└──────────────────────────────────┘ │                                  │
+├──────────────────────────────────┤ │  ┌──┐┌──┐┌──┐┌──┐┌──┐            │
+│  [        Continuer          ]   │ │  │1 ││2 ││3 ││4 ││5 │            │
+└──────────────────────────────────┘ │  └──┘└──┘└──┘└──┘└──┘            │
+                                     │                                  │
                                      │  Combien de places ?             │
                                      │  ( − )   [    3    ]   ( + )     │
+                                     │                                  │
+                                     │  Quand ?                         │
+                                     │  ( ) Aujourd'hui  ( ) Choisir…   │
                                      │                                  │
                                      │  Notes                           │
                                      │  ┌────────────────────────────┐  │
@@ -1499,8 +1803,9 @@ This reverses an earlier call here — "no 1 sur 2, no dots, no progress bar" �
 because DESIGN.md's redesign (› Step indicator) asks for one, echoed in
 EXPERIENCE.md › Step indicator: an action's own name is not enough to say
 *which* step an agent is on. A `size-1.5` gold dot leads a `text-overline` line
-reading « Étape 1 sur 2 · Résultat » or « Étape 2 sur 2 · Questions », on both
-steps, and it is absent only when the visit has one step to begin with — a
+reading « Étape 1 sur 2 · Résultat » or « Étape 2 sur 2 · Questions » (« Étape 2
+sur 2 · Quand ? » for À relancer and Personne sur place, whose step 2 is the
+when step alone, GH #239, GH #244), on both steps, and it is absent only when the visit has one step to begin with — a
 script with nothing this build can render must never make the one-step path
 read "1 sur 2". An action still keeps its own name through the flow, so «
 Enregistrer la visite » still appears exactly once, on the screen that
@@ -1535,14 +1840,55 @@ with Notes inline, « Enregistrer la visite ». A missing questionnaire must
 never stand between an agent and a saved visit, and it must not cost a tap
 either.
 
-**`no_contact` still gets step 2, with nothing required.** Nobody was there to
-ask, so `field-operations.md` waives the required questions — but the notes live
-on this screen, and "ferme le lundi" written off a sign in the window is the most
-valuable thing an agent can record about a door nobody answered. Hiding the step
-would hide the notes with it. So the step stays and the obligation goes. What
-replaces the required questions is a callout at the top of the step, above the
-first question: « Personne sur place : répondez seulement si vous savez. » — the
-one thing an agent must not read as an instruction to guess.
+**`no_contact` and `follow_up` still get step 2, but the script's questions
+are gone.** Nobody able to answer may have been at the door — closed, or the
+boss busy or away — so `field-operations.md` never asks them rather than asking
+and waiving each one: the questions are not rendered, and no answer rides along
+unseen (GH #244). An agent made to answer anyway would invent the answers. What
+replaces them is the when step (GH #239,
+`_bmad-output/specs/spec-done-stop-leaves-the-round/when-step.md`): "Aujourd'hui"
+or "Choisir une date", opened on "Aujourd'hui" for Personne sur place, which can
+only lack a choice by bug, and on nothing for À relancer.
+The notes still live on this screen, and "ferme le lundi" written off a sign in
+the window is the most valuable thing an agent can record about a door nobody
+answered.
+
+**Pas intéressé always gets step 2, and asks for a reason instead of the
+script — the one exception to "step 2 exists only when there is something to
+ask" above.** A restaurateur who says no won't answer a whole questionnaire,
+but one tapped reason is the only record of why (`prospecting.md#refusal-
+reasons`, GH #248). Step 1 reads « Continuer » for this outcome even with no
+cached script, and step 2's indicator reads « Étape 2 sur 2 · Raison du
+refus »:
+
+```
+     step 1                             step 2
+┌──────────────────────────────────┐ ┌───────────────────────────────────┐
+│ ←  Retour à la tournée           │ │ ←  Résultat                       │
+│ ●  Étape 1 sur 2 · Résultat      │ │ ●  Étape 2 sur 2 · Raison du refus│
+│ Le Bouchon des Filles            │ │ Le Bouchon des Filles             │
+├──────────────────────────────────┤ ├───────────────────────────────────┤
+│ [x] Flyer remis                  │ │  Raison du refus                  │
+├──────────────────────────────────┤ │  ( ) Trop d'applis / de tablettes │
+│  Résultat                        │ │  ( ) Attend de voir…              │
+│  ┌────────────────────────────┐  │ │  ( ) Méfiance sur les frais       │
+│  │ [ic] Pas intéressé      (x)│  │ │  ( ) Pas besoin, ça marche…       │
+│  └────────────────────────────┘  │ │  ( ) Hors cible / fermé           │
+│                                  │ │  ( ) Refus sans raison            │
+├──────────────────────────────────┤ │  ( ) Autre                        │
+│  [        Continuer          ]   │ │                                   │
+└──────────────────────────────────┘ │  Notes                            │
+                                     │  ┌────────────────────────────┐   │
+                                     │  └────────────────────────────┘   │
+                                     ├───────────────────────────────────┤
+                                     │  [   Enregistrer la visite   ]    │
+                                     └───────────────────────────────────┘
+```
+
+The radios are native (ADR-0015, ADR-0026), in `REFUSAL_REASONS`'s order.
+"Autre" also requires a note — the only combination that needs one — checked
+the same way a missing reason is, on save. The save summary gains a
+« Raison du refus » row with the chosen label, shown only for this outcome.
 
 **A blocked save moves the screen to the problem.** With a variable number of
 questions, the first invalid one can easily sit below the fold, and a button that
@@ -1593,8 +1939,8 @@ never an `outcome-*` colour and never the status it leads to (INVARIANT 3). A
 row that does not apply is absent rather than "Non": no flyer row when none was
 left, no Notes row when none were typed, and no Questions row on a visit with no
 script. With a script, the row counts only what was answered — a cleared text
-or an unticked multi-choice is not an answer — so Personne sur place with
-nothing answered reads « 0 réponse ».
+or an unticked multi-choice is not an answer — so À relancer and Personne sur place,
+which send no answers, read « 0 réponse ».
 
 **« Modifier » loses nothing.** It closes the summary and puts focus back on «
 Enregistrer la visite ». The form was never unmounted, so every answer, the

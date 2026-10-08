@@ -6,7 +6,7 @@
 import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { StopNumber } from "./StopNumber";
 import { copy, TYPE_LABELS } from "../copy/field";
-import type { TodayItem } from "./today";
+import type { TodayItem } from "../../shared/today";
 
 export function NextStopCard({ item }: { item: TodayItem }) {
   return (

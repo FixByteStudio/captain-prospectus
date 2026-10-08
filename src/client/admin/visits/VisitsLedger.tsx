@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
+import { InboxIcon } from "lucide-react";
 import type { AdminVisit } from "../../../shared/schemas";
 import { OUTCOME_TO_STATUS } from "../../../shared/constants";
-import { OUTCOME_LABELS, copy } from "../../copy";
+import { OUTCOME_LABELS, REFUSAL_REASON_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
 import { Skeleton } from "../../ui/skeleton";
+import { EmptyTile } from "../EmptyTile";
 import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
 import { Pager } from "../Pager";
@@ -16,13 +18,20 @@ import { PAGE_SIZE, pageCount, pageSlice } from "../pagination";
  * The ledger half of Visites — ADR-0010, docs/design.md › "The live feed".
  *
  * Reads the feed as `VisitsScreenBody` holds it: that parent is remounted
- * (`key={period}`) whenever the period changes, since `useVisitsFeed` keeps
- * its cursor in a ref and the only clean way to reseed it from `since=0`
- * under a new window is a fresh mount — which is also what the I/O matrix
- * asks for ("no wash/announcement for the reseed": `seeded` starts false
- * again, so the opening page under the new period is not news).
+ * (keyed by period and refusal reason) whenever either changes, since
+ * `useVisitsFeed` keeps its cursor in a ref and the only clean way to reseed
+ * it from `since=0` under a new window is a fresh mount — which is also what
+ * the I/O matrix asks for ("no wash/announcement for the reseed": `seeded` starts false
+ * again, so the opening page under the new filter is not news).
  */
-export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> }) {
+export function VisitsLedger({
+  feed,
+  empty = copy.visits.empty,
+}: {
+  feed: ReturnType<typeof useVisitsFeed>;
+  /** A filtered feed's empty copy: visits arrived, none matched (GH #249). */
+  empty?: string;
+}) {
   const { visits, arrived, isPending, isError, isFetching, refetch, answeredAt } = feed;
   const [page, setPage] = useState(1);
   const top = useRef<HTMLDivElement>(null);
@@ -78,7 +87,13 @@ export function VisitsLedger({ feed }: { feed: ReturnType<typeof useVisitsFeed> 
         {() =>
           visits.length === 0 ? (
             // A failed first load has nothing to be empty of: the Alert says it all.
-            !isError && <p className="text-muted-foreground">{copy.visits.empty}</p>
+            !isError && (
+              <Surface>
+                <EmptyTile icon={<InboxIcon aria-hidden="true" />}>
+                  <p>{empty}</p>
+                </EmptyTile>
+              </Surface>
+            )
           ) : (
             <>
               <Surface>
@@ -134,6 +149,11 @@ function VisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean }) {
         </span>
         <span className="min-w-0 flex-1 font-medium">{visit.prospectName}</span>
         <span className={cn("shrink-0", STATUS_TEXT[status])}>{OUTCOME_LABELS[visit.outcome]}</span>
+        {visit.refusalReason && (
+          <span className="text-muted-foreground shrink-0">
+            {REFUSAL_REASON_LABELS[visit.refusalReason]}
+          </span>
+        )}
         {visit.flyerGiven && (
           <span className="text-muted-foreground shrink-0 text-xs">{copy.visits.flyer}</span>
         )}

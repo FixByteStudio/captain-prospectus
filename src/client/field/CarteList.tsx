@@ -12,7 +12,7 @@ import { useEffect, useRef } from "react";
 import { copy } from "../copy/field";
 import { NextStopCard } from "./NextStopCard";
 import { StopRow } from "./StopRow";
-import type { TodayList } from "./today";
+import type { TodayList } from "../../shared/today";
 
 export function CarteList({
   list,

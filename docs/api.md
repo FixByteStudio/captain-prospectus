@@ -1,43 +1,55 @@
 # API
 
-Base path `/api`. JSON in, JSON out. Every route requires a verified Access identity. Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
+Base path `/api`. JSON in, JSON out. Any request other than `GET` or `HEAD` whose `Origin` header is missing or is not the request URL's own origin gets **403** `forbidden_origin`, on every route including `/api/auth/*` and `/api/dev/*`. It runs right after the body cap, so an oversized cross-site body still gets 413 (CAP-8, `src/worker/origin.ts`). Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie first, then (until the Access cutover ends) a verified Access JWT ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
 
 ## Common
 | Route | Role | Purpose |
 |---|---|---|
 | `GET /api/me` | any | `{email, role}` |
 
+## Sign-in
+Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Nothing on these routes is logged: not the passphrase, the token or a hash.
+
+| Route | Purpose |
+|---|---|
+| `POST /api/auth/login` | `loginRequestSchema`, a `zod/mini` union on `kind`. Only `{kind: "passphrase", email, passphrase}` exists so far, and only break-glass answers it: `email` (trimmed, lowercased) equal to `OWNER_EMAIL` and `passphrase` (as typed) equal to `BREAK_GLASS`, compared as HMAC digests with `timingSafeEqual`. Success creates or reactivates `OWNER_EMAIL` as an active admin, opens a session and answers **200** `{email, role}` (`MeResponse`) with `Set-Cookie: __Host-cp_session=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=<lifetime>` — 30 days for an admin, 90 for an agent, fixed. A wrong email and a wrong passphrase get the same **401** `unauthorized`, as does a Worker without `OWNER_EMAIL` or `BREAK_GLASS`. Any other `kind`, a missing field or a non-JSON body is **400**. No `AUTH_PEPPER` is **500** `misconfigured`. Throttled per IP (`CF-Connecting-IP`, an IPv6 address by its /64; without the header, one shared `unknown` bucket): every 400 or 401 counts as a failure in a fixed 15-minute window, a success does not reset the count, and from the 10th failure on every login from that IP, valid or not, gets **429** `too_many_attempts` with `Retry-After` (seconds until the window ends). The lock is checked before the body and the credential |
+| `POST /api/auth/logout` | Deletes the cookie's session if there is one, clears the cookie (`Max-Age=0`), **204**. Works without a session |
+
 ## Local development only
 | Route | Purpose |
 |---|---|
-| `POST /api/dev/seed` | Fills the local database with sample prospects, a script and each assigned prospect's visit history over the last 180 Brussels days, validated by `devSeedSchema` → `devSeedResultSchema` `{seeded, inserted: {prospects, visits, orphans}}`. Visits go to the prospect's assignee only and status is derived as sync derives it. Optional per prospect: `manualStatus` (set once, as an admin would, unless `status_set_at` is already set) and `mergeInto`, the `name` of another prospect in the same body (merged once, unless `merged_into` is already set; a name not in the body is **400**). Also quarantines one visit of each reason. Every id is hashed from stable input, so a second run inserts nothing and derives no status while the seeded prospects are unedited, and an orphan repaired since is not quarantined again. A prospect an admin has since assigned or reassigned can gain visits, and one they have unmerged is merged again. The dates stay anchored to the first run, so the 7-day figures empty out after a week; to get fresh ones, delete `.wrangler/state`, then run `pnpm db:migrate:local` and `pnpm db:seed:local` (never `--remote`). Answers 404 unless the request host is localhost **and** `DEV_USER_EMAIL` is set — on localhost the 404 says which is missing. Run through `pnpm db:seed:local` |
+| `POST /api/dev/seed` | Fills the local database with sample prospects, a script and each assigned prospect's visit history over the last 180 Brussels days, validated by `devSeedSchema` → `devSeedResultSchema` `{seeded, inserted: {prospects, visits, orphans, users}}`. First inserts the two local `users` rows `DEV_USER_EMAIL` may name, `admin@example.com` (admin) and `agent@example.com` (agent), both active; a row that already exists is left as it is, so a second run reports `users: 0`. Visits go to the prospect's assignee only and status is derived as sync derives it. Optional per prospect: `manualStatus` (set once, as an admin would, unless `status_set_at` is already set) and `mergeInto`, the `name` of another prospect in the same body (merged once, unless `merged_into` is already set; a name not in the body is **400**). Also quarantines one visit of each reason, unless `orphans` is `false`. Optional `positions` (up to 10 `{email, lat, lng, accuracy}`) are stored as readings taken now, through the sync's writer, so a re-seed on the same day moves the dot rather than adding a row and the admin round view has a position to show; unlike sync, it does not refuse an admin's email. Every id is hashed from stable input, so a second run inserts nothing and derives no status while the seeded prospects are unedited, and an orphan repaired since is not quarantined again. A prospect an admin has since assigned or reassigned can gain visits, and one they have unmerged is merged again. The dates stay anchored to the first run, so the 7-day figures empty out after a week; to get fresh ones, delete `.wrangler/state`, then run `pnpm db:migrate:local` and `pnpm db:seed:local:full` (never `--remote`). Answers 404 unless the request host is localhost **and** `DEV_USER_EMAIL` is set — on localhost the 404 says which is missing. Run through `pnpm db:seed:local` (10 blank prospects) or `pnpm db:seed:local:full` |
 
 ## Agent
 | Route | Purpose |
 |---|---|
-| `POST /api/agent/sync` | Push outbox, pull today list + active script. A visit the server cannot take — unknown prospect, or a prospect not assigned to the sender — is quarantined and still reported in `accepted` ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md)). See [field-operations](domains/field-operations.md#protocol) |
+| `POST /api/agent/sync` | Push outbox, pull today list + active script. A visit the server cannot take — unknown prospect, or a prospect not assigned to the sender — is quarantined and still reported in `accepted` ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md)). A visit may carry an optional `refusalReason` ([prospecting](domains/prospecting.md#refusal-reasons)). An optional `position` `{lat, lng, accuracy, capturedAt}` is stored for an assignable agent, newest wins, and an invalid one is dropped without failing the sync; the response never carries it ([ADR-0028](adr/0028-agent-position-at-sync.md)). See [field-operations](domains/field-operations.md#protocol) |
 | `GET /api/agent/prospects/:id/visits` | Last `VISIT_HISTORY_LIMIT` (20) visits of a prospect, newest first, `visitHistoryResponseSchema`. Agent: only if assigned to them; a non-UUID `:id` is 400, an unknown one 404. Narrower than the row — `clientVisitedAt`, `receivedAt` and `clientVersion` are clock-skew and upgrade diagnostics, not shown to an agent at a doorstep. Cached in Dexie `visitHistory` so the visit form still shows it offline |
 
 ## Admin
 | Route | Purpose |
 |---|---|
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue, flyersGiven, agentsActiveToday, followUpsDueSoon: {value, dueBefore}}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
+| `GET /api/admin/agents/:email/round` | `agentRoundResponseSchema` `{prospects, position}`: the agent's open prospects (the sync pull's query) and their latest reading `{lat, lng, accuracy, capturedAt}` (`capturedAt` clamped to receipt) or `null` when none from today. An admin's email answers 200 with `position: null`, since admins' positions are never stored. **404** for an email that is not assignable, **400** for a malformed one. `Cache-Control: no-store` ([ADR-0028](adr/0028-agent-position-at-sync.md)) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
-| `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&q=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue`; with the dashboard's `followUpsDueSoon.dueBefore`, exactly `followUpsDueSoon.value`. `q` is a substring of `name`, folded ASCII-only |
+| `GET /api/admin/users` | `usersResponseSchema` `{users: [{email, name, role, active, sessions, openProspects}]}` — every user, active or not, ordered by name then email; names compare ignoring case and accents (French collation), unnamed rows last. `sessions` counts unexpired sessions; `openProspects` counts prospects assigned to them with status `new`, `assigned` or `follow_up` and not merged ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)) |
+| `POST /api/admin/users` | `userCreateSchema` `{email, name, role}` → **201** with the list row. The email is trimmed and lowercased, the name required. Created active, with no passphrase. **409** `email_taken` for an existing email, active or not |
+| `PATCH /api/admin/users/:email` | `userUpdateSchema` `{role?, active?}`, at least one → **204**. What is absent stays. Deactivating deletes the user's sessions in the same batch; reactivating leaves none. **404** for an unknown email. **409** `last_admin` when the change would leave no active admin, decided inside the write and counting active admin `users` rows only, not `ADMIN_EMAILS`-only Access admins; nothing is written. No user is ever deleted |
+| `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&q=&outOfTarget=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue`; with the dashboard's `followUpsDueSoon.dueBefore`, exactly `followUpsDueSoon.value`. `q` is a substring of `name`, folded ASCII-only. `outOfTarget=true` (the only accepted value, anything else is **400**) keeps the prospects flagged Hors cible: the latest visit carries `out_of_target` and `out_of_target_reviewed_at` is null or not after that visit's `visited_at` ([prospecting](domains/prospecting.md#refusal-reasons)); `total` counts that combined set |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm", rows[]}` by dedupe key → `{created, updated}` |
-| `PATCH /api/admin/prospects/:id` | Edit fields, `assignedTo`, `status`, `nextVisitAt` → the updated prospect. A `status` set here holds until a visit made after it ([prospecting](domains/prospecting.md#prospect-lifecycle)) |
+| `PATCH /api/admin/prospects/:id` | Edit fields, `assignedTo`, `status`, `nextVisitAt` → the updated prospect. A `status` set here holds until a visit made after it ([prospecting](domains/prospecting.md#prospect-lifecycle)). Any PATCH also stamps `out_of_target_reviewed_at`, the only writer of that column ([Hors cible](domains/prospecting.md#refusal-reasons)) |
 | `POST /api/admin/prospects/assign` | Bulk `{ids[], assignedTo}` → `{assigned}`; `assignedTo: null` unassigns |
-| `GET /api/admin/prospects/export.csv?status=&dueBefore=&assignedTo=&source=&q=` | The ledger as CSV, the same filters as the list — same rows, up to the cap — merged prospects excluded. `text/csv` attachment, max 500 rows, `x-truncated: true` when capped |
+| `GET /api/admin/prospects/export.csv?status=&dueBefore=&assignedTo=&source=&q=&outOfTarget=` | The ledger as CSV, the same filters as the list — same rows, up to the cap — merged prospects excluded. `text/csv` attachment, max 500 rows, `x-truncated: true` when capped |
 | `GET /api/admin/prospects/duplicates` | `{pairs[], truncated}` — prospects that are probably the same place |
 | `POST /api/admin/prospects/merge` | `{survivorId, mergedId}` → `{survivorId, mergedId, dedupeKeyUpdated}` |
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
 | `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached, cachedAt?}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
 | `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached, cachedAt?}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
-| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]`; all bounds apply together. Newest first, max 500. **400** when `from > to`. Each carries `prospectName` |
+| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&reason=&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]` and the refusal `reason` (see [The live feed](#the-live-feed)); all bounds apply together. Newest first, max 500. **400** when `from > to` or `reason` is unknown or empty. Each carries `prospectName` and `refusalReason` (null unless given on a `not_interested` visit) |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, and up to 5 `candidates` ranked by distance from where the visit happened |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
 | `POST /api/admin/visits/orphaned/:id/discard` | Deletes the row for good → `{discarded}`. Idempotent. The one place a visit is deliberately lost, behind a confirmation in the UI |
-| `GET /api/admin/visits/export.csv?from=<ms>&to=<ms>` | Visits as CSV for a range, defaulting to the last 30 days. Filtered on `received_at`, not `visited_at`. **400** when `from > to`. Max 500 rows, `x-truncated` when capped |
+| `GET /api/admin/visits/export.csv?from=<ms>&to=<ms>&reason=` | Visits as CSV for a range, defaulting to the last 30 days. Filtered on `received_at`, not `visited_at`; `reason` narrows it exactly as it narrows the feed. A `refusal_reason` column follows `outcome` (the English value, empty when none). **400** when `from > to` or `reason` is unknown or empty. Max 500 rows, `x-truncated` when capped |
 | `GET /api/admin/scripts` | `{scripts[]}` — all versions, newest first, max 100. At most one has `isActive` |
 | `POST /api/admin/scripts` | `{name, questions[]}` → **201** with the created script. Writes version N+1 of that name and makes it the only active one |
 
@@ -45,13 +57,15 @@ Base path `/api`. JSON in, JSON out. Every route requires a verified Access iden
 | Code | Meaning |
 |---|---|
 | 400 | Invalid body |
-| 401 | No or invalid Access token |
-| 403 | Authenticated but wrong role |
+| 401 | No valid session and no valid Access token — including a Worker with Access not configured, which used to be a 500. Also a refused sign-in |
+| 403 | Authenticated but wrong role, or a request other than `GET` or `HEAD` whose `Origin` is missing or foreign (`forbidden_origin`) |
 | 404 | Unknown resource |
+| 409 | A conflict with current data: `email_taken` (the email already has a `users` row) or `last_admin` (the change would leave no active admin) |
 | 413 | Body over `MAX_REQUEST_BYTES`, refused before it is parsed — so before the 426 check and before validation. `error: "too_large"` |
 | 426 | `clientVersion` no longer supported: update the app. Checked **before** body validation, so an old build is told to update rather than that its data is invalid |
+| 429 | Too many failed logins from this IP (`too_many_attempts`); `Retry-After` says when to try again |
 | 501 | Route declared but not implemented yet (see the roadmap) |
-| 503 | Either D1's daily free-tier limit (`d1_limit`) or a map provider with no key (`places_unconfigured`). Nothing was lost; the `error` code says which |
+| 503 | Either D1's daily free-tier limit (`quota`) or a map provider with no key (`places_unconfigured`). Nothing was lost; the `error` code says which |
 | 502 | A map provider failed or timed out — `overpass_failed` or `places_failed` |
 
 ## Payload caps
@@ -168,7 +182,8 @@ the same response, additively.
   later: a conversion is an event, so a past period never shrinks. Every visit
   and manual change is keyed by `coalesce(merged_into, id)`, so an absorbed
   prospect counts as its survivor (one hop; A→B→C counts A under B). Its delta
-  follows the rule above.
+  follows the rule above. An `interested` prospect is never a conversion
+  ([ADR-0027](adr/0027-interested-is-its-own-closed-status.md)).
   *Limitation:* `status_set_at` keeps only the latest manual change, and a
   later visit replaces the status without touching it. So a manual status
   counts only while it is still in force (`last_visit_at` null or not after
@@ -201,22 +216,23 @@ the same response, additively.
   `openProspects` into `new`, `assigned` and `follow_up` with the same filter,
   and `openProspects` is its sum.
 - **Pipeline par statut** (`pipeline`, GH #112): live prospects
-  (`merged_into IS NULL`) per status, all five `STATUSES` with zeros. A
+  (`merged_into IS NULL`) per status, all six `STATUSES` with zeros. A
   snapshot of now like `openProspects`, so it ignores the period, and
   `new + assigned + follow_up` equals `openProspects`. The screen computes each
   share from the pipeline's own total, and shows 0 % when that total is 0.
 - **Activité par agent** (`agents`, GH #112): one row for each email on the
-  roster (`ADMIN_EMAILS` ∪ `AGENT_EMAILS`), zeros included, plus any other
-  email with a visit in the period or a live prospect assigned now; sorted
+  roster (the active `users` rows), zeros included; a deactivated user has no
+  row, though their visits stay in the totals; sorted
   by `visits` descending, then `email`. `visits` is that agent's rows among
-  Visites; every visitor has a row, so the column always sums to
-  `visits.value`. `converted` is the distinct prospects
+  Visites, so the column sums to `visits.value` less the visits of anyone off
+  the roster (no active `users` row: deactivated, or an Access user with none). `converted` is the distinct prospects
   (`coalesce(merged_into, id)`) they visited with outcome `converted` in the
   period. Its column can differ from Convertis either way: a manual
-  conversion has no visitor and is credited to nobody, and one prospect
+  conversion has no visitor and is credited to nobody, an off-the-roster visitor
+  has no row, and one prospect
   converted by two agents counts for both. `followUp` and `openProspects` are the live `follow_up` and
   `OPEN_STATUSES` prospects assigned to them now, snapshots like
-  `openProspects`; an unassigned prospect is in no row. Each figure is one
+  `openProspects`; a prospect unassigned or assigned off the roster is in no row. Each figure is one
   grouped statement.
 - **Relances dues** (`followUpsDue`, GH #113): live `follow_up` prospects
   whose `next_visit_at` is before `to`, Brussels midnight tomorrow — due today
@@ -286,6 +302,9 @@ tab is visible (ADR-0010).
   duplicate. The name shown is the one the visit was made against.
 - `serverTime` is the server's clock as it answered, so a client never has to
   derive a cursor from its own.
+- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value). The
+  export takes the same parameter, through the same schema and SQL, so both
+  list the same visits. Absent, nothing changes; empty or unknown is **400**.
 
 ## The map import
 
@@ -337,11 +356,17 @@ page.
   the two cannot read each other's rows.
 
 ## Who can be assigned
-There is no users table (ADR-0006). `GET /api/admin/agents` returns the union of
-the `ADMIN_EMAILS` and `AGENT_EMAILS` vars with each address's role, so the
-assign menu has something to offer before anyone has been assigned anything.
-Neither var grants access — Cloudflare Access decides who gets in — so
-`AGENT_EMAILS` has to be kept in step with the Access policy by hand.
+The roster is the active `users` rows (ADR-0029), managed through
+`/api/admin/users` (above). `GET /api/admin/agents` returns them, each with its
+own role, sorted by email; admins are included since an admin may walk a round.
+The same rows decide who `PATCH /prospects/:id` and `POST /prospects/assign`
+accept (**400** `unknown_assignee` for a deactivated or unknown email;
+`assignedTo: null` is always allowed), whose round `GET /agents/:email/round`
+serves (**404** otherwise), the dashboard's agent rows, and whose position a
+sync stores. Deactivating a user leaves their prospects assigned to them.
+An Access-fallback user with no `users` row can sign in but is off the roster
+and not listed by `GET /api/admin/users` until an admin `POST`s them.
+`ADMIN_EMAILS` is read only by the Access-JWT fallback; `AGENT_EMAILS` by nothing.
 
 ## Conventions
 - Timestamps: epoch ms integers.

@@ -10,6 +10,7 @@ import { OrphansScreen } from "./OrphansScreen";
 import { ProspectsScreen } from "./ProspectsScreen";
 import { VisitsScreen } from "./VisitsScreen";
 import { ImportScreen } from "./import/ImportScreen";
+import { RoundScreen } from "./round/RoundScreen";
 import { ScriptsScreen } from "./scripts/ScriptsScreen";
 import { createAdminQueryClient } from "./query-client";
 
@@ -39,6 +40,7 @@ export function AdminApp({ email, updatePrompt }: { email: string; updatePrompt:
           <Route path="visites" element={<VisitsScreen />} />
           <Route path="a-rattacher" element={<OrphansScreen />} />
           <Route path="scripts" element={<ScriptsScreen />} />
+          <Route path="tournee" element={<RoundScreen />} />
           {/* Inside the admin frame, so a typo keeps the sidebar (#90). */}
           <Route
             path="*"

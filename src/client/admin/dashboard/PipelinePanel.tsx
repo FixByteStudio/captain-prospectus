@@ -14,6 +14,7 @@ const COUNT_INK = {
   new: "text-muted-foreground",
   assigned: "text-foreground",
   follow_up: "text-warn",
+  interested: "text-success",
   converted: "text-success",
   rejected: "text-destructive",
 } as const satisfies Record<Status, string>;
@@ -23,7 +24,7 @@ const SHELL = "min-w-0 gap-2 p-4.5";
 /**
  * Pipeline par statut — docs/design.md › Tableau de bord, GH #112.
  *
- * The share is presentation, so it is computed here from the same five counts
+ * The share is presentation, so it is computed here from the same six counts
  * as the total: the two can never disagree, and a total of 0 shows 0 %.
  */
 export function PipelinePanel({ pipeline }: { pipeline: Pipeline }) {

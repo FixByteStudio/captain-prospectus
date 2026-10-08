@@ -1,0 +1,202 @@
+# The stories of epic-own-login (epic id 1), in build order.
+# Refer to an entry as 1.<id> from another epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "docs/design.md decides the login page, the Agents page and the fourth À traiter row"
+description = "Adds the /login layout (code field by default, Accès administrateur switch, lockout message), the Agents page (users, Inscrit status, sessions, code and passphrase panels, deactivation dialog) and the À traiter row that ends the three-row rule to docs/design.md, and raises the EXPERIENCE.md change with its owner, before any screen is built (CLAUDE.md: decide a screen against docs/design.md)."
+verify = "The owner reads the three new design.md sections and approves them in the PR, and every French string they name appears there once for copy.ts to take."
+covers = ["CAP-14", "CAP-4", "CAP-1", "CAP-7"]
+after = []
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Break-glass gives the owner a session on /login"
+description = "Tracer bullet, after the owner (hitl) moves ADR-0029 to accepted and puts AUTH_PEPPER, BREAK_GLASS and OWNER_EMAIL in .dev.vars: expand migration for users and sessions (expires_at set at creation, 90 days for an agent and 30 for an admin, which entry 10 slides and entry 13 sweeps), HMAC-SHA-256 helpers under AUTH_PEPPER, POST /api/auth/login with kind passphrase limited to OWNER_EMAIL + BREAK_GLASS (timingSafeEqual, creates or reactivates the owner as an active admin), the __Host- session cookie, POST /api/auth/logout, requireIdentity looking up the session first and falling back to the Access JWT in one isolated function, and a /login route outside the identity gate with the passphrase form laid out per entry 1."
+verify = "On pnpm dev with DEV_USER_EMAIL unset and the Access vars empty, the owner types OWNER_EMAIL and BREAK_GLASS at /login, lands on /admin and stays signed in after a reload; Worker tests show a session wins over a JWT, the JWT path still passes, and no log line carries the secret, a token or a hash."
+covers = ["CAP-6", "CAP-4", "CAP-5", "CAP-13"]
+after = [1]
+hitl = true
+risk = "high"
+unknown = "How the field shell's identity gate in App.tsx lets /login render without /api/me answering; the builder decides it in the plan."
+
+[[entry]]
+id = 3
+type = "story"
+title = "Local dev signs in as any seeded user, and Worker tests stub a D1 session"
+description = "Makes DEV_USER_EMAIL take its role from a seeded users row on localhost and 127.0.0.1 only, adds users rows to the local seed, and adds the Worker test helper that stubs a D1 session which later entries use; existing JWT stubs stay until epic-access-removed."
+verify = "Worker tests show DEV_USER_EMAIL signs in as the seeded role on localhost and 127.0.0.1 and has no effect on any other host, and pnpm db:seed:local followed by pnpm dev opens the app as the seeded admin."
+covers = ["CAP-9"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Logins are throttled per IP and cross-site writes are refused"
+description = "Adds the login_attempts table and the 10-failures-per-15-minutes lock with 429 and Retry-After (break-glass and passphrase failures share it), and a middleware refusing any non-GET /api request whose Origin is missing or foreign with 403."
+verify = "Worker tests show the 11th failed login from one IP gets 429 with Retry-After even with a valid credential, a POST with a valid session and a foreign or missing Origin gets 403 while the field sync POST still passes, and no log line carries the IP's credential."
+covers = ["CAP-7", "CAP-8"]
+after = [3]
+hitl = false
+risk = "medium"
+unknown = "Which header carries the client IP in local dev, in tests, and behind Access in production (CF-Connecting-IP expected); entry 18 rechecks it on production."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Admins manage users through the API"
+description = "Adds the shared zod/mini contracts and, in a new identity route module that entries 8–10 extend, the admin routes to list, create, change the role of and deactivate users: deactivation deletes their sessions (entry 8 adds codes), the last active admin is protected, and the response gives the count of prospects left assigned."
+verify = "Worker tests show a created user is listed at once, a deactivated one gets 401 on the next request with their sessions gone, and the last active admin cannot be demoted or deactivated."
+covers = ["CAP-1"]
+after = [4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Every roster reader reads users"
+description = "Moves the assign menu (GET /api/admin/agents), the dashboard's agent rows (assignableEmails in routes/admin.ts) and the ADR-0028 position gate (routes/agent.ts) from ADMIN_EMAILS and AGENT_EMAILS to users.role and users.active, and checks the other grep hits (src/shared/schemas.ts, src/worker/types.ts) for roster use."
+verify = "Worker tests show a created agent appears in GET /api/admin/agents and has their position stored at sync, a deactivated one leaves the menu, and a grep finds ADMIN_EMAILS and AGENT_EMAILS only in auth.ts's JWT fallback and types.ts."
+covers = ["CAP-11", "CAP-1"]
+after = [5]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "The Agents page lists, creates and deactivates users"
+description = "Builds the admin Agents page per entry 1 on entry 5's routes: the list with role and Inscrit / Pas encore inscrit, the create form, the role change, and the deactivation dialog stating how many prospects stay assigned, with its nav entry."
+verify = "On pnpm dev as an admin, creating an agent shows them as Pas encore inscrit and in the assign menu, deactivating them shows the prospect count and removes them from the menu, and the admin chunk fetched signed out holds no user data."
+covers = ["CAP-1"]
+after = [1, 6]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "An agent enrols a device with a one-time code"
+description = "Adds login_codes, the shared code and passphrase normaliser (case, spaces, hyphens; I/L → 1, O → 0), the admin route that generates a user's 8-character Crockford code (deleting their unused ones), deletion of unused codes on deactivation in entry 5's route, kind code on POST /api/auth/login (failures counted by entry 4), the code field as /login's default, the lockout message from a 429 with the button disabled until Retry-After, and the Générer un code panel on entry 7's Agents page."
+verify = "On pnpm dev, a code typed in a second browser with spaces and lowercase signs in the right agent; Worker tests show a used, an expired (15 min), a superseded and a deactivated user's code each get 401; and /login shows the lockout message with the button disabled after a 429."
+covers = ["CAP-2", "CAP-4", "CAP-7", "CAP-1"]
+after = [7]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "An admin signs in with a generated passphrase and enrols their own devices"
+description = "Adds passphrase_hash, the route that generates or regenerates an admin's 20-character passphrase shown once, kind passphrase for any admin on POST /api/auth/login with one error for a wrong email or passphrase, the Accès administrateur switch on /login, and the admin's own code from a signed-in device, reusing entry 8's normaliser and code route."
+verify = "On pnpm dev, an admin regenerates their passphrase, the old one gets 401, the new one typed with hyphens and an O for 0 signs in from a second browser through the switch, a wrong email and a wrong passphrase get the same error, and a code the admin makes for themselves enrols a third browser."
+covers = ["CAP-3", "CAP-4"]
+after = [8]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Each device's session can be seen and revoked"
+description = "Adds the parsed User-Agent device label (never the raw string), sliding expiry on entry 2's expires_at with last_seen_at written at most once an hour, and the admin routes and Agents page panel listing each user's sessions with label, enrolment date and last seen and revoking one."
+verify = "Worker tests show one revoked session gets 401 while the user's other session works, last_seen_at and expires_at are not rewritten within the hour, and no sessions column holds the raw User-Agent; on pnpm dev the Agents page lists two browsers by label and revokes one."
+covers = ["CAP-5", "CAP-1"]
+after = [9]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Tableau de bord lists prospects with no active agent"
+description = "Adds the fourth À traiter row 'Prospects sans agent actif {n}' with its count on the dashboard endpoint, and a Prospects filter for inactive agents that its Réassigner button opens, per entry 1."
+verify = "On pnpm dev, after deactivating a seeded agent with prospects, the row shows their count and Réassigner opens Prospects listing exactly those prospects."
+covers = ["CAP-1"]
+after = [7]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "A 401 sends both clients to /login without losing work"
+description = "Makes a 401 open /login in the field and admin apps with the outbox untouched and the cached round dropped as today, makes Se déconnecter call entry 2's logout and open /login, and removes the Access logout link, the ?reconnect=1 marker and the /cdn-cgi/ denylist entry with their tests, checking App.tsx, SyncIndicator, sync-view, leave-guard, theme.ts, AdminLayout and OfflineBanner; the sync payload and clientVersion do not change."
+verify = "On pnpm dev, with two visits queued offline, revoking the agent's session and reconnecting lands the phone on /login with both visits still in the outbox, and a grep finds no reconnect marker, access-logout or /cdn-cgi/ entry."
+covers = ["CAP-12", "CAP-5"]
+after = [7]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 13
+type = "story"
+title = "The nightly sweep clears expired auth rows"
+description = "Extends the ADR-0023 retention cron to delete expired login_codes, sessions past entry 2's expires_at, and login_attempts rows older than their window, with counts only in its log line."
+verify = "retention.test.ts shows expired rows of all three tables deleted and live ones kept, and the log line carries counts and no email or token."
+covers = ["CAP-10"]
+after = [8]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 14
+type = "story"
+title = "identity-access and security docs describe our own login"
+description = "Rewrites docs/domains/identity-access.md (login, roles, 401 handling, unconfirmed-identity rules kept) and docs/security.md (Access-bypass, header-spoofing and stolen-phone rows; new CSRF, brute-force, secret-handling and log-hygiene rows), one PR each."
+verify = "A reviewer finds no sentence in either doc describing Access as the login outside the phase-1 fallback, and each new security.md row names the code that enforces it."
+covers = ["CAP-14"]
+after = [10, 11, 12]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 15
+type = "story"
+title = "Agents and the add-api-route skill know the new login"
+description = "Updates the api-engineer and security-reviewer agents and the add-api-route skill to stub a D1 session with entry 3's helper instead of Access identity, and to apply entry 4's Origin check and the auth rules."
+verify = "A grep of .claude/agents and .claude/skills finds no instruction to stub Access identity or trust Cf-Access headers."
+covers = ["CAP-14"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 16
+type = "story"
+title = "deployment and free-tier-budget docs describe phase 1"
+description = "Documents AUTH_PEPPER, BREAK_GLASS, OWNER_EMAIL and the three phases in docs/deployment.md, and the added D1 read per request, write per session-hour and exposed request quota in docs/free-tier-budget.md, one PR each."
+verify = "The owner can set the three secrets and run phase 1 from docs/deployment.md alone, and free-tier-budget.md gives the read and write figures."
+covers = ["CAP-14", "CAP-13"]
+after = [10]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 17
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only, scoped at pull from this epic's build records and deferred review findings."
+verify = "pnpm lint, typecheck, test and build are green and the precache stays at or under 1,000 KiB."
+covers = []
+after = [11, 12, 13, 14, 15, 16]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 18
+type = "story"
+title = "Phase 1 ships to production"
+description = "The owner sets AUTH_PEPPER, BREAK_GLASS and OWNER_EMAIL, CI deploys, and the owner signs in through break-glass and creates every user, with Access still in front."
+verify = "On production, the owner's break-glass sign-in works, an agent enrols the installed iOS PWA with a code, the 11th bad login gets 429, a cross-origin POST gets 403, and the Agents page lists every user."
+covers = ["CAP-13", "CAP-6", "CAP-2"]
+after = [17]
+hitl = true
+risk = "high"

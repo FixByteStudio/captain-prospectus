@@ -1,6 +1,6 @@
 # ADR-0012: Use the workers.dev hostname
 
-- Status: accepted
+- Status: accepted — amended by [ADR-0029](0029-own-login-instead-of-cloudflare-access.md)
 - Date: 2026-09-21
 
 ## Context

@@ -1,7 +1,7 @@
 /**
  * The round screen (spec-gh-118): single-open rows, the outbox badge seeded
  * from a real `outboxVisits` row, Plus tard rows that carry no link, and the
- * empty state — all offline, against the real Dexie table `today.ts` reads.
+ * empty state — all offline, against the real Dexie table `useRound.ts` reads.
  *
  * `useSyncState` is mocked (as `SyncIndicator.test.tsx` does) so nothing here
  * depends on the sync engine's timers; `useAgentPosition` runs for real and
@@ -15,6 +15,7 @@ import { MemoryRouter } from "react-router";
 import { copy } from "../copy";
 import { formatDate } from "../format";
 import type { FieldProspect, Prospect, Visit } from "../../shared/schemas";
+import { brusselsMidnightDaysFromNow } from "../../shared/period";
 import { fieldDb } from "./db";
 import { TodayScreen } from "./TodayScreen";
 import type { SyncState } from "./useSync";
@@ -145,10 +146,16 @@ describe("TodayScreen", () => {
     expect((await fieldDb.prospects.toArray()).every((p) => p.status === "assigned")).toBe(true);
   });
 
-  it("marks the next stop's card « Pas encore envoyé » from a seeded outboxVisits row", async () => {
+  it("marks the next stop's card « Pas encore envoyé » from a seeded outboxVisits row kept for today", async () => {
     const solo = prospect({ name: "Curry House" });
     await fieldDb.prospects.add(solo);
-    await fieldDb.outboxVisits.add(visit({ prospectId: solo.id }));
+    // A when-step outcome keeps the stop on the round (round-placement.md);
+    // a closed one would take it off, which is exactly what the test below
+    // covers.
+    const now = syncState.current.lastSyncAt ?? Date.now();
+    await fieldDb.outboxVisits.add(
+      visit({ prospectId: solo.id, outcome: "no_contact", followUpAt: now }),
+    );
 
     renderScreen();
 
@@ -157,31 +164,99 @@ describe("TodayScreen", () => {
     expect(within(card as HTMLElement).getByText(copy.today.notSynced)).toBeTruthy();
   });
 
-  it("marks a stop « Pas encore envoyé » from a seeded outboxVisits row, without touching order", async () => {
+  /** GH #239, epic #117 retro F1–F3: Flow 1's climax — "Curry House is gone". */
+  it("a queued closed outcome leaves the round: the next-stop card names a different stop", async () => {
     // Fixed ids, not random: with no position the round falls back to
     // `fieldDb.prospects.toArray()`'s own order, which is primary-key (id)
-    // order — so a known id ordering pins which stop is the card and which
-    // is the row, and lets the test assert both.
+    // order — so a known id ordering pins which stop is visited.
     const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
     const second = prospect({
       id: "00000000-0000-4000-8000-000000000002",
       name: "Bar des Marolles",
     });
     await fieldDb.prospects.bulkAdd([first, second]);
-    await fieldDb.outboxVisits.add(visit({ prospectId: second.id }));
+    await fieldDb.outboxVisits.add(visit({ prospectId: first.id, outcome: "interested" }));
 
     renderScreen();
 
     const card = (await screen.findByText(copy.today.nextStop)).closest("article");
     expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("Curry House")).toBeTruthy();
-    expect(within(card as HTMLElement).queryByText(copy.today.notSynced)).toBeNull();
+    // Curry House left the round before the sync even ran (round-placement.md).
+    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
+    expect(screen.queryByText("Curry House")).toBeNull();
+    expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
+  });
 
-    const row = screen.getByRole("button", { name: /Bar des Marolles/ });
-    expect(within(row).getByText(copy.today.notSynced)).toBeTruthy();
-    // Still on the list, in the same position — the outbox never hides or
-    // reorders a stop (invariants 2, 3).
+  it("keeps the visited stop absent once the pull omits it and the outbox row is accepted", async () => {
+    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
+    const second = prospect({
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "Bar des Marolles",
+    });
+    await fieldDb.prospects.bulkAdd([first, second]);
+    const queued = visit({ prospectId: first.id, outcome: "interested" });
+    await fieldDb.outboxVisits.add(queued);
+
+    renderScreen();
+    expect(await screen.findByText(copy.today.remaining(1))).toBeTruthy();
+
+    // The sync: the server accepts the visit and its pull no longer lists the
+    // prospect (`interested` is closed, ADR-0027).
+    await fieldDb.outboxVisits.delete(queued.id);
+    await fieldDb.prospects.delete(first.id);
+
+    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
+    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
+    expect(screen.queryByText("Curry House")).toBeNull();
+    expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
+  });
+
+  it("sorts a pulled stop kept for today (lastVisitAt and nextVisitAt today) last", async () => {
+    const now = syncState.current.lastSyncAt ?? Date.now();
+    // The lower id would be the card in id order; kept for today moves it last.
+    const kept = prospect({
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "Curry House",
+      status: "follow_up",
+      lastVisitAt: now,
+      nextVisitAt: brusselsMidnightDaysFromNow(now, 0),
+    });
+    const fresh = prospect({
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "Bar des Marolles",
+    });
+    await fieldDb.prospects.bulkAdd([kept, fresh]);
+
+    renderScreen();
+
+    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
+    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Curry House/ })).toBeTruthy();
     expect(screen.getByText(copy.today.remaining(2))).toBeTruthy();
+  });
+
+  it("moves a stop queued with a date after today under Plus tard, off the next-stop card", async () => {
+    const now = syncState.current.lastSyncAt ?? Date.now();
+    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
+    const second = prospect({
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "Bar des Marolles",
+    });
+    await fieldDb.prospects.bulkAdd([first, second]);
+    await fieldDb.outboxVisits.add(
+      visit({
+        prospectId: first.id,
+        outcome: "follow_up",
+        followUpAt: brusselsMidnightDaysFromNow(now, 3),
+      }),
+    );
+
+    renderScreen();
+
+    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
+    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
+    const later = screen.getByText(copy.today.later).parentElement;
+    expect(within(later as HTMLElement).getByText("Curry House")).toBeTruthy();
   });
 
   it("marks a field prospect not yet accepted the same way", async () => {

@@ -1,12 +1,13 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
 import { getDb } from "./db/client";
 import { eq, sql } from "drizzle-orm";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { DASHBOARD_PERIODS, OUTCOMES, type Outcome, type Status } from "../shared/constants";
 import { DAY_MS, brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
 import type { DashboardResponse } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
+import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * `GET /api/admin/dashboard` against a real D1 (GH #107).
@@ -30,10 +31,7 @@ const wall = new Intl.DateTimeFormat("en-GB", {
 });
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function dashboard(query = ""): Promise<DashboardResponse> {
@@ -105,6 +103,7 @@ beforeEach(async () => {
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
   await db.delete(scripts);
+  await resetTestUsers();
 });
 
 describe("GET /api/admin/dashboard", () => {
@@ -243,6 +242,22 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
         delta: null,
         visitedProspects: { value: 1, previous: 0 },
       });
+    },
+  );
+
+  it.each(DASHBOARD_PERIODS)(
+    "does not count an Intéressé lead as a conversion, period %i (ADR-0027)",
+    async (period) => {
+      const { from } = brusselsPeriod(Date.now(), period);
+      await seedVisits(await seedProspect("converted"), [from], "converted");
+      await seedVisits(await seedProspect("interested"), [from], "interested");
+
+      const body = await dashboard(`?period=${period}`);
+      expect(body.converted.value).toBe(1);
+      expect(body.conversionRate.visitedProspects.value).toBe(2);
+      expect(body.conversionRate.value).toBe(0.5);
+      expect(body.pipeline.interested).toBe(1);
+      expect(body.pipeline.converted).toBe(1);
     },
   );
 
@@ -638,6 +653,10 @@ describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
 
 describe("Pipeline and Activité par agent (GH #112)", () => {
   const OTHER = "other@example.com";
+  // OTHER is a second active agent unless a test deactivates them.
+  beforeEach(async () => {
+    await seedUser(OTHER, "agent");
+  });
   const zeros = (email: string) => ({
     email,
     visits: 0,
@@ -654,6 +673,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         "assigned",
         "assigned",
         "follow_up",
+        "interested",
         "converted",
         "rejected",
       ] as const) {
@@ -668,6 +688,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         new: 1,
         assigned: 2,
         follow_up: 1,
+        interested: 1,
         converted: 2,
         rejected: 1,
       });
@@ -719,12 +740,20 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
   );
 
   it.each(DASHBOARD_PERIODS)(
-    "lists an off-roster assignee of a live converted prospect at period %i",
+    "gives a deactivated user no row while their visits stay in the totals at period %i (GH #303)",
     async (period) => {
-      await seedProspect("converted", null, null, OTHER);
+      const { from } = brusselsPeriod(Date.now(), period);
+      await seedUser(OTHER, "agent", false);
+      const assigned = await seedProspect("assigned", null, null, OTHER);
+      await seedVisits(await seedProspect("assigned"), [from], "interested", OTHER);
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.agents).toContainEqual(zeros(OTHER));
+      expect(body.agents.map((a) => a.email)).toEqual([ADMIN, AGENT]);
+      expect(body.visits.value).toBe(1);
+      // Two open prospects: the deactivated user's still counts.
+      expect(body.openProspects).toBe(2);
+      const [row] = await getDb(env.DB).select().from(prospects).where(eq(prospects.id, assigned));
+      expect(row?.assignedTo).toBe(OTHER);
     },
   );
 
@@ -738,6 +767,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
       expect(body.agents).toEqual([
         zeros(ADMIN),
         { email: AGENT, visits: 0, converted: 0, followUp: 2, openProspects: 2 },
+        zeros(OTHER),
       ]);
     },
   );
@@ -791,10 +821,11 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         new: 0,
         assigned: 0,
         follow_up: 0,
+        interested: 0,
         converted: 0,
         rejected: 0,
       });
-      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT)]);
+      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT), zeros(OTHER)]);
     },
   );
 });

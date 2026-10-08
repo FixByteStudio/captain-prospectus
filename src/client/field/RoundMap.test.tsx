@@ -45,6 +45,11 @@ afterEach(() => {
 });
 
 describe("RoundMap", () => {
+  it("renders no re-centre button when `recentre` is not given", () => {
+    render(<RoundMap pins={[pin()]} path={[]} position={null} />);
+    expect(screen.queryByRole("button", { name: copy.carte.recentre })).toBeNull();
+  });
+
   it("draws one marker per pin: gold 34px only for `next`, card 28px for the rest", () => {
     const pins = [
       pin({ index: 1, lat: 1, lng: 2, next: true }),
@@ -145,6 +150,33 @@ describe("RoundMap", () => {
       ],
       expect.objectContaining({ padding: [40, 40] }),
     );
+  });
+
+  it("fits the pins only when `fitPosition` is false, and still draws the position (#287)", () => {
+    const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
+    const pins = [pin({ lat: 1, lng: 2 }), pin({ lat: 3, lng: 4 })];
+
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={{ lat: 5, lng: 6 }} fitPosition={false} />,
+    );
+
+    expect(fitBounds).toHaveBeenCalledWith(
+      [
+        [1, 2],
+        [3, 4],
+      ],
+      expect.objectContaining({ padding: [40, 40] }),
+    );
+    // Two pins and the position dot.
+    expect(markerIcons(container)).toHaveLength(3);
+  });
+
+  it("still centres on the position with no pins when `fitPosition` is false (#287)", () => {
+    const setView = vi.spyOn(L.Map.prototype, "setView");
+
+    render(<RoundMap pins={[]} path={[]} position={{ lat: 5, lng: 6 }} fitPosition={false} />);
+
+    expect(setView).toHaveBeenCalledWith([5, 6], 16);
   });
 
   it("centres on the one known point when there are no pins (matrix: Empty round)", () => {

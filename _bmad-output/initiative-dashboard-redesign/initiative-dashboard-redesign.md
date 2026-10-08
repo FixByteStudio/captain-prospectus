@@ -6,6 +6,7 @@ covers: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-10, 
 after: []
 assignee: ""
 risk: high
+status: done
 ---
 
 # Admin and field run on the new dashboard design
@@ -55,3 +56,4 @@ The client UI (admin and field) and the server additions named in `server-gaps.m
 - Decision (2026-09-26): epic-dashboard and epic-field-screens incepted; epic-field-screens' first entries wait on 2.1 so nothing touches `app.css` while 2.1 and the G2 migration (2.2) run.
 - Open question: what the notifications bell announces (spec, G9); nothing waits on it, and the bell ships inert.
 - Waits on nothing external except ADR-0026 acceptance (PR #57), which epic-shared-shell's first entry records.
+- Decision (2026-10-06): the initiative is closed. All six epics are done and retro'd (#59, #104, #117, #174, #246, #263; retros in `implementation-artifacts/`). The epic and story ticket files, and the build records no code or doc cites, are archived: they are in git history before this commit. Open items carry over as GH issues (#284, #287) and the deferred agents' notice before the next production deploy (epic #263 retro, action 3).

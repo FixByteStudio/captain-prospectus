@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLIENT_VERSION, MAX_REQUEST_BYTES, SYNC_VISITS_PER_REQUEST } from "../../shared/constants";
 import type { FieldProspect, Script, SyncRequest, SyncResponse, Visit } from "../../shared/schemas";
-import { FieldDb, getMeta, setMeta } from "./db";
+import { clearAgentCache, FieldDb, getMeta, setMeta } from "./db";
+import { dropReading, rememberReading, setReadingIdentity } from "./last-reading";
 import { backoffDelayMs, runSync } from "./sync";
 
 /**
@@ -628,5 +629,125 @@ describe("runSync — unconfirmed rows", () => {
     expect(sent[0]?.visits).toHaveLength(1);
     expect(sent[0]?.visits[0]).not.toHaveProperty("unconfirmed");
     expect(sent[0]?.visits[0]).not.toHaveProperty("writtenBy");
+  });
+});
+
+/**
+ * ADR-0028, "On the phone": the latest reading goes with the sync, and nothing
+ * but a qualifying one does. Every row of spec-5-3's matrix that reaches the wire.
+ */
+describe("runSync — the position", () => {
+  const NOW = Date.UTC(2026, 9, 5, 12, 0, 0); // 14:00 in Brussels
+  const MIDNIGHT = Date.UTC(2026, 9, 4, 22, 0, 0);
+  const OTHER = "other@example.com";
+
+  const fix = (over: Partial<Parameters<typeof rememberReading>[0]> = {}) => ({
+    lat: 50.8467,
+    lng: 4.3525,
+    accuracy: 25,
+    capturedAt: NOW - 60_000,
+    ...over,
+  });
+
+  /** The body `runSync` sent, parsed. */
+  async function sentBody(identity = AGENT): Promise<Record<string, unknown>> {
+    let body = "";
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      body = init.body as string;
+      return new Response(JSON.stringify(okResponse()), { status: 200 });
+    }) as unknown as typeof fetch;
+    await runSync({ db, identity, fetchFn, now: () => NOW });
+    return JSON.parse(body) as Record<string, unknown>;
+  }
+
+  afterEach(() => {
+    setReadingIdentity(null);
+    dropReading();
+  });
+
+  it("carries today's reading for the confirmed identity", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix());
+    expect((await sentBody()).position).toEqual(fix());
+  });
+
+  it("carries no position key when there is no reading", async () => {
+    setReadingIdentity(AGENT);
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
+  it("carries none for a reading from yesterday", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix({ capturedAt: MIDNIGHT - 1 }));
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
+  it("carries none for a reading dated after today in Brussels", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix({ capturedAt: MIDNIGHT + 24 * 60 * 60_000 }));
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
+  it("carries none for a reading stamped with another identity", async () => {
+    setReadingIdentity(OTHER);
+    rememberReading(fix());
+    expect(await sentBody(AGENT)).not.toHaveProperty("position");
+  });
+
+  it("carries none for a reading taken under a cache-sourced identity", async () => {
+    // SyncProvider passes null while `confirmed` is false.
+    setReadingIdentity(null);
+    rememberReading(fix());
+    setReadingIdentity(AGENT);
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
+  it("carries none for a reading that fails the wire schema, and still syncs", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix({ accuracy: 10_001 }));
+    const visitRow = visit();
+    await db.outboxVisits.add(visitRow);
+
+    const body = await sentBody();
+
+    expect(body).not.toHaveProperty("position");
+    expect((body.visits as Visit[]).map((v) => v.id)).toEqual([visitRow.id]);
+  });
+
+  it("carries none once clearAgentCache dropped it", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix());
+    await clearAgentCache(db);
+    expect(await sentBody()).not.toHaveProperty("position");
+  });
+
+  it("keeps the position through serializeWithinCap's visit halving", async () => {
+    setReadingIdentity(AGENT);
+    rememberReading(fix());
+    const big = "x".repeat(2_000);
+    const heavy = (): Visit =>
+      visit({ answers: Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`q${i}`, big])) });
+    await db.outboxVisits.bulkAdd(Array.from({ length: 60 }, heavy));
+
+    const body = await sentBody();
+
+    expect((body.visits as Visit[]).length).toBeLessThan(60);
+    expect(body.position).toEqual(fix());
+  });
+
+  it("never calls geolocation", async () => {
+    const getCurrentPosition = vi.fn();
+    const watchPosition = vi.fn();
+    vi.stubGlobal("navigator", { geolocation: { getCurrentPosition, watchPosition } });
+    try {
+      setReadingIdentity(AGENT);
+      rememberReading(fix());
+      await sentBody();
+      await runSync({ db, identity: AGENT, fetchFn: failWith(500), now: () => NOW });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(watchPosition).not.toHaveBeenCalled();
   });
 });

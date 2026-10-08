@@ -21,6 +21,7 @@
 import * as z from "zod/mini";
 import {
   ADMIN_VISITS_PAGE_SIZE,
+  AGENT_POSITION_ACCURACY_MAX_M,
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
   EXPORT_DEFAULT_WINDOW_MS,
@@ -34,6 +35,7 @@ import {
   PROSPECTS_MAX_OFFSET,
   PROSPECTS_PAGE_SIZE,
   OUTCOMES,
+  REFUSAL_REASONS,
   POLYGON_MAX_VERTICES,
   POLYGON_MIN_VERTICES,
   PROSPECT_TYPES,
@@ -68,9 +70,11 @@ const shortText = z.string().check(z.trim(), z.maxLength(200));
 const longText = z.string().check(z.trim(), z.maxLength(2000));
 /** `shortText` that may not be empty. Mini's `.check()` clones and appends. */
 const shortTextRequired = shortText.check(z.minLength(1));
+const countSchema = z.int().check(z.nonnegative());
 
 export const statusSchema = z.enum(STATUSES);
 export const outcomeSchema = z.enum(OUTCOMES);
+export const refusalReasonSchema = z.enum(REFUSAL_REASONS);
 export const prospectTypeSchema = z.enum(PROSPECT_TYPES);
 export const sourceSchema = z.enum(SOURCES);
 export const roleSchema = z.enum(ROLES);
@@ -82,6 +86,27 @@ export const meResponseSchema = z.object({
   role: roleSchema,
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
+
+/* ------------------------------------------------------------- /api/auth/login */
+
+/**
+ * ADR-0029: one route, discriminated on the credential, never on the role.
+ * Only `passphrase` exists so far (break-glass); `code` and `passkey` are later
+ * additive members.
+ *
+ * The email is trimmed and lowercased but not format-checked: it is only ever
+ * compared with a stored address, and a refusal must read the same whichever
+ * part was wrong. The passphrase is kept as typed — a trim here would change
+ * what the exact comparison sees.
+ */
+export const passphraseLoginSchema = z.object({
+  kind: z.literal("passphrase"),
+  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(320)),
+  passphrase: z.string().check(z.minLength(1), z.maxLength(200)),
+});
+
+export const loginRequestSchema = z.discriminatedUnion("kind", [passphraseLoginSchema]);
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 /* -------------------------------------------------------------------- scripts */
 
@@ -310,6 +335,13 @@ export const prospectFiltersSchema = z.object({
   assignedTo: z.optional(emailSchema),
   source: z.optional(sourceSchema),
   q: z.optional(searchQuerySchema),
+  /**
+   * Only `"true"` exists: the filter is on or absent, so `false` or any other
+   * spelling is a 400 rather than a second way to say "no filter". Prospects
+   * whose latest visit reported Hors cible and that no admin edit has reviewed
+   * since (docs/domains/prospecting.md).
+   */
+  outOfTarget: z.optional(z.literal("true")),
 });
 
 /** Query string, so every value arrives as text and has to be coerced. */
@@ -403,14 +435,71 @@ export const mergeResultSchema = z.object({
 });
 export type MergeResult = z.infer<typeof mergeResultSchema>;
 
+/** The agent's latest reading, offered with a sync (ADR-0028). */
+export const agentPositionSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  /** Metres. */
+  accuracy: z.number().check(z.gte(0), z.lte(AGENT_POSITION_ACCURACY_MAX_M)),
+  /** The time the device took the fix, not the time the hook resolved. */
+  capturedAt: epochMsSchema,
+});
+export type AgentPosition = z.infer<typeof agentPositionSchema>;
+
 /**
- * Everyone a prospect can be assigned to. There is no users table (ADR-0006),
- * so this is the ADMIN_EMAILS and AGENT_EMAILS vars, not a query.
+ * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
  */
 export const agentsResponseSchema = z.object({
   agents: z.array(z.object({ email: emailSchema, role: roleSchema })),
 });
 export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
+
+export const agentEmailParamSchema = z.object({ email: emailSchema });
+
+/* ------------------------------------------------------------ /api/admin/users */
+
+/** One row of the Agents list: every user, active or not (ADR-0029). */
+export const userSchema = z.object({
+  email: emailSchema,
+  /** Null for a row created before names were asked for, e.g. the owner's break-glass row. */
+  name: z.nullable(z.string()),
+  role: roleSchema,
+  active: z.boolean(),
+  /** Sessions that have not expired. */
+  sessions: countSchema,
+  /** Prospects assigned to them that are still open and not merged away. */
+  openProspects: countSchema,
+});
+export type User = z.infer<typeof userSchema>;
+
+export const usersResponseSchema = z.object({ users: z.array(userSchema) });
+export type UsersResponse = z.infer<typeof usersResponseSchema>;
+
+/** POST /api/admin/users. */
+export const userCreateSchema = z.object({
+  // emailSchema validates before it lowercases, so trim first: an admin pastes
+  // addresses with stray spaces.
+  email: z.pipe(z.string().check(z.trim()), emailSchema),
+  name: shortTextRequired,
+  role: roleSchema,
+});
+export type UserCreate = z.infer<typeof userCreateSchema>;
+
+/** PATCH /api/admin/users/:email: what is absent stays as it is. */
+export const userUpdateSchema = z
+  .object({
+    role: z.optional(roleSchema),
+    active: z.optional(z.boolean()),
+  })
+  .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
+export type UserUpdate = z.infer<typeof userUpdateSchema>;
+
+/** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
+export const agentRoundResponseSchema = z.object({
+  prospects: z.array(prospectSchema),
+  position: z.nullable(agentPositionSchema),
+});
+export type AgentRoundResponse = z.infer<typeof agentRoundResponseSchema>;
 
 /* ----------------------------------------------------------------------- sync */
 
@@ -438,6 +527,8 @@ export const visitSchema = z
     flyerGiven: z.boolean(),
     outcome: outcomeSchema,
     followUpAt: z.nullish(epochMsSchema),
+    /** Kept only when outcome is not_interested (docs/domains/prospecting.md). */
+    refusalReason: z.nullish(refusalReasonSchema),
     notes: z.nullish(longText),
     scriptId: z.nullish(z.int().check(z.positive())),
     answers: z._default(answersSchema, {}),
@@ -457,6 +548,8 @@ export const syncRequestSchema = z.object({
     [],
   ),
   visits: z._default(z.array(visitSchema).check(z.maxLength(SYNC_VISITS_PER_REQUEST)), []),
+  /** An invalid value parses to undefined: it never fails the sync (ADR-0028, INVARIANT 5). */
+  position: z.catch(z.optional(agentPositionSchema), undefined),
 });
 export type SyncRequest = z.infer<typeof syncRequestSchema>;
 
@@ -531,6 +624,8 @@ export const adminVisitSchema = z.object({
   outcome: outcomeSchema,
   followUpAt: z.nullable(epochMsSchema),
   notes: z.nullable(longText),
+  /** Null on every outcome but `not_interested`, and on refusals before #247. */
+  refusalReason: z.nullable(refusalReasonSchema),
 });
 export type AdminVisit = z.infer<typeof adminVisitSchema>;
 
@@ -561,12 +656,16 @@ const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
  * `since` deliberately keeps its looser `z.coerce.number()`: it is a cursor
  * already deployed to clients, and tightening it to `epochMsQuerySchema`
  * would not be additive (docs/api.md › Conventions).
+ *
+ * `reason` is one `refusalReasonSchema` value, optional like the export's, so
+ * both list the same visits; an empty or unknown value is a 400 like any bad param.
  */
 export const visitsSinceQuerySchema = z
   .object({
     since: z._default(z.coerce.number().check(z.int(), z.nonnegative()), 0),
     from: z.optional(epochMsQuerySchema),
     to: z.optional(epochMsQuerySchema),
+    reason: z.optional(refusalReasonSchema),
     limit: z._default(
       z.coerce.number().check(z.int(), z.positive(), z.lte(ADMIN_VISITS_PAGE_SIZE)),
       ADMIN_VISITS_PAGE_SIZE,
@@ -584,7 +683,6 @@ export const dashboardQuerySchema = z.object({
   period: z._default(z.pipe(z.coerce.number(), dashboardPeriodSchema), DASHBOARD_DEFAULT_PERIOD),
 });
 
-const countSchema = z.int().check(z.nonnegative());
 const rateSchema = z.number().check(z.nonnegative());
 
 /**
@@ -660,6 +758,7 @@ export const dashboardResponseSchema = z.object({
     new: countSchema,
     assigned: countSchema,
     follow_up: countSchema,
+    interested: countSchema,
     converted: countSchema,
     rejected: countSchema,
   }),
@@ -795,7 +894,7 @@ export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 /**
  * `GET /api/admin/prospects/export.csv`.
  *
- * The same five filters as the list screen — `prospectFiltersSchema` itself,
+ * The same filters as the list screen — `prospectFiltersSchema` itself,
  * not a copy of its fields — so an export can never filter differently from
  * the screen it was launched from. No `limit` or `offset`: an export is not
  * paged, it always exports the whole filtered set up to EXPORT_ROWS, so a URL
@@ -804,16 +903,18 @@ export type AreaSearchResponse = z.infer<typeof areaSearchResponseSchema>;
 export const prospectsExportQuerySchema = prospectFiltersSchema;
 
 /**
- * `GET /api/admin/visits/export.csv?from=&to=`.
+ * `GET /api/admin/visits/export.csv?from=&to=&reason=`.
  *
  * Both optional; omitted, the window is the last 30 days ending now, unlike
  * the feed's `from`/`to`, which stay unbounded when omitted. The reversed-range
- * refine is `reversedRangeRefine`, shared with the feed.
+ * refine is `reversedRangeRefine` and `reason` is `refusalReasonSchema`,
+ * both shared with the feed.
  */
 export const visitsExportQuerySchema = z
   .object({
     from: z._default(epochMsQuerySchema, () => Date.now() - EXPORT_DEFAULT_WINDOW_MS),
     to: z._default(epochMsQuerySchema, () => Date.now()),
+    reason: z.optional(refusalReasonSchema),
   })
   .check(reversedRangeRefine);
 
@@ -913,6 +1014,14 @@ export const devSeedSchema = z
       )
       .check(z.maxLength(IMPORT_ROWS_PER_REQUEST)),
     script: scriptCreateSchema,
+    /** `false` quarantines nothing, for the blank seed. Absent means true. */
+    orphans: z.optional(z.boolean()),
+    /** Readings taken "now", so the admin round view has a position to draw. */
+    positions: z.optional(
+      z
+        .array(z.extend(z.omit(agentPositionSchema, { capturedAt: true }), { email: emailSchema }))
+        .check(z.maxLength(10)),
+    ),
   })
   .check((ctx) => {
     // A merge target is resolved by name within this one body, so a name that
@@ -941,6 +1050,8 @@ export const devSeedResultSchema = z.object({
     prospects: z.int().check(z.nonnegative()),
     visits: z.int().check(z.nonnegative()),
     orphans: z.int().check(z.nonnegative()),
+    /** The two local users; an existing row is never changed. */
+    users: z.int().check(z.nonnegative()),
   }),
 });
 export type DevSeedResult = z.infer<typeof devSeedResultSchema>;

@@ -11,6 +11,10 @@ declare global {
       DEV_USER_EMAIL?: string;
       /** A secret in production (ADR-0020); the Places tests set and clear it. */
       GOOGLE_PLACES_KEY?: string;
+      /** Own login (ADR-0029); the auth tests set and clear them. */
+      AUTH_PEPPER?: string;
+      BREAK_GLASS?: string;
+      OWNER_EMAIL?: string;
     }
   }
 }

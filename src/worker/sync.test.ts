@@ -1,12 +1,12 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
+import { env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
-import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { agentPositions, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
+import { OUTCOMES, OUTCOME_TO_STATUS } from "../shared/constants";
 import {
   MAX_REQUEST_BYTES,
   SCRIPT_QUESTIONS_MAX,
@@ -14,6 +14,9 @@ import {
 } from "../shared/constants";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
+import { workerFetch } from "../../test/worker-fetch";
+import { resetTestUsers, seedUser } from "../../test/users";
+import { fakeAccess } from "../../test/access-jwt";
 
 /**
  * Routes against a real D1, built by the real migrations.
@@ -24,10 +27,7 @@ import { MAX_VALIDATION_ISSUES } from "./validate";
 const AGENT = "admin@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function sync(body: Partial<SyncRequest>): Promise<Response> {
@@ -78,6 +78,7 @@ beforeEach(async () => {
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
   await db.delete(scripts);
+  await resetTestUsers();
 });
 
 describe("GET /api/me", () => {
@@ -180,6 +181,130 @@ describe("POST /api/agent/sync", () => {
     const [row] = await db.select().from(prospects);
     // INVARIANT 3: the client sent an outcome, never a status.
     expect(row?.status).toBe("converted");
+  });
+
+  it("stores refusalReason when the outcome is not_interested", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          refusalReason: "too_many_devices",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBe("too_many_devices");
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("rejected");
+  });
+
+  it("stores refusalReason as null when an old build omits it", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBeNull();
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("rejected");
+  });
+
+  it("drops refusalReason sent with another outcome", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "converted",
+          refusalReason: "no_need",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const db = getDb(env.DB);
+    const [visitRow] = await db.select().from(visits);
+    expect(visitRow?.refusalReason).toBeNull();
+    const [prospectRow] = await db.select().from(prospects);
+    expect(prospectRow?.status).toBe("converted");
+  });
+
+  it.each(OUTCOMES)("a refusalReason never changes the status %s derives", async (outcome) => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome,
+          followUpAt: Date.now() + 86_400_000,
+          refusalReason: "out_of_target",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const [prospectRow] = await getDb(env.DB).select().from(prospects);
+    expect(prospectRow?.status).toBe(OUTCOME_TO_STATUS[outcome]);
+    const [visitRow] = await getDb(env.DB).select().from(visits);
+    expect(visitRow?.refusalReason).toBe(outcome === "not_interested" ? "out_of_target" : null);
+  });
+
+  it("rejects a refusalReason outside the enum, as for any bad value", async () => {
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+
+    const response = await sync({
+      visits: [
+        {
+          id: crypto.randomUUID(),
+          prospectId,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "not_interested",
+          refusalReason: "bogus",
+          answers: {},
+        } as never,
+      ],
+    });
+
+    expect(response.status).toBe(400);
   });
 
   it("is idempotent: resending the same payload changes nothing", async () => {
@@ -823,6 +948,18 @@ describe("POST /api/agent/sync — a visit for someone else's prospect", () => {
     expect(held?.agentEmail).toBe(OTHER);
   });
 
+  it("quarantines a refusal with its reason intact", async () => {
+    const db = getDb(env.DB);
+    const id = crypto.randomUUID();
+    await seedProspect(id, AGENT);
+    const visit = { ...visitOf(id, "not_interested"), refusalReason: "no_need" as const };
+
+    await asOtherAgent({ visits: [visit] });
+
+    const [held] = await db.select().from(visitsOrphaned);
+    expect(held?.refusalReason).toBe("no_need");
+  });
+
   it("still derives status from the assignee's own visit", async () => {
     const db = getDb(env.DB);
     const id = crypto.randomUUID();
@@ -940,7 +1077,7 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
     await patch(id, { status: "rejected" });
     await sync({ visits: [visitAt(id, "interested", Date.now())] });
 
-    expect((await prospect(id))?.status).toBe("follow_up");
+    expect((await prospect(id))?.status).toBe("interested");
   });
 
   it("settles two visits with the same visited_at by id, whatever order they arrive in", async () => {
@@ -989,6 +1126,217 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
     await patch(id, { assignedTo: AGENT });
     await sync({ visits: [visitAt(id, "interested", Date.now() - DAY)] });
 
-    expect((await prospect(id))?.status).toBe("follow_up");
+    expect((await prospect(id))?.status).toBe("interested");
+  });
+
+  it("closes the prospect on an Intéressé visit, so the next pull leaves it out (ADR-0027)", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+
+    const first = (await (
+      await sync({ visits: [visitAt(id, "interested", Date.now())] })
+    ).json()) as SyncResponse;
+
+    expect((await prospect(id))?.status).toBe("interested");
+    expect(first.prospects.map((p) => p.id)).not.toContain(id);
+    const next = (await (await sync({})).json()) as SyncResponse;
+    expect(next.prospects.map((p) => p.id)).not.toContain(id);
+  });
+
+  it("derives the status from a visit made after an admin reopens an Intéressé lead", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+    await sync({ visits: [visitAt(id, "interested", Date.now() - 2 * DAY)] });
+
+    expect((await patch(id, { status: "assigned" })).status).toBe(200);
+    const reopened = (await (await sync({})).json()) as SyncResponse;
+    expect(reopened.prospects.map((p) => p.id)).toContain(id);
+
+    await sync({ visits: [visitAt(id, "converted", Date.now())] });
+    expect((await prospect(id))?.status).toBe("converted");
+  });
+});
+
+describe("agent position at sync (ADR-0028)", () => {
+  const AGENT_ONLY = "agent@example.com";
+  const reading = (capturedAt: number, lat = 50.85) => ({
+    lat,
+    lng: 4.35,
+    accuracy: 15,
+    capturedAt,
+  });
+  const stored = () => getDb(env.DB).select().from(agentPositions);
+
+  beforeEach(async () => {
+    await getDb(env.DB).delete(agentPositions);
+  });
+  afterEach(() => {
+    env.DEV_USER_EMAIL = "admin@example.com";
+  });
+
+  it("stores nothing for a body with no position", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    expect((await sync({})).status).toBe(200);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("stores an agent's reading and never echoes it", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const before = Date.now();
+    const capturedAt = before - 5_000;
+    const response = await sync({ position: reading(capturedAt) });
+    const after = Date.now();
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty("position");
+    const rows = await stored();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      agentEmail: AGENT_ONLY,
+      lat: 50.85,
+      lng: 4.35,
+      accuracy: 15,
+      capturedAt,
+    });
+    expect(rows[0]?.receivedAt).toBeGreaterThanOrEqual(before);
+    expect(rows[0]?.receivedAt).toBeLessThanOrEqual(after);
+  });
+
+  it("stores nothing for an admin", async () => {
+    env.DEV_USER_EMAIL = "admin@example.com";
+    expect((await sync({ position: reading(Date.now() - 5_000) })).status).toBe(200);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("stores a reading for a newly created active agent (GH #303)", async () => {
+    await seedUser("fresh@example.com", "agent");
+    env.DEV_USER_EMAIL = "fresh@example.com";
+    expect((await sync({ position: reading(Date.now() - 5_000) })).status).toBe(200);
+    expect(await stored()).toHaveLength(1);
+  });
+
+  it("stores nothing for an Access-JWT agent with no users row (GH #303)", async () => {
+    const access = await fakeAccess();
+    const saved = { ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
+    // types.ts reads these as string; the generated Env types them as "".
+    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
+    env.DEV_USER_EMAIL = "";
+    const syncAs = async (email: string) =>
+      call("/api/agent/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cf-Access-Jwt-Assertion": await access.sign(email),
+        },
+        body: JSON.stringify({
+          clientVersion: 1,
+          prospects: [],
+          visits: [],
+          position: reading(Date.now() - 5_000),
+        }),
+      });
+    try {
+      // Same path with a row stores one, so the refusal below is the gate's.
+      expect((await syncAs(AGENT_ONLY)).status).toBe(200);
+      expect(await stored()).toHaveLength(1);
+      expect((await syncAs("rowless@example.com")).status).toBe(200);
+      expect((await stored()).map((r) => r.agentEmail)).toEqual([AGENT_ONLY]);
+    } finally {
+      Object.assign(env, saved);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still answers 200 with the visit accepted when the position write fails", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("22222222-2222-4222-8222-222222222222", AGENT_ONLY);
+    const visitId = crypto.randomUUID();
+    const realDb = env.DB;
+    const broken = new Proxy(realDb, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("agent_positions")) throw new Error("positions unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    env.DB = broken;
+    let response: Response;
+    try {
+      response = await sync({
+        position: reading(Date.now() - 5_000),
+        visits: [
+          {
+            id: visitId,
+            prospectId: "22222222-2222-4222-8222-222222222222",
+            visitedAt: Date.now(),
+            flyerGiven: true,
+            outcome: "no_contact",
+            answers: {},
+          },
+        ],
+      });
+    } finally {
+      env.DB = realDb;
+    }
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as SyncResponse).accepted.visits).toEqual([visitId]);
+    expect(error).toHaveBeenCalledWith("agent position write failed", "Error");
+    error.mockRestore();
+  });
+
+  it("drops an invalid position but still takes the visit", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    await seedProspect("11111111-1111-4111-8111-111111111111", AGENT_ONLY);
+    const visitId = crypto.randomUUID();
+    const response = await sync({
+      position: reading(Date.now(), 200),
+      visits: [
+        {
+          id: visitId,
+          prospectId: "11111111-1111-4111-8111-111111111111",
+          visitedAt: Date.now(),
+          flyerGiven: true,
+          outcome: "no_contact",
+          answers: {},
+        },
+      ],
+    });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as SyncResponse).accepted.visits).toEqual([visitId]);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("stores nothing when an admin syncs", async () => {
+    await sync({ position: reading(Date.now() - 5_000) });
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it("keeps the row on an older or equal reading and replaces it on a newer one", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const t = Date.now() - 20_000;
+    await sync({ position: reading(t, 50.1) });
+    await sync({ position: reading(t - 5_000, 50.2) });
+    await sync({ position: reading(t, 50.3) });
+    expect((await stored())[0]?.lat).toBe(50.1);
+    await sync({ position: reading(t + 5_000, 50.4) });
+    expect((await stored())[0]?.lat).toBe(50.4);
+  });
+
+  it("stores a future-clock reading raw", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    const future = Date.now() + 3_600_000;
+    await sync({ position: reading(future) });
+    expect((await stored())[0]?.capturedAt).toBe(future);
+  });
+
+  it("does not write a reading from before today", async () => {
+    env.DEV_USER_EMAIL = AGENT_ONLY;
+    await sync({ position: reading(Date.now() - 48 * 3_600_000) });
+    expect(await stored()).toHaveLength(0);
   });
 });

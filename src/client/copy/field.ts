@@ -10,6 +10,7 @@ export {
   OUTCOME_HINTS,
   OUTCOME_LABELS,
   QUESTION_TYPE_LABELS,
+  REFUSAL_REASON_LABELS,
   SOURCE_LABELS,
   STATUS_LABELS,
   TYPE_LABELS,
@@ -76,8 +77,19 @@ export const copy = {
     previousVisits: "Visites précédentes",
     back: "Retour à la tournée",
     outcomeRequired: "Choisissez un résultat.",
+    /** The when step, shared by À relancer and Personne sur place
+     * (when-step.md, CAP-2). */
+    when: "Quand ?",
+    whenToday: "Aujourd'hui",
+    whenDate: "Choisir une date",
+    whenRequired: "Choisissez quand relancer : aujourd'hui ou une date.",
     followUpInvalid: "Cette date n'existe pas. Vérifiez le jour et le mois.",
+    followUpNotAfterToday: "Choisissez une date à partir de demain.",
     notesTooLong: "Ces notes sont trop longues. Raccourcissez-les.",
+    /** Pas intéressé's step 2 (refusal-reasons.md, CAP-1/CAP-2). */
+    refusalReason: "Raison du refus",
+    refusalReasonRequired: "Choisissez une raison du refus.",
+    refusalOtherNeedsNote: "Précisez la raison dans les notes.",
     noPreviousVisits: "Première visite à cet endroit.",
     historyOffline: "Les visites précédentes s'afficheront au retour du réseau.",
     flyerHint: "Cochez si vous avez laissé un flyer sur place.",
@@ -100,8 +112,6 @@ export const copy = {
     /** The back link on step 2 names where it goes: step 1, draft intact. */
     backToOutcome: "Résultat",
     questions: "Questions",
-    /** Shown when the outcome is `no_contact`: nobody was there to ask. */
-    questionsOptional: "Personne sur place : répondez seulement si vous savez.",
     answerRequired: "Répondez à cette question.",
     answerInvalid: "Cette réponse n'est pas valide. Vérifiez-la.",
     yes: "Oui",
@@ -174,6 +184,23 @@ export const copy = {
     /** Reconnects through Access (docs/domains/identity-access.md); the
      * outbox is untouched. */
     reconnect: "Se reconnecter",
+  },
+
+  /** `/login` (docs/design.md › The login page, ADR-0029). The admin form
+   * only for now; the code form and its switch come with one-time codes. */
+  login: {
+    title: "Connexion",
+    adminLede: "Connectez-vous avec votre adresse e-mail et votre phrase de passe.",
+    email: "Adresse e-mail",
+    passphrase: "Phrase de passe",
+    submit: "Se connecter",
+    emailRequired: "Saisissez votre adresse e-mail.",
+    passphraseRequired: "Saisissez votre phrase de passe.",
+    /** One sentence whichever part was wrong (ADR-0029). */
+    adminRefused: "Adresse e-mail ou phrase de passe incorrecte.",
+    unreachable: "Connexion impossible. Vérifiez le réseau et réessayez.",
+    failed: "Connexion impossible pour le moment. Réessayez dans un instant.",
+    offline: "Hors ligne. Connectez-vous dès que le réseau revient.",
   },
 
   /** The service worker has a new build waiting (registerType: "prompt"). */

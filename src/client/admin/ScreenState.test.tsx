@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ScreenState } from "./ScreenState";
 
@@ -168,5 +168,69 @@ describe("ScreenState", () => {
     );
 
     expect(screen.getByText("Squelette")).toBeTruthy();
+  });
+
+  // GH #209 (GH #85): offline, the admin shell's own banner already says the
+  // data is stale, so this Alert stands down and keeps whatever it has.
+  describe("offline", () => {
+    afterEach(() => {
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+      });
+    });
+
+    it("suppresses the load-failed Alert while offline, keeping data on screen, and restores it online", () => {
+      render(
+        <ScreenState
+          data="donnée gardée"
+          isPending={false}
+          isError
+          isFetching={false}
+          onRetry={() => {}}
+          loadFailed={LOAD_FAILED}
+          skeleton={<p>Squelette</p>}
+        >
+          {(data: string) => <p>{data}</p>}
+        </ScreenState>,
+      );
+      expect(screen.getByText(LOAD_FAILED)).toBeTruthy();
+
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+
+      expect(screen.queryByText(LOAD_FAILED)).toBeNull();
+      expect(screen.getByText("donnée gardée")).toBeTruthy();
+
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+      });
+
+      expect(screen.getByText(LOAD_FAILED)).toBeTruthy();
+    });
+
+    it("keeps the skeleton while offline when a first load already failed, instead of showing nothing", () => {
+      render(
+        <ScreenState
+          data={undefined}
+          isPending={false}
+          isError
+          isFetching={false}
+          onRetry={() => {}}
+          loadFailed={LOAD_FAILED}
+          skeleton={<p>Squelette</p>}
+        >
+          {(data: string) => <p>{data}</p>}
+        </ScreenState>,
+      );
+      expect(screen.getByText(LOAD_FAILED)).toBeTruthy();
+
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+
+      expect(screen.getByText("Squelette")).toBeTruthy();
+      expect(screen.queryByText(LOAD_FAILED)).toBeNull();
+    });
   });
 });

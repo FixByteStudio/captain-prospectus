@@ -182,6 +182,24 @@ describe("ProspectsScreen › URL filters", () => {
     expect(location()).toBe("/admin/prospects?status=assigned&source=osm");
   });
 
+  it("offers Intéressé as a filter, and shows the row with its label and faded-green edge (ADR-0027)", async () => {
+    const lead = { ...prospect(crypto.randomUUID(), "Curry House"), status: "interested" as const };
+    const asked = stubFetch([lead], 1);
+    renderAt("/admin/prospects");
+    await screen.findByText("Curry House");
+
+    const user = userEvent.setup();
+    await user.click(statusSelect());
+    await user.click(await screen.findByRole("option", { name: STATUS_LABELS.interested }));
+    expect(location()).toBe("/admin/prospects?status=interested");
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects?status=interested"));
+
+    const row = (await screen.findByText("Curry House")).closest("tr");
+    if (!row) throw new Error("no table row for the lead");
+    expect(row.textContent).toContain(STATUS_LABELS.interested);
+    expect(row.innerHTML).toContain("--color-status-interested");
+  });
+
   it("clears every filter from the URL", async () => {
     stubFetch([], 0);
     renderAt("/admin/prospects?status=converted&dueBefore=5&source=osm");
@@ -351,6 +369,111 @@ describe("ProspectsScreen › search (#179)", () => {
       (screen.getByRole("searchbox", { name: copy.prospects.search.label }) as HTMLInputElement)
         .value,
     ).toBe("");
+  });
+});
+
+describe("ProspectsScreen › Hors cible signalé (#250)", () => {
+  const toggle = (name: string) => screen.getByRole("button", { name });
+
+  it("turns the filter on, writes outOfTarget=true and shows the filtered count", async () => {
+    const asked = stubFetch([prospect("p1", "Chez Fermé")], 4);
+    renderAt("/admin/prospects?source=osm");
+    await screen.findByText(copy.prospects.count(4));
+
+    // Off: no count rides on the label.
+    const off = toggle(copy.prospects.filters.outOfTarget);
+    expect(off.getAttribute("aria-pressed")).toBe("false");
+
+    await userEvent.click(off);
+
+    expect(location()).toBe("/admin/prospects?source=osm&outOfTarget=true");
+    await waitFor(() =>
+      expect(asked.at(-1)).toBe("/api/admin/prospects?source=osm&outOfTarget=true"),
+    );
+    const on = await screen.findByRole("button", {
+      name: copy.prospects.filters.outOfTargetCount(4),
+    });
+    expect(on.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("opens a deep link with the toggle on, and turning it off drops the param", async () => {
+    const asked = stubFetch([], 2);
+    renderAt("/admin/prospects?outOfTarget=true");
+
+    const on = await screen.findByRole("button", {
+      name: copy.prospects.filters.outOfTargetCount(2),
+    });
+    expect(asked).toEqual(["/api/admin/prospects?outOfTarget=true"]);
+
+    await userEvent.click(on);
+    expect(location()).toBe("/admin/prospects");
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects"));
+  });
+
+  it("never labels the toggle with the unfiltered total while the filtered list loads", async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "http://admin");
+        if (url.pathname === "/api/admin/agents") return json({ agents: [] });
+        if (url.searchParams.get("outOfTarget") === "true") {
+          await new Promise<void>((resolve) => (release = resolve));
+          return json({ prospects: [], total: 2 });
+        }
+        return json({ prospects: [], total: 40 });
+      }),
+    );
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(40));
+
+    await userEvent.click(toggle(copy.prospects.filters.outOfTarget));
+    // The filtered request is still pending and the previous page is on
+    // screen: the toggle must not borrow its 40.
+    await waitFor(() => expect(release).toBeDefined());
+    expect(
+      screen.queryByRole("button", { name: copy.prospects.filters.outOfTargetCount(40) }),
+    ).toBe(null);
+
+    release?.();
+    await screen.findByRole("button", { name: copy.prospects.filters.outOfTargetCount(2) });
+    expect(
+      screen.queryByRole("button", { name: copy.prospects.filters.outOfTargetCount(40) }),
+    ).toBe(null);
+  });
+
+  it("says nothing matched, and offers to clear, when the filter finds no prospect", async () => {
+    stubFetch([], 0);
+    renderAt("/admin/prospects?outOfTarget=true");
+
+    expect(await screen.findByText(copy.prospects.noMatch)).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.prospects.clearFilters })).toBeTruthy();
+    expect(screen.queryByText(copy.prospects.empty)).toBe(null);
+  });
+
+  it("ignores a value the API would refuse, and exports with the filter", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prospects");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const asked = stubFetch([], 1, {
+      exportCsv: () =>
+        new Response("name\n", {
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="prospects.csv"',
+          },
+        }),
+    });
+    renderAt("/admin/prospects?outOfTarget=maybe");
+    await screen.findByText(copy.prospects.count(1));
+    expect(asked).toEqual(["/api/admin/prospects"]);
+
+    await userEvent.click(toggle(copy.prospects.filters.outOfTarget));
+    await screen.findByRole("button", { name: copy.prospects.filters.outOfTargetCount(1) });
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+    await waitFor(() =>
+      expect(asked).toContain("/api/admin/prospects/export.csv?outOfTarget=true"),
+    );
   });
 });
 

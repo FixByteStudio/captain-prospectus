@@ -6,7 +6,14 @@
  */
 
 /** docs/glossary.md — a prospect's lifecycle. */
-export const STATUSES = ["new", "assigned", "follow_up", "converted", "rejected"] as const;
+export const STATUSES = [
+  "new",
+  "assigned",
+  "follow_up",
+  "interested",
+  "converted",
+  "rejected",
+] as const;
 export type Status = (typeof STATUSES)[number];
 
 /** docs/glossary.md — the result of one visit. */
@@ -18,6 +25,16 @@ export const OUTCOMES = [
   "converted",
 ] as const;
 export type Outcome = (typeof OUTCOMES)[number];
+
+/**
+ * À relancer and Personne sur place share the when step (when-step.md,
+ * CAP-2); every other result has none. The one home for this rule — the
+ * today rule (`today.ts`), the visit draft and `VisitScreen.tsx` all import it
+ * rather than restating the outcome list.
+ */
+export function hasWhenStep(outcome: Outcome): boolean {
+  return outcome === "follow_up" || outcome === "no_contact";
+}
 
 export const PROSPECT_TYPES = [
   "restaurant",
@@ -51,6 +68,23 @@ export type Role = (typeof ROLES)[number];
 export const ORPHAN_REASONS = ["unknown_prospect", "not_assigned"] as const;
 export type OrphanReason = (typeof ORPHAN_REASONS)[number];
 
+/**
+ * docs/domains/prospecting.md — why a `not_interested` visit was refused.
+ *
+ * Order is display order. Values are stored for ever: never rename or reuse
+ * one with another meaning.
+ */
+export const REFUSAL_REASONS = [
+  "too_many_devices",
+  "wait_and_see",
+  "fee_distrust",
+  "no_need",
+  "out_of_target",
+  "no_reason_given",
+  "other",
+] as const;
+export type RefusalReason = (typeof REFUSAL_REASONS)[number];
+
 export const QUESTION_TYPES = ["yes_no", "single", "multi", "text", "number", "rating"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
@@ -61,7 +95,8 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
  */
 export const OUTCOME_TO_STATUS: Readonly<Record<Outcome, Status>> = {
   no_contact: "follow_up",
-  interested: "follow_up",
+  // Closed, so an Intéressé lead leaves the round (ADR-0027).
+  interested: "interested",
   not_interested: "rejected",
   follow_up: "follow_up",
   converted: "converted",
@@ -97,6 +132,9 @@ export const IMPORT_ROWS_PER_REQUEST = 250;
 export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 export const ADMIN_VISITS_PAGE_SIZE = 500;
+
+/** Coarsest fix worth keeping (metres): an IP-based one cannot order a walk (ADR-0028). */
+export const AGENT_POSITION_ACCURACY_MAX_M = 10_000;
 
 /**
  * Questions per script, and so answers per visit: a visit answers one script

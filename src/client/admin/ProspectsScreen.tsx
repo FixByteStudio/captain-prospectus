@@ -136,7 +136,8 @@ export function ProspectsScreen() {
     filters.dueBefore !== undefined ||
     filters.assignedTo ||
     filters.source ||
-    filters.q,
+    filters.q ||
+    filters.outOfTarget,
   );
 
   /** Replace, not push: a filter tweak is not a page Back should step through. */
@@ -155,6 +156,11 @@ export function ProspectsScreen() {
     else if (key === "source") next.source = value as ProspectFilters["source"];
     else next.assignedTo = value;
     writeFilters(next);
+  }
+
+  function setOutOfTarget(on: boolean) {
+    if (on) writeFilters({ ...filters, outOfTarget: true });
+    else dropFilter("outOfTarget");
   }
 
   function dropFilter(key: keyof ProspectFilters) {
@@ -269,6 +275,8 @@ export function ProspectsScreen() {
       onSearchChange={handleSearchChange}
       onFilterChange={setFilter}
       onDropFilter={dropFilter}
+      onOutOfTargetChange={setOutOfTarget}
+      outOfTargetCount={prospects.data && !prospects.isPlaceholderData ? total : undefined}
       agentList={agentList.map((a) => a.email)}
       assignee={assignee}
       onAssigneeChange={setAssignee}

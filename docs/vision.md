@@ -27,7 +27,7 @@ is tied to a city — moving is changing those three places, not a migration.
 ## Non-goals (v1)
 - PDF import (dropped, see [ADR-0009](adr/0009-no-pdf-import.md)).
 - Route optimisation beyond nearest-next ordering.
-- Continuous GPS tracking of agents. Position is captured at check-in only.
+- Continuous GPS tracking of agents. No reading is taken in the background; the latest one taken today goes with a sync and is gone overnight ([ADR-0028](adr/0028-agent-position-at-sync.md)).
 - Multi-organisation / multi-tenant.
 - Native mobile apps.
 - Any paid service.

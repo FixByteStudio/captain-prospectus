@@ -1,14 +1,18 @@
 # Copy to .dev.vars (git-ignored) for local development.
 #
 # Impersonates a signed-in user. Honoured ONLY when the request host is
-# localhost or 127.0.0.1 — see docs/domains/identity-access.md and ADR-0006.
+# localhost, 127.0.0.1 or [::1] — see docs/domains/identity-access.md and
+# ADR-0029. The role comes from the users table, which `pnpm db:seed:local`
+# fills with admin@example.com (admin) and agent@example.com (agent); an email
+# with no active row there gets a 401.
 DEV_USER_EMAIL="admin@example.com"
 
-# Comma-separated admin emails. Anyone else who signs in is an agent.
+# Comma-separated admin emails. No longer decides a local role (users does):
+# it only feeds the Access JWT fallback.
 ADMIN_EMAILS="admin@example.com"
 
-# Comma-separated. Who the admin's assign menu offers, besides the admins.
-# The local seed assigns to admin@example.com and agent@example.com.
+# Comma-separated. Read by nothing since GH #303 (the roster is the active
+# users rows); goes with epic-access-removed.
 AGENT_EMAILS="agent@example.com"
 
 # Google Places API key (ADR-0020). Optional: without it the map import's
@@ -16,3 +20,10 @@ AGENT_EMAILS="agent@example.com"
 # In production this is a SECRET — `wrangler secret put GOOGLE_PLACES_KEY` —
 # never a var in wrangler.jsonc.
 # GOOGLE_PLACES_KEY="AIza..."
+
+# Own login (ADR-0029). Local values only — production ones are set by the
+# owner or CI, never in the repo. Rotating AUTH_PEPPER signs everyone out.
+AUTH_PEPPER="dev-pepper-change-me"
+# Break-glass: type OWNER_EMAIL + BREAK_GLASS in /login's passphrase form.
+BREAK_GLASS="dev-break-glass-change-me"
+OWNER_EMAIL="admin@example.com"

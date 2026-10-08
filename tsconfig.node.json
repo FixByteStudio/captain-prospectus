@@ -2,7 +2,9 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023"],
-    "types": ["node"]
+    "types": ["node"],
+    // vite.config.ts imports with .ts extensions for Vite's native config loader.
+    "allowImportingTsExtensions": true
   },
   "include": ["vite.config.ts", "drizzle.config.ts", "eslint.config.js", "scripts"]
 }

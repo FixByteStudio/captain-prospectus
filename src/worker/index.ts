@@ -16,9 +16,12 @@ import { getDb } from "./db/client";
 import { isD1DailyLimitError } from "./errors";
 import { describeSweep, runRetention } from "./retention";
 import { describeEviction, evictMapCache } from "./map-cache";
+import { requireSameOrigin } from "./origin";
 import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
+import { authRoutes } from "./routes/auth";
 import { devRoutes } from "./routes/dev";
+import { identityRoutes } from "./routes/identity";
 import { meRoutes } from "./routes/me";
 import type { AppEnv, Bindings } from "./types";
 
@@ -30,8 +33,8 @@ const app = new Hono<AppEnv>().basePath("/api");
  *
  * Registered FIRST, and that is load-bearing. Hono composes matched handlers in
  * registration order, so a middleware added below the /dev mount would sit
- * *after* the dev handler in the chain and never run — and /api/dev/* is the one
- * route mounted before auth. It also has to precede the sync route's
+ * *after* the dev handler in the chain and never run — and /api/dev/* and
+ * /api/auth/* are the routes mounted before auth. It also has to precede the sync route's
  * syncRequest validator, which reads the body: Hono caches the request
  * text on first read, so a cap placed after it would be checking a body that had
  * already been buffered.
@@ -56,16 +59,26 @@ app.use(
   }),
 );
 
+/**
+ * CAP-8: a non-GET request from another origin is refused. Above the /dev and
+ * /auth mounts for the same ordering reason as the body cap.
+ */
+app.use("/*", requireSameOrigin);
+
 /** Local-only; the route itself 404s off localhost. Mounted before auth. */
 app.route("/dev", devRoutes);
 
-// INVARIANT 10: every /api request carries a verified Access identity.
+/** Sign in and out: reached by callers who have no identity yet (ADR-0029). */
+app.route("/auth", authRoutes);
+
+// INVARIANT 10: every other /api request carries a server-verified identity.
 app.use("/*", requireIdentity);
 
 app.route("/me", meRoutes);
 app.route("/agent", agentRoutes);
 app.use("/admin/*", requireAdmin);
 app.route("/admin", adminRoutes);
+app.route("/admin", identityRoutes);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 

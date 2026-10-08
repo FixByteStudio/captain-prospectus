@@ -11,7 +11,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { copy, TYPE_LABELS } from "../copy";
-import type { TodayItem, TodayList } from "./today";
+import type { TodayItem, TodayList } from "../../shared/today";
 import type { RoundState } from "./useRound";
 
 const round = vi.hoisted(() => ({
@@ -55,6 +55,7 @@ const item = (over: Partial<TodayItem> = {}): TodayItem => ({
   address: "12 rue Sainte-Catherine",
   status: "assigned",
   nextVisitAt: null,
+  lastVisitAt: null,
   pending: false,
   distanceM: null,
   visitQueued: false,
@@ -286,7 +287,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(props.position).toBe(round.current.point);
     expect(typeof props.onSelect).toBe("function");
 
-    props.recentre();
+    props.recentre?.();
     expect(round.current.refresh).toHaveBeenCalledTimes(1);
   });
 

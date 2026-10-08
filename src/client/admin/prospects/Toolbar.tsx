@@ -6,6 +6,7 @@ import { cn } from "../../lib/utils";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
+import { Toggle } from "../../ui/toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import type { ProspectFilters } from "../queries";
 import { ANY, Filter } from "./Filter";
@@ -31,6 +32,8 @@ export function Toolbar({
   onSearchChange,
   onFilterChange,
   onDropFilter,
+  onOutOfTargetChange,
+  outOfTargetCount,
   agentList,
   assignee,
   onAssigneeChange,
@@ -47,6 +50,9 @@ export function Toolbar({
   onSearchChange: (value: string) => void;
   onFilterChange: (key: "status" | "assignedTo" | "source", value: string) => void;
   onDropFilter: (key: keyof ProspectFilters) => void;
+  onOutOfTargetChange: (on: boolean) => void;
+  /** The filtered list's own total; undefined until the list has answered. */
+  outOfTargetCount: number | undefined;
   agentList: string[];
   assignee: string | undefined;
   onAssigneeChange: (value: string) => void;
@@ -114,6 +120,17 @@ export function Toolbar({
             anyLabel={copy.prospects.filters.anySource}
             options={SOURCES.map((s) => ({ value: s, label: SOURCE_LABELS[s] }))}
           />
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={filters.outOfTarget === true}
+            onPressedChange={onOutOfTargetChange}
+            className="tnum"
+          >
+            {filters.outOfTarget && outOfTargetCount !== undefined
+              ? copy.prospects.filters.outOfTargetCount(outOfTargetCount)
+              : copy.prospects.filters.outOfTarget}
+          </Toggle>
           {chips.map((chip) => (
             <Badge
               key={chip.key}

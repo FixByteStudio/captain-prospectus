@@ -7,9 +7,11 @@
  * 404s off localhost. The route generates each place's visit history from its
  * dedupe key, so running this twice inserts nothing the second time.
  *
- * Usage: npm run dev   (in one terminal)
- *        npm run db:seed:local
+ * Usage: pnpm dev   (in one terminal)
+ *        pnpm db:seed:local:full
  */
+
+import { script } from "./seed-script.mjs";
 
 const URL_BASE = process.env.SEED_URL ?? "http://localhost:5173";
 const AGENT = process.env.DEV_USER_EMAIL ?? "admin@example.com";
@@ -144,20 +146,16 @@ const generated = PLACES.flatMap((place, row) =>
   }),
 );
 
-const script = {
-  name: "Questionnaire par défaut",
-  questions: [
-    { key: "has_delivery", label: "Proposez-vous la livraison ?", type: "yes_no", required: true },
-    {
-      key: "pos_system",
-      label: "Quel logiciel de caisse utilisez-vous ?",
-      type: "single",
-      options: ["Aucun", "Papier", "Une autre application"],
-    },
-    { key: "covers_per_day", label: "Combien de couverts par jour ?", type: "number" },
-    { key: "remarks", label: "Remarques", type: "text" },
-  ],
-};
+/**
+ * Two readings taken at seed time, so Tournée du jour has a position to draw
+ * (a position is only served for the day it was taken: re-run this each day).
+ * The admin's is not something production stores — it is here so the screen
+ * opened as the dev user shows one.
+ */
+const positions = [
+  { email: OTHER_AGENT, lat: CENTER.lat + 0.004, lng: CENTER.lng - 0.006, accuracy: 15 },
+  { email: AGENT, lat: CENTER.lat - 0.003, lng: CENTER.lng + 0.005, accuracy: 25 },
+];
 
 // IMPORT_ROWS_PER_REQUEST in src/shared/constants.ts: one request stays inside
 // the Worker's CPU budget. The specials sit in the first batch.
@@ -168,8 +166,14 @@ const totals = { seeded: 0, prospects: 0, visits: 0, orphans: 0 };
 for (let i = 0; i < all.length; i += ROWS_PER_REQUEST) {
   const response = await fetch(`${URL_BASE}/api/dev/seed`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prospects: all.slice(i, i + ROWS_PER_REQUEST), script }),
+    // The Worker refuses a POST without its own Origin (src/worker/origin.ts).
+    headers: { "Content-Type": "application/json", Origin: new URL(URL_BASE).origin },
+    // The readings ride the first request: the route writes them last, once.
+    body: JSON.stringify({
+      prospects: all.slice(i, i + ROWS_PER_REQUEST),
+      script,
+      ...(i === 0 ? { positions } : {}),
+    }),
   }).catch((error) => {
     console.error(`Could not reach ${URL_BASE}. Is \`npm run dev\` running?`);
     console.error(String(error));
@@ -191,5 +195,5 @@ for (let i = 0; i < all.length; i += ROWS_PER_REQUEST) {
 console.log(
   `Seeded ${totals.seeded} prospects and 1 active script for ${AGENT} and ${OTHER_AGENT}. ` +
     `Inserted ${totals.prospects} prospects, ${totals.visits} visits and ` +
-    `${totals.orphans} quarantined visits.`,
+    `${totals.orphans} quarantined visits. Positions set for ${positions.map((p) => p.email).join(" and ")}.`,
 );

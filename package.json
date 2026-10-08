@@ -19,7 +19,8 @@
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply captain-prospectus --local",
-    "db:seed:local": "node scripts/seed.mjs",
+    "db:seed:local": "node scripts/seed-blank.mjs",
+    "db:seed:local:full": "node scripts/seed.mjs",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {

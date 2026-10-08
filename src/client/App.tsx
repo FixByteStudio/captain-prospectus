@@ -34,6 +34,7 @@ import {
 } from "./field/db";
 import { adminAccess, resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
+import { LoginScreen } from "./auth/LoginScreen";
 
 /**
  * The admin side is a separate chunk, fetched only when an admin opens one of
@@ -248,7 +249,27 @@ function AdminFrameFallback() {
   );
 }
 
+/**
+ * The outer shell: the service worker, and `/login` beside everything else.
+ *
+ * `/login` is a sibling route rather than a branch inside `GatedApp`, so it
+ * never runs the identity hooks below and never asks `/api/me` — a phone a
+ * 401 sends there has no session to ask with (spec-gh-299, ADR-0029).
+ */
 export function App() {
+  // Registers the service worker on mount, before and regardless of whether
+  // `/api/me` answers. See the note on `UpdatePrompt`.
+  const pwa = usePwa();
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginScreen />} />
+      <Route path="*" element={<GatedApp pwa={pwa} />} />
+    </Routes>
+  );
+}
+
+function GatedApp({ pwa }: { pwa: PwaState }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [error, setError] = useState<{ message: string; revoked: boolean } | null>(null);
   /** True when the identity came from the cache rather than from the server.
@@ -275,10 +296,6 @@ export function App() {
     identityInFlight.current = true;
     setRecheck((n) => n + 1);
   }, []);
-
-  // Registers the service worker on mount, before and regardless of whether
-  // `/api/me` answers. See the note on `UpdatePrompt`.
-  const pwa = usePwa();
 
   const location = useLocation();
   const navigate = useNavigate();

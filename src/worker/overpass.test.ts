@@ -1,12 +1,12 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { overpassCache, prospects, visits } from "./db/schema";
 import { OVERPASS_QUERY_VERSION, buildOverpassQuery, polygonHash, toCandidates } from "./overpass";
 import { OVERPASS_CACHE_TTL_MS, OVERPASS_CANDIDATES_LIMIT } from "../shared/constants";
 import type { AreaSearchResponse } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * The map import — ADR-0008, docs/domains/ingestion.md.
@@ -28,10 +28,7 @@ const POLYGON: [number, number][] = [
 ];
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 function search(polygon: unknown = POLYGON): Promise<Response> {

@@ -21,7 +21,7 @@ describe("OUTCOME_TO_STATUS", () => {
   it("matches the table in docs/domains/prospecting.md", () => {
     expect(OUTCOME_TO_STATUS).toEqual({
       no_contact: "follow_up",
-      interested: "follow_up",
+      interested: "interested",
       not_interested: "rejected",
       follow_up: "follow_up",
       converted: "converted",
@@ -46,6 +46,12 @@ describe("open statuses", () => {
     expect([...OPEN_STATUSES]).toEqual(["new", "assigned", "follow_up"]);
     expect(isOpen("converted")).toBe(false);
     expect(isOpen("rejected")).toBe(false);
+    expect(isOpen("interested")).toBe(false);
+  });
+
+  it("keeps an Intéressé visit off the round: its status is closed (ADR-0027)", () => {
+    expect(STATUSES).toContain("interested");
+    expect(isOpen(OUTCOME_TO_STATUS.interested)).toBe(false);
   });
 });
 

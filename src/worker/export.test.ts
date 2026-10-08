@@ -1,11 +1,11 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { CSV_ATTRIBUTION } from "../shared/csv";
 import { EXPORT_ROWS } from "../shared/constants";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * CSV exports — docs/backlog/001 and 002.
@@ -18,10 +18,7 @@ const ADMIN = "admin@example.com";
 const AGENT = "agent@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 async function seedProspect(over: Partial<Record<string, unknown>> = {}): Promise<string> {
@@ -133,6 +130,19 @@ describe("GET /api/admin/prospects/export.csv", () => {
     const body = await (await call("/api/admin/prospects/export.csv?status=converted")).text();
     expect(body).toContain("Gardé");
     expect(body).not.toContain("Filtré");
+  });
+
+  it("exports the Intéressé leads under their own status (ADR-0027)", async () => {
+    await seedProspect({ name: "Tiède", status: "interested" });
+    await seedProspect({ name: "Gagné", status: "converted" });
+
+    const rows = records(
+      await (await call("/api/admin/prospects/export.csv?status=interested")).text(),
+    );
+    expect(rows).toHaveLength(3);
+    const header = rows[0]?.split(",") ?? [];
+    expect(rows[1]?.split(",")[header.indexOf("status")]).toBe("interested");
+    expect(rows[1]).toContain("Tiède");
   });
 
   it("takes several statuses, comma-separated, like the list", async () => {
@@ -254,7 +264,7 @@ describe("GET /api/admin/visits/export.csv", () => {
 
     const rows = records(await response.text());
     expect(rows[0]).toBe(
-      "visited_at,received_at,agent_email,prospect_name,outcome,flyer_given,follow_up_at,notes",
+      "visited_at,received_at,agent_email,prospect_name,outcome,refusal_reason,flyer_given,follow_up_at,notes",
     );
     expect(rows[1]).toContain("Le Bistrot");
   });
@@ -288,6 +298,57 @@ describe("GET /api/admin/visits/export.csv", () => {
       await call(`/api/admin/visits/export.csv?from=${now - 60_000}&to=${now + 60_000}`)
     ).text();
     expect(body).toContain("sync tardive");
+  });
+
+  it("writes the refusal reason after the outcome, empty when there is none", async () => {
+    const refused = await seedProspect({ name: "Refus" });
+    await seedVisit(refused, { outcome: "not_interested", refusalReason: "fee_distrust" });
+    const older = await seedProspect({ name: "Ancien refus" });
+    await seedVisit(older, { outcome: "not_interested" });
+
+    const rows = records(await (await call("/api/admin/visits/export.csv")).text());
+    const byName = new Map(rows.slice(1, -1).map((row) => [row.split(",")[3], row.split(",")]));
+    expect(byName.get("Refus")?.slice(4, 6)).toEqual(["not_interested", "fee_distrust"]);
+    expect(byName.get("Ancien refus")?.slice(4, 6)).toEqual(["not_interested", ""]);
+  });
+
+  /** One reason= rule for both routes (GH #249): the export lists what the feed lists. */
+  it.each(["no_need", "fee_distrust"])(
+    "lists the same visits as the feed for reason=%s and the same range",
+    async (reason) => {
+      const now = Date.now();
+      const seeds: [string, Record<string, unknown>][] = [
+        ["Pas besoin", { outcome: "not_interested", refusalReason: "no_need" }],
+        [
+          "Pas besoin hors fenetre",
+          { outcome: "not_interested", refusalReason: "no_need", receivedAt: now - 120_000 },
+        ],
+        ["Mefiance", { outcome: "not_interested", refusalReason: "fee_distrust" }],
+        ["Refus ancien", { outcome: "not_interested" }],
+        ["Converti", { outcome: "converted" }],
+        ["A revoir", { outcome: "follow_up" }],
+      ];
+      for (const [name, over] of seeds) {
+        await seedVisit(await seedProspect({ name }), { receivedAt: now, ...over });
+      }
+      const query = `reason=${reason}&from=${now - 60_000}&to=${now + 60_000}`;
+
+      const feed = (await (await call(`/api/admin/visits?${query}`)).json()) as {
+        visits: { prospectName: string }[];
+      };
+      const csv = records(await (await call(`/api/admin/visits/export.csv?${query}`)).text());
+      const exported = csv.slice(1, -1).map((row) => row.split(",")[3]);
+
+      const expected = reason === "fee_distrust" ? ["Mefiance"] : ["Pas besoin"];
+      expect(feed.visits.map((v) => v.prospectName)).toEqual(expected);
+      expect(exported).toEqual(expected);
+    },
+  );
+
+  it.each(["reason=bogus", "reason=", "reason=none"])("refuses %s with 400", async (query) => {
+    const response = await call(`/api/admin/visits/export.csv?${query}`);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "validation" });
   });
 
   it("refuses a reversed range with 400 rather than an empty file", async () => {

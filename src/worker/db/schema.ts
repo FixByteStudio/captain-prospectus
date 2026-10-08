@@ -6,12 +6,22 @@
  * migration that is already on main.
  */
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import {
   ORPHAN_REASONS,
   OUTCOMES,
   PROSPECT_TYPES,
+  REFUSAL_REASONS,
+  ROLES,
   SOURCES,
   STATUSES,
 } from "../../shared/constants";
@@ -59,6 +69,15 @@ export const prospects = sqliteTable(
      * query that lists live prospects must filter on this being null.
      */
     mergedInto: text("merged_into").references((): AnySQLiteColumn => prospects.id),
+
+    /**
+     * When an admin last edited this prospect directly (PATCH /prospects/:id,
+     * fields or status) — the Hors cible review (docs/domains/prospecting.md).
+     * Flagged while the latest visit's reason is out_of_target and this is null
+     * or not after that visit's visited_at. Nothing else writes it: assign,
+     * merge and import must not, and nothing reads updated_at for the flag.
+     */
+    outOfTargetReviewedAt: integer("out_of_target_reviewed_at"),
 
     createdBy: text("created_by").notNull(),
     createdAt: integer("created_at").notNull(),
@@ -109,6 +128,8 @@ export const visits = sqliteTable(
     flyerGiven: integer("flyer_given", { mode: "boolean" }).notNull().default(false),
     outcome: text("outcome", { enum: OUTCOMES }).notNull(),
     followUpAt: integer("follow_up_at"),
+    /** Kept only when outcome is not_interested. See REFUSAL_REASONS. */
+    refusalReason: text("refusal_reason", { enum: REFUSAL_REASONS }),
     notes: text("notes"),
 
     /** The exact script version answered, so answers stay interpretable. */
@@ -167,6 +188,8 @@ export const visitsOrphaned = sqliteTable(
     flyerGiven: integer("flyer_given", { mode: "boolean" }).notNull().default(false),
     outcome: text("outcome", { enum: OUTCOMES }).notNull(),
     followUpAt: integer("follow_up_at"),
+    /** Mirrors visits.refusal_reason, so a repair is a straight copy. */
+    refusalReason: text("refusal_reason", { enum: REFUSAL_REASONS }),
     notes: text("notes"),
 
     /**
@@ -229,6 +252,66 @@ export const overpassCache = sqliteTable("overpass_cache", {
   createdAt: integer("created_at").notNull(),
 });
 
+/** The agent's latest reading, one row each, swept nightly (ADR-0028). */
+export const agentPositions = sqliteTable("agent_positions", {
+  agentEmail: text("agent_email").primaryKey(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  accuracy: real("accuracy").notNull(),
+  /** Phone clock, as sent. */
+  capturedAt: integer("captured_at").notNull(),
+  receivedAt: integer("received_at").notNull(),
+});
+
+/**
+ * Who may sign in, and as what (ADR-0029). The email is the key because every
+ * stored row already identifies a user by it. Deactivated, never deleted.
+ */
+export const users = sqliteTable("users", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  name: text("name"),
+  role: text("role", { enum: ROLES }).notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  /** HMAC-SHA-256 hex under AUTH_PEPPER; admins only. */
+  passphraseHash: text("passphrase_hash"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/**
+ * One row per signed-in device (ADR-0029). Only the HMAC of the cookie's token
+ * is stored, so a leaked table opens no session.
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => users.email),
+    createdAt: integer("created_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (t) => [index("sessions_user_email_idx").on(t.userEmail)],
+);
+
+/**
+ * Failed logins per IP and fixed 15-minute window (CAP-7, login-throttle.ts).
+ * The IP is personal data, so only its HMAC under AUTH_PEPPER is stored.
+ */
+export const loginAttempts = sqliteTable(
+  "login_attempts",
+  {
+    /** HMAC-SHA-256 hex of CF-Connecting-IP, or of "unknown" without it. */
+    ipHash: text("ip_hash").notNull(),
+    /** Epoch ms, a multiple of the window length. */
+    windowStart: integer("window_start").notNull(),
+    failures: integer("failures").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.ipHash, t.windowStart] })],
+);
+
 export type ProspectRow = typeof prospects.$inferSelect;
 export type NewProspectRow = typeof prospects.$inferInsert;
 export type VisitRow = typeof visits.$inferSelect;
@@ -236,4 +319,7 @@ export type NewVisitRow = typeof visits.$inferInsert;
 export type OrphanedVisitRow = typeof visitsOrphaned.$inferSelect;
 export type NewOrphanedVisitRow = typeof visitsOrphaned.$inferInsert;
 export type ScriptRow = typeof scripts.$inferSelect;
+export type AgentPositionRow = typeof agentPositions.$inferSelect;
 export type OverpassCacheRow = typeof overpassCache.$inferSelect;
+export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;

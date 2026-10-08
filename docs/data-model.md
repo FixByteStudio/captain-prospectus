@@ -20,12 +20,13 @@ erDiagram
     text source "csv|osm|google|field"
     text source_ref "e.g. osm node/123, google/ChIJ…"
     text dedupe_key UK
-    text status "new|assigned|follow_up|converted|rejected"
+    text status "new|assigned|follow_up|interested|converted|rejected"
     int status_set_at "last manual status change; null = visits decide"
     text assigned_to "agent email"
     int last_visit_at
     int next_visit_at
     text merged_into FK "null = live; set = absorbed by another prospect"
+    int out_of_target_reviewed_at "stamped by every admin PATCH of the prospect (the Hors cible review, prospecting.md); null = never reviewed"
     text created_by
     int created_at
     int updated_at
@@ -40,6 +41,7 @@ erDiagram
     int flyer_given
     text outcome
     int follow_up_at
+    text refusal_reason "null unless outcome=not_interested"
     text notes
     int script_id FK
     text answers "JSON"
@@ -59,6 +61,7 @@ erDiagram
     int flyer_given
     text outcome
     int follow_up_at
+    text refusal_reason "mirrors visits.refusal_reason"
     text notes
     int script_id "NOT a FK either"
     text answers "JSON"
@@ -74,12 +77,64 @@ erDiagram
     int is_active
     int created_at
   }
+  AGENT_POSITIONS {
+    text agent_email PK "verified Access email, no FK"
+    real lat
+    real lng
+    real accuracy "metres"
+    int captured_at "phone clock, as sent"
+    int received_at "server clock"
+  }
+
   OVERPASS_CACHE {
     text hash PK "versioned per provider"
     text body "raw provider answer"
     int created_at
   }
+
+  USERS ||--o{ SESSIONS : "signed in on"
+  USERS {
+    text email PK "lowercased"
+    text name "nullable"
+    text role "admin | agent"
+    int active "boolean, default 1"
+    text passphrase_hash "HMAC hex, admins only, nullable"
+    int created_at
+  }
+  SESSIONS {
+    text token_hash PK "HMAC-SHA-256 hex of the cookie token"
+    text user_email FK
+    int created_at
+    int last_seen_at "written at creation only, for now"
+    int expires_at "created_at + 30 d admin / 90 d agent, fixed"
+  }
+  LOGIN_ATTEMPTS {
+    text ip_hash PK "HMAC-SHA-256 hex of CF-Connecting-IP (IPv6 by /64), or of unknown"
+    int window_start PK "epoch ms, a multiple of 15 min"
+    int failures
+  }
 ```
+
+`users` and `sessions` are our own login ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+A user is deactivated, never deleted. The browser holds a random 32-byte token in the
+`__Host-cp_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`); only its
+HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. A session
+counts while `expires_at` is in the future and its user is `active`; the role is read from
+`users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
+are later entries of the own-login epic.
+
+`login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
+`src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
+is stored, and an IPv6 address counts by its /64. Each login reserves a failure with an upsert
+that adds one only while the row is under 10, and gives it back unless the login answers 400 or
+401; a row at 10 refuses the IP until the window ends. Nothing deletes old rows yet: the nightly sweep is a later entry of
+the own-login epic.
+
+`agent_positions` holds at most one row per assignable agent: the latest reading the phone
+offered at sync. It is the one upsert on an agent's behalf, allowed by
+[ADR-0028](adr/0028-agent-position-at-sync.md); it is served only while
+`min(captured_at, received_at)` is today in Brussels and the nightly retention sweep
+deletes the rest. No history, no index beyond the primary key.
 
 `overpass_cache` holds **both** map providers' raw answers (ADR-0020) and keeps the
 name of its first one. The hash is SHA-256 of a provider-specific query version plus
@@ -126,7 +181,8 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 - **`client_version` records the sync contract version of the build that sent the visit.** It makes
   "have all phones upgraded?" a SQL query instead of a log search, which is the gate for raising
   `MIN_CLIENT_VERSION` (`sync-contract-change` skill).
-- **No users table.** Identity is the email asserted by Cloudflare Access ([ADR-0006](adr/0006-cloudflare-access-auth.md)). Role comes from the `ADMIN_EMAILS` variable.
+- **Identity is a session first, Access second.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Until the cutover ends, a verified Access JWT still does, with the role from `ADMIN_EMAILS` ([identity-access](domains/identity-access.md)). Stored rows identify a user by email either way. With a `users` row, the Access fallback follows it too: inactive is refused, an active row's role wins over `ADMIN_EMAILS`.
+- **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
 - **A merge is soft.** `merged_into` points at the survivor; nothing is deleted and no visit is
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own
   status and its own dedupe key, which is what makes a merge reversible
@@ -145,13 +201,6 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `prospects(source)` | admin list filtered by source (`csv`, `osm`, `google`, `field`) |
 | `prospects(updated_at)` | admin list default order |
 | `prospects(merged_into)` | live-prospect filter, and finding what a survivor absorbed |
-
-SQLite uses one index per table reference, so a filtered *and* sorted admin list
-(`status=X` ordered by `updated_at`) filters on the index and then sorts the
-matches in memory. Composite `(status, updated_at)`-style indexes would remove
-that sort, and were deliberately not added: at the few thousand prospects this
-project plans for, the sort is negligible, and three more indexes would cost a
-write on every imported row. Revisit if the base grows by an order of magnitude.
 | `visits(prospect_id, visited_at)` | visit history on a prospect |
 | `visits(received_at)` | live feed |
 | `visits(agent_email, visited_at)` | an agent's own history |
@@ -160,6 +209,14 @@ write on every imported row. Revisit if the base grows by an order of magnitude.
 | `scripts(is_active)` unique **where `is_active = 1`** | "exactly one active script at a time" |
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
+| `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
+
+SQLite uses one index per table reference, so a filtered *and* sorted admin list
+(`status=X` ordered by `updated_at`) filters on the index and then sorts the
+matches in memory. Composite `(status, updated_at)`-style indexes would remove
+that sort, and were deliberately not added: at the few thousand prospects this
+project plans for, the sort is negligible, and three more indexes would cost a
+write on every imported row. Revisit if the base grows by an order of magnitude.
 
 No index on `visits_orphaned(reason)`. An empty queue is the healthy state and the page
 is capped at 200, so filtering it is a scan over a handful of rows; an index would cost a

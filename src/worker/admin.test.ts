@@ -1,12 +1,12 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import worker from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { ADMIN_VISITS_PAGE_SIZE } from "../shared/constants";
-import { prospects, scripts, visits } from "./db/schema";
+import { ADMIN_VISITS_PAGE_SIZE, type RefusalReason } from "../shared/constants";
+import { agentPositions, prospects, scripts, visits } from "./db/schema";
 import type {
   AdminVisitsResponse,
+  AgentRoundResponse,
   AgentsResponse,
   AssignResult,
   DuplicatesResponse,
@@ -17,22 +17,22 @@ import type {
   Script,
   ScriptsResponse,
 } from "../shared/schemas";
+import { workerFetch } from "../../test/worker-fetch";
+import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * Admin routes against a real D1, built by the real migrations.
  *
- * DEV_USER_EMAIL is bound in vitest.config.ts to an address that ADMIN_EMAILS
- * also lists, so these run as an admin exactly as localhost development does.
+ * DEV_USER_EMAIL is bound in vitest.config.ts to the admin row that
+ * test/setup-worker.ts seeds, so these run as an admin exactly as localhost
+ * development does.
  */
 
 const ADMIN = "admin@example.com";
 const AGENT = "agent@example.com";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(`http://localhost${path}`, init), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
+  return workerFetch(`http://localhost${path}`, init);
 }
 
 function post(path: string, body: unknown): Promise<Response> {
@@ -71,6 +71,7 @@ beforeEach(async () => {
   await db.delete(visits);
   await db.delete(prospects);
   await db.delete(scripts);
+  await resetTestUsers();
 });
 
 describe("GET /api/admin/agents", () => {
@@ -83,6 +84,67 @@ describe("GET /api/admin/agents", () => {
       { email: ADMIN, role: "admin" },
       { email: AGENT, role: "agent" },
     ]);
+  });
+
+  it("lists active users only, with their own role, sorted by email (GH #303)", async () => {
+    await seedUser("zoe@example.com", "admin");
+    await seedUser("bob@example.com", "agent");
+    await seedUser("gone@example.com", "agent", false);
+    const body = (await (await call("/api/admin/agents")).json()) as AgentsResponse;
+    expect(body.agents).toEqual([
+      { email: ADMIN, role: "admin" },
+      { email: AGENT, role: "agent" },
+      { email: "bob@example.com", role: "agent" },
+      { email: "zoe@example.com", role: "admin" },
+    ]);
+  });
+});
+
+describe("a deactivated user leaves the roster (GH #303)", () => {
+  const GONE = "gone@example.com";
+
+  it("assigns, then refuses new assignments and a round, but keeps the prospects", async () => {
+    await seedUser(GONE, "agent");
+    await importRows([{ name: "Chez Léa", lat: 50.84, lng: 4.35 }]);
+    await importRows([{ name: "Le Zinc", lat: 50.85, lng: 4.36 }]);
+    const db = getDb(env.DB);
+    const [first, second] = await db.select().from(prospects);
+    if (!first || !second) throw new Error("the import wrote nothing");
+
+    expect(
+      (await post("/api/admin/prospects/assign", { ids: [first.id], assignedTo: GONE })).status,
+    ).toBe(200);
+    expect((await call(`/api/admin/agents/${GONE}/round`)).status).toBe(200);
+    // PATCH accepts a users-only email while it is active, then unassigns so
+    // the checks below start from `second` unassigned.
+    const patched = await patch(`/api/admin/prospects/${second.id}`, { assignedTo: GONE });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { assignedTo: string | null }).assignedTo).toBe(GONE);
+    expect((await patch(`/api/admin/prospects/${second.id}`, { assignedTo: null })).status).toBe(
+      200,
+    );
+
+    await seedUser(GONE, "agent", false);
+
+    const refused = await post("/api/admin/prospects/assign", {
+      ids: [second.id],
+      assignedTo: GONE,
+    });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toBe("unknown_assignee");
+    expect((await patch(`/api/admin/prospects/${second.id}`, { assignedTo: GONE })).status).toBe(
+      400,
+    );
+    expect((await call(`/api/admin/agents/${GONE}/round`)).status).toBe(404);
+
+    const rows = await db.select().from(prospects);
+    expect(rows.find((r) => r.id === first.id)?.assignedTo).toBe(GONE);
+    expect(rows.find((r) => r.id === second.id)?.assignedTo).toBeNull();
+
+    // Unassigning stays allowed.
+    expect(
+      (await post("/api/admin/prospects/assign", { ids: [first.id], assignedTo: null })).status,
+    ).toBe(200);
   });
 });
 
@@ -343,6 +405,195 @@ describe("GET /api/admin/prospects", () => {
   });
 });
 
+describe("Hors cible signalé (GH #250)", () => {
+  const T0 = 1_000_000;
+
+  async function seedProspect(name: string, over: Partial<typeof prospects.$inferInsert> = {}) {
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({
+        id,
+        name,
+        type: "restaurant",
+        source: "csv",
+        dedupeKey: `test:${id}`,
+        status: "assigned",
+        createdBy: ADMIN,
+        createdAt: T0,
+        updatedAt: T0,
+        ...over,
+      });
+    return id;
+  }
+
+  /** Straight to D1: a test has to place visits before and after an admin edit. */
+  async function seedVisit(
+    prospectId: string,
+    visitedAt: number,
+    over: Partial<typeof visits.$inferInsert> = {},
+  ) {
+    const db = getDb(env.DB);
+    await db.insert(visits).values({
+      id: crypto.randomUUID(),
+      prospectId,
+      agentEmail: AGENT,
+      visitedAt,
+      clientVisitedAt: visitedAt,
+      receivedAt: visitedAt,
+      flyerGiven: true,
+      outcome: "not_interested",
+      refusalReason: "out_of_target",
+      clientVersion: 1,
+      ...over,
+    });
+    await db.update(prospects).set({ lastVisitAt: visitedAt }).where(eq(prospects.id, prospectId));
+  }
+
+  /** A prospect flagged the way an agent flags it: one out_of_target refusal. */
+  async function flagged(name: string, over: Partial<typeof prospects.$inferInsert> = {}) {
+    const id = await seedProspect(name, over);
+    await seedVisit(id, T0);
+    return id;
+  }
+
+  async function list(query = "outOfTarget=true") {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as ProspectsResponse;
+    return { names: body.prospects.map((p) => p.name).sort(), total: body.total };
+  }
+
+  it("lists a prospect whose latest visit reported out_of_target, and counts it", async () => {
+    await flagged("Fermé");
+    const other = await seedProspect("Ouvert");
+    await seedVisit(other, T0, { refusalReason: "no_need" });
+    await seedProspect("Jamais visité");
+
+    expect(await list()).toEqual({ names: ["Fermé"], total: 1 });
+    expect((await list("")).total).toBe(3);
+  });
+
+  it("leaves the list once an admin PATCHes fields, and the total drops", async () => {
+    const id = await flagged("Fermé");
+    await flagged("Autre fermé");
+    expect((await list()).total).toBe(2);
+
+    expect((await patch(`/api/admin/prospects/${id}`, { phone: "0478000000" })).status).toBe(200);
+    expect(await list()).toEqual({ names: ["Autre fermé"], total: 1 });
+  });
+
+  it("leaves the list once an admin PATCHes the status", async () => {
+    const id = await flagged("Fermé");
+    await patch(`/api/admin/prospects/${id}`, { status: "rejected" });
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("leaves the list when a newer visit has another outcome or another reason", async () => {
+    const outcome = await flagged("Revenu");
+    await seedVisit(outcome, T0 + 1, { outcome: "interested", refusalReason: null });
+    const reason = await flagged("Autre raison");
+    await seedVisit(reason, T0 + 1, { refusalReason: "no_need" });
+
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("settles a tie on visited_at by received_at, then id, like the status does", async () => {
+    const id = await flagged("Égalité");
+    await seedVisit(id, T0, { outcome: "interested", refusalReason: null, receivedAt: T0 + 5 });
+    expect((await list()).total).toBe(0);
+
+    const later = await flagged("Égalité 2");
+    await seedVisit(later, T0, { receivedAt: T0 - 5, outcome: "interested", refusalReason: null });
+    expect(await list()).toEqual({ names: ["Égalité 2"], total: 1 });
+  });
+
+  it("is back in the list when a newer out_of_target visit follows the review", async () => {
+    const id = await flagged("Fermé");
+    await patch(`/api/admin/prospects/${id}`, { phone: "0478000000" });
+    expect((await list()).total).toBe(0);
+
+    await seedVisit(id, Date.now() + 60_000);
+    expect(await list()).toEqual({ names: ["Fermé"], total: 1 });
+  });
+
+  it("stays flagged when the review is stamped at exactly the visit's instant, not after it", async () => {
+    const id = await flagged("Pile");
+    const db = getDb(env.DB);
+    await db.update(prospects).set({ outOfTargetReviewedAt: T0 }).where(eqId(id));
+    expect((await list()).total).toBe(1);
+
+    await db
+      .update(prospects)
+      .set({ outOfTargetReviewedAt: T0 + 1 })
+      .where(eqId(id));
+    expect((await list()).total).toBe(0);
+  });
+
+  it("stays flagged through assign, unassign, merge as survivor and a CSV re-import", async () => {
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35 }]);
+    await importRows([{ name: "Doublon", lat: 50.9, lng: 4.4 }]);
+    const db = getDb(env.DB);
+    const rows = await db.select().from(prospects);
+    const target = rows.find((r) => r.name === "Chez Fermé");
+    const duplicate = rows.find((r) => r.name === "Doublon");
+    if (!target || !duplicate) throw new Error("the import wrote nothing");
+    await seedVisit(target.id, T0);
+
+    await post("/api/admin/prospects/assign", { ids: [target.id], assignedTo: AGENT });
+    expect((await list()).total).toBe(1);
+    await post("/api/admin/prospects/assign", { ids: [target.id], assignedTo: null });
+    expect((await list()).total).toBe(1);
+
+    const merge = await post("/api/admin/prospects/merge", {
+      survivorId: target.id,
+      mergedId: duplicate.id,
+    });
+    expect(merge.status).toBe(200);
+    expect((await list()).total).toBe(1);
+
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35, phone: "0478000000" }]);
+    expect(await list()).toEqual({ names: ["Chez Fermé"], total: 1 });
+    await importRows([{ name: "Chez Fermé", lat: 50.84, lng: 4.35, phone: "0478111111" }], "osm");
+    expect(await list()).toEqual({ names: ["Chez Fermé"], total: 1 });
+    const [after] = await db.select().from(prospects).where(eqId(target.id));
+    expect(after?.outOfTargetReviewedAt).toBeNull();
+  });
+
+  it("never lists nor counts a merged prospect", async () => {
+    const survivor = await seedProspect("Survivant");
+    const absorbed = await flagged("Absorbé", { mergedInto: survivor });
+    expect(absorbed).not.toBe(survivor);
+    expect(await list()).toEqual({ names: [], total: 0 });
+  });
+
+  it("combines with another filter, and totals the combined set", async () => {
+    await flagged("Chez Léa", { assignedTo: AGENT });
+    await flagged("Le Zinc", { assignedTo: ADMIN });
+    await seedProspect("Ouvert", { assignedTo: AGENT });
+
+    expect(await list(`outOfTarget=true&assignedTo=${AGENT}`)).toEqual({
+      names: ["Chez Léa"],
+      total: 1,
+    });
+  });
+
+  it("filters the CSV export the same way", async () => {
+    await flagged("Fermé");
+    await seedProspect("Ouvert");
+    const csv = await (await call("/api/admin/prospects/export.csv?outOfTarget=true")).text();
+    expect(csv).toContain("Fermé");
+    expect(csv).not.toContain("Ouvert");
+  });
+
+  it.each(["maybe", "false", "", "TRUE", "1"])("answers 400 for outOfTarget=%s", async (value) => {
+    for (const path of ["/api/admin/prospects", "/api/admin/prospects/export.csv"]) {
+      const response = await call(`${path}?outOfTarget=${value}`);
+      expect(response.status).toBe(400);
+    }
+  });
+});
+
 describe("POST /api/admin/prospects/batch", () => {
   it("rejects a row without a name", async () => {
     const response = await importRows([{ name: "" }]);
@@ -500,6 +751,35 @@ describe("PATCH /api/admin/prospects/:id", () => {
 
     expect(response.status).toBe(200);
     expect(((await response.json()) as Prospect).status).toBe("assigned");
+  });
+
+  it("sets Intéressé by hand, and lists it under its own filter (ADR-0027)", async () => {
+    await importRows([
+      { name: "Le Zinc", lat: 50.85, lng: 4.36 },
+      { name: "Chez Léa", lat: 50.84, lng: 4.35 },
+    ]);
+    const db = getDb(env.DB);
+    const [row] = await db.select().from(prospects).where(eq(prospects.name, "Le Zinc"));
+    if (!row) throw new Error("the import wrote nothing");
+
+    const response = await patch(`/api/admin/prospects/${row.id}`, { status: "interested" });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as Prospect).status).toBe("interested");
+
+    const listed = (await (
+      await call("/api/admin/prospects?status=interested")
+    ).json()) as ProspectsResponse;
+    expect(listed.prospects.map((p) => p.name)).toEqual(["Le Zinc"]);
+    expect(listed.total).toBe(1);
+  });
+
+  it("still refuses a status it does not know", async () => {
+    await importRows([{ name: "Le Zinc", lat: 50.85, lng: 4.36 }]);
+    const [row] = await getDb(env.DB).select().from(prospects);
+    if (!row) throw new Error("the import wrote nothing");
+
+    const response = await patch(`/api/admin/prospects/${row.id}`, { status: "warm" });
+    expect(response.status).toBe(400);
   });
 
   it("answers 404 for an id that does not exist", async () => {
@@ -1019,12 +1299,13 @@ describe("authorization", () => {
   });
 
   it("answers 403 on every admin route when the caller is an agent", async () => {
-    // ADMIN_EMAILS does not list this address, so roleFor() makes them an agent.
+    // The seeded users row for this address is an agent.
     env.DEV_USER_EMAIL = AGENT;
 
     expect((await call("/api/me")).status).toBe(200);
     expect((await call("/api/admin/prospects")).status).toBe(403);
     expect((await call("/api/admin/agents")).status).toBe(403);
+    expect((await call(`/api/admin/agents/${AGENT}/round`)).status).toBe(403);
     expect((await importRows([{ name: "Chez Léa" }])).status).toBe(403);
     expect(
       (await post("/api/admin/prospects/assign", { ids: [crypto.randomUUID()], assignedTo: null }))
@@ -1054,7 +1335,12 @@ describe("GET /api/admin/visits", () => {
    * about `received_at`, and only a direct insert lets a test place two visits
    * on either side of a known cursor.
    */
-  async function seedVisit(name: string, receivedAt: number, outcome = "interested") {
+  async function seedVisit(
+    name: string,
+    receivedAt: number,
+    outcome = "interested",
+    refusalReason: RefusalReason | null = null,
+  ) {
     const db = getDb(env.DB);
     const prospectId = crypto.randomUUID();
     await db.insert(prospects).values({
@@ -1077,6 +1363,7 @@ describe("GET /api/admin/visits", () => {
       receivedAt,
       flyerGiven: true,
       outcome: outcome as "interested",
+      refusalReason,
       clientVersion: 1,
     });
     return prospectId;
@@ -1208,9 +1495,161 @@ describe("GET /api/admin/visits", () => {
     env.DEV_USER_EMAIL = AGENT;
     expect((await call("/api/admin/visits")).status).toBe(403);
   });
+
+  describe("refusal reasons (GH #249)", () => {
+    it("returns refusalReason, null where the visit has none", async () => {
+      await seedVisit("Refus", 1_000, "not_interested", "no_need");
+      await seedVisit("Ancien refus", 2_000, "not_interested");
+      const byName = new Map((await feed()).visits.map((v) => [v.prospectName, v]));
+      expect(byName.get("Refus")?.refusalReason).toBe("no_need");
+      expect(byName.get("Ancien refus")?.refusalReason).toBeNull();
+    });
+
+    it("keeps only the visits with the reason asked for", async () => {
+      await seedVisit("Trop d'applis", 1_000, "not_interested", "too_many_devices");
+      await seedVisit("Pas besoin", 2_000, "not_interested", "no_need");
+      await seedVisit("Converti", 3_000, "converted");
+
+      const body = await feed("?reason=too_many_devices");
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Trop d'applis"]);
+    });
+
+    it("applies reason alongside since, from and to", async () => {
+      await seedVisit("Avant since", 500, "not_interested", "no_need");
+      await seedVisit("Avant la fenetre", 1_000, "not_interested", "no_need");
+      await seedVisit("Autre raison", 2_000, "not_interested", "other");
+      await seedVisit("Dans la fenetre", 2_500, "not_interested", "no_need");
+      await seedVisit("Apres la fenetre", 4_000, "not_interested", "no_need");
+
+      const body = await feed("?reason=no_need&since=600&from=1500&to=3000");
+      expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+    });
+
+    it.each(["reason=bogus", "reason=", "reason=NONE", "reason=none"])(
+      "rejects %s",
+      async (query) => {
+        const response = await call(`/api/admin/visits?${query}`);
+        expect(response.status).toBe(400);
+        expect(((await response.json()) as { error: string }).error).toBe("validation");
+      },
+    );
+  });
 });
 
 /** Local helper so the tests read as prose rather than as Drizzle. */
 function eqId(id: string) {
   return eq(prospects.id, id);
 }
+
+describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
+  const position = (capturedAt: number, receivedAt: number) => ({
+    agentEmail: AGENT,
+    lat: 50.85,
+    lng: 4.35,
+    accuracy: 10,
+    capturedAt,
+    receivedAt,
+  });
+
+  beforeEach(async () => {
+    await getDb(env.DB).delete(agentPositions);
+  });
+
+  it("serves the position and the remaining prospects, uncached", async () => {
+    const now = Date.now();
+    await getDb(env.DB)
+      .insert(agentPositions)
+      .values(position(now - 1_000, now));
+    const response = await call(`/api/admin/agents/${AGENT.toUpperCase()}/round`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await response.json()) as AgentRoundResponse;
+    expect(body.prospects).toEqual([]);
+    expect(body.position).toEqual({ lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: now - 1_000 });
+  });
+
+  it("lists exactly the agent's open, unmerged prospects", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const ids = {
+      open: crypto.randomUUID(),
+      converted: crypto.randomUUID(),
+      merged: crypto.randomUUID(),
+      other: crypto.randomUUID(),
+    };
+    const base = {
+      name: "Le Bistrot",
+      type: "restaurant" as const,
+      lat: 48.85,
+      lng: 2.35,
+      address: null,
+      phone: null,
+      website: null,
+      cuisine: null,
+      source: "csv" as const,
+      sourceRef: null,
+      createdBy: ADMIN,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.insert(prospects).values([
+      { ...base, id: ids.open, dedupeKey: "round:open", status: "assigned", assignedTo: AGENT },
+      {
+        ...base,
+        id: ids.converted,
+        dedupeKey: "round:conv",
+        status: "converted",
+        assignedTo: AGENT,
+      },
+      {
+        ...base,
+        id: ids.merged,
+        dedupeKey: "round:merged",
+        status: "assigned",
+        assignedTo: AGENT,
+        mergedInto: ids.open,
+      },
+      { ...base, id: ids.other, dedupeKey: "round:other", status: "assigned", assignedTo: ADMIN },
+    ]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.prospects.map((p) => p.id)).toEqual([ids.open]);
+  });
+
+  it("answers 200 with a null position for an admin's email", async () => {
+    const body = (await (
+      await call(`/api/admin/agents/${ADMIN}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.position).toBeNull();
+  });
+
+  it("serves capturedAt clamped to receivedAt", async () => {
+    const now = Date.now();
+    await getDb(env.DB)
+      .insert(agentPositions)
+      .values(position(now + 3_600_000, now));
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.position?.capturedAt).toBe(now);
+  });
+
+  it("serves null when there is no row or the row is not from today", async () => {
+    const empty = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(empty.position).toBeNull();
+    const old = Date.now() - 48 * 3_600_000;
+    await getDb(env.DB).insert(agentPositions).values(position(old, old));
+    const stale = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(stale.position).toBeNull();
+  });
+
+  it("answers 404 for an unknown email and 400 for a malformed one", async () => {
+    expect((await call("/api/admin/agents/nobody@example.com/round")).status).toBe(404);
+    expect((await call("/api/admin/agents/not-an-email/round")).status).toBe(400);
+  });
+});

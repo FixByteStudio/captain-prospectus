@@ -37,6 +37,7 @@ import {
   SCRIPTS_PAGE_SIZE,
   STATUSES,
   type Outcome,
+  type RefusalReason,
   type Source,
   type Status,
 } from "../../shared/constants";
@@ -59,6 +60,7 @@ import {
 import { cellAndNeighbours, cellOf, distanceMeters } from "../../shared/geo";
 import { isProbablySamePlace } from "../../shared/similarity";
 import {
+  agentEmailParamSchema,
   assignSchema,
   dashboardQuerySchema,
   mergeSchema,
@@ -77,11 +79,12 @@ import {
 } from "../../shared/schemas";
 import type {
   AdminVisitsResponse,
+  AgentRoundResponse,
+  AgentsResponse,
   OrphanCandidate,
   OrphanedVisit,
   OrphanRepairResult,
   OrphansResponse,
-  AgentsResponse,
   AssignResult,
   DashboardResponse,
   DuplicatesResponse,
@@ -93,8 +96,10 @@ import type {
   Script,
   ScriptsResponse,
 } from "../../shared/schemas";
-import { parseEmails, roleFor } from "../auth";
+import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
+import { readAgentPosition } from "../agent-position";
+import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
 import { overpassCache, prospects, scripts, visits, visitsOrphaned } from "../db/schema";
 import {
@@ -168,24 +173,28 @@ function toWireProspect(row: ProspectRow): Prospect {
 /* ------------------------------------------------------------------- people */
 
 /**
- * Everyone a prospect can be assigned to.
- *
- * There is no users table (ADR-0006): identity comes from Cloudflare Access and
- * the role from ADMIN_EMAILS. AGENT_EMAILS lists the rest, so the assign menu
- * has something to show before anyone has been assigned anything. Admins are
- * included — in a two-person field team an admin may well walk a round.
+ * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
+ * Admins are included — in a two-person field team an admin may well walk a round.
  */
-function assignableEmails(env: AppEnv["Bindings"]): string[] {
-  return [...new Set([...parseEmails(env.ADMIN_EMAILS), ...parseEmails(env.AGENT_EMAILS)])].sort();
-}
+adminRoutes.get("/agents", async (c) => {
+  const roster = await activeRoster(getDb(c.env.DB));
+  return c.json<AgentsResponse>({ agents: roster });
+});
 
-adminRoutes.get("/agents", (c) => {
-  return c.json<AgentsResponse>({
-    agents: assignableEmails(c.env).map((email) => ({
-      email,
-      role: roleFor(email, c.env.ADMIN_EMAILS),
-    })),
-  });
+/**
+ * One agent's remaining round and last reading (ADR-0028). Never cached: a
+ * position is personal data and stale the minute it is served.
+ */
+adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema), async (c) => {
+  const { email } = c.req.valid("param");
+  const db = getDb(c.env.DB);
+  if (!(await activeRosterMember(db, email))) return c.json({ error: "not_found" }, 404);
+  const [rows, position] = await Promise.all([
+    openAssignedProspects(db, email),
+    readAgentPosition(db, email, Date.now()),
+  ]);
+  c.header("Cache-Control", "no-store");
+  return c.json<AgentRoundResponse>({ prospects: rows.map(toWireProspect), position });
 });
 
 /**
@@ -195,10 +204,10 @@ adminRoutes.get("/agents", (c) => {
  * prospect disappears from every agent's sync pull, which matches on the exact
  * email, while the admin list still shows it as assigned and handled. One typo
  * and a restaurant is never visited again. So the assignee has to be on the
- * roster, and `null` — unassign — is always allowed.
+ * roster (an active user), and `null` — unassign — is always allowed.
  */
-function unknownAssignee(email: string | null, env: AppEnv["Bindings"]): boolean {
-  return email !== null && !assignableEmails(env).includes(email);
+async function unknownAssignee(email: string | null, db: Db): Promise<boolean> {
+  return email !== null && !(await activeRosterMember(db, email));
 }
 
 /* ---------------------------------------------------------------- dashboard */
@@ -234,6 +243,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     agentConverted,
     due,
     agentsToday,
+    roster,
   ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
@@ -318,6 +328,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .select({ n: sql<number>`count(distinct ${visits.agentEmail})`.mapWith(Number) })
       .from(visits)
       .where(and(gte(visits.receivedAt, todayStart), lt(visits.receivedAt, to))),
+    activeRoster(db),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -358,7 +369,12 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     },
     visitsByDay: byDay,
     pipeline: pipelineOf(pipelineRows),
-    agents: agentRows(assignableEmails(c.env), agentVisits, agentOpen, agentConverted),
+    agents: agentRows(
+      roster.map((r) => r.email),
+      agentVisits,
+      agentOpen,
+      agentConverted,
+    ),
     followUpsDue: due[0]?.n ?? 0,
     flyersGiven: visitCounts[0]?.flyersGiven ?? 0,
     agentsActiveToday: agentsToday[0]?.n ?? 0,
@@ -373,8 +389,9 @@ function pipelineOf(rows: { status: Status; n: number }[]): DashboardResponse["p
 }
 
 /**
- * The roster with zeros, plus any other email with a visit in the period or a
- * live prospect assigned now (docs/api.md › The dashboard).
+ * One row per roster email, zeros included. An email off the roster (a
+ * deactivated user) has no row, though their visits stay in the totals
+ * (docs/api.md › The dashboard).
  */
 function agentRows(
   roster: string[],
@@ -383,22 +400,24 @@ function agentRows(
   convertedRows: { email: string; n: number }[],
 ): DashboardResponse["agents"] {
   const byEmail = new Map<string, DashboardResponse["agents"][number]>();
-  const row = (email: string) => {
-    let r = byEmail.get(email);
-    if (!r) {
-      r = { email, visits: 0, converted: 0, followUp: 0, openProspects: 0 };
-      byEmail.set(email, r);
-    }
-    return r;
-  };
-  for (const email of roster) row(email);
-  for (const v of visitRows) row(v.email).visits = v.n;
-  for (const o of openRows) {
-    const r = row(o.email);
-    r.followUp = o.followUp;
-    r.openProspects = o.n;
+  for (const email of roster) {
+    byEmail.set(email, { email, visits: 0, converted: 0, followUp: 0, openProspects: 0 });
   }
-  for (const c of convertedRows) row(c.email).converted = c.n;
+  for (const v of visitRows) {
+    const r = byEmail.get(v.email);
+    if (r) r.visits = v.n;
+  }
+  for (const o of openRows) {
+    const r = byEmail.get(o.email);
+    if (r) {
+      r.followUp = o.followUp;
+      r.openProspects = o.n;
+    }
+  }
+  for (const c of convertedRows) {
+    const r = byEmail.get(c.email);
+    if (r) r.converted = c.n;
+  }
   return [...byEmail.values()].sort(
     (a, b) => b.visits - a.visits || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0),
   );
@@ -611,6 +630,29 @@ function nameSearchFilter(q: string) {
 }
 
 /**
+ * "Hors cible signalé" (prospecting.md): the prospect's latest visit carries
+ * `out_of_target` and no admin edit has stamped `out_of_target_reviewed_at`
+ * after it. "Latest" orders as `deriveProspectStatus` does. The flag never
+ * reads `updated_at`, which assign, merge and import also move. The subselect
+ * walks `visits_prospect_visited_idx`, and `last_visit_at is not null` prunes
+ * prospects that were never visited before it runs.
+ */
+const OUT_OF_TARGET_FLAGGED = sql`(
+  ${prospects.lastVisitAt} is not null
+  and exists (
+    select 1 from ${visits}
+    where ${visits.id} = (
+      select v.id from visits v
+      where v.prospect_id = ${prospects.id}
+      order by v.visited_at desc, v.received_at desc, v.id desc
+      limit 1
+    )
+    and ${visits.refusalReason} = 'out_of_target'
+    and (${prospects.outOfTargetReviewedAt} is null or ${prospects.outOfTargetReviewedAt} <= ${visits.visitedAt})
+  )
+)`;
+
+/**
  * The `SQL[]` for `prospectFiltersSchema` (src/shared/schemas.ts), shared by
  * the list and the export so a filter added to one is never forgotten on the
  * other (Intent: "so the two cannot diverge").
@@ -621,8 +663,9 @@ function prospectFilters(query: {
   assignedTo?: string | null;
   source?: Source;
   q?: string;
+  outOfTarget?: "true";
 }): SQL[] {
-  const { status, dueBefore, assignedTo, source, q } = query;
+  const { status, dueBefore, assignedTo, source, q, outOfTarget } = query;
   return [
     // A merged prospect is not a row the admin manages any more.
     isNull(prospects.mergedInto),
@@ -633,14 +676,15 @@ function prospectFilters(query: {
     assignedTo ? eq(prospects.assignedTo, assignedTo) : undefined,
     source ? eq(prospects.source, source) : undefined,
     q ? nameSearchFilter(q) : undefined,
+    outOfTarget ? OUT_OF_TARGET_FLAGGED : undefined,
   ].filter((f) => f !== undefined);
 }
 
 adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c) => {
-  const { status, dueBefore, assignedTo, source, q, limit, offset } = c.req.valid("query");
+  const { limit, offset, ...filters } = c.req.valid("query");
   const db = getDb(c.env.DB);
 
-  const where = and(...prospectFilters({ status, dueBefore, assignedTo, source, q }));
+  const where = and(...prospectFilters(filters));
 
   const rows = await db
     .select()
@@ -844,11 +888,10 @@ adminRoutes.get(
   "/prospects/export.csv",
   validate("query", prospectsExportQuerySchema),
   async (c) => {
-    const { status, dueBefore, assignedTo, source, q } = c.req.valid("query");
     const db = getDb(c.env.DB);
     const now = Date.now();
 
-    const filters = prospectFilters({ status, dueBefore, assignedTo, source, q });
+    const filters = prospectFilters(c.req.valid("query"));
 
     // One row over the cap: see `capExport`.
     const rows = await db
@@ -919,7 +962,10 @@ adminRoutes.patch(
     const { id } = c.req.valid("param");
     const patch = c.req.valid("json");
 
-    if (patch.assignedTo !== undefined && unknownAssignee(patch.assignedTo, c.env)) {
+    if (
+      patch.assignedTo !== undefined &&
+      (await unknownAssignee(patch.assignedTo, getDb(c.env.DB)))
+    ) {
       return c.json(
         { error: "unknown_assignee", message: "Cette adresse ne figure pas parmi les agents." },
         400,
@@ -930,12 +976,14 @@ adminRoutes.patch(
     const now = Date.now();
 
     // A status set here holds against any visit dated at or before now, however
-    // late that visit syncs (ADR-0025).
+    // late that visit syncs (ADR-0025). Any direct edit is also the admin's
+    // review of a Hors cible flag: this is the only writer of the column.
     const [row] = await db
       .update(prospects)
       .set({
         ...patch,
         ...(patch.status !== undefined && { statusSetAt: now }),
+        outOfTargetReviewedAt: now,
         updatedAt: now,
       })
       .where(eq(prospects.id, id))
@@ -951,12 +999,13 @@ adminRoutes.patch(
  *
  * Status moves only along the two edges prospecting.md allows: new → assigned
  * on assignment, assigned → new on unassignment. A prospect that has been
- * visited (follow_up, converted, rejected) keeps the status its visits earned.
+ * visited (follow_up, interested, converted, rejected) keeps the status its
+ * visits earned.
  */
 adminRoutes.post("/prospects/assign", validate("json", assignSchema), async (c) => {
   const { ids, assignedTo } = c.req.valid("json");
 
-  if (unknownAssignee(assignedTo, c.env)) {
+  if (await unknownAssignee(assignedTo, getDb(c.env.DB))) {
     return c.json(
       { error: "unknown_assignee", message: "Cette adresse ne figure pas parmi les agents." },
       400,
@@ -1409,6 +1458,14 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
 /* ---------------------------------------------------------------- live feed */
 
 /**
+ * `reason=` as SQL, written once so the feed and its export can never list
+ * different visits.
+ */
+function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined {
+  return reason === undefined ? undefined : eq(visits.refusalReason, reason);
+}
+
+/**
  * Visits as they arrive — ADR-0010, docs/design.md "The live feed".
  *
  * Ordered by `received_at`, not `visited_at`: the feed answers "what has
@@ -1417,16 +1474,17 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
  *
  * `since` is exclusive, so the client can pass back the last `receivedAt` it
  * saw and get only what is new. Polling every 15 s makes that the difference
- * between 500 rows and none.
+ * between 500 rows and none. `reason` narrows it like the export does.
  */
 adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) => {
-  const { since, from, to, limit } = c.req.valid("query");
+  const { since, from, to, reason, limit } = c.req.valid("query");
   const db = getDb(c.env.DB);
 
   const filters = [
     since > 0 ? gt(visits.receivedAt, since) : undefined,
     from !== undefined ? gte(visits.receivedAt, from) : undefined,
     to !== undefined ? lte(visits.receivedAt, to) : undefined,
+    refusalReasonFilter(reason),
   ].filter((f) => f !== undefined);
 
   /**
@@ -1451,6 +1509,7 @@ adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) 
       outcome: visits.outcome,
       followUpAt: visits.followUpAt,
       notes: visits.notes,
+      refusalReason: visits.refusalReason,
     })
     .from(visits)
     .innerJoin(prospects, eq(visits.prospectId, prospects.id))
@@ -1472,10 +1531,10 @@ adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) 
  * same reason the prospect export is: a literal path must never be read as an
  * id. Joined to prospects for the name, and NOT filtered on `merged_into`,
  * matching the live feed — this records what agents did, and an absorbed
- * prospect keeps its visits.
+ * prospect keeps its visits. `reason` narrows it exactly as it narrows the feed.
  */
 adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema), async (c) => {
-  const { from, to } = c.req.valid("query");
+  const { from, to, reason } = c.req.valid("query");
   const db = getDb(c.env.DB);
   const now = Date.now();
 
@@ -1486,13 +1545,16 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       agentEmail: visits.agentEmail,
       prospectName: prospects.name,
       outcome: visits.outcome,
+      refusalReason: visits.refusalReason,
       flyerGiven: visits.flyerGiven,
       followUpAt: visits.followUpAt,
       notes: visits.notes,
     })
     .from(visits)
     .innerJoin(prospects, eq(visits.prospectId, prospects.id))
-    .where(and(gte(visits.receivedAt, from), lte(visits.receivedAt, to)))
+    .where(
+      and(gte(visits.receivedAt, from), lte(visits.receivedAt, to), refusalReasonFilter(reason)),
+    )
     .orderBy(desc(visits.receivedAt))
     .limit(EXPORT_ROWS + 1);
 
@@ -1505,6 +1567,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       "agent_email",
       "prospect_name",
       "outcome",
+      "refusal_reason",
       "flyer_given",
       "follow_up_at",
       "notes",
@@ -1515,6 +1578,7 @@ adminRoutes.get("/visits/export.csv", validate("query", visitsExportQuerySchema)
       v.agentEmail,
       v.prospectName,
       v.outcome,
+      v.refusalReason,
       v.flyerGiven,
       csvTimestamp(v.followUpAt),
       // Free text typed outdoors: commas, quotes and newlines all turn up, and
@@ -1709,6 +1773,7 @@ adminRoutes.post(
           flyerGiven: held.flyerGiven,
           outcome: held.outcome,
           followUpAt: held.followUpAt,
+          refusalReason: held.refusalReason,
           notes: held.notes,
           scriptId,
           answers: held.answers,

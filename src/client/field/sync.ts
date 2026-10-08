@@ -24,6 +24,7 @@ import {
 import { syncResponseSchema } from "../../shared/schemas";
 import type { FieldProspect, SyncRequest, Visit } from "../../shared/schemas";
 import { clearAgentCache, type FieldDb, outboxCounts, setMeta } from "./db";
+import { readingToSend } from "./last-reading";
 import { type OutboxStamp, sendableBy } from "./outbox-stamp";
 
 export type SyncStatus =
@@ -60,6 +61,8 @@ export type SyncDeps = {
   identity: string;
   fetchFn?: typeof fetch;
   endpoint?: string;
+  /** The clock "today" is read from; tests pin it. */
+  now?: () => number;
 };
 
 const EMPTY = { acceptedProspects: 0, acceptedVisits: 0 };
@@ -133,6 +136,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     clientVersion: CLIENT_VERSION,
     prospects: outboxProspects.map((row): FieldProspect => unstamped(row)),
     visits: outboxVisits.map((row): Visit => unstamped(row)),
+    // The latest reading the phone already took today, if it qualifies; never a
+    // new one (ADR-0028). `undefined` leaves the key out of the JSON.
+    position: readingToSend(identity, (deps.now ?? Date.now)()),
   });
 
   let response: Response;

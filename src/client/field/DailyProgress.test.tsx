@@ -3,7 +3,7 @@
  * (GH #119) — nothing here re-derives `n`/`total` from Dexie, only the
  * component's own rendering of the `progress` prop it is handed.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { copy } from "../copy";
 import { DailyProgress } from "./DailyProgress";
@@ -26,12 +26,20 @@ describe("DailyProgress", () => {
     // a `cn` merge could reintroduce silently.
     expect(bar.className).toMatch(/bg-secondary/);
 
-    // Not asserting `aria-valuenow`: the vendored `Progress` never forwards
-    // `value` to the Radix root (ui/progress.tsx, a pre-existing bug left
-    // alone here), so the indicator's inline transform is the only place the
-    // percentage actually lands.
+    expect(bar.getAttribute("aria-valuenow")).toBe("40");
     const indicator = bar.querySelector('[data-slot="progress-indicator"]');
     expect(indicator).not.toBeNull();
     expect((indicator as HTMLElement).style.transform).toBe("translateX(-60%)");
+  });
+
+  it("caps the bar at full when a stop was visited twice", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<DailyProgress progress={{ n: 2, total: 1, percent: 200 }} />);
+
+    const bar = screen.getByLabelText(copy.today.progressLabel);
+    expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    expect(bar.getAttribute("data-state")).toBe("complete");
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
   });
 });

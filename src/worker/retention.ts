@@ -17,6 +17,7 @@ import { and, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { D1_MAX_BOUND_PARAMS, RETENTION_BATCH, RETENTION_MS } from "../shared/constants";
 import { chunk } from "../shared/chunk";
 import { visits } from "./db/schema";
+import { sweepAgentPositions } from "./agent-position";
 import type { Db } from "./db/client";
 
 export type SweepResult = {
@@ -24,6 +25,8 @@ export type SweepResult = {
   redacted: number;
   /** Cutoff used, so a log line says what "old" meant on the day it ran. */
   cutoff: number;
+  /** Agent positions deleted (ADR-0028); counts only, never coordinates. */
+  positionsDeleted: number;
 };
 
 /**
@@ -38,6 +41,15 @@ export type SweepResult = {
  */
 export async function runRetention(db: Db, now: number): Promise<SweepResult> {
   const cutoff = now - RETENTION_MS;
+
+  // Its own try/catch: a failed position sweep must not stop the visit redaction,
+  // and the read path serves a stale row as null anyway (ADR-0028).
+  let positionsDeleted = 0;
+  try {
+    positionsDeleted = await sweepAgentPositions(db, now);
+  } catch (err) {
+    console.error("agent position sweep failed", err instanceof Error ? err.name : "unknown");
+  }
 
   // SQLite has no UPDATE ... LIMIT, so the bound goes on a select of ids first.
   // That also makes the returned count the count actually written.
@@ -55,7 +67,7 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
     )
     .limit(RETENTION_BATCH);
 
-  if (expired.length === 0) return { redacted: 0, cutoff };
+  if (expired.length === 0) return { redacted: 0, cutoff, positionsDeleted };
 
   // One bound parameter per id, so the batch is chunked to D1's limit of 100
   // (INVARIANT 7). RETENTION_BATCH is deliberately larger than that: the cap
@@ -68,12 +80,12 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
       .where(inArray(visits.id, batch));
   }
 
-  return { redacted: ids.length, cutoff };
+  return { redacted: ids.length, cutoff, positionsDeleted };
 }
 
 /** The line the scheduled handler logs, so a silent cron is a visible gap. */
 export function describeSweep(result: SweepResult): string {
   return `retention: redacted ${result.redacted} visit(s) received before ${new Date(
     result.cutoff,
-  ).toISOString()}`;
+  ).toISOString()}; deleted ${result.positionsDeleted} agent position(s)`;
 }
