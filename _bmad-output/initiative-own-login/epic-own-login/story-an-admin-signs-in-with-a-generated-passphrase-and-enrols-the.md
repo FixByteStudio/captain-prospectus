@@ -15,11 +15,11 @@ risk: medium
 
 ## Description
 
-Adds passphrase_hash, the route that generates or regenerates an admin's 20-character passphrase shown once, kind passphrase for any admin on POST /api/auth/login with one error for a wrong email or passphrase, the Accès administrateur switch on /login, and the admin's own code from a signed-in device, reusing entry 8's normaliser and code route.
+Adds passphrase_hash, the route that generates or regenerates an admin's 20-character passphrase shown once, kind passphrase for any admin on POST /api/auth/login with one error for a wrong email or passphrase, and entry 8's normaliser applied to passphrases. Entry 8 already delivers the Accès administrateur switch and the admin's own code (its Notes, 2026-10-08).
 
 ## Acceptance Criteria
 
-Verify: On pnpm dev, an admin regenerates their passphrase, the old one gets 401, the new one typed with hyphens and an O for 0 signs in from a second browser through the switch, a wrong email and a wrong passphrase get the same error, and a code the admin makes for themselves enrols a third browser.
+Verify: On pnpm dev, an admin regenerates their passphrase, the old one gets 401, the new one typed with hyphens and an O for 0 signs in from a second browser through the switch, and a wrong email and a wrong passphrase get the same error.
 
 ## References
 
