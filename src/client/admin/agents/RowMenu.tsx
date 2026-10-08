@@ -16,18 +16,21 @@ export function displayName(user: User): string {
 }
 
 /**
- * One row's actions (docs/design.md › Agents). No code or passphrase item:
- * those come with the enrolment stories. The last active admin cannot be
- * demoted or deactivated, and says why under the two items.
+ * One row's actions (docs/design.md › Agents). "Générer un code" comes first,
+ * on every active row, the admin's own included; the passphrase item comes
+ * with a later enrolment story. The last active admin cannot be demoted or
+ * deactivated, and says why under the two items.
  */
 export function RowMenu({
   user,
   isLastAdmin,
+  onGenerateCode,
   onToggleRole,
   onDeactivate,
 }: {
   user: User;
   isLastAdmin: boolean;
+  onGenerateCode: () => void;
   onToggleRole: () => void;
   onDeactivate: () => void;
 }) {
@@ -39,6 +42,7 @@ export function RowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onGenerateCode}>{copy.agents.generateCode}</DropdownMenuItem>
         <DropdownMenuItem disabled={isLastAdmin} onSelect={onToggleRole}>
           {user.role === "admin" ? copy.agents.makeAgent : copy.agents.makeAdmin}
         </DropdownMenuItem>

@@ -2,13 +2,14 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { loginAttempts, sessions, users } from "./db/schema";
+import { loginAttempts, loginCodes, sessions, users } from "./db/schema";
 import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
-import { SESSION_COOKIE, hmacHex } from "./session";
+import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
 import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
 import { testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
+import type { LoginCodeResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 
 /**
@@ -81,6 +82,7 @@ const db = () => getDb(env.DB);
 beforeEach(async () => {
   await db().delete(loginAttempts);
   await db().delete(sessions);
+  await db().delete(loginCodes);
   await db().delete(users);
   await seedTestUsers();
 });
@@ -167,7 +169,8 @@ describe("POST /api/auth/login — break-glass", () => {
   });
 
   it.each([
-    ["an unknown kind", { kind: "code", code: "K7QM2XPA" }],
+    ["an unknown kind", { kind: "passkey" }],
+    ["an empty code", { kind: "code", code: "" }],
     ["a missing passphrase", { kind: "passphrase", email: OWNER }],
     ["a missing email", { kind: "passphrase", passphrase: BREAK_GLASS }],
     ["an empty passphrase", { kind: "passphrase", email: OWNER, passphrase: "" }],
@@ -401,6 +404,146 @@ describe("log hygiene", () => {
   });
 });
 
+describe("POST /api/auth/login — code (GH #305)", () => {
+  /** Generates a code for `email` the way the Agents page does. */
+  async function generate(email: string): Promise<LoginCodeResponse> {
+    const response = await call(`/api/admin/users/${encodeURIComponent(email)}/code`, {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
+    });
+    expect(response.status).toBe(201);
+    return (await response.json()) as LoginCodeResponse;
+  }
+
+  /** "K7QM2XPA" as an agent might type it: lowercase, split by a space. */
+  const typed = (code: string) =>
+    `${code.slice(0, 4).toLowerCase()} ${code.slice(4).toLowerCase()}`;
+
+  const agentSessions = () =>
+    db().select().from(sessions).where(eq(sessions.userEmail, TEST_AGENT));
+
+  it("opens an agent session for a code typed in lowercase with a space, and spends it", async () => {
+    const { code } = await generate(TEST_AGENT);
+
+    const response = await login({ kind: "code", code: typed(code) });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(90 * DAY_MS) / 1000}`);
+    const token = tokenFrom(response);
+    expect(await (await me(cookie(token))).json()).toEqual({ email: TEST_AGENT, role: "agent" });
+
+    const [row] = await db().select().from(loginCodes);
+    expect(row?.usedAt).not.toBeNull();
+    const [session] = await agentSessions();
+    expect(session?.tokenHash).toBe(await hmacHex(PEPPER, token));
+    expect(session && session.expiresAt - session.createdAt).toBe(90 * DAY_MS);
+  });
+
+  it("reads I, L and O typed for 1 and 0", async () => {
+    const { code } = await generate(TEST_AGENT);
+    const lookalike = code.replace(/1/g, "l").replace(/0/g, "o");
+    expect((await login({ kind: "code", code: lookalike })).status).toBe(200);
+  });
+
+  it("gives an admin's own code an admin session with the admin lifetime", async () => {
+    const { code } = await generate(TEST_ADMIN);
+    const response = await login({ kind: "code", code });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
+    const [session] = await db()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
+    expect(session?.userEmail).toBe(TEST_ADMIN);
+    expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
+  });
+
+  it("refuses a wrong code with 401 unauthorized and opens nothing", async () => {
+    await generate(TEST_AGENT);
+    const response = await login({ kind: "code", code: "ZZZZZZZZ" });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "unauthorized" });
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await agentSessions()).toHaveLength(0);
+  });
+
+  it("refuses a code once it has expired", async () => {
+    const { code, expiresAt } = await generate(TEST_AGENT);
+    vi.spyOn(Date, "now").mockReturnValue(expiresAt);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+  });
+
+  it("refuses a code already used", async () => {
+    const { code } = await generate(TEST_AGENT);
+    expect((await login({ kind: "code", code })).status).toBe(200);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("refuses a code a newer one superseded, and takes the newer one", async () => {
+    const older = await generate(TEST_AGENT);
+    const newer = await generate(TEST_AGENT);
+    expect((await login({ kind: "code", code: older.code })).status).toBe(401);
+    expect((await login({ kind: "code", code: newer.code })).status).toBe(200);
+  });
+
+  it("refuses the code of a user deactivated since", async () => {
+    const { code } = await generate(TEST_AGENT);
+    // Behind the route's back, so the code row is still there.
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    expect((await login({ kind: "code", code })).status).toBe(401);
+  });
+
+  it("lets exactly one of two concurrent logins spend a code", async () => {
+    const { code } = await generate(TEST_AGENT);
+    const responses = await Promise.all([
+      login({ kind: "code", code }),
+      login({ kind: "code", code: typed(code) }),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 401]);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("opens no session for the loser of a race in the same millisecond", async () => {
+    const { code } = await generate(TEST_AGENT);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    expect((await login({ kind: "code", code })).status).toBe(200);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("answers 15 minutes from generation in expiresAt", async () => {
+    const before = Date.now();
+    const { expiresAt } = await generate(TEST_AGENT);
+    expect(expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+  });
+
+  it("never logs the code nor stores it in plaintext", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+
+    const { code } = await generate(TEST_AGENT);
+    await login({ kind: "code", code: "WRONG000" });
+    const token = tokenFrom(await login({ kind: "code", code: typed(code) }));
+
+    const hash = await hmacHex(PEPPER, code);
+    const logged = JSON.stringify(calls);
+    for (const secret of [code, typed(code), hash, token]) {
+      expect(logged).not.toContain(secret);
+    }
+    const [row] = await db().select().from(loginCodes);
+    expect(row?.codeHash).toBe(hash);
+    expect(JSON.stringify(row)).not.toContain(code);
+  });
+});
+
 describe("login throttle (CAP-7)", () => {
   const IP_A = "203.0.113.7";
   const IP_B = "198.51.100.23";
@@ -468,6 +611,13 @@ describe("login throttle (CAP-7)", () => {
   it("counts the 401 a Worker without OWNER_EMAIL answers", async () => {
     env.OWNER_EMAIL = undefined;
     await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("counts a refused code like a refused passphrase", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      expect((await loginFrom(IP_A, { kind: "code", code: "ZZZZZZZZ" })).status).toBe(401);
+    }
     expect((await loginFrom(IP_A, VALID)).status).toBe(429);
   });
 

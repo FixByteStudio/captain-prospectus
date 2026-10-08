@@ -1,11 +1,12 @@
 /** The Agents page (GH #304): docs/design.md › Agents, ADR-0029. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import type { User } from "../../../shared/schemas";
 import { copy } from "../../copy";
+import { formatBrusselsTime } from "../../format";
 import { toast } from "sonner";
 import { Toaster } from "../../ui/sonner";
 import { adminKeys } from "../queries";
@@ -214,6 +215,107 @@ describe("AgentsScreen", () => {
       await userEvent.type(screen.getByLabelText(t.addDialog.name), "Léa");
       await userEvent.click(screen.getByRole("button", { name: t.addDialog.submit }));
       expect(await screen.findByText(t.toast.failed)).toBeTruthy();
+    });
+  });
+
+  describe("one-time code", () => {
+    // 13:39 UTC on 7 October is 15:39 in Brussels.
+    const ISSUED = { code: "K7QM2XPA", expiresAt: Date.UTC(2026, 9, 7, 13, 39) };
+    const GENERATE = "POST /api/admin/users/lea%40example.com/code";
+
+    function stubClipboard(writeText: (text: string) => Promise<void>) {
+      const spy = vi.fn(writeText);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: spy },
+        configurable: true,
+      });
+      return spy;
+    }
+
+    async function generateFor(name: string) {
+      await openMenu(name);
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.generateCode }));
+    }
+
+    it("puts Générer un code first in every active row's menu, the admin's own included", async () => {
+      stubFetch([[ADMIN, LEA]]);
+      renderScreen();
+      for (const name of ["Léa Dupont", "Sam Owner"]) {
+        await openMenu(name);
+        const items = await screen.findAllByRole("menuitem");
+        expect(items[0]?.textContent).toBe(t.generateCode);
+        await userEvent.keyboard("{Escape}");
+      }
+    });
+
+    it("shows the code split 4 + 4 with its Brussels expiry, leaving the list alone", async () => {
+      const calls = stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json(ISSUED, 201) });
+      const { invalidate } = renderScreen();
+      await generateFor("Léa Dupont");
+
+      const dialog = await screen.findByRole("dialog", { name: t.codeDialog.title("Léa Dupont") });
+      expect(within(dialog).getByText("K7QM 2XPA")).toBeTruthy();
+      expect(
+        within(dialog).getByText(t.codeDialog.validUntil(formatBrusselsTime(ISSUED.expiresAt))),
+      ).toBeTruthy();
+      expect(formatBrusselsTime(ISSUED.expiresAt)).toBe("15:39");
+      expect(within(dialog).getByText(t.codeDialog.once)).toBeTruthy();
+      expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+      const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+      expect(keys).not.toContain(JSON.stringify(adminKeys.users()));
+
+      await userEvent.click(within(dialog).getByRole("button", { name: t.codeDialog.done }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("copies the code and toasts, keeping it on screen", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json(ISSUED, 201) });
+      renderScreen();
+      await generateFor("Léa Dupont");
+      const dialog = await screen.findByRole("dialog");
+
+      const writeText = stubClipboard(() => Promise.resolve());
+      fireEvent.click(within(dialog).getByRole("button", { name: t.codeDialog.copy }));
+
+      expect(await screen.findByText(t.codeDialog.copied)).toBeTruthy();
+      expect(writeText).toHaveBeenCalledWith("K7QM2XPA");
+      expect(within(dialog).getByText("K7QM 2XPA")).toBeTruthy();
+    });
+
+    it("says to copy by hand when the clipboard refuses, keeping the code", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json(ISSUED, 201) });
+      renderScreen();
+      await generateFor("Léa Dupont");
+      const dialog = await screen.findByRole("dialog");
+
+      stubClipboard(() => Promise.reject(new DOMException("denied", "NotAllowedError")));
+      fireEvent.click(within(dialog).getByRole("button", { name: t.codeDialog.copy }));
+
+      expect(await screen.findByText(t.codeDialog.copyFailed)).toBeTruthy();
+      expect(within(dialog).getByText("K7QM 2XPA")).toBeTruthy();
+    });
+
+    it("generates from the row menu below 768px", async () => {
+      setMobile(true);
+      const calls = stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json(ISSUED, 201) });
+      renderScreen();
+      await generateFor("Léa Dupont");
+      expect(
+        await screen.findByRole("dialog", { name: t.codeDialog.title("Léa Dupont") }),
+      ).toBeTruthy();
+      expect(calls.filter((c) => c.method === "POST").map((c) => c.path)).toEqual([
+        "/api/admin/users/lea%40example.com/code",
+      ]);
+    });
+
+    it("toasts the generic failure and opens no dialog when generating fails", async () => {
+      stubFetch([[ADMIN, LEA]], {
+        [GENERATE]: () => json({ error: "user_inactive", message: "x" }, 409),
+      });
+      renderScreen();
+      await generateFor("Léa Dupont");
+      expect(await screen.findByText(t.toast.failed)).toBeTruthy();
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 

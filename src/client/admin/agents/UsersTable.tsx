@@ -11,6 +11,7 @@ export type UsersActions = {
   self: string;
   /** Set when exactly one active admin row is listed. */
   lastAdmin: string | null;
+  onGenerateCode: (user: User) => void;
   onToggleRole: (user: User) => void;
   onDeactivate: (user: User) => void;
   onReactivate: (user: User) => void;
@@ -74,6 +75,7 @@ export function UsersTable({
                 <RowMenu
                   user={user}
                   isLastAdmin={user.email === actions.lastAdmin}
+                  onGenerateCode={() => actions.onGenerateCode(user)}
                   onToggleRole={() => actions.onToggleRole(user)}
                   onDeactivate={() => actions.onDeactivate(user)}
                 />

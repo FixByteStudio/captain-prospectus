@@ -93,6 +93,7 @@ erDiagram
   }
 
   USERS ||--o{ SESSIONS : "signed in on"
+  USERS ||--o{ LOGIN_CODES : "enrols with"
   USERS {
     text email PK "lowercased"
     text name "nullable"
@@ -108,6 +109,13 @@ erDiagram
     int last_seen_at "written at creation only, for now"
     int expires_at "created_at + 30 d admin / 90 d agent, fixed"
   }
+  LOGIN_CODES {
+    text code_hash PK "HMAC-SHA-256 hex of the normalised code"
+    text user_email FK
+    int created_at
+    int expires_at "created_at + 15 min"
+    int used_at "nullable; set by the login that spends it"
+  }
   LOGIN_ATTEMPTS {
     text ip_hash PK "HMAC-SHA-256 hex of CF-Connecting-IP (IPv6 by /64), or of unknown"
     int window_start PK "epoch ms, a multiple of 15 min"
@@ -122,6 +130,14 @@ HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. 
 counts while `expires_at` is in the future and its user is `active`; the role is read from
 `users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
 are later entries of the own-login epic.
+
+`login_codes` holds the one-time codes an admin generates for a device to enrol
+([identity-access](domains/identity-access.md)). A code is 8 Crockford base32 characters (40
+random bits); only the HMAC-SHA-256 under `AUTH_PEPPER` of its normalised form
+(`src/shared/credential.ts`) is stored, never the code. Generating deletes the user's unused codes in
+the same batch, so at most one works. A login spends a code with one conditional `UPDATE … SET
+used_at` (unused, unexpired, user active), so of two racing logins only one gets the row. Used and
+expired rows stay: their sweep is a later entry of the own-login epic.
 
 `login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
 `src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
@@ -182,7 +198,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
   "have all phones upgraded?" a SQL query instead of a log search, which is the gate for raising
   `MIN_CLIENT_VERSION` (`sync-contract-change` skill).
 - **Identity is a session first, Access second.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Until the cutover ends, a verified Access JWT still does, with the role from `ADMIN_EMAILS` ([identity-access](domains/identity-access.md)). Stored rows identify a user by email either way. With a `users` row, the Access fallback follows it too: inactive is refused, an active row's role wins over `ADMIN_EMAILS`.
-- **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
+- **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` and unused `login_codes` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
 - **A merge is soft.** `merged_into` points at the survivor; nothing is deleted and no visit is
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own
   status and its own dedupe key, which is what makes a merge reversible
@@ -210,6 +226,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
 | `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
+| `login_codes(user_email)` | a user's codes: superseding them on generate, deleting them on deactivation |
 
 SQLite uses one index per table reference, so a filtered *and* sorted admin list
 (`status=X` ordered by `updated_at`) filters on the index and then sorts the

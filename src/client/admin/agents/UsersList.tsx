@@ -43,6 +43,7 @@ export function UsersList({
               <RowMenu
                 user={user}
                 isLastAdmin={user.email === actions.lastAdmin}
+                onGenerateCode={() => actions.onGenerateCode(user)}
                 onToggleRole={() => actions.onToggleRole(user)}
                 onDeactivate={() => actions.onDeactivate(user)}
               />

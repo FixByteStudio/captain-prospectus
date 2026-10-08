@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deltaTone,
+  formatBrusselsTime,
   formatCoordinate,
   formatCount,
   formatDay,
@@ -172,5 +173,14 @@ describe("formatDayTick and formatDay (GH #110)", () => {
     expect(formatDay("2026-09-21")).toBe("lundi 21 septembre");
     // New Year's Day stays on 1 January, whatever the machine's zone.
     expect(formatDayTick("2026-01-01", false)).toBe("01/01");
+  });
+});
+
+describe("formatBrusselsTime", () => {
+  it("reads the time in Brussels, summer and winter", () => {
+    // 13:24 UTC is 15:24 in Brussels on 7 October (CEST)…
+    expect(formatBrusselsTime(Date.UTC(2026, 9, 7, 13, 24))).toBe("15:24");
+    // …and 14:24 on 7 December (CET).
+    expect(formatBrusselsTime(Date.UTC(2026, 11, 7, 13, 24))).toBe("14:24");
   });
 });

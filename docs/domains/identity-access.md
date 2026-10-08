@@ -23,14 +23,23 @@ Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admi
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
 dashboard rows, position gate) is the active `users` rows.
 
-**Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
+**A one-time code** enrols a device. An admin picks "Générer un code" on a user's row of the Agents
+page (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
+15 minutes and once ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
+deactivating the user cancels it too. On `/login`'s default form the agent types it as given; the
+server reads it case-insensitively, ignoring spaces and hyphens, with I/L read as 1 and O as 0
+(`src/shared/credential.ts`). The code opens a session with the user's own role. A wrong, expired,
+used, superseded or deactivated-user code gets the same 401. Only the code's HMAC is stored and
+nothing logs it.
+
+**Break-glass** is the admin form, behind "Accès administrateur" on `/login`. In it, `OWNER_EMAIL` (any case,
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
 admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
 repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
-`POST /api/auth/logout` deletes the device's session. Codes for agents and generated passphrases for
-admins are later entries of the own-login epic.
+`POST /api/auth/logout` deletes the device's session. Generated passphrases for admins are a later
+entry of the own-login epic.
 
-After 10 failed logins from one IP in a 15-minute window, that IP's logins get 429 until the window
+After 10 failed logins (codes and passphrases alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
 foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
 

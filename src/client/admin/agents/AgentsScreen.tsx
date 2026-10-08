@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { User } from "../../../shared/schemas";
+import type { LoginCodeResponse, User } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { copy } from "../../copy";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -10,9 +10,11 @@ import { Skeleton } from "../../ui/skeleton";
 import { ScreenHeader } from "../ScreenHeader";
 import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
-import { useUpdateUser, useUsers } from "../queries";
+import { useGenerateCode, useUpdateUser, useUsers } from "../queries";
 import { AddUserDialog } from "./AddUserDialog";
+import { CodeDialog } from "./CodeDialog";
 import { DeactivateDialog } from "./DeactivateDialog";
+import { displayName } from "./RowMenu";
 import { UsersList } from "./UsersList";
 import { UsersTable } from "./UsersTable";
 import type { UsersActions } from "./UsersTable";
@@ -34,6 +36,19 @@ export function AgentsScreen({ email }: { email: string }) {
   const [adding, setAdding] = useState(false);
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const [showDeactivated, setShowDeactivated] = useState(false);
+  const generate = useGenerateCode();
+  const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
+
+  const generateCode = async (user: User) => {
+    let code: LoginCodeResponse;
+    try {
+      code = await generate.mutateAsync(user.email);
+    } catch {
+      toast.error(t.toast.failed);
+      return;
+    }
+    setIssued({ name: displayName(user), code });
+  };
 
   const toggleRole = async (user: User) => {
     const role = user.role === "admin" ? "agent" : "admin";
@@ -89,6 +104,7 @@ export function AgentsScreen({ email }: { email: string }) {
           const actions: UsersActions = {
             self: email,
             lastAdmin: activeAdmins.length === 1 ? (activeAdmins[0]?.email ?? null) : null,
+            onGenerateCode: (user) => void generateCode(user),
             onToggleRole: (user) => void toggleRole(user),
             onDeactivate: (user) => setDeactivating(user.email),
             onReactivate: (user) => void reactivate(user),
@@ -124,6 +140,9 @@ export function AgentsScreen({ email }: { email: string }) {
       </ScreenState>
 
       <AddUserDialog open={adding} onOpenChange={setAdding} />
+      {issued && (
+        <CodeDialog name={issued.name} issued={issued.code} onClose={() => setIssued(null)} />
+      )}
       {deactivating && (
         <DeactivateDialog email={deactivating} self={email} onClose={() => setDeactivating(null)} />
       )}

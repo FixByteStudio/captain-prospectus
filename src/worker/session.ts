@@ -6,6 +6,7 @@
  * credential in Workers observability (docs/security.md).
  */
 import type { Role } from "../shared/constants";
+import { CROCKFORD } from "../shared/credential";
 
 export const SESSION_COOKIE = "__Host-cp_session";
 
@@ -60,6 +61,19 @@ export function newSessionToken(): string {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** How long a one-time code works once generated (identity-access.md). */
+export const LOGIN_CODE_TTL_MS = 15 * 60 * 1000;
+
+/** 5 random bytes as 8 Crockford characters, 5 bits each: 40 bits per code. */
+export function newLoginCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(5));
+  let bits = 0n;
+  for (const b of bytes) bits = (bits << 8n) | BigInt(b);
+  let code = "";
+  for (let i = 7; i >= 0; i--) code += CROCKFORD.charAt(Number((bits >> BigInt(i * 5)) & 31n));
+  return code;
 }
 
 /** One named cookie from a Cookie header, or null. */
