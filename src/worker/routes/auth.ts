@@ -2,9 +2,11 @@
  * Sign in and sign out (ADR-0029). Mounted before the identity gate: these are
  * the routes a caller with no identity must reach.
  *
- * Two kinds so far. `passphrase` is break-glass: `OWNER_EMAIL` plus
- * `BREAK_GLASS` opens an admin session. `code` spends a one-time code an admin
- * generated (identity-access.md) and opens a session with the user's own role.
+ * Two kinds so far. `passphrase` is break-glass first: `OWNER_EMAIL` plus
+ * `BREAK_GLASS` opens an admin session. Otherwise it is an active admin's
+ * generated passphrase, checked against `users.passphrase_hash`. `code` spends
+ * a one-time code an admin generated (identity-access.md) and opens a session
+ * with the user's own role.
  * Nothing here logs — not the passphrase, not the code, not the token, not a
  * hash (docs/security.md).
  *
@@ -37,6 +39,8 @@ export const authRoutes = new Hono<AppEnv>();
 
 /** One body for every refusal, so it never tells which part was wrong. */
 const REFUSED = "Wrong email or passphrase.";
+/** Stands in for a missing hash, so a refusal compares as long as a match. */
+const DUMMY_HASH = "0".repeat(64);
 /** Wrong, expired, used, superseded or deactivated all read the same. */
 const CODE_REFUSED = "This code does not work.";
 
@@ -104,34 +108,74 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
 
   const owner = c.env.OWNER_EMAIL?.trim().toLowerCase();
   const breakGlass = c.env.BREAK_GLASS;
-  if (!owner || !breakGlass) throw unauthorized(REFUSED);
+  if (owner && breakGlass) {
+    // Both sides are HMAC digests, so the lengths always match and the
+    // comparison leaks neither the secret's length nor where it differs.
+    const [typed, expected] = await Promise.all([
+      hmacBytes(pepper, body.passphrase),
+      hmacBytes(pepper, breakGlass),
+    ]);
+    const secretOk = crypto.subtle.timingSafeEqual(typed, expected);
+    if (secretOk && body.email === owner) {
+      const now = Date.now();
+      const role = "admin" as const;
+      const session = await newSession(pepper, owner, role, now);
 
-  // Both sides are HMAC digests, so the lengths always match and the
-  // comparison leaks neither the secret's length nor where it differs.
-  const [typed, expected] = await Promise.all([
-    hmacBytes(pepper, body.passphrase),
-    hmacBytes(pepper, breakGlass),
-  ]);
-  const secretOk = crypto.subtle.timingSafeEqual(typed, expected);
-  if (!secretOk || body.email !== owner) throw unauthorized(REFUSED);
+      // Break-glass creates the owner, or puts a deactivated or demoted owner back
+      // as an active admin (ADR-0029 decision 7). One batch, so a session never
+      // exists for a user row that was not written.
+      await db.batch([
+        db
+          .insert(users)
+          .values({ email: owner, role, active: true, createdAt: now })
+          .onConflictDoUpdate({ target: users.email, set: { role, active: true } }),
+        db.insert(sessions).values(session.row),
+      ]);
 
+      c.header("Set-Cookie", session.cookie);
+      return c.json<MeResponse>({ email: owner, role });
+    }
+  }
+
+  // An admin's generated passphrase (identity-access.md). Every refusal does the
+  // same work — one HMAC, one read by key, one constant-time compare against
+  // the stored hash or a dummy — so neither the body nor the timing tells an
+  // unknown email from a wrong passphrase.
+  const typedHash = await hmacHex(pepper, normaliseCredential(body.passphrase));
+  const [user] = await db
+    .select({ role: users.role, active: users.active, passphraseHash: users.passphraseHash })
+    .from(users)
+    .where(eq(users.email, body.email))
+    .limit(1);
+  const stored = user?.passphraseHash;
+  const hasHash = stored != null && stored.length === DUMMY_HASH.length;
+  const encoder = new TextEncoder();
+  const hashOk = crypto.subtle.timingSafeEqual(
+    encoder.encode(typedHash),
+    encoder.encode(hasHash ? stored : DUMMY_HASH),
+  );
+  if (!hashOk || !hasHash || !user?.active || user.role !== "admin") {
+    throw unauthorized(REFUSED);
+  }
+
+  // The insert re-reads the row as it is when it runs, so a demotion,
+  // deactivation or regeneration that lands first opens no session.
   const now = Date.now();
-  const role = "admin" as const;
-  const session = await newSession(pepper, owner, role, now);
+  const token = newSessionToken();
+  const tokenHash = await hmacHex(pepper, token);
+  const inserted = await db
+    .insert(sessions)
+    .select(
+      sql`SELECT ${tokenHash}, ${users.email}, ${now}, ${now}, ${now + SESSION_TTL_MS.admin}
+          FROM ${users}
+          WHERE ${users.email} = ${body.email} AND ${users.role} = 'admin'
+            AND ${users.active} = 1 AND ${users.passphraseHash} = ${typedHash}`,
+    )
+    .returning({ email: sessions.userEmail });
+  if (inserted.length === 0) throw unauthorized(REFUSED);
 
-  // Break-glass creates the owner, or puts a deactivated or demoted owner back
-  // as an active admin (ADR-0029 decision 7). One batch, so a session never
-  // exists for a user row that was not written.
-  await db.batch([
-    db
-      .insert(users)
-      .values({ email: owner, role, active: true, createdAt: now })
-      .onConflictDoUpdate({ target: users.email, set: { role, active: true } }),
-    db.insert(sessions).values(session.row),
-  ]);
-
-  c.header("Set-Cookie", session.cookie);
-  return c.json<MeResponse>({ email: owner, role });
+  c.header("Set-Cookie", sessionCookie(token, SESSION_TTL_MS.admin));
+  return c.json<MeResponse>({ email: body.email, role: "admin" });
 });
 
 /** Ends this device's session, if it has one. Always 204, always clears the cookie. */

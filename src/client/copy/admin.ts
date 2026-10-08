@@ -41,6 +41,7 @@ export const adminCopy = {
     you: "Vous",
     menu: (name: string) => `Actions pour ${name}`,
     generateCode: "Générer un code",
+    newPassphrase: "Nouvelle phrase de passe",
     makeAdmin: "Passer admin",
     makeAgent: "Passer agent",
     deactivate: "Désactiver",
@@ -85,6 +86,19 @@ export const adminCopy = {
       done: "Terminé",
       copied: "Code copié.",
       copyFailed: "Copie impossible. Recopiez-le à la main.",
+    },
+
+    passphraseDialog: {
+      confirmTitle: "Remplacer votre phrase de passe ?",
+      confirmBody: "L'ancienne cessera de fonctionner dès que la nouvelle s'affiche.",
+      cancel: "Annuler",
+      replace: "Remplacer",
+      title: "Votre phrase de passe",
+      save: "Enregistrez-la dans votre gestionnaire de mots de passe : elle ne sera plus affichée. L'ancienne ne fonctionne plus.",
+      copy: "Copier",
+      done: "Terminé",
+      copied: "Phrase de passe copiée.",
+      copyFailed: "Copie impossible. Recopiez-la à la main.",
     },
 
     toast: {

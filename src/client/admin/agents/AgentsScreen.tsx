@@ -14,6 +14,7 @@ import { useGenerateCode, useUpdateUser, useUsers } from "../queries";
 import { AddUserDialog } from "./AddUserDialog";
 import { CodeDialog } from "./CodeDialog";
 import { DeactivateDialog } from "./DeactivateDialog";
+import { PassphraseDialog } from "./PassphraseDialog";
 import { displayName } from "./RowMenu";
 import { UsersList } from "./UsersList";
 import { UsersTable } from "./UsersTable";
@@ -38,6 +39,7 @@ export function AgentsScreen({ email }: { email: string }) {
   const [showDeactivated, setShowDeactivated] = useState(false);
   const generate = useGenerateCode();
   const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
+  const [replacingPassphrase, setReplacingPassphrase] = useState(false);
 
   const generateCode = async (user: User) => {
     let code: LoginCodeResponse;
@@ -105,6 +107,7 @@ export function AgentsScreen({ email }: { email: string }) {
             self: email,
             lastAdmin: activeAdmins.length === 1 ? (activeAdmins[0]?.email ?? null) : null,
             onGenerateCode: (user) => void generateCode(user),
+            onNewPassphrase: () => setReplacingPassphrase(true),
             onToggleRole: (user) => void toggleRole(user),
             onDeactivate: (user) => setDeactivating(user.email),
             onReactivate: (user) => void reactivate(user),
@@ -143,6 +146,7 @@ export function AgentsScreen({ email }: { email: string }) {
       {issued && (
         <CodeDialog name={issued.name} issued={issued.code} onClose={() => setIssued(null)} />
       )}
+      {replacingPassphrase && <PassphraseDialog onClose={() => setReplacingPassphrase(false)} />}
       {deactivating && (
         <DeactivateDialog email={deactivating} self={email} onClose={() => setDeactivating(null)} />
       )}

@@ -66,14 +66,31 @@ export function newSessionToken(): string {
 /** How long a one-time code works once generated (identity-access.md). */
 export const LOGIN_CODE_TTL_MS = 15 * 60 * 1000;
 
-/** 5 random bytes as 8 Crockford characters, 5 bits each: 40 bits per code. */
-export function newLoginCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(5));
+/**
+ * `length` random Crockford characters, 5 bits each, read most significant
+ * first from ceil(length × 5 / 8) random bytes; the spare low bits are dropped.
+ */
+function crockfordRandom(length: number): string {
+  const byteCount = Math.ceil((length * 5) / 8);
+  const spare = BigInt(byteCount * 8 - length * 5);
+  const bytes = crypto.getRandomValues(new Uint8Array(byteCount));
   let bits = 0n;
   for (const b of bytes) bits = (bits << 8n) | BigInt(b);
-  let code = "";
-  for (let i = 7; i >= 0; i--) code += CROCKFORD.charAt(Number((bits >> BigInt(i * 5)) & 31n));
-  return code;
+  bits >>= spare;
+  let out = "";
+  for (let i = length - 1; i >= 0; i--)
+    out += CROCKFORD.charAt(Number((bits >> BigInt(i * 5)) & 31n));
+  return out;
+}
+
+/** 8 Crockford characters from 5 random bytes: 40 bits per code. */
+export function newLoginCode(): string {
+  return crockfordRandom(8);
+}
+
+/** An admin's passphrase (identity-access.md): 20 Crockford characters, 100 bits. */
+export function newPassphrase(): string {
+  return crockfordRandom(20);
 }
 
 /** One named cookie from a Cookie header, or null. */

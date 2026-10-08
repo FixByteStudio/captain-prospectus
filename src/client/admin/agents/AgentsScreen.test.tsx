@@ -319,6 +319,144 @@ describe("AgentsScreen", () => {
     });
   });
 
+  describe("passphrase", () => {
+    const P = t.passphraseDialog;
+    const GENERATE = "POST /api/admin/me/passphrase";
+    const PASSPHRASE = "K7QM2XPA9DWER4TN8BCH";
+
+    function stubClipboard(writeText: (text: string) => Promise<void>) {
+      const spy = vi.fn(writeText);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: spy },
+        configurable: true,
+      });
+      return spy;
+    }
+
+    async function replaceOwn() {
+      await openMenu("Sam Owner");
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
+      const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
+      expect(within(confirm).getByText(P.confirmBody)).toBeTruthy();
+      await userEvent.click(within(confirm).getByRole("button", { name: P.replace }));
+      return screen.findByRole("dialog", { name: P.title });
+    }
+
+    it("offers Nouvelle phrase de passe after Générer un code on your own row only", async () => {
+      stubFetch([[ADMIN, LEA, user("max@example.com", { name: "Max", role: "admin" })]]);
+      renderScreen();
+      await openMenu("Sam Owner");
+      const items = await screen.findAllByRole("menuitem");
+      expect(items.slice(0, 2).map((i) => i.textContent)).toEqual([
+        t.generateCode,
+        t.newPassphrase,
+      ]);
+      await userEvent.keyboard("{Escape}");
+      for (const name of ["Léa Dupont", "Max"]) {
+        await openMenu(name);
+        await screen.findAllByRole("menuitem");
+        expect(screen.queryByRole("menuitem", { name: t.newPassphrase })).toBeNull();
+        await userEvent.keyboard("{Escape}");
+      }
+    });
+
+    it("sends nothing when the confirmation is cancelled", async () => {
+      const calls = stubFetch([[ADMIN, LEA]]);
+      renderScreen();
+      await openMenu("Sam Owner");
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
+      const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
+      await userEvent.click(within(confirm).getByRole("button", { name: P.cancel }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+      expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    });
+
+    it("confirms, then shows the passphrase in five groups of four, leaving the list alone", async () => {
+      const calls = stubFetch([[ADMIN, LEA]], {
+        [GENERATE]: () => json({ passphrase: PASSPHRASE }),
+      });
+      const { invalidate } = renderScreen();
+      const dialog = await replaceOwn();
+
+      expect(within(dialog).getByText("K7QM 2XPA 9DWE R4TN 8BCH")).toBeTruthy();
+      expect(within(dialog).getByText(P.save)).toBeTruthy();
+      expect(calls.filter((c) => c.method === "POST")).toEqual([
+        { method: "POST", path: "/api/admin/me/passphrase", body: undefined },
+      ]);
+      const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+      expect(keys).not.toContain(JSON.stringify(adminKeys.users()));
+
+      await userEvent.click(within(dialog).getByRole("button", { name: P.done }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("keeps the passphrase on screen on Escape; only Terminé closes it", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json({ passphrase: PASSPHRASE }) });
+      renderScreen();
+      const dialog = await replaceOwn();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.getByRole("dialog", { name: P.title })).toBe(dialog);
+      expect(within(dialog).getByText("K7QM 2XPA 9DWE R4TN 8BCH")).toBeTruthy();
+    });
+
+    it("copies the passphrase and toasts, keeping it on screen", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json({ passphrase: PASSPHRASE }) });
+      renderScreen();
+      const dialog = await replaceOwn();
+
+      const writeText = stubClipboard(() => Promise.resolve());
+      fireEvent.click(within(dialog).getByRole("button", { name: P.copy }));
+
+      expect(await screen.findByText(P.copied)).toBeTruthy();
+      expect(writeText).toHaveBeenCalledWith(PASSPHRASE);
+      expect(within(dialog).getByText("K7QM 2XPA 9DWE R4TN 8BCH")).toBeTruthy();
+    });
+
+    it("says to copy by hand when the clipboard refuses, keeping the passphrase", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json({ passphrase: PASSPHRASE }) });
+      renderScreen();
+      const dialog = await replaceOwn();
+
+      stubClipboard(() => Promise.reject(new DOMException("denied", "NotAllowedError")));
+      fireEvent.click(within(dialog).getByRole("button", { name: P.copy }));
+
+      expect(await screen.findByText(P.copyFailed)).toBeTruthy();
+      expect(within(dialog).getByText("K7QM 2XPA 9DWE R4TN 8BCH")).toBeTruthy();
+    });
+
+    it("toasts the generic failure and shows no passphrase when generating fails", async () => {
+      stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json({ error: "not_found" }, 404) });
+      renderScreen();
+      await openMenu("Sam Owner");
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
+      const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
+      await userEvent.click(within(confirm).getByRole("button", { name: P.replace }));
+
+      expect(await screen.findByText(t.toast.failed)).toBeTruthy();
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("offers it on your own row below 768px, and not on another's", async () => {
+      setMobile(true);
+      const calls = stubFetch([[ADMIN, LEA]], {
+        [GENERATE]: () => json({ passphrase: PASSPHRASE }),
+      });
+      renderScreen();
+      await openMenu("Léa Dupont");
+      await screen.findAllByRole("menuitem");
+      expect(screen.queryByRole("menuitem", { name: t.newPassphrase })).toBeNull();
+      await userEvent.keyboard("{Escape}");
+
+      const dialog = await replaceOwn();
+      expect(within(dialog).getByText("K7QM 2XPA 9DWE R4TN 8BCH")).toBeTruthy();
+      expect(calls.filter((c) => c.method === "POST").map((c) => c.path)).toEqual([
+        "/api/admin/me/passphrase",
+      ]);
+    });
+  });
+
   describe("role change", () => {
     it("patches the role, toasts, and invalidates users and agents", async () => {
       const calls = stubFetch([[ADMIN, LEA]], {

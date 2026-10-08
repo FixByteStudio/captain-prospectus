@@ -38,6 +38,7 @@ import type {
   Script,
   ScriptsResponse,
   LoginCodeResponse,
+  PassphraseResponse,
   User,
   UserCreate,
   UserUpdate,
@@ -230,6 +231,17 @@ export function useGenerateCode() {
       apiFetch<LoginCodeResponse>(`/api/admin/users/${encodeURIComponent(email)}/code`, {
         method: "POST",
       }),
+  });
+}
+
+/**
+ * The signed-in admin's own new passphrase. Like a code it is shown once, so
+ * gcTime 0 drops it from the cache with the dialog; the list does not change.
+ */
+export function useGeneratePassphrase() {
+  return useMutation({
+    gcTime: 0,
+    mutationFn: () => apiFetch<PassphraseResponse>("/api/admin/me/passphrase", { method: "POST" }),
   });
 }
 
