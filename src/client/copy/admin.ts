@@ -22,6 +22,68 @@ export const adminCopy = {
     reconnected: "Connexion rétablie.",
   },
 
+  /** The Agents page (GH #304, docs/design.md › Agents). */
+  agents: {
+    title: "Agents",
+    subtitle: "Qui peut se connecter, et avec quel rôle.",
+    loading: "Chargement des utilisateurs…",
+    loadFailed: "Impossible de charger les utilisateurs.",
+    add: "Ajouter un utilisateur",
+    columns: {
+      user: "Utilisateur",
+      role: "Rôle",
+      enrolment: "Inscription",
+      devices: "Appareils",
+    },
+    roles: { agent: "Agent", admin: "Admin" },
+    enrolled: "Inscrit",
+    notEnrolled: "Pas encore inscrit",
+    you: "Vous",
+    menu: (name: string) => `Actions pour ${name}`,
+    makeAdmin: "Passer admin",
+    makeAgent: "Passer agent",
+    deactivate: "Désactiver",
+    reactivate: "Réactiver",
+    lastAdmin: "Il faut au moins un administrateur actif.",
+    deactivated: (n: number) => `Désactivés (${n})`,
+    deactivatedLabel: "Utilisateurs désactivés",
+
+    addDialog: {
+      title: "Ajouter un utilisateur",
+      email: "Adresse e-mail",
+      name: "Nom",
+      role: "Rôle",
+      submit: "Ajouter",
+      cancel: "Annuler",
+      emailInvalid: "Saisissez une adresse e-mail valide.",
+      nameRequired: "Saisissez un nom.",
+      emailTaken:
+        "Cette adresse a déjà un compte. S'il est désactivé, réactivez-le sous Désactivés.",
+    },
+
+    deactivateDialog: {
+      title: (name: string) => `Désactiver ${name} ?`,
+      checking: "Vérification des prospects assignés…",
+      assigned: (n: number, name: string) =>
+        n === 0
+          ? `Aucun prospect n'est assigné à ${name}.`
+          : n === 1
+            ? `1 prospect reste assigné à ${name}. Réassignez-le depuis « Prospects sans agent actif » au Tableau de bord.`
+            : `${n} prospects restent assignés à ${name}. Réassignez-les depuis « Prospects sans agent actif » au Tableau de bord.`,
+      always: "Ses appareils seront déconnectés et son code annulé. Vous pourrez le réactiver.",
+      cancel: "Annuler",
+      confirm: "Désactiver",
+    },
+
+    toast: {
+      added: "Utilisateur ajouté.",
+      roleChanged: "Rôle modifié.",
+      deactivated: "Utilisateur désactivé.",
+      reactivated: "Utilisateur réactivé.",
+      failed: "L'action n'a pas abouti. Réessayez.",
+    },
+  },
+
   /** The top bar's search button and its inert CommandDialog (GH #64). */
   search: {
     // Reused verbatim as the ≥768px button's text and, below 768px, as the

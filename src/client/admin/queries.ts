@@ -37,6 +37,10 @@ import type {
   Question,
   Script,
   ScriptsResponse,
+  User,
+  UserCreate,
+  UserUpdate,
+  UsersResponse,
   OrphansResponse,
   OrphanRepairResult,
 } from "../../shared/schemas";
@@ -62,6 +66,7 @@ export const adminKeys = {
   dashboard: (period: DashboardPeriod) => ["admin", "dashboard", period] as const,
   prospects: (filters: ProspectFilters) => ["admin", "prospects", filters] as const,
   agents: () => ["admin", "agents"] as const,
+  users: () => ["admin", "users"] as const,
   duplicates: () => ["admin", "duplicates"] as const,
   visitsFeed: () => ["admin", "visits", "feed"] as const,
   scripts: () => ["admin", "scripts"] as const,
@@ -164,6 +169,51 @@ export function useAgents() {
     // The roster comes from a Worker variable, not a table. It cannot change
     // while the page is open.
     staleTime: Infinity,
+  });
+}
+
+/** Every user, active or not (ADR-0029). The deactivation count is kept fresh by DeactivateDialog's own refetch(), not by this query. */
+export function useUsers() {
+  return useQuery({
+    queryKey: adminKeys.users(),
+    queryFn: () => apiFetch<UsersResponse>("/api/admin/users"),
+  });
+}
+
+/** The users list and the assign menu's roster both read `users`, so both follow a change. */
+function useInvalidateUsers() {
+  const client = useQueryClient();
+  return async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: adminKeys.users() }),
+      client.invalidateQueries({ queryKey: adminKeys.agents() }),
+    ]);
+  };
+}
+
+export function useCreateUser() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (input: UserCreate) =>
+      apiFetch<User>("/api/admin/users", { method: "POST", body: JSON.stringify(input) }),
+    // Not awaited (query-client.ts): after a self-demotion the refetch would 403 and flash the failed state.
+    onSuccess: () => {
+      void invalidate();
+    },
+  });
+}
+
+export function useUpdateUser() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (input: { email: string; update: UserUpdate }) =>
+      apiFetch<void>(`/api/admin/users/${encodeURIComponent(input.email)}`, {
+        method: "PATCH",
+        body: JSON.stringify(input.update),
+      }),
+    onSuccess: () => {
+      void invalidate();
+    },
   });
 }
 
