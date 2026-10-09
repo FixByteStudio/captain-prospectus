@@ -18,6 +18,7 @@ import { D1_MAX_BOUND_PARAMS, RETENTION_BATCH, RETENTION_MS } from "../shared/co
 import { chunk } from "../shared/chunk";
 import { visits } from "./db/schema";
 import { sweepAgentPositions } from "./agent-position";
+import { sweepAuthRows, type AuthSweepCounts } from "./auth-sweep";
 import type { Db } from "./db/client";
 
 export type SweepResult = {
@@ -27,7 +28,7 @@ export type SweepResult = {
   cutoff: number;
   /** Agent positions deleted (ADR-0028); counts only, never coordinates. */
   positionsDeleted: number;
-};
+} & AuthSweepCounts;
 
 /**
  * Redact one bounded batch of expired visits.
@@ -51,6 +52,9 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
     console.error("agent position sweep failed", err instanceof Error ? err.name : "unknown");
   }
 
+  // Never throws: sweepAuthRows guards each table itself (CAP-10).
+  const auth = await sweepAuthRows(db, now);
+
   // SQLite has no UPDATE ... LIMIT, so the bound goes on a select of ids first.
   // That also makes the returned count the count actually written.
   const expired = await db
@@ -67,7 +71,7 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
     )
     .limit(RETENTION_BATCH);
 
-  if (expired.length === 0) return { redacted: 0, cutoff, positionsDeleted };
+  if (expired.length === 0) return { redacted: 0, cutoff, positionsDeleted, ...auth };
 
   // One bound parameter per id, so the batch is chunked to D1's limit of 100
   // (INVARIANT 7). RETENTION_BATCH is deliberately larger than that: the cap
@@ -80,12 +84,12 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
       .where(inArray(visits.id, batch));
   }
 
-  return { redacted: ids.length, cutoff, positionsDeleted };
+  return { redacted: ids.length, cutoff, positionsDeleted, ...auth };
 }
 
 /** The line the scheduled handler logs, so a silent cron is a visible gap. */
 export function describeSweep(result: SweepResult): string {
   return `retention: redacted ${result.redacted} visit(s) received before ${new Date(
     result.cutoff,
-  ).toISOString()}; deleted ${result.positionsDeleted} agent position(s)`;
+  ).toISOString()}; deleted ${result.positionsDeleted} agent position(s), ${result.loginCodesDeleted} login code(s), ${result.sessionsDeleted} session(s), ${result.loginAttemptsDeleted} login attempt(s)`;
 }

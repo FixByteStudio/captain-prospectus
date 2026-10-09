@@ -106,6 +106,11 @@ sweep is bounded to `RETENTION_BATCH` (500) rows written per run, which keeps it
 the D1 daily write quota even on the first run after a backlog — the backlog drains over a
 few days rather than in one statement.
 The same run then deletes expired map-cache rows, bounded to `MAP_CACHE_EVICT_BATCH` (500).
+It also deletes expired `login_codes` and `sessions` and finished-window `login_attempts` rows, each
+table bounded to `AUTH_SWEEP_BATCH` (500) per run: a flood of failed logins can write a day's request
+quota of `login_attempts` rows, and deleting them all at once could use the D1 write quota. There is
+no index for it: in normal use the tables hold a few rows per user, so a scan costs a few reads. After a
+flood, `login_attempts` is read in full each night until it drains.
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
 operations a month; a weekly export of a database measured in megabytes uses one operation
