@@ -106,8 +106,10 @@ erDiagram
     text token_hash PK "HMAC-SHA-256 hex of the cookie token"
     text user_email FK
     int created_at
-    int last_seen_at "written at creation only, for now"
-    int expires_at "created_at + 30 d admin / 90 d agent, fixed"
+    int last_seen_at "bumped at most hourly by the slide"
+    int expires_at "last_seen_at + 30 d admin / 90 d agent, sliding"
+    text id UK "public id, 32 random hex; nullable until the contract step"
+    text device_label "e.g. iPhone · Safari, from the User-Agent at login; nullable"
   }
   LOGIN_CODES {
     text code_hash PK "HMAC-SHA-256 hex of the normalised code"
@@ -128,8 +130,13 @@ A user is deactivated, never deleted. The browser holds a random 32-byte token i
 `__Host-cp_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`); only its
 HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. A session
 counts while `expires_at` is in the future and its user is `active`; the role is read from
-`users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
-are later entries of the own-login epic.
+`users` on every request. The expiry slides: a request at least an hour after `last_seen_at`
+sets it to now and `expires_at` to now + the role's lifetime (30 d admin, 90 d agent) in one
+conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Agents page revokes a
+device by, so the hash never leaves the Worker; rows from before it were backfilled, and a row the
+previous Worker writes during a deploy gets its id from its first slide. `device_label` is parsed from
+the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep of
+expired rows is a later entry of the own-login epic.
 
 `login_codes` holds the one-time codes an admin generates for a device to enrol
 ([identity-access](domains/identity-access.md)). A code is 8 Crockford base32 characters (40
@@ -226,6 +233,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
 | `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
+| `sessions(id)` unique | revoking one device by its public id |
 | `login_codes(user_email)` | a user's codes: superseding them on generate, deleting them on deactivation |
 
 SQLite uses one index per table reference, so a filtered *and* sorted admin list

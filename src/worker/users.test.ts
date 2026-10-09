@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { loginCodes, prospects, sessions, users } from "./db/schema";
 import { fakeAccess } from "../../test/access-jwt";
-import { testSessionCookie } from "../../test/session";
+import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
 import { workerFetch } from "../../test/worker-fetch";
@@ -111,6 +111,7 @@ describe("GET /api/admin/users", () => {
         active: false,
         sessions: 1,
         openProspects: 3,
+        devices: [expect.objectContaining({ current: false })],
       },
       {
         email: TEST_ADMIN,
@@ -119,6 +120,7 @@ describe("GET /api/admin/users", () => {
         active: true,
         sessions: 1,
         openProspects: 1,
+        devices: [expect.objectContaining({ current: true })],
       },
     ]);
   });
@@ -161,6 +163,7 @@ describe("POST /api/admin/users", () => {
       active: true,
       sessions: 0,
       openProspects: 0,
+      devices: [],
     });
     const [row] = await db().select().from(users).where(eq(users.email, "lea@x.be"));
     expect(row?.passphraseHash).toBeNull();
@@ -546,6 +549,97 @@ describe("POST /api/admin/me/passphrase", () => {
     const logged = JSON.stringify(calls);
     expect(logged).not.toContain(passphrase);
     expect(logged).not.toContain(String(await storedHash(TEST_ADMIN)));
+  });
+});
+
+describe("devices (GH #307)", () => {
+  function revoke(id: string, cookie: string, headers?: Record<string, string>) {
+    return call(`/api/admin/sessions/${encodeURIComponent(id)}`, cookie, {
+      method: "DELETE",
+      headers,
+    });
+  }
+
+  it("lists live sessions with an id, newest first, the caller's flagged current", async () => {
+    const now = Date.now();
+    const caller = await testSession(TEST_ADMIN, { lastSeenAt: now - 5 * 60 * 1000 });
+    const older = await testSession(TEST_AGENT, {
+      createdAt: now - 3 * 86_400_000,
+      lastSeenAt: now - 30 * 60 * 1000,
+      deviceLabel: "iPhone · Safari",
+    });
+    const newer = await testSession(TEST_AGENT, { createdAt: now, lastSeenAt: now - 60 * 1000 });
+    await testSession(TEST_AGENT, { expiresAt: now - 1000, deviceLabel: "Mac · Safari" });
+    await testSession(TEST_AGENT, { id: null });
+
+    const rows = await list(caller.cookie);
+
+    const agent = rows.find((u) => u.email === TEST_AGENT);
+    expect(agent?.sessions).toBe(3);
+    expect(agent?.devices).toEqual([
+      { id: newer.id, label: null, createdAt: now, lastSeenAt: now - 60 * 1000, current: false },
+      {
+        id: older.id,
+        label: "iPhone · Safari",
+        createdAt: now - 3 * 86_400_000,
+        lastSeenAt: now - 30 * 60 * 1000,
+        current: false,
+      },
+    ]);
+    const admin = rows.find((u) => u.email === TEST_ADMIN);
+    expect(admin?.devices).toEqual([expect.objectContaining({ id: caller.id, current: true })]);
+  });
+
+  it("never sends a token hash", async () => {
+    const caller = await testSession(TEST_ADMIN);
+    const agent = await testSession(TEST_AGENT);
+    const response = await call("/api/admin/users", caller.cookie);
+    const text = await response.text();
+    expect(text).not.toContain(caller.tokenHash);
+    expect(text).not.toContain(agent.tokenHash);
+    expect(text).not.toContain("tokenHash");
+    expect(text).not.toMatch(/[0-9a-f]{64}/);
+  });
+
+  it("revokes one device: 204, its cookie is refused, the other session still works", async () => {
+    const admin = await adminCookie();
+    const phone = await testSession(TEST_AGENT);
+    const laptop = await testSession(TEST_AGENT);
+    if (!phone.id) throw new Error("testSession gave no id");
+
+    expect((await revoke(phone.id, admin)).status).toBe(204);
+
+    expect((await call("/api/me", phone.cookie)).status).toBe(401);
+    expect((await call("/api/me", laptop.cookie)).status).toBe(200);
+    const again = await revoke(phone.id, admin);
+    expect(again.status).toBe(404);
+    expect(await again.json()).toMatchObject({ error: "not_found" });
+  });
+
+  it("lets an admin revoke their own current session", async () => {
+    const caller = await testSession(TEST_ADMIN);
+    if (!caller.id) throw new Error("testSession gave no id");
+    expect((await revoke(caller.id, caller.cookie)).status).toBe(204);
+    expect((await call("/api/me", caller.cookie)).status).toBe(401);
+  });
+
+  it("answers 404 to an unknown well-formed id and 400 to a malformed one", async () => {
+    const admin = await adminCookie();
+    expect((await revoke("0".repeat(32), admin)).status).toBe(404);
+    for (const id of ["a".repeat(31), "a".repeat(33), "A".repeat(32), "g".repeat(32)]) {
+      expect((await revoke(id, admin)).status).toBe(400);
+    }
+  });
+
+  it("answers 403 to an agent and to a foreign Origin, deleting nothing", async () => {
+    const target = await testSession(TEST_AGENT);
+    if (!target.id) throw new Error("testSession gave no id");
+    expect((await revoke(target.id, await testSessionCookie(TEST_AGENT))).status).toBe(403);
+    const foreign = await revoke(target.id, await adminCookie(), {
+      Origin: "https://evil.example",
+    });
+    expect(foreign.status).toBe(403);
+    expect((await call("/api/me", target.cookie)).status).toBe(200);
   });
 });
 

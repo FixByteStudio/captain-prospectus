@@ -46,6 +46,7 @@ it — a payload the server always refuses is an outbox that never drains (INVAR
   An agent's latest position of the day (`agent_positions`) is served only for that Brussels
   day and deleted by the next morning's sweep ([ADR-0028](adr/0028-agent-position-at-sync.md)).
 - No third-party analytics, and the data stays in the Cloudflare account. Backups go to R2, not to a GitHub artifact (ADR-0023, [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)); the bucket is one-time setup in [deployment.md](deployment.md).
+- A session stores only the device label parsed from the User-Agent at login ("iPhone · Safari", `src/worker/device-label.ts`), never the raw User-Agent, and nothing logs it.
 - The Worker's unhandled-error log (`onError`, `src/worker/index.ts`) carries only error names and the route, never a message or bound values — Drizzle's own message is `Failed query: <sql>\nparams: <values>`, which can be a visit note or an agent's email (`src/worker/errors.ts`).
 
 ## Secrets

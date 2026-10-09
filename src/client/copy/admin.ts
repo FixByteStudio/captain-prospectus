@@ -50,6 +50,18 @@ export const adminCopy = {
     deactivated: (n: number) => `Désactivés (${n})`,
     deactivatedLabel: "Utilisateurs désactivés",
 
+    /** A row's device lines (GH #307). `date` and `dateTime` come formatted. */
+    devices: {
+      expand: (name: string) => `Appareils de ${name}`,
+      unknown: "Appareil inconnu",
+      none: "Aucun appareil inscrit.",
+      enrolledOn: (date: string) => `Inscrit le ${date}`,
+      seenOn: (dateTime: string) => `Vu le ${dateTime}`,
+      revoke: "Révoquer",
+      revokeLabel: (label: string) => `Révoquer ${label}`,
+      current: "Cet appareil",
+    },
+
     addDialog: {
       title: "Ajouter un utilisateur",
       email: "Adresse e-mail",
@@ -106,6 +118,7 @@ export const adminCopy = {
       roleChanged: "Rôle modifié.",
       deactivated: "Utilisateur désactivé.",
       reactivated: "Utilisateur réactivé.",
+      revoked: "Appareil déconnecté.",
       failed: "L'action n'a pas abouti. Réessayez.",
     },
   },

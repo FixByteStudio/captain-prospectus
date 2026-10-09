@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { LoginCodeResponse, User } from "../../../shared/schemas";
+import type { Device, LoginCodeResponse, User } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { copy } from "../../copy";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -10,7 +10,7 @@ import { Skeleton } from "../../ui/skeleton";
 import { ScreenHeader } from "../ScreenHeader";
 import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
-import { useGenerateCode, useUpdateUser, useUsers } from "../queries";
+import { useGenerateCode, useRevokeSession, useUpdateUser, useUsers } from "../queries";
 import { AddUserDialog } from "./AddUserDialog";
 import { CodeDialog } from "./CodeDialog";
 import { DeactivateDialog } from "./DeactivateDialog";
@@ -40,6 +40,39 @@ export function AgentsScreen({ email }: { email: string }) {
   const generate = useGenerateCode();
   const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
   const [replacingPassphrase, setReplacingPassphrase] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const revokeSession = useRevokeSession();
+  const [revoking, setRevoking] = useState<Set<string>>(() => new Set());
+
+  const toggleExpand = (userEmail: string) =>
+    setExpanded((open) => {
+      const next = new Set(open);
+      if (next.has(userEmail)) next.delete(userEmail);
+      else next.add(userEmail);
+      return next;
+    });
+
+  // No confirmation (design.md): a new code re-enrols the device.
+  // A 404 means the session is already gone (a double click, another admin,
+  // expiry): the outcome the admin asked for, so it reads as done.
+  const revoke = async (device: Device) => {
+    setRevoking((ids) => new Set(ids).add(device.id));
+    try {
+      await revokeSession.mutateAsync(device.id);
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 404)) {
+        toast.error(t.toast.failed);
+        return;
+      }
+    } finally {
+      setRevoking((ids) => {
+        const next = new Set(ids);
+        next.delete(device.id);
+        return next;
+      });
+    }
+    toast.success(t.toast.revoked);
+  };
 
   const generateCode = async (user: User) => {
     let code: LoginCodeResponse;
@@ -111,6 +144,10 @@ export function AgentsScreen({ email }: { email: string }) {
             onToggleRole: (user) => void toggleRole(user),
             onDeactivate: (user) => setDeactivating(user.email),
             onReactivate: (user) => void reactivate(user),
+            expanded,
+            onToggleExpand: toggleExpand,
+            revoking,
+            onRevoke: (device) => void revoke(device),
           };
           const Rows = isMobile ? UsersList : UsersTable;
           return (

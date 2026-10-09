@@ -7,7 +7,7 @@ import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-thrott
 import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
 import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
-import { testSessionCookie } from "../../test/session";
+import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import { normaliseCredential } from "../shared/credential";
 import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
@@ -907,5 +907,187 @@ describe("requireIdentity — DEV_USER_EMAIL on a local host (GH #300)", () => {
   it("is ignored off a local host", async () => {
     env.DEV_USER_EMAIL = TEST_ADMIN;
     expect((await me()).status).toBe(401);
+  });
+});
+
+describe("device sessions (GH #307)", () => {
+  const IPHONE_SAFARI =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+  const ANDROID_CHROME =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
+  const WINDOWS_EDGE =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0";
+  const HOUR_MS = 60 * 60 * 1000;
+
+  function loginAs(body: unknown, userAgent?: string): Promise<Response> {
+    return call("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(userAgent ? { "User-Agent": userAgent } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function sessionOf(response: Response) {
+    const [row] = await db()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
+    return row;
+  }
+
+  async function sessionByHash(tokenHash: string) {
+    const [row] = await db().select().from(sessions).where(eq(sessions.tokenHash, tokenHash));
+    return row;
+  }
+
+  it("stores an id and the device label on a break-glass login", async () => {
+    const response = await loginAs(
+      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
+      IPHONE_SAFARI,
+    );
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("iPhone · Safari");
+  });
+
+  it("stores an id and the device label on a code login", async () => {
+    const generated = await call(`/api/admin/users/${encodeURIComponent(TEST_AGENT)}/code`, {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
+    });
+    const { code } = (await generated.json()) as LoginCodeResponse;
+    const response = await loginAs({ kind: "code", code }, ANDROID_CHROME);
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.userEmail).toBe(TEST_AGENT);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("Android · Chrome");
+    expect(row && row.expiresAt - row.createdAt).toBe(90 * DAY_MS);
+  });
+
+  it("stores an id and the device label on a generated-passphrase login", async () => {
+    const passphrase = "K7QM2XPA9DWE10TN8B01";
+    await db()
+      .update(users)
+      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
+      .where(eq(users.email, TEST_ADMIN));
+    const response = await loginAs(
+      { kind: "passphrase", email: TEST_ADMIN, passphrase },
+      WINDOWS_EDGE,
+    );
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("Windows · Edge");
+  });
+
+  it("stores a null label for an empty or bot User-Agent, and distinct ids", async () => {
+    const body = { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS };
+    const bare = await sessionOf(await loginAs(body));
+    const bot = await sessionOf(
+      await loginAs(body, "Googlebot/2.1 (+http://www.google.com/bot.html)"),
+    );
+    expect(bare?.deviceLabel).toBeNull();
+    expect(bot?.deviceLabel).toBeNull();
+    expect(bare?.id).not.toBe(bot?.id);
+  });
+
+  it("writes nothing and sends no cookie within the hour", async () => {
+    const lastSeenAt = Date.now() - 10 * 60 * 1000;
+    const session = await testSession(TEST_AGENT, { lastSeenAt });
+    const before = await sessionByHash(session.tokenHash);
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await sessionByHash(session.tokenHash)).toEqual(before);
+  });
+
+  it("slides a stale agent session by 90 days and re-sends the same token", async () => {
+    const session = await testSession(TEST_AGENT, {
+      lastSeenAt: Date.now() - 2 * HOUR_MS,
+      expiresAt: Date.now() + DAY_MS,
+    });
+    const startedAt = Date.now();
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    const setCookie = response.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain(`${session.cookie};`);
+    expect(setCookie).toContain("Max-Age=7776000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row?.lastSeenAt).toBeGreaterThanOrEqual(startedAt);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(90 * DAY_MS);
+    expect(row?.id).toBe(session.id);
+
+    // Slid just now: the next request is inside the hour again.
+    expect((await me({ Cookie: session.cookie })).headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("slides a stale admin session by 30 days", async () => {
+    const session = await testSession(TEST_ADMIN, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=2592000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(30 * DAY_MS);
+  });
+
+  it("slides by the current role's lifetime after a demotion", async () => {
+    await db().insert(users).values({ email: OWNER, role: "admin", active: true, createdAt: 1 });
+    const session = await testSession(OWNER, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+    await db().update(users).set({ role: "agent" }).where(eq(users.email, OWNER));
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(90 * DAY_MS) / 1000}`);
+    const row = await sessionByHash(session.tokenHash);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(90 * DAY_MS);
+  });
+
+  it("gives a row the previous Worker wrote its id on the first request, and slides it", async () => {
+    const session = await testSession(TEST_AGENT, { id: null });
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=7776000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("keeps the refreshed cookie on an error response", async () => {
+    const session = await testSession(TEST_AGENT, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+
+    const response = await call("/api/admin/users", { headers: { Cookie: session.cookie } });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("Set-Cookie")).toContain(`${session.cookie};`);
+  });
+
+  it("never logs the User-Agent", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    const ua = `${IPHONE_SAFARI} marker-7f3a`;
+
+    const response = await loginAs(
+      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
+      ua,
+    );
+    await loginAs({ kind: "passphrase", email: OWNER, passphrase: "wrong" }, ua);
+    await call("/api/me", { headers: { ...cookie(tokenFrom(response)), "User-Agent": ua } });
+
+    expect(JSON.stringify(calls)).not.toContain("marker-7f3a");
   });
 });

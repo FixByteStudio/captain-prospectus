@@ -2,7 +2,10 @@
  * Who is calling — docs/domains/identity-access.md.
  *
  * Session first (ADR-0029): a `__Host-` cookie whose token's HMAC is a live
- * `sessions` row of an active user. Then, on a local host only (localhost,
+ * `sessions` row of an active user. The session slides: a request at least
+ * SESSION_SLIDE_MS after `last_seen_at` pushes `expires_at` to now + its role's
+ * TTL and re-sends the cookie, so a device in use never expires (GH #307).
+ * Then, on a local host only (localhost,
  * 127.0.0.1, [::1]), DEV_USER_EMAIL, whose role is its active `users` row's;
  * without one the caller gets a 401.
  * Then, until the cutover's phase 3, the Cloudflare Access JWT (ADR-0006) —
@@ -18,12 +21,20 @@
  */
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Role } from "../shared/constants";
 import { getDb, type Db } from "./db/client";
 import { sessions, users } from "./db/schema";
-import { SESSION_COOKIE, hmacHex, readCookie } from "./session";
+import {
+  SESSION_COOKIE,
+  SESSION_SLIDE_MS,
+  SESSION_TTL_MS,
+  hmacHex,
+  newSessionId,
+  readCookie,
+  sessionCookie,
+} from "./session";
 import type { AppEnv, Bindings, Identity } from "./types";
 
 export type { Identity, AppEnv } from "./types";
@@ -112,29 +123,70 @@ export function misconfigured(): HTTPException {
 }
 
 /**
- * The session cookie's identity, or null: no cookie, no pepper, an unknown or
+ * A session's caller: who, the session's public id (null only in the rare race
+ * where a row written by the previous Worker is still waiting for one), and the
+ * refreshed cookie when this request slid the session.
+ */
+export type SessionCaller = { identity: Identity; sessionId: string | null; cookie: string | null };
+
+/**
+ * The session cookie's caller, or null: no cookie, no pepper, an unknown or
  * expired token, or a deactivated user. The role is the `users` row's, never
  * the cookie's. Without AUTH_PEPPER no token can be hashed, so the lookup is
  * skipped rather than guessed.
+ *
+ * Within SESSION_SLIDE_MS of the last slide nothing is written. Past it, one
+ * conditional UPDATE slides the session and gives a pre-#307 row its id; of
+ * two requests racing on it only the one that gets a row back re-sends the
+ * cookie. The TTL is the role's now, so a demoted admin slides to an agent's.
  */
-export async function identityFromSession(env: Bindings, req: Request): Promise<Identity | null> {
+export async function identityFromSession(
+  env: Bindings,
+  req: Request,
+): Promise<SessionCaller | null> {
   const token = readCookie(req.headers.get("Cookie"), SESSION_COOKIE);
   if (!token || !env.AUTH_PEPPER) return null;
 
   const tokenHash = await hmacHex(env.AUTH_PEPPER, token);
-  const [row] = await getDb(env.DB)
-    .select({ email: users.email, role: users.role })
+  const db = getDb(env.DB);
+  const now = Date.now();
+  const [row] = await db
+    .select({
+      email: users.email,
+      role: users.role,
+      id: sessions.id,
+      lastSeenAt: sessions.lastSeenAt,
+    })
     .from(sessions)
     .innerJoin(users, eq(users.email, sessions.userEmail))
     .where(
-      and(
-        eq(sessions.tokenHash, tokenHash),
-        gt(sessions.expiresAt, Date.now()),
-        eq(users.active, true),
-      ),
+      and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, now), eq(users.active, true)),
     )
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+
+  const identity: Identity = { email: row.email, role: row.role };
+  if (row.id !== null && now - row.lastSeenAt < SESSION_SLIDE_MS) {
+    return { identity, sessionId: row.id, cookie: null };
+  }
+
+  const ttl = SESSION_TTL_MS[row.role];
+  const [slid] = await db
+    .update(sessions)
+    .set({
+      lastSeenAt: now,
+      expiresAt: now + ttl,
+      id: sql`coalesce(${sessions.id}, ${newSessionId()})`,
+    })
+    .where(
+      and(
+        eq(sessions.tokenHash, tokenHash),
+        or(lte(sessions.lastSeenAt, now - SESSION_SLIDE_MS), isNull(sessions.id)),
+      ),
+    )
+    .returning({ id: sessions.id });
+  if (!slid) return { identity, sessionId: row.id, cookie: null };
+  return { identity, sessionId: slid.id, cookie: sessionCookie(token, ttl) };
 }
 
 /** DEV_USER_EMAIL's `users` row, or null when it has none or is inactive. */
@@ -190,12 +242,19 @@ async function identityFromAccess(env: Bindings, req: Request): Promise<Identity
   return { email, role: row.role };
 }
 
-/** Puts the caller's identity on the context, or answers 401. */
+/**
+ * Puts the caller's identity (and, for a session, its id) on the context, or
+ * answers 401. A slid session's cookie is appended after `next()`, so it rides
+ * on whatever the handler answered, an HTTPException's response included.
+ */
 export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
   const session = await identityFromSession(c.env, c.req.raw);
   if (session) {
-    c.set("identity", session);
-    return next();
+    c.set("identity", session.identity);
+    if (session.sessionId) c.set("sessionId", session.sessionId);
+    await next();
+    if (session.cookie) c.header("Set-Cookie", session.cookie, { append: true });
+    return;
   }
 
   // Local development only. Honoured solely on a local host (localhost,
