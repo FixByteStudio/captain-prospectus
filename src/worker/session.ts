@@ -49,10 +49,13 @@ export async function hmacBytes(pepper: string, value: string): Promise<ArrayBuf
   return crypto.subtle.sign("HMAC", await hmacKey(pepper), new TextEncoder().encode(value));
 }
 
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** HMAC-SHA-256 as lowercase hex: the only form a secret is stored in. */
 export async function hmacHex(pepper: string, value: string): Promise<string> {
-  const bytes = new Uint8Array(await hmacBytes(pepper, value));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return toHex(new Uint8Array(await hmacBytes(pepper, value)));
 }
 
 /**
@@ -67,8 +70,7 @@ export const SESSION_SLIDE_MS = 60 * 60 * 1000;
  * leaving the Worker.
  */
 export function newSessionId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return toHex(crypto.getRandomValues(new Uint8Array(16)));
 }
 
 /** 32 random bytes, base64url without padding. */
@@ -126,5 +128,5 @@ export function sessionCookie(token: string, maxAgeMs: number): string {
 }
 
 export function clearedSessionCookie(): string {
-  return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+  return sessionCookie("", 0);
 }

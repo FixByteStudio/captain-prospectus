@@ -47,6 +47,12 @@ const DUMMY_HASH = "0".repeat(64);
 /** Wrong, expired, used, superseded or deactivated all read the same. */
 const CODE_REFUSED = "This code does not work.";
 
+/** A fresh session token and the hash that is stored in its place. */
+async function newToken(pepper: string) {
+  const token = newSessionToken();
+  return { token, tokenHash: await hmacHex(pepper, token) };
+}
+
 /** A new session's row and the token its cookie carries; the TTL is the role's. */
 async function newSession(
   pepper: string,
@@ -55,10 +61,10 @@ async function newSession(
   now: number,
   label: string | null,
 ) {
-  const token = newSessionToken();
+  const { token, tokenHash } = await newToken(pepper);
   const ttl = SESSION_TTL_MS[role];
   const row = {
-    tokenHash: await hmacHex(pepper, token),
+    tokenHash,
     userEmail: email,
     createdAt: now,
     lastSeenAt: now,
@@ -80,8 +86,7 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
   if (body.kind === "code") {
     const now = Date.now();
     const codeHash = await hmacHex(pepper, normaliseCredential(body.code));
-    const token = newSessionToken();
-    const tokenHash = await hmacHex(pepper, token);
+    const { token, tokenHash } = await newToken(pepper);
     // One conditional UPDATE spends the code: of two logins racing on it, only
     // one gets a row back. The session is inserted in the same batch, so the
     // two land or fail together: no spent code without its session, and no
@@ -176,8 +181,7 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
   // deactivation or regeneration that lands first opens no session. The SELECT
   // is positional, so its columns follow the schema's order.
   const now = Date.now();
-  const token = newSessionToken();
-  const tokenHash = await hmacHex(pepper, token);
+  const { token, tokenHash } = await newToken(pepper);
   const inserted = await db
     .insert(sessions)
     .select(

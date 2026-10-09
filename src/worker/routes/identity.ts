@@ -100,6 +100,16 @@ async function userRows(db: Db, sessionId: string | undefined, email?: string): 
     });
 }
 
+/** Whether a `users` row exists, active or not: what tells a 404 from a refused write. */
+async function userExists(db: Db, email: string): Promise<boolean> {
+  const [row] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  return row !== undefined;
+}
+
 identityRoutes.get("/users", async (c) => {
   const rows = await userRows(getDb(c.env.DB), c.get("sessionId"));
   return c.json<UsersResponse>({ users: rows });
@@ -170,12 +180,7 @@ identityRoutes.patch(
         : [await update];
 
     if (updated.length === 0) {
-      const [again] = await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      if (!again) return c.json({ error: "not_found" }, 404);
+      if (!(await userExists(db, email))) return c.json({ error: "not_found" }, 404);
       return c.json({ error: "last_admin", message: "Keep at least one active admin." }, 409);
     }
     return c.body(null, 204);
@@ -210,12 +215,7 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
   ]);
 
   if (inserted.length === 0) {
-    const [row] = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-    if (!row) return c.json({ error: "not_found" }, 404);
+    if (!(await userExists(db, email))) return c.json({ error: "not_found" }, 404);
     return c.json({ error: "user_inactive", message: "This user is deactivated." }, 409);
   }
   return c.json<LoginCodeResponse>({ code, expiresAt }, 201);

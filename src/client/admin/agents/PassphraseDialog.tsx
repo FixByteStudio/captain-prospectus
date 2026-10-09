@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "../../ui/dialog";
 import { useGeneratePassphrase } from "../queries";
+import { copyToClipboard } from "./copy-to-clipboard";
 
 const t = copy.agents.passphraseDialog;
 
@@ -41,16 +42,6 @@ export function PassphraseDialog({ onClose }: { onClose: () => void }) {
       toast.error(copy.agents.toast.failed);
       onClose();
     }
-  };
-
-  const copyPassphrase = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      toast.error(t.copyFailed);
-      return;
-    }
-    toast.success(t.copied);
   };
 
   if (passphrase === null) {
@@ -101,7 +92,7 @@ export function PassphraseDialog({ onClose }: { onClose: () => void }) {
           <DialogDescription>{t.save}</DialogDescription>
         </div>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => void copyPassphrase(passphrase)}>
+          <Button variant="secondary" onClick={() => void copyToClipboard(passphrase, t)}>
             {t.copy}
           </Button>
           <Button onClick={onClose}>{t.done}</Button>
