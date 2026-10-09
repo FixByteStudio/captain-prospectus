@@ -3,8 +3,9 @@
  *
  * Mounted under /api/admin, behind `requireAdmin` (index.ts). Users are
  * deactivated, never deleted; the last active admin can be neither demoted nor
- * deactivated. A one-time code is generated here and shown once; only its HMAC
- * is stored, and nothing here logs it.
+ * deactivated. A one-time code, and the signed-in admin's own passphrase, are
+ * generated here and shown once; only their HMAC is stored, and nothing here
+ * logs them. Demoting or deactivating a user clears their passphrase.
  */
 import { Hono } from "hono";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -15,12 +16,13 @@ import {
   userCreateSchema,
   userUpdateSchema,
   type LoginCodeResponse,
+  type PassphraseResponse,
   type User,
   type UsersResponse,
 } from "../../shared/schemas";
 import { getDb, type Db } from "../db/client";
 import { loginCodes, prospects, sessions, users } from "../db/schema";
-import { LOGIN_CODE_TTL_MS, hmacHex, newLoginCode } from "../session";
+import { LOGIN_CODE_TTL_MS, hmacHex, newLoginCode, newPassphrase } from "../session";
 import { misconfigured } from "../auth";
 import { validate } from "../validate";
 import type { AppEnv } from "../types";
@@ -98,6 +100,9 @@ identityRoutes.patch(
     const set: Partial<typeof users.$inferInsert> = {};
     if (body.role !== undefined) set.role = body.role;
     if (body.active !== undefined) set.active = body.active;
+    // A passphrase belongs to an active admin: demoting or deactivating drops
+    // it in the same guarded UPDATE, so a refused PATCH keeps it.
+    if (body.role === "agent" || body.active === false) set.passphraseHash = null;
 
     const newRole = body.role ?? null;
     const newActive = body.active === undefined ? null : body.active ? 1 : 0;
@@ -174,4 +179,27 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
     return c.json({ error: "user_inactive", message: "This user is deactivated." }, 409);
   }
   return c.json<LoginCodeResponse>({ code, expiresAt }, 201);
+});
+
+/**
+ * The signed-in admin's own passphrase, and nobody else's: no body, the email
+ * is the caller's identity. Only its HMAC is stored, replacing the old one at
+ * once; sessions stay as they are. An admin with no active `users` row (signed
+ * in through Access only) has nothing to attach it to: 404, nothing written.
+ */
+identityRoutes.post("/me/passphrase", async (c) => {
+  const pepper = c.env.AUTH_PEPPER;
+  if (!pepper) throw misconfigured();
+  const { email } = c.get("identity");
+
+  const passphrase = newPassphrase();
+  const updated = await getDb(c.env.DB)
+    .update(users)
+    .set({ passphraseHash: await hmacHex(pepper, passphrase) })
+    .where(and(eq(users.email, email), eq(users.role, "admin"), eq(users.active, true)))
+    .returning({ email: users.email });
+  if (updated.length === 0) return c.json({ error: "not_found" }, 404);
+  // The secret in clear: no cache, browser or proxy, may keep a copy.
+  c.header("Cache-Control", "no-store");
+  return c.json<PassphraseResponse>({ passphrase });
 });

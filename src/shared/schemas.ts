@@ -91,13 +91,14 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 
 /**
  * ADR-0029: one route, discriminated on the credential, never on the role.
- * `passphrase` (break-glass) and `code` (a one-time code) exist; `passkey` is a
- * later additive member.
+ * `passphrase` (break-glass, or an admin's generated passphrase) and `code` (a
+ * one-time code) exist; `passkey` is a later additive member.
  *
  * The email is trimmed and lowercased but not format-checked: it is only ever
  * compared with a stored address, and a refusal must read the same whichever
  * part was wrong. The passphrase is kept as typed — a trim here would change
- * what the exact comparison sees.
+ * what the exact break-glass comparison sees; the server normalises it only
+ * for the generated-passphrase check (shared/credential.ts).
  */
 export const passphraseLoginSchema = z.object({
   kind: z.literal("passphrase"),
@@ -512,6 +513,12 @@ export const loginCodeResponseSchema = z.object({
   expiresAt: epochMsSchema,
 });
 export type LoginCodeResponse = z.infer<typeof loginCodeResponseSchema>;
+
+/** POST /api/admin/me/passphrase: the only time the passphrase is ever shown. */
+export const passphraseResponseSchema = z.object({
+  passphrase: z.string(),
+});
+export type PassphraseResponse = z.infer<typeof passphraseResponseSchema>;
 
 /** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
 export const agentRoundResponseSchema = z.object({

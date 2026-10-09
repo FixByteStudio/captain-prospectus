@@ -44,6 +44,7 @@ export function UsersList({
                 user={user}
                 isLastAdmin={user.email === actions.lastAdmin}
                 onGenerateCode={() => actions.onGenerateCode(user)}
+                onNewPassphrase={user.email === actions.self ? actions.onNewPassphrase : undefined}
                 onToggleRole={() => actions.onToggleRole(user)}
                 onDeactivate={() => actions.onDeactivate(user)}
               />

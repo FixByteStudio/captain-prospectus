@@ -9,7 +9,8 @@ import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
 import { testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
-import type { LoginCodeResponse } from "../shared/schemas";
+import { normaliseCredential } from "../shared/credential";
+import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 
 /**
@@ -544,6 +545,130 @@ describe("POST /api/auth/login — code (GH #305)", () => {
   });
 });
 
+describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
+  /** Generates the signed-in admin's own passphrase the way the Agents page does. */
+  async function generatePassphrase(email = TEST_ADMIN): Promise<string> {
+    const response = await call("/api/admin/me/passphrase", {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(email) },
+    });
+    expect(response.status).toBe(200);
+    return ((await response.json()) as PassphraseResponse).passphrase;
+  }
+
+  /** "K7QM2XPA…" as an admin might type it: lowercase, hyphen-grouped, O for 0. */
+  const typed = (passphrase: string) =>
+    (passphrase.match(/.{4}/g) ?? []).join("-").toLowerCase().replace(/0/g, "o");
+
+  it("opens a 30-day admin session from the passphrase typed loosely", async () => {
+    // Fixed, with both 0 and 1, so O-for-0 and I/L-for-1 are exercised on every run.
+    const passphrase = "K7QM2XPA9DWE10TN8B01";
+    await db()
+      .update(users)
+      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
+      .where(eq(users.email, TEST_ADMIN));
+
+    const response = await login({
+      kind: "passphrase",
+      email: ` ${TEST_ADMIN.toUpperCase()} `,
+      passphrase: "k7qm-2xpa-9dwe-iotn-8bol",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
+    const [session] = await db().select().from(sessions);
+    expect(session?.userEmail).toBe(TEST_ADMIN);
+    expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
+    expect((await me(cookie(tokenFrom(response)))).status).toBe(200);
+  });
+
+  it("works with break-glass configured but missed, and without it", async () => {
+    const passphrase = await generatePassphrase();
+    const body = { kind: "passphrase", email: TEST_ADMIN, passphrase };
+    expect((await login(body)).status).toBe(200);
+    env.BREAK_GLASS = undefined;
+    env.OWNER_EMAIL = undefined;
+    expect((await login(body)).status).toBe(200);
+  });
+
+  it("lets the owner sign in with a generated passphrase as well as break-glass", async () => {
+    await signIn();
+    const passphrase = await generatePassphrase(OWNER);
+    expect((await login({ kind: "passphrase", email: OWNER, passphrase })).status).toBe(200);
+    expect(
+      (await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS })).status,
+    ).toBe(200);
+  });
+
+  it("refuses the old passphrase once a new one is generated", async () => {
+    const old = await generatePassphrase();
+    const fresh = await generatePassphrase();
+    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: old })).status).toBe(
+      401,
+    );
+    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: fresh })).status).toBe(
+      200,
+    );
+  });
+
+  it("refuses every failure with the same body and opens no session", async () => {
+    const passphrase = await generatePassphrase();
+    const agentHash = await hmacHex(PEPPER, normaliseCredential(passphrase));
+    await db()
+      .insert(users)
+      .values([
+        {
+          email: "gone@x.be",
+          role: "admin",
+          active: false,
+          passphraseHash: agentHash,
+          createdAt: 1,
+        },
+        { email: "nohash@x.be", role: "admin", active: true, createdAt: 1 },
+      ]);
+    // An agent row holding a hash is not reachable through the routes, but must still be refused.
+    await db().update(users).set({ passphraseHash: agentHash }).where(eq(users.email, TEST_AGENT));
+    await db().delete(sessions);
+
+    const responses = await Promise.all([
+      login({ kind: "passphrase", email: "unknown@x.be", passphrase }),
+      login({ kind: "passphrase", email: "nohash@x.be", passphrase }),
+      login({ kind: "passphrase", email: "gone@x.be", passphrase }),
+      login({ kind: "passphrase", email: TEST_AGENT, passphrase }),
+      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: `${passphrase.slice(0, -1)}X` }),
+      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "0".repeat(64) }),
+    ]);
+    const bodies = await Promise.all(responses.map((r) => r.text()));
+    expect(responses.map((r) => r.status)).toEqual([401, 401, 401, 401, 401, 401]);
+    expect(new Set(bodies).size).toBe(1);
+    expect(responses.every((r) => r.headers.get("Set-Cookie") === null)).toBe(true);
+    expect(await db().select().from(sessions)).toEqual([]);
+  });
+
+  it("stores only the HMAC of the passphrase and never logs it", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    const passphrase = await generatePassphrase();
+    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: typed(passphrase) });
+    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "wrong" });
+
+    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
+    const hash = await hmacHex(PEPPER, passphrase);
+    expect(row?.passphraseHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row?.passphraseHash).toBe(hash);
+    expect(JSON.stringify(row)).not.toContain(passphrase);
+    const logged = JSON.stringify(calls);
+    for (const secret of [passphrase, typed(passphrase), hash]) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+});
+
 describe("login throttle (CAP-7)", () => {
   const IP_A = "203.0.113.7";
   const IP_B = "198.51.100.23";
@@ -611,6 +736,14 @@ describe("login throttle (CAP-7)", () => {
   it("counts the 401 a Worker without OWNER_EMAIL answers", async () => {
     env.OWNER_EMAIL = undefined;
     await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("counts a refused generated passphrase", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      const body = { kind: "passphrase", email: TEST_ADMIN, passphrase: "ZZZZ-ZZZZ" };
+      expect((await loginFrom(IP_A, body)).status).toBe(401);
+    }
     expect((await loginFrom(IP_A, VALID)).status).toBe(429);
   });
 

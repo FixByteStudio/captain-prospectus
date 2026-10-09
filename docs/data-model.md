@@ -99,7 +99,7 @@ erDiagram
     text name "nullable"
     text role "admin | agent"
     int active "boolean, default 1"
-    text passphrase_hash "HMAC hex, admins only, nullable"
+    text passphrase_hash "HMAC hex of the normalised generated passphrase; active admins only, cleared on demotion or deactivation, nullable"
     int created_at
   }
   SESSIONS {

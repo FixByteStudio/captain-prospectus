@@ -323,3 +323,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-304-agents-page.md`
   summary: Opening the Agents deactivation AlertDialog from a modal DropdownMenu item may leave `pointer-events: none` on body after it closes (known Radix interaction), freezing the page.
   evidence: Unverified (would be medium). Settle it on `pnpm dev`: open Désactiver from a row menu, cancel, then click anywhere on the page; if clicks are dead, use `modal={false}` on the row DropdownMenu.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-306-admin-passphrase.md`
+  summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
+  evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.

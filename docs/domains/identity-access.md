@@ -36,8 +36,17 @@ nothing logs it.
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
 admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
 repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
-`POST /api/auth/logout` deletes the device's session. Generated passphrases for admins are a later
-entry of the own-login epic.
+`POST /api/auth/logout` deletes the device's session.
+
+**An admin's passphrase** is the same admin form, for everyday sign-ins. An admin picks "Nouvelle
+phrase de passe" on their own row of the Agents page, and only there: after a confirmation, the
+server generates 20 Crockford base32 characters (100 bits), shows them once and stores only their
+HMAC ([api](../api.md#admin)). Nobody chooses a passphrase or sees another user's. Generating a new
+one replaces the old at once; sessions stay. The login tries break-glass first, then the user's
+passphrase, read like a code (case, spaces and hyphens ignored, I/L as 1, O as 0): it opens a
+30-day admin session for an active admin whose hash matches. Demoting or deactivating a user clears
+their passphrase. Every refusal — unknown email, no passphrase, deactivated, agent, wrong
+passphrase — gets the same 401 after the same work, and nothing logs a passphrase or its hash.
 
 After 10 failed logins (codes and passphrases alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
