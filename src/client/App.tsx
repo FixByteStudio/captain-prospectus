@@ -18,7 +18,7 @@ import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
 import { FieldTabs } from "./field/FieldTabs";
-import { LeaveGuardProvider } from "./field/leave-guard";
+import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
 import { TodayScreen } from "./field/TodayScreen";
 import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
 import { hasReconnectMarker, reconnectUrl, withoutReconnectMarker } from "./field/reconnect-marker";
@@ -149,7 +149,7 @@ function FieldFrame({
   const hideUpdatePrompt = hidesUpdateBanner(useSyncView());
 
   return (
-    <LeaveGuardProvider>
+    <>
       <Band>
         <BandBrand subtitle={subtitle} />
         {/* Below 768px this detaches to a fixed bar at the bottom of the
@@ -187,7 +187,7 @@ function FieldFrame({
       <main className="px-4 pt-6 pb-tab-bar">
         <Outlet />
       </main>
-    </LeaveGuardProvider>
+    </>
   );
 }
 
@@ -264,7 +264,17 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginScreen />} />
-      <Route path="*" element={<GatedApp pwa={pwa} />} />
+      {/* Above `GatedApp`, not inside `FieldFrame`: its identity re-check asks
+          the guard before it opens /login (GH #356). Admin screens never
+          register a dirty form, so there `leave` just runs. */}
+      <Route
+        path="*"
+        element={
+          <LeaveGuardProvider>
+            <GatedApp pwa={pwa} />
+          </LeaveGuardProvider>
+        }
+      />
     </Routes>
   );
 }
@@ -305,6 +315,13 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
+  // Same reason: the identity effect reads the latest `leave`, whose dirty flag
+  // is the open form's at the moment the re-check answers.
+  const { leave } = useLeaveGuard();
+  const leaveRef = useRef(leave);
+  useEffect(() => {
+    leaveRef.current = leave;
+  }, [leave]);
 
   // "Se reconnecter" (SyncStrip, or the identity-error frame below) navigates
   // here with the marker so the SW's navigateFallbackDenylist sends that one
@@ -337,8 +354,22 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       const outcome = resolveIdentity(result, cached);
 
       if (outcome.kind === "error") {
-        // A 401 is the Worker revoking this identity. An expired cookie
-        // cannot confirm anyone, so nothing here is re-stamped to "the
+        // The Worker's own 401 opens `/login` through the leave guard: a
+        // re-check of a cache-started session can answer over an open visit
+        // form, which "Annuler" must keep (GH #356). Nothing below runs until
+        // the agent confirms, so the cache the form reads is intact meanwhile.
+        if (outcome.toLogin) {
+          leaveRef.current(() => {
+            void (async () => {
+              await releaseUnconfirmed(fieldDb);
+              await clearAgentCache(fieldDb);
+              void navigateRef.current("/login", { replace: true });
+            })();
+          });
+          return;
+        }
+        // A 401 is the Access redirect revoking this identity. An expired
+        // cookie cannot confirm anyone, so nothing here is re-stamped to "the
         // current identity" — a flagged row already carries the cached email
         // it was written under, and dropping only the flag lets it keep that
         // — run before the cache that is its only other record of that email
@@ -352,13 +383,6 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
         // (docs/domains/identity-access.md). The outbox stays: INVARIANT 5.
         if (outcome.revoked) await clearAgentCache(fieldDb);
         if (cancelled) return;
-        // The Worker's own 401: `/login` is the way back, and the cache and
-        // outbox are as the lines above left them. An Access redirect keeps
-        // the error frame and its marker navigation (GH #309).
-        if (outcome.toLogin) {
-          void navigateRef.current("/login", { replace: true });
-          return;
-        }
         setError({ message: outcome.message, revoked: outcome.revoked });
         return;
       }
