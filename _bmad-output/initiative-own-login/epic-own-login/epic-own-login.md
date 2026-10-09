@@ -25,6 +25,7 @@ In production, the owner can sign in, create agents and hand out codes without a
 
 The spec's `CAP-N` ids are this epic's requirements, all owned here except:
 - CAP-13: phase 1 only (session first, JWT fallback in one place, expand-only migrations). Phases 2–3 belong to epic-access-removed.
+- CAP-12: all of it except removing the `?reconnect=1` marker, the `/cdn-cgi/` denylist entry and the Access logout link, which belong to epic-access-removed (Access fronts the hostname until phase 2).
 - CAP-14: identity-access, security, api, data-model, design, free-tier-budget (reads and writes), deployment (new secrets and phase 1), the agents and the skill. The Access-removal parts of deployment and free-tier-budget belong to epic-access-removed.
 
 ## Done when
@@ -56,4 +57,5 @@ The Worker's auth, the admin routes for users and sessions, the `/login` page, t
 - Decision (2026-10-07): `docs/api.md` and `docs/data-model.md` update in the same PR as each entry that adds a route or table (CLAUDE.md Definition of done), overriding the spec constraint that each follow-up doc lands in its own change for these two. The other follow-ups keep their own changes (entries 1, 14, 15, 16).
 - Decision (2026-10-07): an agent whose Access cookie expires in phase 1 before receiving a code lands on `/login` and waits for one; accepted, since the owner hands out codes right after entry 18.
 - Decision (2026-10-07): entries 8 → 9 → 10 run in one lane (all add Agents page panels and auth-module code); 12 waits on 7 for `AdminLayout`; 18 entries kept in one epic over the typical 8–12.
+- Decision (2026-10-09): CAP-12's removal of the Access paths moves to epic-access-removed. Until phase 2 an expired Access cookie can only be renewed by a network navigation, which the `?reconnect=1` marker provides (entry 12).
 - Decision (2026-10-07): the Worker tests' Access JWT stubs stay until epic-access-removed; entry 3 adds the D1 session stub new tests use.

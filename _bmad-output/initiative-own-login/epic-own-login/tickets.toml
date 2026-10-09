@@ -136,6 +136,17 @@ hitl = false
 risk = "high"
 
 [[entry]]
+id = 19
+type = "story"
+title = "/login shows the waiting visits and the update prompt"
+description = "Adds design.md's two /login rules that entries 8 and 12 left out: the meta line under the lede counting the visits waiting in this device's outbox (read only, absent while reading or on failure), and the band's update prompt when a login gets a 426."
+verify = "On pnpm dev, a phone with two visits in the outbox reads '2 visites non envoyées sont gardées sur ce téléphone. Elles partiront après la connexion.' on /login, the outbox is unchanged after reading it, and a stubbed 426 on login shows the update prompt instead of an error Alert."
+covers = ["CAP-12"]
+after = [12]
+hitl = false
+risk = "low"
+
+[[entry]]
 id = 13
 type = "story"
 title = "The nightly sweep clears expired auth rows"
@@ -186,7 +197,7 @@ title = "Refactor sweep"
 description = "Cleanup only, scoped at pull from this epic's build records and deferred review findings."
 verify = "pnpm lint, typecheck, test and build are green and the precache stays at or under 1,000 KiB."
 covers = []
-after = [11, 12, 13, 14, 15, 16]
+after = [11, 12, 13, 14, 15, 16, 19]
 hitl = false
 risk = "low"
 
