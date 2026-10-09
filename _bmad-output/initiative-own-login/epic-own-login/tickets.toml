@@ -191,13 +191,35 @@ hitl = false
 risk = "low"
 
 [[entry]]
+id = 20
+type = "story"
+title = "Tests reach the guarded-insert re-check"
+description = "Gives Worker tests a way to change a users row between the read and the guarded INSERT … SELECT of the code generate route and the passphrase login, and adds a test for each that fails if the guarded insert is replaced by a plain one; an enabler for the gap #305 and #306 both deferred (deferred-work.md)."
+verify = "Replacing either guarded insert with a plain insert makes a test fail, and pnpm test is green with the guards in place."
+covers = ["CAP-2", "CAP-3"]
+after = [9]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 21
+type = "story"
+title = "The identity re-check asks the leave guard before /login"
+description = "Makes a Worker 401 on the identity re-check of a cache-started session go through the leave guard before it opens /login, as the sync strip's button does, so an open visit form is never dropped (deferred from #309, deferred-work.md); the outbox and the 401 cache clearing are unchanged."
+verify = "On pnpm dev, an agent who launched offline with a visit form open gets the leave-guard prompt when the re-check returns 401, and both choices behave as at the strip's button; the outbox is untouched either way."
+covers = ["CAP-12"]
+after = [12]
+hitl = false
+risk = "medium"
+
+[[entry]]
 id = 17
 type = "story"
 title = "Refactor sweep"
 description = "Cleanup only, scoped at pull from this epic's build records and deferred review findings."
 verify = "pnpm lint, typecheck, test and build are green and the precache stays at or under 1,000 KiB."
 covers = []
-after = [11, 12, 13, 14, 15, 16, 19]
+after = [11, 12, 13, 14, 15, 16, 19, 20, 21]
 hitl = false
 risk = "low"
 

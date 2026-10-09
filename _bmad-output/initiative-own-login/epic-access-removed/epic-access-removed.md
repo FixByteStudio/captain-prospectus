@@ -50,4 +50,5 @@ The owner's phase 2 steps in the Cloudflare dashboard (hitl), the phase 3 remova
 
 ## Notes
 
+- Decision (2026-10-09): inception adds an entry for the `sessions.id` contract step deferred from #307: make it NOT NULL and drop the null-id branches in `auth.ts` and `routes/identity.ts`. It must ship in a release after migration 0012 is live, and this epic's phase-3 PR is already a contract release.
 - Waits on epic-own-login because: phase 2 needs phase 1 live in production, and phase 3 deletes the JWT fallback that epic isolates in `src/worker/auth.ts`.
