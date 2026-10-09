@@ -16,7 +16,32 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | OSM tiles | Public, fair-use, attribution required | light admin use | fine |
 | GitHub Actions | Free minutes for private repos | a few minutes per PR | fine |
 
-Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pages).
+Checked: 2026-10-09 (the Workers requests, CPU and D1 rows read, written and storage figures against Cloudflare's D1 pricing and Workers limits pages; the other rows are as of 2026-09-22 and unconfirmed).
+
+## Own login (ADR-0029)
+
+Each figure follows from a constant or query on `main`, named in brackets. The estimate is the table's ~3,000 requests a day.
+
+- **Reads.** Every authenticated request looks its session up: `sessions` by primary key, joined to `users`
+  by primary key, so 2 rows (`identityFromSession`, `src/worker/auth.ts`). 3,000 × 2 = 6,000 rows a day,
+  0.12 % of 5 M. A request with no cookie reads nothing.
+- **Writes.** A session slides at most once an hour (`SESSION_SLIDE_MS`, `src/worker/session.ts`): one row,
+  so at most 24 a day per live session, about 100 for four. A sign-in writes the session (D1 counts its three
+  indexes too: 4 rows), the spent code (1), the attempt reservation (2 the first time in a window, plus 1 for
+  the refund when the login succeeds): at most 8 (`routes/auth.ts`, `login-throttle.ts`). A failed login
+  keeps its reservation: 1 write, and at most `LOGIN_MAX_FAILURES` (10) per IP per `LOGIN_WINDOW_MS` (15 min),
+  because a locked IP's requests write nothing. With 10 sign-ins a day this is roughly 200 rows, 0.2 % of
+  100 k. The nightly sweep's deletes stay bounded by `AUTH_SWEEP_BATCH` (see below).
+- **CPU.** A request with a session cookie costs one HMAC-SHA-256; the imported key is cached in module scope
+  (`hmacKey`, `session.ts`), so there is no key import. A sign-in does 3 to 5 HMACs (the IP, the credential,
+  the new token; break-glass adds a second to compare). D1 time is not billed. **Not measured**: unlike the
+  dashboard's below, no script times a sign-in, so the 10 ms watch-out is argued, not shown.
+- **The exposed request quota.** While Access fronts the hostname (phases 1 and 2) it refuses anonymous
+  requests before the Worker runs. Once it is gone, anonymous `/api/auth/*` requests run the Worker and count
+  against the 100,000 a day **even when they get 429**; the D1 throttle cannot prevent that, because the
+  request is already counted. **Residual risk, recorded**: until the question of a free WAF rate-limiting rule
+  in front of `/api/auth/*` is answered, before phase 3 (epic-access-removed), a flood can exhaust the day's
+  quota and take the app down until midnight UTC. Nothing bills.
 
 ## Watch-outs
 
