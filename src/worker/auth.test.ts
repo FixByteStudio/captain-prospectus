@@ -11,6 +11,7 @@ import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import { normaliseCredential } from "../shared/credential";
 import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
+import { beforeStatement } from "../../test/d1-hook";
 import { workerFetch } from "../../test/worker-fetch";
 
 /**
@@ -643,6 +644,35 @@ describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
     expect(responses.map((r) => r.status)).toEqual([401, 401, 401, 401, 401, 401]);
     expect(new Set(bodies).size).toBe(1);
     expect(responses.every((r) => r.headers.get("Set-Cookie") === null)).toBe(true);
+    expect(await db().select().from(sessions)).toEqual([]);
+  });
+
+  it.each([
+    ["deactivated", { active: false }],
+    ["demoted", { role: "agent" as const }],
+    ["given a new passphrase", { passphraseHash: "f".repeat(64) }],
+  ])("opens no session for an admin %s after the read, before the insert", async (_, change) => {
+    const passphrase = await generatePassphrase();
+    await db().delete(sessions);
+    let changed = false;
+    const hooked = beforeStatement(env.DB, /^insert into "sessions"/i, async () => {
+      changed = true;
+      await db().update(users).set(change).where(eq(users.email, TEST_ADMIN));
+    });
+
+    const response = await workerFetch(
+      `${HOST}/api/auth/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "passphrase", email: TEST_ADMIN, passphrase }),
+      },
+      { DB: hooked },
+    );
+
+    expect(changed).toBe(true);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
     expect(await db().select().from(sessions)).toEqual([]);
   });
 

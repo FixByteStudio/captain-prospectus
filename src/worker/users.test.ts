@@ -7,6 +7,7 @@ import { fakeAccess } from "../../test/access-jwt";
 import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
+import { beforeStatement } from "../../test/d1-hook";
 import { workerFetch } from "../../test/worker-fetch";
 import type { Status } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
@@ -19,11 +20,17 @@ const HOST = "https://captain.example";
 const db = () => getDb(env.DB);
 const ORIGINAL = { ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
 
-async function call(path: string, cookie: string, init: RequestInit = {}): Promise<Response> {
-  return workerFetch(`${HOST}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", Cookie: cookie, ...init.headers },
-  });
+async function call(
+  path: string,
+  cookie: string,
+  init: RequestInit = {},
+  bindings?: Partial<typeof env>,
+): Promise<Response> {
+  return workerFetch(
+    `${HOST}${path}`,
+    { ...init, headers: { "Content-Type": "application/json", Cookie: cookie, ...init.headers } },
+    bindings,
+  );
 }
 
 const adminCookie = () => testSessionCookie(TEST_ADMIN);
@@ -428,6 +435,27 @@ describe("POST /api/admin/users/:email/code", () => {
     const unknown = await generate("ghost@x.be", cookie);
     expect(unknown.status).toBe(404);
     expect(await unknown.json()).toMatchObject({ error: "not_found" });
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+
+  it("answers 409 and stores nothing for a user deactivated just before the insert", async () => {
+    const cookie = await adminCookie();
+    let changed = false;
+    const hooked = beforeStatement(env.DB, /^insert into "login_codes"/i, async () => {
+      changed = true;
+      await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    });
+
+    const response = await call(
+      `/api/admin/users/${encodeURIComponent(TEST_AGENT)}/code`,
+      cookie,
+      { method: "POST" },
+      { DB: hooked },
+    );
+
+    expect(changed).toBe(true);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "user_inactive" });
     expect(await db().select().from(loginCodes)).toEqual([]);
   });
 
