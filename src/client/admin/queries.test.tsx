@@ -77,6 +77,16 @@ describe("Prospects' URL filters (GH #114)", () => {
     expect(parse("q=bistro")).toEqual({ q: "bistro" });
   });
 
+  it("round-trips inactiveAgent and drops any value but true (GH #308)", () => {
+    const filters = { status: ["new" as const], inactiveAgent: true as const };
+    const query = toQueryString(filters);
+    expect(query).toBe("?status=new&inactiveAgent=true");
+    expect(parse(query.slice(1))).toEqual(filters);
+    expect(parse("inactiveAgent=1")).toEqual({});
+    expect(parse("inactiveAgent=false")).toEqual({});
+    expect(parse("inactiveAgent=")).toEqual({});
+  });
+
   it("collapses duplicate statuses", () => {
     expect(parse("status=new,new")).toEqual({ status: ["new"] });
   });

@@ -59,6 +59,8 @@ export type ProspectFilters = {
   q?: string;
   /** Hors cible signalé (GH #250): only ever `true`; absent means no filter. */
   outOfTarget?: true;
+  /** Prospects sans agent actif (GH #308): only ever `true`; absent means no filter. */
+  inactiveAgent?: true;
 };
 
 /** One factory, so an invalidation can never miss a key by spelling it differently. */
@@ -105,6 +107,7 @@ export function toQueryString(filters: ProspectFilters): string {
   if (filters.source) params.set("source", filters.source);
   if (filters.q) params.set("q", filters.q);
   if (filters.outOfTarget) params.set("outOfTarget", "true");
+  if (filters.inactiveAgent) params.set("inactiveAgent", "true");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -140,6 +143,10 @@ export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
     params.get("outOfTarget") ?? undefined,
   );
   if (outOfTarget.success && outOfTarget.data) filters.outOfTarget = true;
+  const inactiveAgent = prospectFiltersSchema.shape.inactiveAgent.safeParse(
+    params.get("inactiveAgent") ?? undefined,
+  );
+  if (inactiveAgent.success && inactiveAgent.data) filters.inactiveAgent = true;
   return filters;
 }
 

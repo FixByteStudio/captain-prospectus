@@ -355,6 +355,13 @@ export const prospectFiltersSchema = z.object({
    * since (docs/domains/prospecting.md).
    */
   outOfTarget: z.optional(z.literal("true")),
+  /**
+   * Only `"true"`, as for `outOfTarget`. Prospects assigned to someone with no
+   * active `users` row — deactivated, or an email left from the allow-lists
+   * (docs/api.md › The dashboard, `inactiveAgentProspects`). It adds that
+   * condition only; status stays the job of `status`.
+   */
+  inactiveAgent: z.optional(z.literal("true")),
 });
 
 /** Query string, so every value arrives as text and has to be coerced. */
@@ -843,6 +850,12 @@ export const dashboardResponseSchema = z.object({
     /** Brussels midnight 7 days from today; `?dueBefore=` on the prospects list. */
     dueBefore: epochMsSchema,
   }),
+  /**
+   * Prospects sans agent actif: live open prospects assigned to someone with
+   * no active `users` row. A snapshot that ignores `period`; the prospects
+   * list at `status=new,assigned,follow_up&inactiveAgent=true` totals it.
+   */
+  inactiveAgentProspects: countSchema,
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 

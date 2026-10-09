@@ -137,7 +137,8 @@ export function ProspectsScreen() {
     filters.assignedTo ||
     filters.source ||
     filters.q ||
-    filters.outOfTarget,
+    filters.outOfTarget ||
+    filters.inactiveAgent,
   );
 
   /** Replace, not push: a filter tweak is not a page Back should step through. */
@@ -151,6 +152,9 @@ export function ProspectsScreen() {
 
   function setFilter(key: "status" | "assignedTo" | "source", value: string) {
     const next = { ...filters };
+    // The Agent select stands in for "Agent désactivé" while that filter is
+    // on, so any choice there, "Tous les agents" included, replaces it.
+    if (key === "assignedTo") delete next.inactiveAgent;
     if (value === ANY) delete next[key];
     else if (key === "status") next.status = [value as Status];
     else if (key === "source") next.source = value as ProspectFilters["source"];
@@ -202,6 +206,9 @@ export function ProspectsScreen() {
       key: "dueBefore",
       label: copy.prospects.filters.dueBefore(formatBrusselsDate(filters.dueBefore)),
     });
+  }
+  if (filters.inactiveAgent) {
+    chips.push({ key: "inactiveAgent", label: copy.prospects.filters.inactiveAgentChip });
   }
 
   function toggle(id: string) {

@@ -203,7 +203,7 @@ export const adminCopy = {
       openProspects: "Prospects ouverts",
       empty: "Aucun agent pour l'instant.",
     },
-    /** À traiter (GH #113): three queues, each with its count and a way in. */
+    /** À traiter (GH #113, #308): four queues, each with its count and a way in. */
     todo: {
       title: "À traiter",
       followUps: "Relances dues",
@@ -216,6 +216,9 @@ export const adminCopy = {
       duplicatesMeta: "Semblent désigner le même endroit",
       duplicatesAction: "Fusionner",
       pairs: (n: number) => `${formatCount(n)} ${n <= 1 ? "paire" : "paires"}`,
+      inactiveAgent: "Prospects sans agent actif",
+      inactiveAgentMeta: "Assignés à un agent désactivé",
+      inactiveAgentAction: "Réassigner",
     },
     /** Dernières visites (GH #113); the rest of its copy is `visits`'. */
     recent: {
@@ -290,6 +293,9 @@ export const adminCopy = {
       remove: (label: string) => `Retirer le filtre « ${label} »`,
       /** The Statut select's text while the URL holds several statuses. */
       someStatuses: "Plusieurs statuts",
+      /** `inactiveAgent=true` (GH #308): its chip, and the Agent select's text while it is on. */
+      inactiveAgentChip: "Agent\u00a0: désactivé",
+      inactiveAgentSelect: "Agent désactivé",
     },
 
     columns: {
