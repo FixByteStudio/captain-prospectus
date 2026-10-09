@@ -111,7 +111,7 @@ verify = "Worker tests show one revoked session gets 401 while the user's other 
 covers = ["CAP-5", "CAP-1"]
 after = [9]
 hitl = false
-risk = "medium"
+risk = "high"
 
 [[entry]]
 id = 11
