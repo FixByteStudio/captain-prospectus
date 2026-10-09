@@ -308,6 +308,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-299-break-glass-session.md`
   summary: A deactivated user still gets in through the Access JWT fallback, because `identityFromAccess` never reads `users`.
   evidence: `src/worker/auth.ts` identityFromAccess derives the role from ADMIN_EMAILS only; harmless until an entry adds deactivation (CAP-1), which must also make the fallback refuse an inactive `users` row.
+  closed_by: GH #302 (`3173b3da6b7a1e9c0bd3fc18081ff334a38f0f04`, PR #325) — `identityFromAccess` reads the `users` row and refuses an inactive one with a 401; an active row's role wins over ADMIN_EMAILS. Recorded by GH #314.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-301-login-throttle-origin-check.md`
   summary: The seed scripts' Origin header has no automated check, so pnpm db:seed:local could break without CI noticing.
   evidence: scripts/seed.mjs and scripts/seed-blank.mjs have no tests; worker tests reach /api/dev/seed through test/worker-fetch.ts, which adds the Origin itself.
@@ -317,12 +318,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
   summary: The admin client caches `GET /api/admin/agents` with `staleTime: Infinity` under a comment saying the roster is a Worker var, so an open tab keeps the old assign menu after a user is created or deactivated.
   evidence: `src/client/admin/queries.ts:160-167`; since GH #303 the roster is `users` rows. The Agents page story (entry 7) should invalidate `adminKeys.agents()` on user mutations and fix the comment.
+  closed_by: GH #304 (PR #331) invalidates `adminKeys.agents()` on every user change (`useInvalidateUsers`), and the comment now says the roster is the active `users` rows (GH #314, own-login sweep).
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
   summary: The Prospects screen's agent filter is built from `GET /api/admin/agents`, so a deactivated user's still-assigned prospects cannot be filtered by them.
   evidence: `src/client/admin/prospects/Toolbar.tsx:114` via `ProspectsScreen.tsx:133`; story #303 removes deactivated users from the menu, and entry 11 (prospects with no active agent) is the natural place to give them a filter.
+  closed_by: GH #308 (`3bda8ba8e3a407f7cd8b889e4ab38f31a16a0d27`, PR #342) — Prospects takes an `inactiveAgent` filter for prospects whose assignee is deactivated. Recorded by GH #314.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-304-agents-page.md`
   summary: Opening the Agents deactivation AlertDialog from a modal DropdownMenu item may leave `pointer-events: none` on body after it closes (known Radix interaction), freezing the page.
   evidence: Unverified (would be medium). Settle it on `pnpm dev`: open Désactiver from a row menu, cancel, then click anywhere on the page; if clicks are dead, use `modal={false}` on the row DropdownMenu.
+  closed_by: GH #314 — checked on `pnpm dev` in headless Chromium: Désactiver from a row menu, then Annuler. `body` goes back to `pointer-events: auto`, and a click on the row's menu button opens the menu again, so the page is not frozen. The row menu keeps its default modal behaviour; no prop changed.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-306-admin-passphrase.md`
   summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
   evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.

@@ -191,12 +191,7 @@ export async function identityFromSession(
 
 /** DEV_USER_EMAIL's `users` row, or null when it has none or is inactive. */
 async function identityFromDevUser(env: Bindings, devUserEmail: string): Promise<Identity | null> {
-  const [row] = await getDb(env.DB)
-    .select({ email: users.email, role: users.role })
-    .from(users)
-    .where(and(eq(users.email, devUserEmail.trim().toLowerCase()), eq(users.active, true)))
-    .limit(1);
-  return row ?? null;
+  return (await activeRosterMember(getDb(env.DB), devUserEmail.trim())) ?? null;
 }
 
 function readAccessToken(req: Request): string | null {

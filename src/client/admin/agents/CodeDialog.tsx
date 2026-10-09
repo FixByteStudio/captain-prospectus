@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import type { LoginCodeResponse } from "../../../shared/schemas";
 import { copy } from "../../copy";
 import { formatBrusselsTime } from "../../format";
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../ui/dialog";
+import { copyToClipboard } from "./copy-to-clipboard";
 
 const t = copy.agents.codeDialog;
 
@@ -31,16 +31,6 @@ export function CodeDialog({
 }) {
   const shown = `${issued.code.slice(0, 4)} ${issued.code.slice(4)}`;
 
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(issued.code);
-    } catch {
-      toast.error(t.copyFailed);
-      return;
-    }
-    toast.success(t.copied);
-  };
-
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -55,7 +45,7 @@ export function CodeDialog({
           <p className="text-muted-foreground text-meta">{t.once}</p>
         </div>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => void copyCode()}>
+          <Button variant="secondary" onClick={() => void copyToClipboard(issued.code, t)}>
             {t.copy}
           </Button>
           <Button onClick={onClose}>{t.done}</Button>

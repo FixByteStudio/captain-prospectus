@@ -121,8 +121,9 @@ app.onError(onError);
  *
  * `fetch` is the API above. `scheduled` is the daily retention sweep (ADR-0023)
  * — the one thing in this app that writes to `visits`, and the reason that
- * table's append-only rule now carries an exception — followed by map-cache
- * eviction (map-cache.ts).
+ * table's append-only rule now carries an exception. The same run deletes the
+ * old agent positions (agent-position.ts) and the expired auth rows
+ * (auth-sweep.ts), then evicts the map cache (map-cache.ts).
  *
  * It fails quietly by nature: if the cron stops firing nothing breaks and
  * nobody notices, so it logs what it did on every run and the release

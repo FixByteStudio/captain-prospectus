@@ -176,8 +176,8 @@ export function useAgents() {
   return useQuery({
     queryKey: adminKeys.agents(),
     queryFn: () => apiFetch<AgentsResponse>("/api/admin/agents"),
-    // The roster comes from a Worker variable, not a table. It cannot change
-    // while the page is open.
+    // The roster is the active `users` rows. This tab's own user changes
+    // invalidate it (useInvalidateUsers); another admin's show on reload.
     staleTime: Infinity,
   });
 }

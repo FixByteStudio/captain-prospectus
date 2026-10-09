@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { User } from "../../../shared/schemas";
-import { ApiError } from "../../api";
 import { copy } from "../../copy";
 import {
   AlertDialog,
@@ -15,6 +14,7 @@ import {
 } from "../../ui/alert-dialog";
 import { buttonVariants } from "../../ui/button-variants";
 import { useUpdateUser, useUsers } from "../queries";
+import { failureToast } from "./failure-toast";
 import { displayName } from "./RowMenu";
 
 const t = copy.agents.deactivateDialog;
@@ -59,11 +59,7 @@ export function DeactivateDialog({
     try {
       await update.mutateAsync({ email, update: { active: false } });
     } catch (error) {
-      toast.error(
-        error instanceof ApiError && error.code === "last_admin"
-          ? copy.agents.lastAdmin
-          : copy.agents.toast.failed,
-      );
+      failureToast(error);
       onClose();
       return;
     }

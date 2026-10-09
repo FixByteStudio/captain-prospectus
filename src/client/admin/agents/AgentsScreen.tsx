@@ -15,19 +15,13 @@ import { AddUserDialog } from "./AddUserDialog";
 import { CodeDialog } from "./CodeDialog";
 import { DeactivateDialog } from "./DeactivateDialog";
 import { PassphraseDialog } from "./PassphraseDialog";
+import { failureToast } from "./failure-toast";
 import { displayName } from "./RowMenu";
 import { UsersList } from "./UsersList";
 import { UsersTable } from "./UsersTable";
 import type { UsersActions } from "./UsersTable";
 
 const t = copy.agents;
-
-/** A 409 `last_admin` has its own sentence; anything else leaves the screen as it was. */
-function failureToast(error: unknown) {
-  toast.error(
-    error instanceof ApiError && error.code === "last_admin" ? t.lastAdmin : t.toast.failed,
-  );
-}
 
 /** `/admin/agents` — docs/design.md › Agents. `email` is the signed-in admin. */
 export function AgentsScreen({ email }: { email: string }) {
