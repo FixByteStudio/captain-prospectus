@@ -164,7 +164,7 @@ title = "identity-access and security docs describe our own login"
 description = "Rewrites docs/domains/identity-access.md (login, roles, 401 handling, unconfirmed-identity rules kept) and docs/security.md (Access-bypass, header-spoofing and stolen-phone rows; new CSRF, brute-force, secret-handling and log-hygiene rows), one PR each."
 verify = "A reviewer finds no sentence in either doc describing Access as the login outside the phase-1 fallback, and each new security.md row names the code that enforces it."
 covers = ["CAP-14"]
-after = [10, 11, 12]
+after = [10, 11, 12, 13]
 hitl = false
 risk = "low"
 
