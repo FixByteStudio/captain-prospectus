@@ -5,13 +5,18 @@ import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
 import {
   agentPositions,
+  loginAttempts,
+  loginCodes,
   overpassCache,
   prospects,
   scripts,
+  sessions,
   visits,
   visitsOrphaned,
 } from "./db/schema";
 import {
+  AUTH_SWEEP_BATCH,
+  D1_MAX_BOUND_PARAMS,
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
   RETENTION_BATCH,
@@ -19,6 +24,10 @@ import {
 } from "../shared/constants";
 import { describeSweep, runRetention } from "./retention";
 import worker from "./index";
+import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
+import { hmacHex } from "./session";
+import { TEST_ADMIN, TEST_AGENT } from "../../test/users";
+import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * The retention sweep — ADR-0023.
@@ -219,7 +228,14 @@ describe("runRetention", () => {
   });
 
   it("reports the cutoff it used", () => {
-    const line = describeSweep({ redacted: 3, cutoff: Date.UTC(2026, 5, 25), positionsDeleted: 0 });
+    const line = describeSweep({
+      redacted: 3,
+      cutoff: Date.UTC(2026, 5, 25),
+      positionsDeleted: 0,
+      loginCodesDeleted: 0,
+      sessionsDeleted: 0,
+      loginAttemptsDeleted: 0,
+    });
     expect(line).toContain("3 visit(s)");
     expect(line).toContain("2026-06-25");
   });
@@ -378,5 +394,163 @@ describe("the scheduled handler", () => {
     expect(error).toHaveBeenCalledWith("map cache eviction failed", expect.any(String));
     log.mockRestore();
     error.mockRestore();
+  });
+});
+
+/**
+ * The auth tables' share of the sweep (CAP-10). "Expired" is the exact
+ * complement of what the readers accept, so these tests sit on both sides of
+ * the boundary: a wrong comparison would sign every agent out.
+ */
+describe("the auth rows sweep (CAP-10)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const code = (hash: string, expiresAt: number, usedAt: number | null = null) => ({
+    codeHash: hash,
+    userEmail: TEST_AGENT,
+    createdAt: expiresAt - 15 * 60 * 1000,
+    expiresAt,
+    usedAt,
+  });
+  const session = (hash: string, expiresAt: number, lastSeenAt = NOW) => ({
+    tokenHash: hash,
+    userEmail: TEST_AGENT,
+    createdAt: NOW - 100 * DAY,
+    lastSeenAt,
+    expiresAt,
+  });
+  const windowOf = (at: number) => at - (at % LOGIN_WINDOW_MS);
+
+  beforeEach(async () => {
+    const db = getDb(env.DB);
+    await db.delete(loginAttempts);
+    await db.delete(sessions);
+    await db.delete(loginCodes);
+  });
+
+  it("deletes expired and used-and-expired codes, keeps an unexpired one", async () => {
+    const db = getDb(env.DB);
+    await db
+      .insert(loginCodes)
+      .values([
+        code("expired", NOW - 1),
+        code("used", NOW - 1, NOW - 60_000),
+        code("live", NOW + 60_000),
+        code("used-live", NOW + 60_000, NOW - 1000),
+      ]);
+
+    const result = await runRetention(db, NOW);
+
+    expect(result.loginCodesDeleted).toBe(2);
+    const left = await db.select({ h: loginCodes.codeHash }).from(loginCodes);
+    expect(left.map((r) => r.h).sort()).toEqual(["live", "used-live"]);
+  });
+
+  it("deletes an expired session, keeps a live one even if last seen long ago", async () => {
+    const db = getDb(env.DB);
+    await db
+      .insert(sessions)
+      .values([
+        session("expired", NOW - 1),
+        session("live", NOW + DAY),
+        session("live-idle", NOW + DAY, NOW - 80 * DAY),
+      ]);
+
+    const result = await runRetention(db, NOW);
+
+    expect(result.sessionsDeleted).toBe(1);
+    const left = await db.select({ h: sessions.tokenHash }).from(sessions);
+    expect(left.map((r) => r.h).sort()).toEqual(["live", "live-idle"]);
+  });
+
+  it("deletes a finished login window and keeps the open one, whose lockout still holds", async () => {
+    const db = getDb(env.DB);
+    const pepper = env.AUTH_PEPPER;
+    if (!pepper) throw new Error("needs AUTH_PEPPER (vitest.config.ts)");
+    const ip = "198.51.100.7";
+    const ipHash = await hmacHex(pepper, throttleKey(ip));
+    const now = Date.now();
+    const open = windowOf(now);
+    await db.insert(loginAttempts).values([
+      { ipHash, windowStart: open, failures: LOGIN_MAX_FAILURES },
+      { ipHash, windowStart: open - LOGIN_WINDOW_MS, failures: 3 },
+      { ipHash: "other", windowStart: open - 5 * LOGIN_WINDOW_MS, failures: 1 },
+    ]);
+
+    const result = await runRetention(db, now);
+
+    expect(result.loginAttemptsDeleted).toBe(2);
+    expect((await db.select().from(loginAttempts)).map((r) => r.windowStart)).toEqual([open]);
+    const refused = await workerFetch("https://captain.example/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip },
+      body: JSON.stringify({ kind: "passphrase", email: TEST_ADMIN, passphrase: "wrong" }),
+    });
+    expect(refused.status).toBe(429);
+  });
+
+  it("deletes one batch per table and leaves the rest for the next run", async () => {
+    const db = getDb(env.DB);
+    const extra = 7;
+    const n = AUTH_SWEEP_BATCH + extra;
+    const ids = Array.from({ length: n }, (_, i) => i);
+    // 5 columns per code row, so chunk by D1's bound-parameter limit.
+    for (const part of chunk(
+      ids,
+      Math.floor(D1_MAX_BOUND_PARAMS / boundParamsPerRow(loginCodes)),
+    )) {
+      await db.insert(loginCodes).values(part.map((i) => code(`c${i}`, NOW - 1)));
+    }
+
+    const first = await runRetention(db, NOW);
+    const second = await runRetention(db, NOW);
+
+    expect(first.loginCodesDeleted).toBe(AUTH_SWEEP_BATCH);
+    expect(second.loginCodesDeleted).toBe(extra);
+    expect(await db.select().from(loginCodes)).toEqual([]);
+  });
+
+  it("lets the other tables and the visit redaction run when one delete fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("p-auth-fail");
+    const real = getDb(env.DB);
+    await seedVisit("p-auth-fail", { receivedAt: OLD });
+    await real.insert(sessions).values(session("expired", NOW - 1));
+    await real.insert(loginCodes).values(code("expired", NOW - 1));
+    const broken = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("login_codes")) throw new Error("codes unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const result = await runRetention(getDb(broken), NOW);
+
+    expect(result.loginCodesDeleted).toBe(0);
+    expect(result.sessionsDeleted).toBe(1);
+    expect(result.redacted).toBe(1);
+    expect(error).toHaveBeenCalledWith("login_codes sweep failed", "Error");
+    error.mockRestore();
+  });
+
+  it("logs the three counts and nothing identifying", async () => {
+    const db = getDb(env.DB);
+    await db.insert(loginCodes).values(code("secret-code-hash", NOW - 1));
+    await db.insert(sessions).values(session("secret-token-hash", NOW - 1));
+    await db.insert(loginAttempts).values({
+      ipHash: "secret-ip-hash",
+      windowStart: windowOf(NOW) - LOGIN_WINDOW_MS,
+      failures: 2,
+    });
+
+    const line = describeSweep(await runRetention(db, NOW));
+
+    expect(line).toContain("1 login code(s), 1 session(s), 1 login attempt(s)");
+    expect(line).not.toMatch(/secret|@/);
   });
 });

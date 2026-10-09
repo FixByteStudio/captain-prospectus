@@ -135,8 +135,8 @@ sets it to now and `expires_at` to now + the role's lifetime (30 d admin, 90 d a
 conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Agents page revokes a
 device by, so the hash never leaves the Worker; rows from before it were backfilled, and a row the
 previous Worker writes during a deploy gets its id from its first slide. `device_label` is parsed from
-the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep of
-expired rows is a later entry of the own-login epic.
+the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep
+deletes rows with `expires_at` in the past, however long since the session was last seen.
 
 `login_codes` holds the one-time codes an admin generates for a device to enrol
 ([identity-access](domains/identity-access.md)). A code is 8 Crockford base32 characters (40
@@ -144,14 +144,15 @@ random bits); only the HMAC-SHA-256 under `AUTH_PEPPER` of its normalised form
 (`src/shared/credential.ts`) is stored, never the code. Generating deletes the user's unused codes in
 the same batch, so at most one works. A login spends a code with one conditional `UPDATE … SET
 used_at` (unused, unexpired, user active), so of two racing logins only one gets the row. Used and
-expired rows stay: their sweep is a later entry of the own-login epic.
+expired rows go in the nightly sweep: it deletes every row past `expires_at`, and a used code expires
+15 minutes after it was made.
 
 `login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
 `src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
 is stored, and an IPv6 address counts by its /64. Each login reserves a failure with an upsert
 that adds one only while the row is under 10, and gives it back unless the login answers 400 or
-401; a row at 10 refuses the IP until the window ends. Nothing deletes old rows yet: the nightly sweep is a later entry of
-the own-login epic.
+401; a row at 10 refuses the IP until the window ends. The nightly sweep deletes a row once its window
+has ended, so it never lifts a lockout early.
 
 `agent_positions` holds at most one row per assignable agent: the latest reading the phone
 offered at sync. It is the one upsert on an agent's behalf, allowed by
