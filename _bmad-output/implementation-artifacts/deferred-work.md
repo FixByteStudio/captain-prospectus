@@ -335,3 +335,4 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-309-401-to-login.md`
   summary: The identity re-check of a cache-started session (`GatedApp`, after the network returns) opens `/login` on a Worker 401 without asking the leave guard, so an open visit form is dropped.
   evidence: Edge-case lens; before #309 the same 401 replaced the whole app with the error frame, so the draft was lost equally (pre-existing). The field `LeaveGuardProvider` lives in `FieldFrame`, below the identity effect, so a fix needs the guard lifted or the jump deferred to the strip.
+  closed_by: GH #356 — `LeaveGuardProvider` wraps `GatedApp`; the re-check's cache drop and `/login` jump run inside `leave`.

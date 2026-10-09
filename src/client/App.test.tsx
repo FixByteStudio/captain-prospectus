@@ -105,6 +105,18 @@ vi.mock("virtual:pwa-register/react", () => ({
   }),
 }));
 
+// The real form needs a prospect list and react-hook-form; the leave guard only
+// needs its dirty registration (GH #356).
+vi.mock("./field/AddProspectScreen", async () => {
+  const { useRegisterDirty } = await import("./field/leave-guard");
+  return {
+    AddProspectScreen: () => {
+      useRegisterDirty(true);
+      return <p>dirty form</p>;
+    },
+  };
+});
+
 vi.mock("./admin/AdminApp", () => ({
   AdminApp: ({ updatePrompt }: { email: string; updatePrompt: React.ReactNode }) => (
     <div data-testid="admin-frame">{updatePrompt}</div>
@@ -731,6 +743,60 @@ describe("App, the Worker's 401 at launch (GH #309)", () => {
     // Not the error frame, and no marker button.
     expect(screen.queryByText(REVOKED_MESSAGE)).toBeNull();
     expect(screen.queryByRole("button", { name: copy.sync.reconnect })).toBeNull();
+  });
+});
+
+describe("App, the Worker's 401 on the re-check of a cache-started session (GH #356)", () => {
+  afterEach(async () => {
+    await fieldDb.outboxVisits.clear();
+  });
+
+  /** Opens offline on the cache over a dirty form, then lets the network return with a 401. */
+  async function recheckOverDirtyForm() {
+    await setMeta(fieldDb, "identity", AGENT);
+    await fieldDb.outboxVisits.bulkAdd([visit(), visit()]);
+    stub.identityUnreachable = true;
+    renderApp("/tournee/nouveau");
+    expect(await screen.findByText("dirty form")).toBeTruthy();
+
+    stub.identityUnreachable = false;
+    stub.identityUnauthorized = true;
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    return screen.findByText(copy.nav.leaveGuard.title);
+  }
+
+  it("asks first; Annuler keeps the form, the cache and the outbox", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      const user = userEvent.setup();
+      await recheckOverDirtyForm();
+      await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
+
+      expect(screen.getByText("dirty form")).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/tournee/nouveau");
+      expect(await getMeta(fieldDb, "identity")).toEqual(AGENT);
+      expect(await fieldDb.outboxVisits.count()).toBe(2);
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("asks first; Quitter opens /login, drops the cache and keeps every outbox row", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      const user = userEvent.setup();
+      await recheckOverDirtyForm();
+      await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
+
+      expect(await screen.findByText(copy.login.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/login");
+      expect(await getMeta(fieldDb, "identity")).toBeUndefined();
+      expect(await fieldDb.outboxVisits.count()).toBe(2);
+    } finally {
+      onlineSpy.mockRestore();
+    }
   });
 });
 
