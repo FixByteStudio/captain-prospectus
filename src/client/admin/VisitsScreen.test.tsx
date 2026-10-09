@@ -79,6 +79,7 @@ function dashboardAnswer(period: number): DashboardResponse {
     flyersGiven: 84,
     agentsActiveToday: 2,
     followUpsDueSoon: { value: 12, dueBefore: 1_700_000_000_000 },
+    inactiveAgentProspects: 0,
   };
 }
 

@@ -37,6 +37,7 @@ const DASHBOARD: DashboardResponse = {
   flyersGiven: 120,
   agentsActiveToday: 2,
   followUpsDueSoon: { value: 6, dueBefore: 1 },
+  inactiveAgentProspects: 0,
 };
 
 function json(body: unknown): Response {

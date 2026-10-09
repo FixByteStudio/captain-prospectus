@@ -101,7 +101,7 @@ import { validate } from "../validate";
 import { readAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
-import { overpassCache, prospects, scripts, visits, visitsOrphaned } from "../db/schema";
+import { overpassCache, prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
 import {
   OVERPASS_ENDPOINT,
   OVERPASS_USER_AGENT,
@@ -244,6 +244,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     due,
     agentsToday,
     roster,
+    inactiveAgent,
   ] = await Promise.all([
     /**
      * Both periods in one range read, which `visits_visited_idx` serves.
@@ -329,6 +330,18 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .from(visits)
       .where(and(gte(visits.receivedAt, todayStart), lt(visits.receivedAt, to))),
     activeRoster(db),
+    // Prospects sans agent actif: a snapshot like `open`, on the same SQL as
+    // the list's `inactiveAgent` filter, so the list totals it.
+    db
+      .select({ n: count() })
+      .from(prospects)
+      .where(
+        and(
+          isNull(prospects.mergedInto),
+          inArray(prospects.status, [...OPEN_STATUSES]),
+          NO_ACTIVE_AGENT,
+        ),
+      ),
   ]);
 
   const value = visitCounts[0]?.value ?? 0;
@@ -379,6 +392,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     flyersGiven: visitCounts[0]?.flyersGiven ?? 0,
     agentsActiveToday: agentsToday[0]?.n ?? 0,
     followUpsDueSoon: { value: due[0]?.dueSoon ?? 0, dueBefore: dueSoonBefore },
+    inactiveAgentProspects: inactiveAgent[0]?.n ?? 0,
   });
 });
 
@@ -653,6 +667,21 @@ const OUT_OF_TARGET_FLAGGED = sql`(
 )`;
 
 /**
+ * "Sans agent actif" (docs/api.md › The dashboard): assigned to an email with
+ * no active `users` row, so a deactivated user and an address left from the
+ * allow-lists both count. Shared by the dashboard's `inactiveAgentProspects`
+ * and `prospectFilters`, so the figure and the list cannot diverge. The
+ * subselect is a primary-key lookup on `users.email`.
+ */
+const NO_ACTIVE_AGENT = sql`(
+  ${prospects.assignedTo} is not null
+  and not exists (
+    select 1 from ${users}
+    where ${users.email} = ${prospects.assignedTo} and ${users.active} = 1
+  )
+)`;
+
+/**
  * The `SQL[]` for `prospectFiltersSchema` (src/shared/schemas.ts), shared by
  * the list and the export so a filter added to one is never forgotten on the
  * other (Intent: "so the two cannot diverge").
@@ -664,8 +693,9 @@ function prospectFilters(query: {
   source?: Source;
   q?: string;
   outOfTarget?: "true";
+  inactiveAgent?: "true";
 }): SQL[] {
-  const { status, dueBefore, assignedTo, source, q, outOfTarget } = query;
+  const { status, dueBefore, assignedTo, source, q, outOfTarget, inactiveAgent } = query;
   return [
     // A merged prospect is not a row the admin manages any more.
     isNull(prospects.mergedInto),
@@ -677,6 +707,7 @@ function prospectFilters(query: {
     source ? eq(prospects.source, source) : undefined,
     q ? nameSearchFilter(q) : undefined,
     outOfTarget ? OUT_OF_TARGET_FLAGGED : undefined,
+    inactiveAgent ? NO_ACTIVE_AGENT : undefined,
   ].filter((f) => f !== undefined);
 }
 

@@ -1058,3 +1058,74 @@ describe("The Visites strip's flyers, agents and due-soon figures (GH #177)", ()
     });
   });
 });
+
+describe("À traiter › Prospects sans agent actif (GH #308)", () => {
+  const GONE = "gone@example.com";
+  const STRAY = "stray@example.com";
+
+  async function list(query: string): Promise<{ total: number; ids: string[] }> {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { total: number; prospects: { id: string }[] };
+    return { total: body.total, ids: body.prospects.map((p) => p.id).sort() };
+  }
+
+  it("counts open, live prospects with no active assignee, and the list at the same filter totals it (I/O matrix)", async () => {
+    await seedUser(GONE, "agent", false);
+    const deactivated = await seedProspect("assigned", null, null, GONE);
+    const noRow = await seedProspect("follow_up", null, null, STRAY);
+    const deactivatedNew = await seedProspect("new", null, null, GONE);
+    // Neither counted nor listed.
+    await seedProspect("assigned"); // active assignee
+    await seedProspect("new", null, null, null); // unassigned
+    await seedProspect("assigned", deactivated, null, GONE); // merged
+    // Won or lost: not counted, listed only when `status` lets them through.
+    const won = await seedProspect("converted", null, null, GONE);
+    const lost = await seedProspect("rejected", null, null, STRAY);
+    const lead = await seedProspect("interested", null, null, GONE);
+
+    const body = await dashboard();
+    expect(body.inactiveAgentProspects).toBe(3);
+
+    const open = await list("status=new,assigned,follow_up&inactiveAgent=true");
+    expect(open.total).toBe(body.inactiveAgentProspects);
+    expect(open.ids).toEqual([deactivated, noRow, deactivatedNew].sort());
+
+    const all = await list("inactiveAgent=true");
+    expect(all.ids).toEqual([deactivated, noRow, deactivatedNew, won, lost, lead].sort());
+  });
+
+  it("ignores the period, and reads 0 once every one is reassigned to an active agent", async () => {
+    await seedUser(GONE, "agent", false);
+    const id = await seedProspect("assigned", null, null, GONE);
+    for (const period of DASHBOARD_PERIODS) {
+      expect((await dashboard(`?period=${period}`)).inactiveAgentProspects).toBe(1);
+    }
+
+    const response = await call("/api/admin/prospects/assign", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids: [id], assignedTo: AGENT }),
+    });
+    expect(response.status).toBe(200);
+    expect((await dashboard()).inactiveAgentProspects).toBe(0);
+    expect((await list("status=new,assigned,follow_up&inactiveAgent=true")).total).toBe(0);
+  });
+
+  it("follows an admin deactivating and reactivating the assignee", async () => {
+    await seedUser(GONE, "agent", true);
+    await seedProspect("assigned", null, null, GONE);
+    expect((await dashboard()).inactiveAgentProspects).toBe(0);
+
+    const setActive = (active: boolean) =>
+      call(`/api/admin/users/${GONE}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+    expect((await setActive(false)).status).toBe(204);
+    expect((await dashboard()).inactiveAgentProspects).toBe(1);
+    expect((await setActive(true)).status).toBe(204);
+    expect((await dashboard()).inactiveAgentProspects).toBe(0);
+  });
+});
