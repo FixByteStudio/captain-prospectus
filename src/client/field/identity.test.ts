@@ -55,16 +55,32 @@ describe("a successful /api/me", () => {
 
 describe("a 401 — the session is invalid, not merely unreachable", () => {
   it("never falls back to the cache, even with a valid one sitting there", () => {
-    const error = new ApiError(401, "auth", "Votre session a expiré. Reconnectez-vous.");
+    const error = new ApiError(401, "unauthorized", "Votre session a expiré. Reconnectez-vous.");
     const outcome = resolveIdentity({ ok: false, error }, AGENT_A);
-    expect(outcome).toEqual({ kind: "error", message: error.message, revoked: true });
+    expect(outcome).toEqual({
+      kind: "error",
+      message: error.message,
+      revoked: true,
+      toLogin: true,
+    });
+  });
+
+  it("keeps an Access redirect on the error frame instead of /login", () => {
+    const error = new ApiError(401, "access_redirect", "Votre session a expiré. Reconnectez-vous.");
+    const outcome = resolveIdentity({ ok: false, error }, AGENT_A);
+    expect(outcome).toEqual({
+      kind: "error",
+      message: error.message,
+      revoked: true,
+      toLogin: false,
+    });
   });
 
   it("tells the caller to delete the cache, not merely to ignore it", () => {
     // Refusing the fallback is not enough on its own: the cache survives, and
     // the same phone in airplane mode takes the offline branch below, where
     // there is no 401 to refuse. `revoked` is what closes that door.
-    const error = new ApiError(401, "auth", "Votre session a expiré. Reconnectez-vous.");
+    const error = new ApiError(401, "access_redirect", "Votre session a expiré. Reconnectez-vous.");
     const revoked = resolveIdentity({ ok: false, error }, AGENT_A);
     expect(revoked.kind === "error" && revoked.revoked).toBe(true);
 

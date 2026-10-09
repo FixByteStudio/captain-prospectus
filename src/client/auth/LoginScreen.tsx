@@ -7,10 +7,12 @@
  * `BREAK_GLASS`), and nothing on screen names it. The swap is screen state,
  * not a URL. The outbox line comes with a later entry of epic-own-login.
  *
- * It renders outside the identity gate (App.tsx) and never asks `/api/me`:
- * a phone sent here by a 401 must reach it with no session. It ships in the
- * field shell, so the field rules hold — `copy/field`, native inputs and
- * labels, 48px targets.
+ * It renders outside the identity gate (App.tsx). It asks `/api/me` once on
+ * mount, only to skip the form for a device that already has an identity
+ * (GH #309); a 401, an Access redirect or a network error leaves the form up,
+ * with no retry — a phone sent here by a 401 must reach it with no session.
+ * It ships in the field shell, so the field rules hold — `copy/field`, native
+ * inputs and labels, 48px targets.
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -62,6 +64,10 @@ function refusalFor(error: unknown): Refusal {
   return error instanceof TypeError ? "unreachable" : "failed";
 }
 
+function landingFor(role: "admin" | "agent"): string {
+  return role === "admin" ? "/admin" : "/tournee";
+}
+
 const labelClass = "text-base font-medium";
 
 export function LoginScreen() {
@@ -82,6 +88,25 @@ export function LoginScreen() {
   // Either form: a swap mid-request must not free the other's button or word
   // the answer in the wrong form's terms, so the swap waits too.
   const submitting = codeForm.formState.isSubmitting || adminForm.formState.isSubmitting;
+
+  // A live identity has no use for the form: straight to its landing. The
+  // form is up meanwhile and stays up on any failure, so this never blocks it.
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<unknown>("/api/me")
+      .then((body) => {
+        const me = meResponseSchema.safeParse(body);
+        if (!cancelled && me.success) {
+          void navigate(landingFor(me.data.role), { replace: true });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // Once on mount: `navigate` changes with the location, and a re-ask is a retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The lock lifts on its own at `until`, with no reload; unmounting clears it.
   useEffect(() => {
@@ -126,7 +151,7 @@ export function LoginScreen() {
       return;
     }
     // Always the landing, never the page a 401 interrupted (design.md).
-    await navigate(role === "admin" ? "/admin" : "/tournee", { replace: true });
+    await navigate(landingFor(role), { replace: true });
   };
 
   const signInWithCode = (values: CodeForm) => signIn({ kind: "code", ...values });

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MutationObserver } from "@tanstack/react-query";
+import { ApiError } from "../api";
 import { createAdminQueryClient } from "./query-client";
 import { adminKeys } from "./queries";
 
@@ -30,5 +31,68 @@ describe("createAdminQueryClient", () => {
     await expect(failing.mutate()).rejects.toThrow("refused");
 
     expect(client.getQueryState(adminKeys.dashboard(30))?.isInvalidated).toBe(false);
+  });
+});
+
+describe("createAdminQueryClient › the Worker's 401 (GH #309)", () => {
+  const unauthorized = () => new ApiError(401, "unauthorized", "x");
+  const accessRedirect = () => new ApiError(401, "access_redirect", "x");
+
+  it("calls onUnauthorized once when a query gets a Worker 401, however many fail", async () => {
+    const onUnauthorized = vi.fn();
+    const client = createAdminQueryClient(onUnauthorized);
+
+    await Promise.allSettled([
+      client.fetchQuery({
+        queryKey: ["a"],
+        queryFn: () => Promise.reject(unauthorized()),
+        retry: false,
+      }),
+      client.fetchQuery({
+        queryKey: ["b"],
+        queryFn: () => Promise.reject(unauthorized()),
+        retry: false,
+      }),
+    ]);
+
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+  });
+
+  it("calls it for a mutation too", async () => {
+    const onUnauthorized = vi.fn();
+    const client = createAdminQueryClient(onUnauthorized);
+
+    await expect(
+      new MutationObserver(client, { mutationFn: () => Promise.reject(unauthorized()) }).mutate(),
+    ).rejects.toBeInstanceOf(ApiError);
+
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+  });
+
+  it("leaves an Access redirect and other failures to the screens", async () => {
+    const onUnauthorized = vi.fn();
+    const client = createAdminQueryClient(onUnauthorized);
+
+    for (const error of [accessRedirect(), new ApiError(500, "error", "x"), new Error("net")]) {
+      await expect(
+        client.fetchQuery({
+          queryKey: [String(error)],
+          queryFn: () => Promise.reject(error),
+          retry: false,
+        }),
+      ).rejects.toBe(error);
+    }
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a Worker 401, but retries once anything else", async () => {
+    const client = createAdminQueryClient(() => {});
+    const retry = client.getDefaultOptions().queries?.retry;
+    if (typeof retry !== "function") throw new Error("retry is not a function");
+
+    expect(retry(0, unauthorized())).toBe(false);
+    expect(retry(0, new ApiError(500, "error", "x"))).toBe(true);
+    expect(retry(1, new ApiError(500, "error", "x"))).toBe(false);
   });
 });

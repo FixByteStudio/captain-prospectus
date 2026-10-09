@@ -31,8 +31,10 @@ export type SyncStatus =
   | "ok"
   /** No network. Keep everything, try again later. */
   | "offline"
-  /** Access session expired or revoked. Keep the outbox, drop the cached round (GH #35); sign in again. */
+  /** Access session expired or revoked (an Access redirect, or a 403). Keep the outbox, drop the cached round (GH #35); sign in again. */
   | "auth"
+  /** The Worker answered 401: the own-login session is gone. Same keep/drop as "auth", but `/login` is the way back (GH #309). */
+  | "unauthorized"
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"
   /** Server or quota error. Keep everything; back off. */
@@ -156,14 +158,19 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     return { status: "offline", ...EMPTY, ...(await countPending()) };
   }
 
-  if (response.type === "opaqueredirect" || response.status === 401 || response.status === 403) {
+  const workerUnauthorized = response.status === 401;
+  if (response.type === "opaqueredirect" || workerUnauthorized || response.status === 403) {
     // The server refused this identity. A PWA resumed from the app switcher
     // never remounts, so the shell's `/api/me` check cannot drop the cached
     // round for it (GH #35); this refusal must. Expired and revoked look the
     // same from here, and both are stolen-phone mitigations (docs/security.md).
     // The outbox stays — clearAgentCache leaves it alone (INVARIANT 5).
     await clearAgentCache(db);
-    return { status: "auth", ...EMPTY, ...(await countPending()) };
+    return {
+      status: workerUnauthorized ? "unauthorized" : "auth",
+      ...EMPTY,
+      ...(await countPending()),
+    };
   }
   if (response.status === 426) {
     return { status: "upgrade", ...EMPTY, ...(await countPending()) };

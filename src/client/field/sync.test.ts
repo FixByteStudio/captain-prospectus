@@ -129,7 +129,9 @@ describe("runSync — failures must never clear the outbox", () => {
   it("reports 426 as an upgrade, distinctly from an auth failure", async () => {
     await db.outboxVisits.add(visit());
     expect((await runSync({ db, identity: AGENT, fetchFn: failWith(426) })).status).toBe("upgrade");
-    expect((await runSync({ db, identity: AGENT, fetchFn: failWith(401) })).status).toBe("auth");
+    expect((await runSync({ db, identity: AGENT, fetchFn: failWith(401) })).status).toBe(
+      "unauthorized",
+    );
   });
 
   it("keeps the outbox when the network is gone", async () => {
@@ -205,12 +207,12 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
   }) as unknown as typeof fetch;
 
   it.each([
-    ["a 401", failWith(401)],
-    ["a 403", failWith(403)],
-    ["an Access login redirect", redirected],
+    ["a 401", failWith(401), "unauthorized"],
+    ["a 403", failWith(403), "auth"],
+    ["an Access login redirect", redirected, "auth"],
   ])(
     "clears the round and the cached identity on %s, and keeps the outbox",
-    async (_l, fetchFn) => {
+    async (_l, fetchFn, status) => {
       // A PWA resumed from the app switcher never remounts, so this refusal is
       // the only place a revoked phone learns to forget the round.
       await seedCache();
@@ -218,7 +220,8 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
 
       const result = await runSync({ db, identity: AGENT, fetchFn });
 
-      expect(result.status).toBe("auth");
+      // The Worker's own 401 gets its own status (GH #309); the rest keep "auth".
+      expect(result.status).toBe(status);
       expect(await db.prospects.count()).toBe(0);
       expect(await db.sentVisits.count()).toBe(0);
       expect(await getMeta(db, "identity")).toBeUndefined();

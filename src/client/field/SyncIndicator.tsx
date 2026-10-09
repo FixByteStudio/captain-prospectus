@@ -12,6 +12,7 @@
  * it returns.
  */
 import { ClockIcon, CloudUploadIcon, UserXIcon, XIcon, type LucideIcon } from "lucide-react";
+import { useNavigate } from "react-router";
 import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "@/ui/button-variants";
@@ -29,7 +30,7 @@ import {
 import { useSyncState } from "./useSync";
 
 /**
- * `?sync=<state>` forces one of the seven states, dev-only, so each can be
+ * `?sync=<state>` forces one of the states, dev-only, so each can be
  * checked by eye against `key-f8-sync.html` without waiting for the network
  * or the outbox to be in the right shape. Built only inside the `DEV` branch
  * and looked up with `Object.hasOwn`, so this table costs nothing in
@@ -49,6 +50,7 @@ function forcedView(): SyncView | null {
     unconfirmed: syncView({ status: "unconfirmed", running: false, pending: 3 }),
     failed: syncView({ status: "error", running: false, pending: 3 }),
     auth: syncView({ status: "auth", running: false, pending: 3 }),
+    unauthorized: syncView({ status: "unauthorized", running: false, pending: 3 }),
     upgrade: syncView({ status: "upgrade", running: false, pending: 3 }),
   };
   if (!Object.hasOwn(table, key)) return null;
@@ -123,6 +125,7 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
   const strip = view.strip;
   const heldBack = heldBackMessage(useSyncState().heldBack);
   const { leave } = useLeaveGuard();
+  const navigate = useNavigate();
 
   const runAction = () => {
     if (!strip?.action) return;
@@ -140,6 +143,11 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
             if (navigator.onLine) window.location.href = effect.to;
           });
         }
+        return;
+      case "login":
+        // The Worker's own 401: `/login` is a router route, no network
+        // needed to open it, and the draft goes through the same dialog.
+        leave(() => void navigate("/login"));
         return;
       case "apply-update":
         leave(pwa.update);
@@ -207,7 +215,7 @@ function StripRegion({
                 "hover:bg-transparent hover:text-current focus-visible:border-current focus-visible:ring-current dark:hover:bg-transparent",
               )}
             >
-              {strip.action === "reconnect" ? copy.sync.reconnect : copy.update.apply}
+              {strip.action === "update" ? copy.update.apply : copy.sync.reconnect}
             </button>
           )}
         </>

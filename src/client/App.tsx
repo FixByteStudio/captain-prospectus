@@ -253,8 +253,8 @@ function AdminFrameFallback() {
  * The outer shell: the service worker, and `/login` beside everything else.
  *
  * `/login` is a sibling route rather than a branch inside `GatedApp`, so it
- * never runs the identity hooks below and never asks `/api/me` — a phone a
- * 401 sends there has no session to ask with (spec-gh-299, ADR-0029).
+ * never runs the identity hooks below: the screen asks `/api/me` once itself,
+ * only to skip the form for a live identity (GH #309, ADR-0029).
  */
 export function App() {
   // Registers the service worker on mount, before and regardless of whether
@@ -299,6 +299,12 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
 
   const location = useLocation();
   const navigate = useNavigate();
+  // The identity effect below must not re-run (and re-ask `/api/me`) each time
+  // `navigate` changes identity with the location, so it reads the latest one here.
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   // "Se reconnecter" (SyncStrip, or the identity-error frame below) navigates
   // here with the marker so the SW's navigateFallbackDenylist sends that one
@@ -346,6 +352,13 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
         // (docs/domains/identity-access.md). The outbox stays: INVARIANT 5.
         if (outcome.revoked) await clearAgentCache(fieldDb);
         if (cancelled) return;
+        // The Worker's own 401: `/login` is the way back, and the cache and
+        // outbox are as the lines above left them. An Access redirect keeps
+        // the error frame and its marker navigation (GH #309).
+        if (outcome.toLogin) {
+          void navigateRef.current("/login", { replace: true });
+          return;
+        }
         setError({ message: outcome.message, revoked: outcome.revoked });
         return;
       }

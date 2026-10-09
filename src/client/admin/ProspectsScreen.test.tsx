@@ -36,6 +36,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** What `redirect: "manual"` makes of Access's redirect to its login page. */
+function accessRedirect(): Response {
+  const response = new Response(null, { status: 200 });
+  Object.defineProperty(response, "type", { value: "opaqueredirect" });
+  return response;
+}
+
 /** Records every prospects request; the roster answers with one agent. */
 function stubFetch(
   rows: Prospect[] = [],
@@ -836,14 +843,26 @@ describe("ProspectsScreen › export (#179)", () => {
     await waitFor(() => expect(asked).toContain("/api/admin/prospects/export.csv?q=bistro"));
   });
 
-  it("warns that the session expired on a 401", async () => {
+  it("opens /login when the Worker answers the export 401 (GH #309)", async () => {
     stubFetch([], 13, { exportCsv: () => json({}, 401) });
     renderAt("/admin/prospects");
     await screen.findByText(copy.prospects.count(13));
 
     await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
 
+    await waitFor(() => expect(location()).toBe("/login"));
+    expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
+  });
+
+  it("warns that the session expired when Access redirects the export", async () => {
+    stubFetch([], 13, { exportCsv: accessRedirect });
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
     expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+    expect(location()).not.toBe("/login");
   });
 
   it("warns that the export failed on a server error", async () => {

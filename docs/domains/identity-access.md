@@ -70,11 +70,13 @@ foreign gets 403, so no other site can act with a user's session ([api](../api.m
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
-Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
+Sessions expire or are revoked. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
 
-**"Se reconnecter" is a marker navigation, not a reload.** The service worker serves every ordinary navigation from precache (`navigateFallback`), which never reaches Access, so a plain reload cannot re-authenticate. The button instead navigates to the current URL plus `?reconnect=1`, an entry `navigateFallbackDenylist` excludes from that fallback (`vite.config.ts`), so this one navigation goes to the network and through Access; the app strips the marker back out of the URL once it has landed (`docs/design.md` § "Sync is ambient, never a toast"). The outbox is untouched either way — INVARIANT 5.
+**The Worker's own 401 and an Access redirect are told apart** (`apiFetch`: a plain 401 status against `response.type === "opaqueredirect"`; both are `ApiError` status 401, with `code` `unauthorized` or `access_redirect`). The Worker's 401 means `/login` is the way back: at launch the app drops the cache as below and opens `/login` (`replace`), the sync strip's button opens `/login` through the leave guard (so a dirty form asks first), and any admin query, mutation or CSV export that gets one opens `/login`. Nothing on these paths touches the outbox. An Access redirect keeps the marker navigation below. `/login` asks `/api/me` once on mount: a device that still has an identity goes to its landing; a 401, an Access redirect or a network error leaves the form.
 
-**The admin top bar's "Se déconnecter" (GH #64) hits the same wall the other way round.** It is a plain `<a href="/cdn-cgi/access/logout">`, not a router `Link`: a SPA navigation never leaves `App.tsx`, and a normal `<a>` click would still be swallowed by `navigateFallback`. `navigateFallbackDenylist` also excludes `/^\/cdn-cgi\//` (GH #76) so this one anchor's click reaches the network and Access's own logout endpoint instead of the precached shell.
+**For an Access redirect, "Se reconnecter" is a marker navigation, not a reload.** The service worker serves every ordinary navigation from precache (`navigateFallback`), which never reaches Access, so a plain reload cannot re-authenticate. The button instead navigates to the current URL plus `?reconnect=1`, an entry `navigateFallbackDenylist` excludes from that fallback (`vite.config.ts`), so this one navigation goes to the network and through Access; the app strips the marker back out of the URL once it has landed (`docs/design.md` § "Sync is ambient, never a toast"). The outbox is untouched either way — INVARIANT 5.
+
+**The admin top bar's "Se déconnecter" (GH #64, #309)** calls `POST /api/auth/logout`, then asks `/api/me` once. If it still answers, Access is signing this device in, so the page is sent to `/cdn-cgi/access/logout` with `window.location` (a SPA navigation never leaves `App.tsx`, and `navigateFallbackDenylist` excludes `/^\/cdn-cgi\//`, GH #76, so that request reaches Access instead of the precached shell). Otherwise the session was all there was and the app opens `/login`. If the POST never reaches the server the menu stays put and a toast says so: the cookie would survive, and `/login` would send the user straight back to their landing. The `?reconnect=1` marker, the `/cdn-cgi/` denylist entry and the Access logout path stay until Access is gone (phase 3).
 
 **The app shell itself has the same offline fallback, with the same limit.**
 On load it calls `GET /api/me`; if that genuinely cannot be reached (no network
@@ -84,9 +86,10 @@ fall back on a 401 — that is the Worker answering that the session is no
 longer valid, which is different from being unreachable, and is exactly the
 "stolen phone" mitigation in [security.md](../security.md) (an admin removes
 the email from the Access policy; the next `/api/me` the phone manages to send
-comes back 401, not cached-and-accepted). A 401 shows the error with the same
-"Se reconnecter" marker navigation as the sync strip (GH #75): a reload would
-come back from precache and straight into the same 401.
+comes back 401, not cached-and-accepted). The Worker's 401 opens `/login`
+(above). An Access redirect shows the error with the same "Se reconnecter"
+marker navigation as the sync strip (GH #75): a reload would come back from
+precache and straight into the same redirect.
 
 **A 401 also deletes the cache, not merely declines to read it.** Refusing the
 fallback on its own would leave the mitigation one aeroplane-mode toggle wide:
@@ -99,9 +102,9 @@ outbox survives it — a revoked session is not the server listing those rows in
 
 **A refused sync clears it too.** A PWA resumed from the app switcher does not
 remount, so it never re-asks `/api/me`. `runSync` therefore calls
-`clearAgentCache` on every response it reports as `auth` — a 401, a 403 or an
-Access redirect, since an expired session and a revoked one look the same from
-the phone (GH #35). A network failure clears nothing. An agent online with an
+`clearAgentCache` on every refusal it reports, as `unauthorized` (the Worker's
+401) or `auth` (a 403 or an Access redirect). An expired session and a revoked
+one look the same from the phone (GH #35). A network failure clears nothing. An agent online with an
 expired session sees an empty round until "Se reconnecter" brings it back.
 
 **The cached identity opens the field side only.** An admin identity read from
