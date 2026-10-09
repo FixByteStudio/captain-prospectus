@@ -56,6 +56,9 @@ After 10 failed logins (codes and passphrases alike) from one IP in a 15-minute 
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
 foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
 
+The nightly sweep deletes expired codes, expired sessions and `login_attempts` rows whose window has
+ended ([data-model](../data-model.md)).
+
 ## Permissions
 | Action | Agent | Admin |
 |---|---|---|
@@ -65,6 +68,10 @@ foreign gets 403, so no other site can act with a user's session ([api](../api.m
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |
 | Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
+| Manage users: add one, change a role, deactivate or reactivate | | ✓ |
+| Generate a one-time code for any user, their own row included | | ✓ |
+| Revoke one device's session | | ✓ |
+| Regenerate one's own passphrase | | ✓ |
 
 ## Local development
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
@@ -84,9 +91,9 @@ route to the Worker at all), it falls back to the last identity Dexie cached
 and opens the field screens from what the phone already has. It does **not**
 fall back on a 401 — that is the Worker answering that the session is no
 longer valid, which is different from being unreachable, and is exactly the
-"stolen phone" mitigation in [security.md](../security.md) (an admin removes
-the email from the Access policy; the next `/api/me` the phone manages to send
-comes back 401, not cached-and-accepted). The Worker's 401 opens `/login`
+"stolen phone" mitigation in [security.md](../security.md) (an admin revokes
+the device's session or deactivates the user; the next `/api/me` the phone
+manages to send comes back 401, not cached-and-accepted). The Worker's 401 opens `/login`
 (above). An Access redirect shows the error with the same "Se reconnecter"
 marker navigation as the sync strip (GH #75): a reload would come back from
 precache and straight into the same redirect.
@@ -122,8 +129,8 @@ admin screens the moment that re-check lands (spec-gh-115,
 never re-checks — going offline and back costs it nothing.
 
 The cached identity is a rendering convenience, never proof: the Worker
-re-derives identity from the verified JWT on every request regardless of what
-the client claims to be. Its only other effect is that if the identity that
+re-derives identity on every request from the session (or, in phase 1, the
+verified Access JWT) regardless of what the client claims to be. Its only other effect is that if the identity that
 comes back from a successful `/api/me` names a **different** email than the
 cached one — a different agent has signed in on this device — the locally
 cached round (`prospects`) and cached visit history are cleared before
@@ -136,8 +143,8 @@ again (`docs/domains/field-operations.md#local-store-dexie`, backlog 005).
 
 **A cache-sourced session is unconfirmed, and syncs nothing until a live
 `/api/me` says otherwise (docs/backlog/013).** The cached email is a rendering
-convenience, not proof of who holds the Access cookie the next request will
-actually carry — if agent B signs in through Access on agent A's phone and
+convenience, not proof of whose session cookie the next request will
+actually carry — if agent B signs in with a code on agent A's phone and
 that launch's `/api/me` hits a network blip or a 5xx, `resolveIdentity` falls
 back to A's cached identity (above) while the cookie is really B's. Backlog
 005 stamps every outbox row with the identity active when it was written, but
