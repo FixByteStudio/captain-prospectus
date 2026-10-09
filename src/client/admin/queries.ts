@@ -4,8 +4,9 @@
  * is how visits get lost.
  */
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiFetch } from "../api";
+import { ApiError, apiFetch, authError, isWorkerUnauthorized } from "../api";
 import { copy } from "../copy";
 import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
@@ -37,6 +38,12 @@ import type {
   Question,
   Script,
   ScriptsResponse,
+  LoginCodeResponse,
+  PassphraseResponse,
+  User,
+  UserCreate,
+  UserUpdate,
+  UsersResponse,
   OrphansResponse,
   OrphanRepairResult,
 } from "../../shared/schemas";
@@ -53,6 +60,8 @@ export type ProspectFilters = {
   q?: string;
   /** Hors cible signalé (GH #250): only ever `true`; absent means no filter. */
   outOfTarget?: true;
+  /** Prospects sans agent actif (GH #308): only ever `true`; absent means no filter. */
+  inactiveAgent?: true;
 };
 
 /** One factory, so an invalidation can never miss a key by spelling it differently. */
@@ -62,6 +71,7 @@ export const adminKeys = {
   dashboard: (period: DashboardPeriod) => ["admin", "dashboard", period] as const,
   prospects: (filters: ProspectFilters) => ["admin", "prospects", filters] as const,
   agents: () => ["admin", "agents"] as const,
+  users: () => ["admin", "users"] as const,
   duplicates: () => ["admin", "duplicates"] as const,
   visitsFeed: () => ["admin", "visits", "feed"] as const,
   scripts: () => ["admin", "scripts"] as const,
@@ -98,6 +108,7 @@ export function toQueryString(filters: ProspectFilters): string {
   if (filters.source) params.set("source", filters.source);
   if (filters.q) params.set("q", filters.q);
   if (filters.outOfTarget) params.set("outOfTarget", "true");
+  if (filters.inactiveAgent) params.set("inactiveAgent", "true");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -133,6 +144,10 @@ export function parseProspectFilters(params: URLSearchParams): ProspectFilters {
     params.get("outOfTarget") ?? undefined,
   );
   if (outOfTarget.success && outOfTarget.data) filters.outOfTarget = true;
+  const inactiveAgent = prospectFiltersSchema.shape.inactiveAgent.safeParse(
+    params.get("inactiveAgent") ?? undefined,
+  );
+  if (inactiveAgent.success && inactiveAgent.data) filters.inactiveAgent = true;
   return filters;
 }
 
@@ -164,6 +179,92 @@ export function useAgents() {
     // The roster comes from a Worker variable, not a table. It cannot change
     // while the page is open.
     staleTime: Infinity,
+  });
+}
+
+/** Every user, active or not (ADR-0029). The deactivation count is kept fresh by DeactivateDialog's own refetch(), not by this query. */
+export function useUsers() {
+  return useQuery({
+    queryKey: adminKeys.users(),
+    queryFn: () => apiFetch<UsersResponse>("/api/admin/users"),
+  });
+}
+
+/** The users list and the assign menu's roster both read `users`, so both follow a change. */
+function useInvalidateUsers() {
+  const client = useQueryClient();
+  return async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: adminKeys.users() }),
+      client.invalidateQueries({ queryKey: adminKeys.agents() }),
+    ]);
+  };
+}
+
+export function useCreateUser() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (input: UserCreate) =>
+      apiFetch<User>("/api/admin/users", { method: "POST", body: JSON.stringify(input) }),
+    // Not awaited (query-client.ts): after a self-demotion the refetch would 403 and flash the failed state.
+    onSuccess: () => {
+      void invalidate();
+    },
+  });
+}
+
+export function useUpdateUser() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (input: { email: string; update: UserUpdate }) =>
+      apiFetch<void>(`/api/admin/users/${encodeURIComponent(input.email)}`, {
+        method: "PATCH",
+        body: JSON.stringify(input.update),
+      }),
+    onSuccess: () => {
+      void invalidate();
+    },
+  });
+}
+
+/**
+ * Signs one device out (GH #307); its line leaves the list on the refetch,
+ * which runs on failure too, since a 404 means it was already gone.
+ */
+export function useRevokeSession() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/api/admin/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    onSettled: () => {
+      void invalidate();
+    },
+  });
+}
+
+/**
+ * A one-time code for a user's next device. The list does not change, so
+ * nothing is invalidated; gcTime 0 drops the code from the cache once the
+ * dialog is done with it, since it is shown once.
+ */
+export function useGenerateCode() {
+  return useMutation({
+    gcTime: 0,
+    mutationFn: (email: string) =>
+      apiFetch<LoginCodeResponse>(`/api/admin/users/${encodeURIComponent(email)}/code`, {
+        method: "POST",
+      }),
+  });
+}
+
+/**
+ * The signed-in admin's own new passphrase. Like a code it is shown once, so
+ * gcTime 0 drops it from the cache with the dialog; the list does not change.
+ */
+export function useGeneratePassphrase() {
+  return useMutation({
+    gcTime: 0,
+    mutationFn: () => apiFetch<PassphraseResponse>("/api/admin/me/passphrase", { method: "POST" }),
   });
 }
 
@@ -229,6 +330,7 @@ export function useAssign() {
  */
 export function useImportBatches(source: Source = "csv") {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const invalidate = useInvalidateProspects();
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -258,6 +360,11 @@ export function useImportBatches(source: Source = "csv") {
       }
       setResult(totals);
     } catch (cause) {
+      // Outside the MutationCache, so the Worker's 401 is handled here (GH #309).
+      if (isWorkerUnauthorized(cause)) {
+        void navigate("/login");
+        return;
+      }
       setError(cause instanceof ApiError ? cause.message : copy.import.failed);
     } finally {
       setIsRunning(false);
@@ -463,8 +570,9 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
  * inclusive) and, by the same helper, Prospects' (#179).
  *
  * Not `apiFetch`: that parses JSON, and this response is a file. The auth
- * failure it recognises is the same one (ADR-0006's opaque redirect), so it is
- * thrown as the same `ApiError` for a caller to handle identically.
+ * failures it recognises are the same two (the Worker's 401 and ADR-0006's
+ * opaque redirect), thrown as the same `ApiError`s for a caller to handle
+ * identically.
  *
  * Resolves to whether the server flagged `x-truncated`, so the caller can warn
  * about the row cap without re-parsing headers itself.
@@ -480,9 +588,8 @@ export async function downloadCsv(
 ): Promise<boolean> {
   const response = await fetch(path, { redirect: "manual" });
 
-  if (response.type === "opaqueredirect" || response.status === 401) {
-    throw new ApiError(401, "auth", copy.errors.sessionExpired);
-  }
+  const authFailure = authError(response, copy.errors.sessionExpired);
+  if (authFailure) throw authFailure;
   if (!response.ok) {
     throw new ApiError(response.status, "error", failed);
   }

@@ -292,8 +292,41 @@ export const sessions = sqliteTable(
     createdAt: integer("created_at").notNull(),
     lastSeenAt: integer("last_seen_at").notNull(),
     expiresAt: integer("expires_at").notNull(),
+    /**
+     * Public id an admin revokes a device by (GH #307): 32 random lowercase
+     * hex, never derived from the token. Nullable until the contract step:
+     * the Worker deployed before it inserts null, and the slide fills it.
+     */
+    id: text("id"),
+    /** "iPhone · Safari", parsed from the User-Agent at login; never the raw header. */
+    deviceLabel: text("device_label"),
   },
-  (t) => [index("sessions_user_email_idx").on(t.userEmail)],
+  (t) => [
+    index("sessions_user_email_idx").on(t.userEmail),
+    uniqueIndex("sessions_id_idx").on(t.id),
+  ],
+);
+
+/**
+ * One-time codes an admin generates for a device to enrol (GH #305,
+ * identity-access.md). Only the HMAC of the normalised code is stored, so a
+ * leaked table opens no session. At most one unused code per user: generating
+ * deletes the others. Expired and used rows stay until a later sweep.
+ */
+export const loginCodes = sqliteTable(
+  "login_codes",
+  {
+    /** HMAC-SHA-256 hex under AUTH_PEPPER of normaliseCredential(code). */
+    codeHash: text("code_hash").primaryKey(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => users.email),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    /** Set by the one login that spends it. */
+    usedAt: integer("used_at"),
+  },
+  (t) => [index("login_codes_user_email_idx").on(t.userEmail)],
 );
 
 /**
@@ -323,3 +356,4 @@ export type AgentPositionRow = typeof agentPositions.$inferSelect;
 export type OverpassCacheRow = typeof overpassCache.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
+export type LoginCodeRow = typeof loginCodes.$inferSelect;

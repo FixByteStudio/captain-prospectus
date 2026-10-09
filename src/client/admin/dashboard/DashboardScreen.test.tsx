@@ -92,6 +92,7 @@ function answer(
     flyersGiven: period * 3,
     agentsActiveToday: 2,
     followUpsDueSoon: { value: 8, dueBefore: 1 },
+    inactiveAgentProspects: 4,
   };
 }
 
@@ -652,7 +653,7 @@ function visit(n: number, over: Partial<AdminVisit> = {}): AdminVisit {
 }
 
 describe("DashboardScreen › À traiter (GH #113)", () => {
-  it("shows the three counts, each with its way in", async () => {
+  it("shows the four counts, each with its way in", async () => {
     stubFetch((period) => json(answer(period)), {
       orphans: () => json({ visits: [{}, {}], remaining: 3 }),
       duplicates: () => json({ pairs: [{}, {}, {}], truncated: false }),
@@ -681,10 +682,18 @@ describe("DashboardScreen › À traiter (GH #113)", () => {
         .getByRole("link", { name: t.duplicatesAction })
         .getAttribute("href"),
     ).toBe("/admin/doublons");
+    // GH #308: the open statuses the figure counts, so the list totals it.
+    expect(within(todoRow(t.inactiveAgent)).getByText("4")).toBeTruthy();
+    expect(within(todoRow(t.inactiveAgent)).getByText(t.inactiveAgentMeta)).toBeTruthy();
+    expect(
+      within(todoRow(t.inactiveAgent))
+        .getByRole("link", { name: t.inactiveAgentAction })
+        .getAttribute("href"),
+    ).toBe("/admin/prospects?status=new%2Cassigned%2Cfollow_up&inactiveAgent=true");
   });
 
   it("mutes every 0 and disables its button (I/O matrix, empty queues)", async () => {
-    stubFetch((period) => json({ ...answer(period), followUpsDue: 0 }));
+    stubFetch((period) => json({ ...answer(period), followUpsDue: 0, inactiveAgentProspects: 0 }));
     renderScreen();
     await screen.findByRole("heading", { level: 3, name: copy.dashboard.todo.title });
 
@@ -694,12 +703,16 @@ describe("DashboardScreen › À traiter (GH #113)", () => {
       [t.followUps, t.followUpsAction],
       [t.orphans, t.orphansAction],
       [t.duplicates, t.duplicatesAction],
+      [t.inactiveAgent, t.inactiveAgentAction],
     ] as const) {
       const row = todoRow(label);
       expect(within(row).queryByRole("link")).toBeNull();
       expect(within(row).getByRole("button", { name: action }).hasAttribute("disabled")).toBe(true);
     }
     expect(within(todoRow(t.followUps)).getByText("0").className).toContain(
+      "text-muted-foreground",
+    );
+    expect(within(todoRow(t.inactiveAgent)).getByText("0").className).toContain(
       "text-muted-foreground",
     );
   });

@@ -36,6 +36,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** What `redirect: "manual"` makes of Access's redirect to its login page. */
+function accessRedirect(): Response {
+  const response = new Response(null, { status: 200 });
+  Object.defineProperty(response, "type", { value: "opaqueredirect" });
+  return response;
+}
+
 /** Records every prospects request; the roster answers with one agent. */
 function stubFetch(
   rows: Prospect[] = [],
@@ -168,6 +175,106 @@ describe("ProspectsScreen › URL filters", () => {
     expect(location()).toBe("/admin/prospects");
     expect(statusSelect().textContent).toBe(copy.prospects.filters.anyStatus);
     await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects"));
+  });
+
+  describe("inactiveAgent (GH #308)", () => {
+    const agentSelect = () => screen.getByRole("combobox", { name: copy.prospects.filters.agent });
+    const chip = copy.prospects.filters.inactiveAgentChip;
+    const deepLink = "/admin/prospects?status=new,assigned,follow_up&inactiveAgent=true";
+
+    it("asks for it, shows the chip, and names it in the Agent select", async () => {
+      const asked = stubFetch();
+      renderAt(deepLink);
+
+      await screen.findByText(copy.prospects.count(13));
+      expect(asked).toEqual([
+        "/api/admin/prospects?status=new%2Cassigned%2Cfollow_up&inactiveAgent=true",
+      ]);
+      // getByText folds the no-break space before the colon; the name keeps it.
+      expect(screen.getByText(chip.replace("\u00a0", " "))).toBeTruthy();
+      expect(agentSelect().textContent).toBe(copy.prospects.filters.inactiveAgentSelect);
+    });
+
+    it("leaves the URL by the chip's ×", async () => {
+      stubFetch();
+      renderAt(deepLink);
+      await screen.findByText(copy.prospects.count(13));
+
+      await userEvent.click(
+        screen.getByRole("button", { name: copy.prospects.filters.remove(chip) }),
+      );
+      expect(location()).toBe("/admin/prospects?status=new%2Cassigned%2Cfollow_up");
+      expect(agentSelect().textContent).toBe(copy.prospects.filters.anyAgent);
+    });
+
+    it("leaves the URL when another agent is picked", async () => {
+      stubFetch();
+      renderAt(deepLink);
+      await screen.findByText(copy.prospects.count(13));
+
+      const user = userEvent.setup();
+      await user.click(agentSelect());
+      await user.click(await screen.findByRole("option", { name: "lea@example.com" }));
+      expect(location()).toBe(
+        "/admin/prospects?status=new%2Cassigned%2Cfollow_up&assignedTo=lea%40example.com",
+      );
+    });
+
+    it("leaves the URL when « Tous les agents » is picked", async () => {
+      stubFetch();
+      renderAt(deepLink);
+      await screen.findByText(copy.prospects.count(13));
+
+      const user = userEvent.setup();
+      await user.click(agentSelect());
+      await user.click(
+        await screen.findByRole("option", { name: copy.prospects.filters.anyAgent }),
+      );
+      expect(location()).toBe("/admin/prospects?status=new%2Cassigned%2Cfollow_up");
+    });
+
+    it("keeps the filter when Statut changes", async () => {
+      stubFetch();
+      renderAt("/admin/prospects?inactiveAgent=true");
+      await screen.findByText(copy.prospects.count(13));
+
+      const user = userEvent.setup();
+      await user.click(statusSelect());
+      await user.click(await screen.findByRole("option", { name: STATUS_LABELS.assigned }));
+      expect(location()).toBe("/admin/prospects?status=assigned&inactiveAgent=true");
+    });
+
+    it("leaves the URL by Effacer les filtres", async () => {
+      stubFetch([], 0);
+      renderAt("/admin/prospects?inactiveAgent=true");
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: copy.prospects.clearFilters }),
+      );
+      expect(location()).toBe("/admin/prospects");
+    });
+
+    it("exports with the same filter", async () => {
+      vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prospects");
+      vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      const asked = stubFetch([], 13, {
+        exportCsv: () =>
+          new Response("name\n", {
+            headers: {
+              "content-type": "text/csv; charset=utf-8",
+              "content-disposition": 'attachment; filename="prospects.csv"',
+            },
+          }),
+      });
+      renderAt("/admin/prospects?inactiveAgent=true");
+      await screen.findByText(copy.prospects.count(13));
+
+      await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+      await waitFor(() =>
+        expect(asked).toContain("/api/admin/prospects/export.csv?inactiveAgent=true"),
+      );
+    });
   });
 
   it("writes a select change to the URL", async () => {
@@ -736,14 +843,26 @@ describe("ProspectsScreen › export (#179)", () => {
     await waitFor(() => expect(asked).toContain("/api/admin/prospects/export.csv?q=bistro"));
   });
 
-  it("warns that the session expired on a 401", async () => {
+  it("opens /login when the Worker answers the export 401 (GH #309)", async () => {
     stubFetch([], 13, { exportCsv: () => json({}, 401) });
     renderAt("/admin/prospects");
     await screen.findByText(copy.prospects.count(13));
 
     await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
 
+    await waitFor(() => expect(location()).toBe("/login"));
+    expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
+  });
+
+  it("warns that the session expired when Access redirects the export", async () => {
+    stubFetch([], 13, { exportCsv: accessRedirect });
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
+
     expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+    expect(location()).not.toBe("/login");
   });
 
   it("warns that the export failed on a server error", async () => {

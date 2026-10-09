@@ -2,6 +2,7 @@
 
 const dateTime = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 const date = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
+const shortDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
 export function formatDateTime(epochMs: number): string {
   return dateTime.format(new Date(epochMs));
@@ -9,6 +10,11 @@ export function formatDateTime(epochMs: number): string {
 
 export function formatDate(epochMs: number): string {
   return date.format(new Date(epochMs));
+}
+
+/** "24/09/2026". */
+export function formatShortDate(epochMs: number): string {
+  return shortDate.format(new Date(epochMs));
 }
 
 const brusselsDate = new Intl.DateTimeFormat("fr-FR", {
@@ -19,6 +25,17 @@ const brusselsDate = new Intl.DateTimeFormat("fr-FR", {
 /** A day as Brussels reads it, whatever the browser's zone: the dashboard's days are Brussels days. */
 export function formatBrusselsDate(epochMs: number): string {
   return brusselsDate.format(new Date(epochMs));
+}
+
+const brusselsTime = new Intl.DateTimeFormat("fr-FR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Brussels",
+});
+
+/** "15:24" as Brussels reads it, whatever the device's zone or clock setting. */
+export function formatBrusselsTime(epochMs: number): string {
+  return brusselsTime.format(new Date(epochMs));
 }
 
 /*

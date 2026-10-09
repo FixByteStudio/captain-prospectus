@@ -320,3 +320,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-303-roster-readers-read-users.md`
   summary: The Prospects screen's agent filter is built from `GET /api/admin/agents`, so a deactivated user's still-assigned prospects cannot be filtered by them.
   evidence: `src/client/admin/prospects/Toolbar.tsx:114` via `ProspectsScreen.tsx:133`; story #303 removes deactivated users from the menu, and entry 11 (prospects with no active agent) is the natural place to give them a filter.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-304-agents-page.md`
+  summary: Opening the Agents deactivation AlertDialog from a modal DropdownMenu item may leave `pointer-events: none` on body after it closes (known Radix interaction), freezing the page.
+  evidence: Unverified (would be medium). Settle it on `pnpm dev`: open Désactiver from a row menu, cancel, then click anywhere on the page; if clicks are dead, use `modal={false}` on the row DropdownMenu.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-306-admin-passphrase.md`
+  summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
+  evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
+  summary: No test exercises a migration's backfill against rows that exist before it runs (e.g. 0012's `sessions.id` backfill).
+  evidence: test/setup-worker.ts applies every migration once to an empty database, so a broken backfill UPDATE passes CI; checked by hand on a scratch SQLite file for #307.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
+  summary: Contract step for `sessions.id` — make it NOT NULL and drop the null-id branches in auth.ts and identity.ts once no pre-#307 session can remain.
+  evidence: 0012 adds `id` nullable so the Worker deployed before it keeps inserting; the null handling has no end date until this is scheduled.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-309-401-to-login.md`
+  summary: The identity re-check of a cache-started session (`GatedApp`, after the network returns) opens `/login` on a Worker 401 without asking the leave guard, so an open visit form is dropped.
+  evidence: Edge-case lens; before #309 the same 401 replaced the whole app with the error frame, so the draft was lost equally (pre-existing). The field `LeaveGuardProvider` lives in `FieldFrame`, below the identity effect, so a fix needs the guard lifted or the jump deferred to the strip.

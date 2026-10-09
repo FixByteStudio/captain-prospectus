@@ -43,5 +43,9 @@ export type Identity = { email: string; role: Role };
 
 export type AppEnv = {
   Bindings: Bindings;
-  Variables: { identity: Identity };
+  Variables: {
+    identity: Identity;
+    /** The caller's session's public id; unset for DEV_USER_EMAIL and Access callers. */
+    sessionId?: string;
+  };
 };

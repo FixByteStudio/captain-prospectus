@@ -22,6 +22,107 @@ export const adminCopy = {
     reconnected: "Connexion rétablie.",
   },
 
+  /** The Agents page (GH #304, docs/design.md › Agents). */
+  agents: {
+    title: "Agents",
+    subtitle: "Qui peut se connecter, et avec quel rôle.",
+    loading: "Chargement des utilisateurs…",
+    loadFailed: "Impossible de charger les utilisateurs.",
+    add: "Ajouter un utilisateur",
+    columns: {
+      user: "Utilisateur",
+      role: "Rôle",
+      enrolment: "Inscription",
+      devices: "Appareils",
+    },
+    roles: { agent: "Agent", admin: "Admin" },
+    enrolled: "Inscrit",
+    notEnrolled: "Pas encore inscrit",
+    you: "Vous",
+    menu: (name: string) => `Actions pour ${name}`,
+    generateCode: "Générer un code",
+    newPassphrase: "Nouvelle phrase de passe",
+    makeAdmin: "Passer admin",
+    makeAgent: "Passer agent",
+    deactivate: "Désactiver",
+    reactivate: "Réactiver",
+    lastAdmin: "Il faut au moins un administrateur actif.",
+    deactivated: (n: number) => `Désactivés (${n})`,
+    deactivatedLabel: "Utilisateurs désactivés",
+
+    /** A row's device lines (GH #307). `date` and `dateTime` come formatted. */
+    devices: {
+      expand: (name: string) => `Appareils de ${name}`,
+      unknown: "Appareil inconnu",
+      none: "Aucun appareil inscrit.",
+      enrolledOn: (date: string) => `Inscrit le ${date}`,
+      seenOn: (dateTime: string) => `Vu le ${dateTime}`,
+      revoke: "Révoquer",
+      revokeLabel: (label: string) => `Révoquer ${label}`,
+      current: "Cet appareil",
+    },
+
+    addDialog: {
+      title: "Ajouter un utilisateur",
+      email: "Adresse e-mail",
+      name: "Nom",
+      role: "Rôle",
+      submit: "Ajouter",
+      cancel: "Annuler",
+      emailInvalid: "Saisissez une adresse e-mail valide.",
+      nameRequired: "Saisissez un nom.",
+      emailTaken:
+        "Cette adresse a déjà un compte. S'il est désactivé, réactivez-le sous Désactivés.",
+    },
+
+    deactivateDialog: {
+      title: (name: string) => `Désactiver ${name} ?`,
+      checking: "Vérification des prospects assignés…",
+      assigned: (n: number, name: string) =>
+        n === 0
+          ? `Aucun prospect n'est assigné à ${name}.`
+          : n === 1
+            ? `1 prospect reste assigné à ${name}. Réassignez-le depuis « Prospects sans agent actif » au Tableau de bord.`
+            : `${n} prospects restent assignés à ${name}. Réassignez-les depuis « Prospects sans agent actif » au Tableau de bord.`,
+      always: "Ses appareils seront déconnectés et son code annulé. Vous pourrez le réactiver.",
+      cancel: "Annuler",
+      confirm: "Désactiver",
+    },
+
+    /** Shown once; `time` is the server's expiry in Brussels time. */
+    codeDialog: {
+      title: (name: string) => `Code pour ${name}`,
+      validUntil: (time: string) => `Valable jusqu'à ${time}, une seule fois.`,
+      once: "Ce code ne sera plus affiché. En générer un autre annule celui-ci.",
+      copy: "Copier",
+      done: "Terminé",
+      copied: "Code copié.",
+      copyFailed: "Copie impossible. Recopiez-le à la main.",
+    },
+
+    passphraseDialog: {
+      confirmTitle: "Remplacer votre phrase de passe ?",
+      confirmBody: "L'ancienne cessera de fonctionner dès que la nouvelle s'affiche.",
+      cancel: "Annuler",
+      replace: "Remplacer",
+      title: "Votre phrase de passe",
+      save: "Enregistrez-la dans votre gestionnaire de mots de passe : elle ne sera plus affichée. L'ancienne ne fonctionne plus.",
+      copy: "Copier",
+      done: "Terminé",
+      copied: "Phrase de passe copiée.",
+      copyFailed: "Copie impossible. Recopiez-la à la main.",
+    },
+
+    toast: {
+      added: "Utilisateur ajouté.",
+      roleChanged: "Rôle modifié.",
+      deactivated: "Utilisateur désactivé.",
+      reactivated: "Utilisateur réactivé.",
+      revoked: "Appareil déconnecté.",
+      failed: "L'action n'a pas abouti. Réessayez.",
+    },
+  },
+
   /** The top bar's search button and its inert CommandDialog (GH #64). */
   search: {
     // Reused verbatim as the ≥768px button's text and, below 768px, as the
@@ -102,7 +203,7 @@ export const adminCopy = {
       openProspects: "Prospects ouverts",
       empty: "Aucun agent pour l'instant.",
     },
-    /** À traiter (GH #113): three queues, each with its count and a way in. */
+    /** À traiter (GH #113, #308): four queues, each with its count and a way in. */
     todo: {
       title: "À traiter",
       followUps: "Relances dues",
@@ -115,6 +216,9 @@ export const adminCopy = {
       duplicatesMeta: "Semblent désigner le même endroit",
       duplicatesAction: "Fusionner",
       pairs: (n: number) => `${formatCount(n)} ${n <= 1 ? "paire" : "paires"}`,
+      inactiveAgent: "Prospects sans agent actif",
+      inactiveAgentMeta: "Assignés à un agent désactivé",
+      inactiveAgentAction: "Réassigner",
     },
     /** Dernières visites (GH #113); the rest of its copy is `visits`'. */
     recent: {
@@ -189,6 +293,9 @@ export const adminCopy = {
       remove: (label: string) => `Retirer le filtre « ${label} »`,
       /** The Statut select's text while the URL holds several statuses. */
       someStatuses: "Plusieurs statuts",
+      /** `inactiveAgent=true` (GH #308): its chip, and the Agent select's text while it is on. */
+      inactiveAgentChip: "Agent\u00a0: désactivé",
+      inactiveAgentSelect: "Agent désactivé",
     },
 
     columns: {

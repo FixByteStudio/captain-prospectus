@@ -2,14 +2,16 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { prospects, sessions, users } from "./db/schema";
+import { loginCodes, prospects, sessions, users } from "./db/schema";
 import { fakeAccess } from "../../test/access-jwt";
-import { testSessionCookie } from "../../test/session";
+import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
 import { workerFetch } from "../../test/worker-fetch";
 import type { Status } from "../shared/constants";
-import type { User } from "../shared/schemas";
+import { CROCKFORD } from "../shared/credential";
+import type { LoginCodeResponse, PassphraseResponse, User } from "../shared/schemas";
+import { LOGIN_CODE_TTL_MS, hmacHex } from "./session";
 
 /** Admin user management (GH #302, ADR-0029) and the Access fallback's row check. */
 
@@ -44,6 +46,13 @@ function patch(email: string, body: unknown, cookie: string, headers?: Record<st
   });
 }
 
+function generate(email: string, cookie: string, headers?: Record<string, string>) {
+  return call(`/api/admin/users/${encodeURIComponent(email)}/code`, cookie, {
+    method: "POST",
+    headers,
+  });
+}
+
 async function addProspect(assignedTo: string, status: Status, mergedInto: string | null = null) {
   const id = crypto.randomUUID();
   await db()
@@ -66,6 +75,7 @@ async function addProspect(assignedTo: string, status: Status, mergedInto: strin
 
 beforeEach(async () => {
   await db().delete(sessions);
+  await db().delete(loginCodes);
   await db().delete(prospects);
   await db().delete(users);
   await seedTestUsers();
@@ -73,6 +83,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   Object.assign(env, ORIGINAL);
 });
 
@@ -100,6 +111,7 @@ describe("GET /api/admin/users", () => {
         active: false,
         sessions: 1,
         openProspects: 3,
+        devices: [expect.objectContaining({ current: false })],
       },
       {
         email: TEST_ADMIN,
@@ -108,6 +120,7 @@ describe("GET /api/admin/users", () => {
         active: true,
         sessions: 1,
         openProspects: 1,
+        devices: [expect.objectContaining({ current: true })],
       },
     ]);
   });
@@ -150,6 +163,7 @@ describe("POST /api/admin/users", () => {
       active: true,
       sessions: 0,
       openProspects: 0,
+      devices: [],
     });
     const [row] = await db().select().from(users).where(eq(users.email, "lea@x.be"));
     expect(row?.passphraseHash).toBeNull();
@@ -203,6 +217,36 @@ describe("PATCH /api/admin/users/:email", () => {
     );
     const [row] = await db().select().from(users).where(eq(users.email, TEST_AGENT));
     expect(row).toMatchObject({ role: "agent", active: false });
+  });
+
+  it("deactivates, deleting the user's unused codes but not the used ones", async () => {
+    const cookie = await adminCookie();
+    expect((await generate(TEST_AGENT, cookie)).status).toBe(201);
+    await db().insert(loginCodes).values({
+      codeHash: "spent",
+      userEmail: TEST_AGENT,
+      createdAt: 1,
+      expiresAt: 2,
+      usedAt: 1,
+    });
+    expect((await generate(TEST_ADMIN, cookie)).status).toBe(201);
+
+    expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
+    const rows = await db().select().from(loginCodes);
+    expect(rows.map((r) => [r.userEmail, r.codeHash === "spent"])).toEqual(
+      expect.arrayContaining([
+        [TEST_AGENT, true],
+        [TEST_ADMIN, false],
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("keeps the codes when the last-admin guard refuses the deactivation", async () => {
+    const cookie = await adminCookie();
+    expect((await generate(TEST_ADMIN, cookie)).status).toBe(201);
+    expect((await patch(TEST_ADMIN, { active: false }, cookie)).status).toBe(409);
+    expect(await db().select().from(loginCodes)).toHaveLength(1);
   });
 
   it("reactivates without a session", async () => {
@@ -299,10 +343,303 @@ describe("PATCH /api/admin/users/:email", () => {
     expect(row).toMatchObject({ role: "admin", active: false });
   });
 
+  it("clears the passphrase on a demotion or a deactivation, and only then", async () => {
+    const cookie = await adminCookie();
+    const hashOf = async () =>
+      (
+        await db()
+          .select({ hash: users.passphraseHash })
+          .from(users)
+          .where(eq(users.email, TEST_AGENT))
+      )[0]?.hash;
+    const give = () =>
+      db()
+        .update(users)
+        .set({ role: "admin", active: true, passphraseHash: "a".repeat(64) })
+        .where(eq(users.email, TEST_AGENT));
+
+    await give();
+    expect((await patch(TEST_AGENT, { role: "admin" }, cookie)).status).toBe(204);
+    expect((await patch(TEST_AGENT, { active: true }, cookie)).status).toBe(204);
+    expect(await hashOf()).toBe("a".repeat(64));
+
+    expect((await patch(TEST_AGENT, { role: "agent" }, cookie)).status).toBe(204);
+    expect(await hashOf()).toBeNull();
+
+    await give();
+    expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
+    expect(await hashOf()).toBeNull();
+  });
+
+  it("keeps the passphrase when the last-admin guard refuses", async () => {
+    const cookie = await adminCookie();
+    await db()
+      .update(users)
+      .set({ passphraseHash: "b".repeat(64) })
+      .where(eq(users.email, TEST_ADMIN));
+    for (const body of [{ role: "agent" }, { active: false }]) {
+      expect((await patch(TEST_ADMIN, body, cookie)).status).toBe(409);
+    }
+    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
+    expect(row?.passphraseHash).toBe("b".repeat(64));
+  });
+
   it("answers 404 for an email with no row and 400 for an empty body", async () => {
     const cookie = await adminCookie();
     expect((await patch("ghost@x.be", { active: false }, cookie)).status).toBe(404);
     expect((await patch(TEST_AGENT, {}, cookie)).status).toBe(400);
+  });
+});
+
+describe("POST /api/admin/users/:email/code", () => {
+  it("answers 201 with an 8-character Crockford code that expires in 15 minutes", async () => {
+    const before = Date.now();
+    const response = await generate(TEST_AGENT, await adminCookie());
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as LoginCodeResponse;
+    expect(body.code).toMatch(new RegExp(`^[${CROCKFORD}]{8}$`));
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+
+    const [row] = await db().select().from(loginCodes);
+    expect(row).toMatchObject({ userEmail: TEST_AGENT, expiresAt: body.expiresAt, usedAt: null });
+  });
+
+  it("deletes the user's older unused codes and keeps other users' codes", async () => {
+    const cookie = await adminCookie();
+    await generate(TEST_ADMIN, cookie);
+    await generate(TEST_AGENT, cookie);
+    await generate(TEST_AGENT, cookie);
+    const rows = await db().select().from(loginCodes);
+    expect(rows.filter((r) => r.userEmail === TEST_AGENT)).toHaveLength(1);
+    expect(rows.filter((r) => r.userEmail === TEST_ADMIN)).toHaveLength(1);
+  });
+
+  it("generates a code on the signed-in admin's own row", async () => {
+    expect((await generate(TEST_ADMIN, await adminCookie())).status).toBe(201);
+  });
+
+  it("answers 409 user_inactive for a deactivated user and 404 for no row, storing nothing", async () => {
+    const cookie = await adminCookie();
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    const inactive = await generate(TEST_AGENT, cookie);
+    expect(inactive.status).toBe(409);
+    expect(await inactive.json()).toMatchObject({ error: "user_inactive" });
+    const unknown = await generate("ghost@x.be", cookie);
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ error: "not_found" });
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+
+  it("fails closed with 500 misconfigured without AUTH_PEPPER, storing nothing", async () => {
+    // No pepper means no session can be read, so the admin is DEV_USER_EMAIL on localhost.
+    const pepper = env.AUTH_PEPPER;
+    env.AUTH_PEPPER = undefined;
+    try {
+      const response = await workerFetch(
+        `http://localhost/api/admin/users/${encodeURIComponent(TEST_AGENT)}/code`,
+        { method: "POST" },
+      );
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ error: "misconfigured" });
+    } finally {
+      env.AUTH_PEPPER = pepper;
+    }
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+
+  it("answers 403 to an agent and to a foreign Origin", async () => {
+    const agent = await testSessionCookie(TEST_AGENT);
+    expect((await generate(TEST_AGENT, agent)).status).toBe(403);
+    const foreign = await generate(TEST_AGENT, await adminCookie(), {
+      Origin: "https://evil.example",
+    });
+    expect(foreign.status).toBe(403);
+    expect(await db().select().from(loginCodes)).toEqual([]);
+  });
+});
+
+describe("POST /api/admin/me/passphrase", () => {
+  function newPassphrase(cookie: string, headers?: Record<string, string>) {
+    return call("/api/admin/me/passphrase", cookie, { method: "POST", headers });
+  }
+
+  async function storedHash(email: string): Promise<string | null | undefined> {
+    const [row] = await db()
+      .select({ hash: users.passphraseHash })
+      .from(users)
+      .where(eq(users.email, email));
+    return row?.hash;
+  }
+
+  it("answers 200 with 20 Crockford characters and stores only their HMAC", async () => {
+    const response = await newPassphrase(await adminCookie());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const { passphrase } = (await response.json()) as PassphraseResponse;
+    expect(passphrase).toHaveLength(20);
+    expect([...passphrase].every((ch) => CROCKFORD.includes(ch))).toBe(true);
+    const hash = await storedHash(TEST_ADMIN);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hash).toBe(await hmacHex(env.AUTH_PEPPER ?? "", passphrase));
+  });
+
+  it("replaces the old hash and keeps the caller's sessions", async () => {
+    const cookie = await adminCookie();
+    await newPassphrase(cookie);
+    const first = await storedHash(TEST_ADMIN);
+    expect((await newPassphrase(cookie)).status).toBe(200);
+    expect(await storedHash(TEST_ADMIN)).not.toBe(first);
+    expect((await call("/api/me", cookie)).status).toBe(200);
+  });
+
+  it("touches only the caller's row", async () => {
+    await db().update(users).set({ role: "admin" }).where(eq(users.email, TEST_AGENT));
+    expect((await newPassphrase(await adminCookie())).status).toBe(200);
+    expect(await storedHash(TEST_AGENT)).toBeNull();
+  });
+
+  it("answers 404 to an Access-only admin with no users row, writing nothing", async () => {
+    await db().delete(users).where(eq(users.email, TEST_ADMIN));
+    const access = await fakeAccess();
+    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
+    const response = await workerFetch(`${HOST}/api/admin/me/passphrase`, {
+      method: "POST",
+      headers: { "Cf-Access-Jwt-Assertion": await access.sign(TEST_ADMIN) },
+    });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: "not_found" });
+    const hashes = await db().select({ hash: users.passphraseHash }).from(users);
+    expect(hashes.every((r) => r.hash === null)).toBe(true);
+  });
+
+  it("fails closed with 500 misconfigured without AUTH_PEPPER, storing nothing", async () => {
+    const pepper = env.AUTH_PEPPER;
+    env.AUTH_PEPPER = undefined;
+    try {
+      const response = await workerFetch("http://localhost/api/admin/me/passphrase", {
+        method: "POST",
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ error: "misconfigured" });
+    } finally {
+      env.AUTH_PEPPER = pepper;
+    }
+    expect(await storedHash(TEST_ADMIN)).toBeNull();
+  });
+
+  it("answers 403 to an agent and to a foreign Origin", async () => {
+    expect((await newPassphrase(await testSessionCookie(TEST_AGENT))).status).toBe(403);
+    const foreign = await newPassphrase(await adminCookie(), { Origin: "https://evil.example" });
+    expect(foreign.status).toBe(403);
+    expect(await storedHash(TEST_ADMIN)).toBeNull();
+    expect(await storedHash(TEST_AGENT)).toBeNull();
+  });
+
+  it("never logs the passphrase or its hash", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    const { passphrase } = (await (
+      await newPassphrase(await adminCookie())
+    ).json()) as PassphraseResponse;
+    const logged = JSON.stringify(calls);
+    expect(logged).not.toContain(passphrase);
+    expect(logged).not.toContain(String(await storedHash(TEST_ADMIN)));
+  });
+});
+
+describe("devices (GH #307)", () => {
+  function revoke(id: string, cookie: string, headers?: Record<string, string>) {
+    return call(`/api/admin/sessions/${encodeURIComponent(id)}`, cookie, {
+      method: "DELETE",
+      headers,
+    });
+  }
+
+  it("lists live sessions with an id, newest first, the caller's flagged current", async () => {
+    const now = Date.now();
+    const caller = await testSession(TEST_ADMIN, { lastSeenAt: now - 5 * 60 * 1000 });
+    const older = await testSession(TEST_AGENT, {
+      createdAt: now - 3 * 86_400_000,
+      lastSeenAt: now - 30 * 60 * 1000,
+      deviceLabel: "iPhone · Safari",
+    });
+    const newer = await testSession(TEST_AGENT, { createdAt: now, lastSeenAt: now - 60 * 1000 });
+    await testSession(TEST_AGENT, { expiresAt: now - 1000, deviceLabel: "Mac · Safari" });
+    await testSession(TEST_AGENT, { id: null });
+
+    const rows = await list(caller.cookie);
+
+    const agent = rows.find((u) => u.email === TEST_AGENT);
+    expect(agent?.sessions).toBe(3);
+    expect(agent?.devices).toEqual([
+      { id: newer.id, label: null, createdAt: now, lastSeenAt: now - 60 * 1000, current: false },
+      {
+        id: older.id,
+        label: "iPhone · Safari",
+        createdAt: now - 3 * 86_400_000,
+        lastSeenAt: now - 30 * 60 * 1000,
+        current: false,
+      },
+    ]);
+    const admin = rows.find((u) => u.email === TEST_ADMIN);
+    expect(admin?.devices).toEqual([expect.objectContaining({ id: caller.id, current: true })]);
+  });
+
+  it("never sends a token hash", async () => {
+    const caller = await testSession(TEST_ADMIN);
+    const agent = await testSession(TEST_AGENT);
+    const response = await call("/api/admin/users", caller.cookie);
+    const text = await response.text();
+    expect(text).not.toContain(caller.tokenHash);
+    expect(text).not.toContain(agent.tokenHash);
+    expect(text).not.toContain("tokenHash");
+    expect(text).not.toMatch(/[0-9a-f]{64}/);
+  });
+
+  it("revokes one device: 204, its cookie is refused, the other session still works", async () => {
+    const admin = await adminCookie();
+    const phone = await testSession(TEST_AGENT);
+    const laptop = await testSession(TEST_AGENT);
+    if (!phone.id) throw new Error("testSession gave no id");
+
+    expect((await revoke(phone.id, admin)).status).toBe(204);
+
+    expect((await call("/api/me", phone.cookie)).status).toBe(401);
+    expect((await call("/api/me", laptop.cookie)).status).toBe(200);
+    const again = await revoke(phone.id, admin);
+    expect(again.status).toBe(404);
+    expect(await again.json()).toMatchObject({ error: "not_found" });
+  });
+
+  it("lets an admin revoke their own current session", async () => {
+    const caller = await testSession(TEST_ADMIN);
+    if (!caller.id) throw new Error("testSession gave no id");
+    expect((await revoke(caller.id, caller.cookie)).status).toBe(204);
+    expect((await call("/api/me", caller.cookie)).status).toBe(401);
+  });
+
+  it("answers 404 to an unknown well-formed id and 400 to a malformed one", async () => {
+    const admin = await adminCookie();
+    expect((await revoke("0".repeat(32), admin)).status).toBe(404);
+    for (const id of ["a".repeat(31), "a".repeat(33), "A".repeat(32), "g".repeat(32)]) {
+      expect((await revoke(id, admin)).status).toBe(400);
+    }
+  });
+
+  it("answers 403 to an agent and to a foreign Origin, deleting nothing", async () => {
+    const target = await testSession(TEST_AGENT);
+    if (!target.id) throw new Error("testSession gave no id");
+    expect((await revoke(target.id, await testSessionCookie(TEST_AGENT))).status).toBe(403);
+    const foreign = await revoke(target.id, await adminCookie(), {
+      Origin: "https://evil.example",
+    });
+    expect(foreign.status).toBe(403);
+    expect((await call("/api/me", target.cookie)).status).toBe(200);
   });
 });
 

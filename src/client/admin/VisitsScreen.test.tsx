@@ -28,6 +28,13 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   });
 }
 
+/** What `redirect: "manual"` makes of Access's redirect to its login page. */
+function accessRedirect(): Response {
+  const response = new Response(null, { status: 200 });
+  Object.defineProperty(response, "type", { value: "opaqueredirect" });
+  return response;
+}
+
 /**
  * `useVisitsFeed` trims held rows to the scoped window's own `from` (a period
  * boundary near `NOW`), so a fixture's `receivedAt` has to land inside it —
@@ -79,6 +86,7 @@ function dashboardAnswer(period: number): DashboardResponse {
     flyersGiven: 84,
     agentsActiveToday: 2,
     followUpsDueSoon: { value: 12, dueBefore: 1_700_000_000_000 },
+    inactiveAgentProspects: 0,
   };
 }
 
@@ -437,14 +445,26 @@ describe("VisitsScreen", () => {
     expect(new URLSearchParams(exportCall?.split("?")[1]).get("reason")).toBeNull();
   });
 
-  it("warns that the session expired when the export's request is redirected (401)", async () => {
+  it("opens /login when the Worker answers the export 401 (GH #309)", async () => {
     stubFetch({ exportCsv: () => json({}, 401) });
     renderScreen();
     await screen.findByText(copy.visits.strip.flyersGiven);
 
     await userEvent.click(screen.getByRole("button", { name: copy.visits.export.button }));
 
+    await waitFor(() => expect(screen.getByTestId("location").textContent).toBe("/login"));
+    expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
+  });
+
+  it("warns that the session expired when Access redirects the export", async () => {
+    stubFetch({ exportCsv: accessRedirect });
+    renderScreen();
+    await screen.findByText(copy.visits.strip.flyersGiven);
+
+    await userEvent.click(screen.getByRole("button", { name: copy.visits.export.button }));
+
     expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+    expect(screen.getByTestId("location").textContent).not.toBe("/login");
   });
 
   it("warns that the export failed on a server error", async () => {

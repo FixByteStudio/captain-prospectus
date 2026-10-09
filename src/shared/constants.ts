@@ -265,6 +265,14 @@ export const RETENTION_BATCH = 500;
  */
 export const MAP_CACHE_EVICT_BATCH = 500;
 
+/**
+ * Expired rows the daily sweep deletes from EACH of `login_codes`, `sessions`
+ * and `login_attempts` per run. A flood of failed logins can write a day's
+ * request quota of attempt rows; one run deleting them all could use the D1
+ * write quota, so a backlog drains over a few days (CAP-10).
+ */
+export const AUTH_SWEEP_BATCH = 500;
+
 /** Candidate duplicate pairs returned in one sweep. */
 export const DUPLICATES_PAGE_SIZE = 100;
 

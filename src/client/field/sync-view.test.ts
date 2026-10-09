@@ -103,6 +103,17 @@ describe("syncView", () => {
     });
   });
 
+  it("session expired by the Worker's 401: the same strip, but its button signs in (GH #309)", () => {
+    const access = syncView({ status: "auth", running: false, pending: 3 });
+    const worker = syncView({ status: "unauthorized", running: false, pending: 3 });
+    expect(worker.dot).toEqual(access.dot);
+    expect(worker.count).toBe(3);
+    expect(worker.strip).toEqual({ ...access.strip, action: "login" });
+    expect(syncView({ status: "unauthorized", running: true, pending: 3 }).strip).toEqual(
+      worker.strip,
+    );
+  });
+
   it("update needed: warn dot + count, warn strip, update, assertive", () => {
     const view = syncView({ status: "upgrade", running: false, pending: 3 });
     expect(view.dot).toEqual({ tone: "warn", pulse: false, label: copy.sync.upgrade });
@@ -157,7 +168,14 @@ describe("syncView", () => {
     expect(hidesUpdateBanner(syncView({ status: "upgrade", running: false, pending: 0 }))).toBe(
       true,
     );
-    for (const status of ["ok", "offline", "error", "auth", "unconfirmed"] as const) {
+    for (const status of [
+      "ok",
+      "offline",
+      "error",
+      "auth",
+      "unauthorized",
+      "unconfirmed",
+    ] as const) {
       expect(hidesUpdateBanner(syncView({ status, running: false, pending: 3 }))).toBe(false);
     }
   });
@@ -173,6 +191,11 @@ describe("stripEffect", () => {
       kind: "navigate",
       to: "/tournee?reconnect=1",
     });
+  });
+
+  it("login opens /login, whatever the build's state or the current URL", () => {
+    expect(stripEffect("login", false, "/tournee")).toEqual({ kind: "login" });
+    expect(stripEffect("login", true, "/tournee")).toEqual({ kind: "login" });
   });
 
   it("update takes a build already waiting", () => {

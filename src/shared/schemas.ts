@@ -91,13 +91,14 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 
 /**
  * ADR-0029: one route, discriminated on the credential, never on the role.
- * Only `passphrase` exists so far (break-glass); `code` and `passkey` are later
- * additive members.
+ * `passphrase` (break-glass, or an admin's generated passphrase) and `code` (a
+ * one-time code) exist; `passkey` is a later additive member.
  *
  * The email is trimmed and lowercased but not format-checked: it is only ever
  * compared with a stored address, and a refusal must read the same whichever
  * part was wrong. The passphrase is kept as typed — a trim here would change
- * what the exact comparison sees.
+ * what the exact break-glass comparison sees; the server normalises it only
+ * for the generated-passphrase check (shared/credential.ts).
  */
 export const passphraseLoginSchema = z.object({
   kind: z.literal("passphrase"),
@@ -105,7 +106,19 @@ export const passphraseLoginSchema = z.object({
   passphrase: z.string().check(z.minLength(1), z.maxLength(200)),
 });
 
-export const loginRequestSchema = z.discriminatedUnion("kind", [passphraseLoginSchema]);
+/**
+ * A one-time code, sent as typed: the server normalises it (shared/credential.ts),
+ * so the client never rewrites or rejects what the agent entered.
+ */
+export const codeLoginSchema = z.object({
+  kind: z.literal("code"),
+  code: z.string().check(z.minLength(1), z.maxLength(200)),
+});
+
+export const loginRequestSchema = z.discriminatedUnion("kind", [
+  passphraseLoginSchema,
+  codeLoginSchema,
+]);
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 /* -------------------------------------------------------------------- scripts */
@@ -342,6 +355,13 @@ export const prospectFiltersSchema = z.object({
    * since (docs/domains/prospecting.md).
    */
   outOfTarget: z.optional(z.literal("true")),
+  /**
+   * Only `"true"`, as for `outOfTarget`. Prospects assigned to someone with no
+   * active `users` row — deactivated, or an email left from the allow-lists
+   * (docs/api.md › The dashboard, `inactiveAgentProspects`). It adds that
+   * condition only; status stays the job of `status`.
+   */
+  inactiveAgent: z.optional(z.literal("true")),
 });
 
 /** Query string, so every value arrives as text and has to be coerced. */
@@ -458,6 +478,21 @@ export const agentEmailParamSchema = z.object({ email: emailSchema });
 
 /* ------------------------------------------------------------ /api/admin/users */
 
+/**
+ * One signed-in device of a user (GH #307): a live session with a public id.
+ * The token's hash never leaves the Worker; `id` is what revokes it.
+ */
+export const deviceSchema = z.object({
+  id: z.string(),
+  /** "iPhone · Safari"; null when the User-Agent gave no summary. */
+  label: z.nullable(z.string()),
+  createdAt: epochMsSchema,
+  lastSeenAt: epochMsSchema,
+  /** The session this request was made from. */
+  current: z.boolean(),
+});
+export type Device = z.infer<typeof deviceSchema>;
+
 /** One row of the Agents list: every user, active or not (ADR-0029). */
 export const userSchema = z.object({
   email: emailSchema,
@@ -469,6 +504,8 @@ export const userSchema = z.object({
   sessions: countSchema,
   /** Prospects assigned to them that are still open and not merged away. */
   openProspects: countSchema,
+  /** Live sessions that have an id, newest `lastSeenAt` first. */
+  devices: z.array(deviceSchema),
 });
 export type User = z.infer<typeof userSchema>;
 
@@ -493,6 +530,24 @@ export const userUpdateSchema = z
   })
   .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
 export type UserUpdate = z.infer<typeof userUpdateSchema>;
+
+/** DELETE /api/admin/sessions/:id. */
+export const sessionIdParamSchema = z.object({
+  id: z.string().check(z.regex(/^[0-9a-f]{32}$/)),
+});
+
+/** POST /api/admin/users/:email/code: the only time the code is ever shown. */
+export const loginCodeResponseSchema = z.object({
+  code: z.string(),
+  expiresAt: epochMsSchema,
+});
+export type LoginCodeResponse = z.infer<typeof loginCodeResponseSchema>;
+
+/** POST /api/admin/me/passphrase: the only time the passphrase is ever shown. */
+export const passphraseResponseSchema = z.object({
+  passphrase: z.string(),
+});
+export type PassphraseResponse = z.infer<typeof passphraseResponseSchema>;
 
 /** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
 export const agentRoundResponseSchema = z.object({
@@ -795,6 +850,12 @@ export const dashboardResponseSchema = z.object({
     /** Brussels midnight 7 days from today; `?dueBefore=` on the prospects list. */
     dueBefore: epochMsSchema,
   }),
+  /**
+   * Prospects sans agent actif: live open prospects assigned to someone with
+   * no active `users` row. A snapshot that ignores `period`; the prospects
+   * list at `status=new,assigned,follow_up&inactiveAgent=true` totals it.
+   */
+  inactiveAgentProspects: countSchema,
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 

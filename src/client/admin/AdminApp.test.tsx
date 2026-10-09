@@ -37,6 +37,7 @@ const DASHBOARD: DashboardResponse = {
   flyersGiven: 120,
   agentsActiveToday: 2,
   followUpsDueSoon: { value: 6, dueBefore: 1 },
+  inactiveAgentProspects: 0,
 };
 
 function json(body: unknown): Response {
@@ -55,6 +56,7 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith("/api/admin/users")) return json({ users: [] });
       if (url.startsWith("/api/admin/dashboard")) return json(DASHBOARD);
       if (url.startsWith("/api/admin/prospects/duplicates"))
         return json({ pairs: [], truncated: false });
@@ -77,6 +79,7 @@ function renderAdmin(pathname: string) {
           path="/admin/*"
           element={<AdminApp email="admin@example.com" updatePrompt={null} />}
         />
+        <Route path="/login" element={<p>login page</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -100,6 +103,39 @@ describe("AdminApp", () => {
     expect(await screen.findByText("278")).toBeTruthy();
     expect(sidebarLink(copy.nav.dashboard).getAttribute("aria-current")).toBe("page");
     expect(sidebarLink(copy.nav.prospects).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("opens /login when the Worker answers any admin request 401 (GH #309)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    renderAdmin("/admin");
+
+    expect(await screen.findByText("login page")).toBeTruthy();
+  });
+
+  it("builds its query client per mount, so a later sign-in sees no old answers (GH #309)", async () => {
+    const first = renderAdmin("/admin");
+    expect(await first.findByText("278")).toBeTruthy();
+    first.unmount();
+
+    const dashboardCalls = () =>
+      vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith("/api/admin/dashboard"));
+    const before = dashboardCalls().length;
+
+    const second = renderAdmin("/admin");
+    // A shared client would paint the cached figure at once and refetch
+    // quietly; a fresh one has nothing to paint until the answer lands.
+    expect(second.queryByText("278")).toBeNull();
+    expect(await second.findByText("278")).toBeTruthy();
+    expect(dashboardCalls().length).toBeGreaterThan(before);
+  });
+
+  it("registers /admin/agents: the Agents screen opens", async () => {
+    renderAdmin("/admin/agents");
+
+    expect(await screen.findByRole("heading", { level: 2, name: copy.agents.title })).toBeTruthy();
   });
 
   it("registers /admin/tournee: the round screen opens, asking for an agent", async () => {

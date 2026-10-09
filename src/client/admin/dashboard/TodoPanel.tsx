@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { Clock, Copy, Link as LinkIcon, type LucideIcon } from "lucide-react";
+import { Clock, Copy, Link as LinkIcon, UserX, type LucideIcon } from "lucide-react";
+import { OPEN_STATUSES } from "../../../shared/constants";
 import { copy } from "../../copy";
 import { formatCount } from "../../format";
 import { cn } from "../../lib/utils";
@@ -25,22 +26,24 @@ type Row = {
 /**
  * À traiter — docs/design.md › Tableau de bord, GH #113.
  *
- * Relances dues comes from the dashboard; the two queues from the queries the
- * sidebar already runs, so no request of its own. A row with nothing to do, or
- * no number yet, is muted and its button disabled: a link to an empty queue is
- * a click for nothing.
+ * Relances dues and Prospects sans agent actif come from the dashboard; the
+ * two queues from the queries the sidebar already runs, so no request of its
+ * own. A row with nothing to do, or no number yet, is muted and its button
+ * disabled: a link to an empty queue is a click for nothing.
  */
 export function TodoPanel({
   followUpsDue,
   dueBefore,
   orphans,
   duplicates,
+  inactiveAgentProspects,
 }: {
   followUpsDue: number | undefined;
   /** The dashboard's `to`: the list behind Voir counts exactly `followUpsDue`. */
   dueBefore: number;
   orphans: number | undefined;
   duplicates: number | undefined;
+  inactiveAgentProspects: number | undefined;
 }) {
   const t = copy.dashboard.todo;
   const rows: Row[] = [
@@ -68,6 +71,16 @@ export function TodoPanel({
       format: t.pairs,
       action: t.duplicatesAction,
       to: "/admin/doublons",
+    },
+    {
+      icon: UserX,
+      label: t.inactiveAgent,
+      meta: t.inactiveAgentMeta,
+      count: inactiveAgentProspects,
+      action: t.inactiveAgentAction,
+      // The dashboard counts open prospects only; the filter leaves status
+      // to `status`, so the link names them and the list totals the figure.
+      to: prospectsHref({ status: [...OPEN_STATUSES], inactiveAgent: true }),
     },
   ];
 
@@ -123,6 +136,7 @@ export function TodoPanelSkeleton() {
   return (
     <Card className={`${SHELL} gap-3`} aria-hidden="true">
       <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-10 w-full" />
       <Skeleton className="h-10 w-full" />
       <Skeleton className="h-10 w-full" />
       <Skeleton className="h-10 w-full" />

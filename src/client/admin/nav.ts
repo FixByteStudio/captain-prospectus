@@ -8,6 +8,7 @@ import {
   MapPin,
   Route,
   Store,
+  Users,
 } from "lucide-react";
 import type { OrphansResponse } from "../../shared/schemas";
 import { copy } from "../copy";
@@ -34,16 +35,19 @@ export type NavGroup = {
 
 /**
  * The admin sidebar's groups and order — GH #63. nav.test.ts checks these
- * paths against a hand-copied list of the eight routes AdminApp.tsx renders
+ * paths against a hand-copied list of the nine routes AdminApp.tsx renders
  * under `/admin/*` today (the index included) — it does not read
  * AdminApp.tsx, so update both together if a route there ever changes.
  *
- * Pilotage holds Tableau de bord since GH #107.
+ * Pilotage holds Tableau de bord since GH #107, Agents since GH #304.
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: copy.nav.groups.pilotage,
-    items: [{ label: copy.nav.dashboard, path: "/admin", icon: LayoutGrid, end: true }],
+    items: [
+      { label: copy.nav.dashboard, path: "/admin", icon: LayoutGrid, end: true },
+      { label: copy.nav.agents, path: "/admin/agents", icon: Users },
+    ],
   },
   {
     label: copy.nav.groups.prospects,

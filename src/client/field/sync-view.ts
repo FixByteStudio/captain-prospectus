@@ -23,7 +23,8 @@ export type SyncViewInput = {
 export type SyncDotTone = "success" | "warn" | "muted" | "destructive";
 export type SyncStripTone = "band-strip" | "secondary" | "destructive" | "warn";
 export type SyncIcon = "cloud-upload" | "clock" | "x";
-export type SyncAction = "reconnect" | "update";
+/** "login" is the session-expired strip's button when the Worker said 401 (GH #309). */
+export type SyncAction = "reconnect" | "login" | "update";
 
 export type SyncStripView = {
   tone: SyncStripTone;
@@ -60,6 +61,9 @@ const AUTH_STRIP: SyncStripView = {
   action: "reconnect",
   politeness: "assertive",
 };
+
+/** Same strip and message; only the button's destination differs. */
+const UNAUTHORIZED_STRIP: SyncStripView = { ...AUTH_STRIP, action: "login" };
 
 const UPGRADE_STRIP: SyncStripView = {
   tone: "warn",
@@ -120,6 +124,14 @@ export function syncView({ status, running, pending }: SyncViewInput): SyncView 
       dot: { tone: "destructive", pulse: running, label: copy.sync.authExpired },
       count,
       strip: AUTH_STRIP,
+    };
+  }
+
+  if (status === "unauthorized") {
+    return {
+      dot: { tone: "destructive", pulse: running, label: copy.sync.authExpired },
+      count,
+      strip: UNAUTHORIZED_STRIP,
     };
   }
 
@@ -198,7 +210,10 @@ export function heldBackMessage(heldBack: number): string | null {
 /* ------------------------------------------------------------- strip effect */
 
 export type StripEffect =
-  { kind: "navigate"; to: string } | { kind: "apply-update" } | { kind: "reload" };
+  | { kind: "navigate"; to: string }
+  | { kind: "login" }
+  | { kind: "apply-update" }
+  | { kind: "reload" };
 
 /**
  * What tapping the strip's one button does, decided here rather than in the
@@ -212,5 +227,6 @@ export type StripEffect =
  */
 export function stripEffect(action: SyncAction, needRefresh: boolean, href: string): StripEffect {
   if (action === "reconnect") return { kind: "navigate", to: reconnectUrl(href) };
+  if (action === "login") return { kind: "login" };
   return needRefresh ? { kind: "apply-update" } : { kind: "reload" };
 }

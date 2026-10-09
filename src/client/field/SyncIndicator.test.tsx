@@ -19,7 +19,8 @@
  * `DirtyForm`.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { copy } from "../copy";
 import type { PwaState } from "../pwa";
@@ -32,6 +33,11 @@ import type { SyncState } from "./useSync";
 function DirtyForm() {
   useRegisterDirty(true);
   return null;
+}
+
+/** Shows where the router is, since `/login` is a router navigation, not `location.href`. */
+function Where() {
+  return <output data-testid="where">{useLocation().pathname}</output>;
 }
 
 const syncState = vi.hoisted(() => ({
@@ -73,10 +79,13 @@ function renderStrip(
 ) {
   syncState.current = state;
   const { container } = render(
-    <LeaveGuardProvider>
-      {dirty && <DirtyForm />}
-      <SyncStrip pwa={pwa} />
-    </LeaveGuardProvider>,
+    <MemoryRouter initialEntries={["/tournee"]}>
+      <LeaveGuardProvider>
+        {dirty && <DirtyForm />}
+        <SyncStrip pwa={pwa} />
+        <Where />
+      </LeaveGuardProvider>
+    </MemoryRouter>,
   );
   const region = (politeness: "polite" | "assertive") => {
     const node = container.querySelector(`[aria-live="${politeness}"]`);
@@ -110,6 +119,42 @@ describe("SyncStrip", () => {
     // The marker is what keeps the service worker's navigateFallback out of
     // the way, so the request actually reaches Access (reconnect-marker.ts).
     expect(location.href).toBe(reconnectUrl("https://app.example/tournee"));
+  });
+
+  it("opens /login from the strip when the Worker said 401, online or not", async () => {
+    const user = userEvent.setup();
+    const location = stubLocation("https://app.example/tournee");
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    renderStrip({ status: "unauthorized", running: false, pending: 3 });
+    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+
+    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
+    expect(screen.getByTestId("where").textContent).toBe("/login");
+    // A router navigation: the page itself is never reloaded.
+    expect(location.href).toBe("https://app.example/tournee");
+
+    onLine.mockReturnValue(false);
+    cleanup();
+    renderStrip({ status: "unauthorized", running: false, pending: 3 });
+    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
+    expect(screen.getByTestId("where").textContent).toBe("/login");
+  });
+
+  it("asks before opening /login over a dirty form: Quitter opens it, Annuler keeps the draft", async () => {
+    const user = userEvent.setup();
+    renderStrip({ status: "unauthorized", running: false, pending: 3 }, PWA, { dirty: true });
+
+    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+
+    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
+    expect(screen.getByTestId("where").textContent).toBe("/login");
   });
 
   it("takes the waiting build when the update button is tapped", async () => {

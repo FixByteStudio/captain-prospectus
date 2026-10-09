@@ -594,6 +594,79 @@ describe("Hors cible signalé (GH #250)", () => {
   });
 });
 
+describe("Prospects sans agent actif (GH #308)", () => {
+  const GONE = "gone@example.com";
+  const STRAY = "stray@example.com";
+
+  async function seedProspect(name: string, over: Partial<typeof prospects.$inferInsert> = {}) {
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({
+        id,
+        name,
+        type: "restaurant",
+        source: "csv",
+        dedupeKey: `test:${id}`,
+        status: "assigned",
+        createdBy: ADMIN,
+        createdAt: 0,
+        updatedAt: 0,
+        ...over,
+      });
+    return id;
+  }
+
+  async function list(query: string) {
+    const response = await call(`/api/admin/prospects?${query}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as ProspectsResponse;
+    return { names: body.prospects.map((p) => p.name).sort(), total: body.total };
+  }
+
+  async function seedAll() {
+    await seedUser(GONE, "agent", false);
+    const survivor = await seedProspect("Désactivé", { assignedTo: GONE });
+    await seedProspect("Sans compte", { assignedTo: STRAY, status: "follow_up" });
+    await seedProspect("Converti", { assignedTo: GONE, status: "converted" });
+    await seedProspect("Actif", { assignedTo: AGENT });
+    await seedProspect("Libre", { status: "new" });
+    await seedProspect("Absorbé", { assignedTo: GONE, mergedInto: survivor });
+  }
+
+  it("lists a deactivated assignee and an email with no users row, nothing else (I/O matrix)", async () => {
+    await seedAll();
+    expect(await list("inactiveAgent=true")).toEqual({
+      names: ["Converti", "Désactivé", "Sans compte"],
+      total: 3,
+    });
+    // Status stays the job of `status`.
+    expect(await list("status=new,assigned,follow_up&inactiveAgent=true")).toEqual({
+      names: ["Désactivé", "Sans compte"],
+      total: 2,
+    });
+  });
+
+  it("filters the CSV export to the list's rows", async () => {
+    await seedAll();
+    const query = "status=new,assigned,follow_up&inactiveAgent=true";
+    const { names } = await list(query);
+    const response = await call(`/api/admin/prospects/export.csv?${query}`);
+    expect(response.status).toBe(200);
+    const csv = await response.text();
+    for (const name of ["Désactivé", "Sans compte", "Converti", "Actif", "Libre", "Absorbé"]) {
+      expect(csv.includes(name), name).toBe(names.includes(name));
+    }
+  });
+
+  it.each(["1", "false", ""])("answers 400 for inactiveAgent=%s", async (value) => {
+    for (const path of ["/api/admin/prospects", "/api/admin/prospects/export.csv"]) {
+      const response = await call(`${path}?inactiveAgent=${value}`);
+      expect(response.status).toBe(400);
+    }
+  });
+});
+
 describe("POST /api/admin/prospects/batch", () => {
   it("rejects a row without a name", async () => {
     const response = await importRows([{ name: "" }]);

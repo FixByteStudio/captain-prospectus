@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
-import { Route, Routes } from "react-router";
+import { useState, type ReactNode } from "react";
+import { Route, Routes, useNavigate } from "react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { copy } from "../copy";
 import { Toaster } from "../ui/sonner";
 import { AdminLayout } from "./AdminLayout";
+import { AgentsScreen } from "./agents/AgentsScreen";
 import { DashboardScreen } from "./dashboard/DashboardScreen";
 import { DuplicatesScreen } from "./DuplicatesScreen";
 import { OrphansScreen } from "./OrphansScreen";
@@ -26,14 +27,19 @@ import { createAdminQueryClient } from "./query-client";
  * truth is Dexie, and a second cache over the outbox is how visits get lost —
  * the provider living here rather than in App.tsx is what enforces that.
  */
-const queryClient = createAdminQueryClient();
-
 export function AdminApp({ email, updatePrompt }: { email: string; updatePrompt: ReactNode }) {
+  const navigate = useNavigate();
+  // Built per mount, not per module: a sign-in after a 401 must not see the
+  // previous session's cached answers (GH #309). The first render's `navigate`
+  // stays good for an absolute path, so the client never needs rebuilding.
+  const [queryClient] = useState(() => createAdminQueryClient(() => void navigate("/login")));
+
   return (
     <QueryClientProvider client={queryClient}>
       <AdminLayout banner={updatePrompt} email={email}>
         <Routes>
           <Route index element={<DashboardScreen />} />
+          <Route path="agents" element={<AgentsScreen email={email} />} />
           <Route path="prospects" element={<ProspectsScreen />} />
           <Route path="import" element={<ImportScreen />} />
           <Route path="doublons" element={<DuplicatesScreen />} />

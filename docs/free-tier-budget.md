@@ -73,6 +73,11 @@ Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pa
   noise already reaches about 9.9 ms on either build, so the headroom is under 2 ms: the next figure
   added to G1 should be measured the same way (alternating builds, not one run) and may need its own
   endpoint.
+- **After GH #308** (`inactiveAgentProspects`: one new statement, 13 in all). Measured the same way
+  on the same seeded local D1 (303 prospects, 1,689 visits), alternating the pre-change build
+  (e6e6ffc) and this one, 14 cold first requests each: median 9.28 ms after vs 9.27 ms before
+  (8.93–10.46 vs 8.87–11.16). Warm medians 0.56–0.65 ms. No measurable change, but the cold first
+  request now reaches about 11 ms on either build, beyond the 10 ms budget on local hardware (GH #341).
 - **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
   GH #113, eleven since GH #177, the
   largest with 11 bound parameters. Every range read on `visits` — Visites and its previous period,
@@ -81,7 +86,10 @@ Checked: 2026-09-22 (from public sources, to be confirmed on official pricing pa
   (a covering index for Visites), with each joined prospect found by primary key. Prospects
   ouverts and Relances dues search `prospects_status_idx`; the pipeline and the agents'
   assignments search `prospects_merged_idx`. GH #177 adds one statement, `agentsActiveToday`,
-  searching `visits_received_idx (received_at>? AND received_at<?)`.
+  searching `visits_received_idx (received_at>? AND received_at<?)`. GH #308 adds one statement
+  (thirteen in all), `inactiveAgentProspects`, which searches `prospects_merged_idx
+  (merged_into=?)` with a correlated subquery that searches `users` by primary key
+  (`sqlite_autoindex_users_1 (email=?)`).
 - **D1 free-tier limits are hard-enforced since 2026-09-01.** Past the daily row read/write limit,
   queries fail until midnight UTC with `Your account has exceeded D1's free tier daily row read
   limit` (or `…row write limit`). The sync route must translate that into a clear "retry later"
@@ -98,6 +106,11 @@ sweep is bounded to `RETENTION_BATCH` (500) rows written per run, which keeps it
 the D1 daily write quota even on the first run after a backlog — the backlog drains over a
 few days rather than in one statement.
 The same run then deletes expired map-cache rows, bounded to `MAP_CACHE_EVICT_BATCH` (500).
+It also deletes expired `login_codes` and `sessions` and finished-window `login_attempts` rows, each
+table bounded to `AUTH_SWEEP_BATCH` (500) per run: a flood of failed logins can write a day's request
+quota of `login_attempts` rows, and deleting them all at once could use the D1 write quota. There is
+no index for it: in normal use the tables hold a few rows per user, so a scan costs a few reads. After a
+flood, `login_attempts` is read in full each night until it drains.
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
 operations a month; a weekly export of a database measured in megabytes uses one operation

@@ -93,20 +93,30 @@ erDiagram
   }
 
   USERS ||--o{ SESSIONS : "signed in on"
+  USERS ||--o{ LOGIN_CODES : "enrols with"
   USERS {
     text email PK "lowercased"
     text name "nullable"
     text role "admin | agent"
     int active "boolean, default 1"
-    text passphrase_hash "HMAC hex, admins only, nullable"
+    text passphrase_hash "HMAC hex of the normalised generated passphrase; active admins only, cleared on demotion or deactivation, nullable"
     int created_at
   }
   SESSIONS {
     text token_hash PK "HMAC-SHA-256 hex of the cookie token"
     text user_email FK
     int created_at
-    int last_seen_at "written at creation only, for now"
-    int expires_at "created_at + 30 d admin / 90 d agent, fixed"
+    int last_seen_at "bumped at most hourly by the slide"
+    int expires_at "last_seen_at + 30 d admin / 90 d agent, sliding"
+    text id UK "public id, 32 random hex; nullable until the contract step"
+    text device_label "e.g. iPhone · Safari, from the User-Agent at login; nullable"
+  }
+  LOGIN_CODES {
+    text code_hash PK "HMAC-SHA-256 hex of the normalised code"
+    text user_email FK
+    int created_at
+    int expires_at "created_at + 15 min"
+    int used_at "nullable; set by the login that spends it"
   }
   LOGIN_ATTEMPTS {
     text ip_hash PK "HMAC-SHA-256 hex of CF-Connecting-IP (IPv6 by /64), or of unknown"
@@ -120,15 +130,29 @@ A user is deactivated, never deleted. The browser holds a random 32-byte token i
 `__Host-cp_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`); only its
 HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. A session
 counts while `expires_at` is in the future and its user is `active`; the role is read from
-`users` on every request. Sliding expiry, device labels and the nightly sweep of expired rows
-are later entries of the own-login epic.
+`users` on every request. The expiry slides: a request at least an hour after `last_seen_at`
+sets it to now and `expires_at` to now + the role's lifetime (30 d admin, 90 d agent) in one
+conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Agents page revokes a
+device by, so the hash never leaves the Worker; rows from before it were backfilled, and a row the
+previous Worker writes during a deploy gets its id from its first slide. `device_label` is parsed from
+the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep
+deletes rows with `expires_at` in the past, however long since the session was last seen.
+
+`login_codes` holds the one-time codes an admin generates for a device to enrol
+([identity-access](domains/identity-access.md)). A code is 8 Crockford base32 characters (40
+random bits); only the HMAC-SHA-256 under `AUTH_PEPPER` of its normalised form
+(`src/shared/credential.ts`) is stored, never the code. Generating deletes the user's unused codes in
+the same batch, so at most one works. A login spends a code with one conditional `UPDATE … SET
+used_at` (unused, unexpired, user active), so of two racing logins only one gets the row. Used and
+expired rows go in the nightly sweep: it deletes every row past `expires_at`, and a used code expires
+15 minutes after it was made.
 
 `login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
 `src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
 is stored, and an IPv6 address counts by its /64. Each login reserves a failure with an upsert
 that adds one only while the row is under 10, and gives it back unless the login answers 400 or
-401; a row at 10 refuses the IP until the window ends. Nothing deletes old rows yet: the nightly sweep is a later entry of
-the own-login epic.
+401; a row at 10 refuses the IP until the window ends. The nightly sweep deletes a row once its window
+has ended, so it never lifts a lockout early.
 
 `agent_positions` holds at most one row per assignable agent: the latest reading the phone
 offered at sync. It is the one upsert on an agent's behalf, allowed by
@@ -182,7 +206,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
   "have all phones upgraded?" a SQL query instead of a log search, which is the gate for raising
   `MIN_CLIENT_VERSION` (`sync-contract-change` skill).
 - **Identity is a session first, Access second.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Until the cutover ends, a verified Access JWT still does, with the role from `ADMIN_EMAILS` ([identity-access](domains/identity-access.md)). Stored rows identify a user by email either way. With a `users` row, the Access fallback follows it too: inactive is refused, an active row's role wins over `ADMIN_EMAILS`.
-- **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
+- **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` and unused `login_codes` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
 - **A merge is soft.** `merged_into` points at the survivor; nothing is deleted and no visit is
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own
   status and its own dedupe key, which is what makes a merge reversible
@@ -210,6 +234,8 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
 | `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
+| `sessions(id)` unique | revoking one device by its public id |
+| `login_codes(user_email)` | a user's codes: superseding them on generate, deleting them on deactivation |
 
 SQLite uses one index per table reference, so a filtered *and* sorted admin list
 (`status=X` ordered by `updated_at`) filters on the index and then sorts the

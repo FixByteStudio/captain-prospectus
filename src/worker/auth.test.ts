@@ -2,13 +2,15 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { loginAttempts, sessions, users } from "./db/schema";
+import { loginAttempts, loginCodes, sessions, users } from "./db/schema";
 import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
-import { SESSION_COOKIE, hmacHex } from "./session";
+import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
 import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
-import { testSessionCookie } from "../../test/session";
+import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
+import { normaliseCredential } from "../shared/credential";
+import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 
 /**
@@ -81,6 +83,7 @@ const db = () => getDb(env.DB);
 beforeEach(async () => {
   await db().delete(loginAttempts);
   await db().delete(sessions);
+  await db().delete(loginCodes);
   await db().delete(users);
   await seedTestUsers();
 });
@@ -167,7 +170,8 @@ describe("POST /api/auth/login — break-glass", () => {
   });
 
   it.each([
-    ["an unknown kind", { kind: "code", code: "K7QM2XPA" }],
+    ["an unknown kind", { kind: "passkey" }],
+    ["an empty code", { kind: "code", code: "" }],
     ["a missing passphrase", { kind: "passphrase", email: OWNER }],
     ["a missing email", { kind: "passphrase", passphrase: BREAK_GLASS }],
     ["an empty passphrase", { kind: "passphrase", email: OWNER, passphrase: "" }],
@@ -401,6 +405,270 @@ describe("log hygiene", () => {
   });
 });
 
+describe("POST /api/auth/login — code (GH #305)", () => {
+  /** Generates a code for `email` the way the Agents page does. */
+  async function generate(email: string): Promise<LoginCodeResponse> {
+    const response = await call(`/api/admin/users/${encodeURIComponent(email)}/code`, {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
+    });
+    expect(response.status).toBe(201);
+    return (await response.json()) as LoginCodeResponse;
+  }
+
+  /** "K7QM2XPA" as an agent might type it: lowercase, split by a space. */
+  const typed = (code: string) =>
+    `${code.slice(0, 4).toLowerCase()} ${code.slice(4).toLowerCase()}`;
+
+  const agentSessions = () =>
+    db().select().from(sessions).where(eq(sessions.userEmail, TEST_AGENT));
+
+  it("opens an agent session for a code typed in lowercase with a space, and spends it", async () => {
+    const { code } = await generate(TEST_AGENT);
+
+    const response = await login({ kind: "code", code: typed(code) });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_AGENT, role: "agent" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(90 * DAY_MS) / 1000}`);
+    const token = tokenFrom(response);
+    expect(await (await me(cookie(token))).json()).toEqual({ email: TEST_AGENT, role: "agent" });
+
+    const [row] = await db().select().from(loginCodes);
+    expect(row?.usedAt).not.toBeNull();
+    const [session] = await agentSessions();
+    expect(session?.tokenHash).toBe(await hmacHex(PEPPER, token));
+    expect(session && session.expiresAt - session.createdAt).toBe(90 * DAY_MS);
+  });
+
+  it("reads I, L and O typed for 1 and 0", async () => {
+    const { code } = await generate(TEST_AGENT);
+    const lookalike = code.replace(/1/g, "l").replace(/0/g, "o");
+    expect((await login({ kind: "code", code: lookalike })).status).toBe(200);
+  });
+
+  it("gives an admin's own code an admin session with the admin lifetime", async () => {
+    const { code } = await generate(TEST_ADMIN);
+    const response = await login({ kind: "code", code });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
+    const [session] = await db()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
+    expect(session?.userEmail).toBe(TEST_ADMIN);
+    expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
+  });
+
+  it("refuses a wrong code with 401 unauthorized and opens nothing", async () => {
+    await generate(TEST_AGENT);
+    const response = await login({ kind: "code", code: "ZZZZZZZZ" });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "unauthorized" });
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await agentSessions()).toHaveLength(0);
+  });
+
+  it("refuses a code once it has expired", async () => {
+    const { code, expiresAt } = await generate(TEST_AGENT);
+    vi.spyOn(Date, "now").mockReturnValue(expiresAt);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+  });
+
+  it("refuses a code already used", async () => {
+    const { code } = await generate(TEST_AGENT);
+    expect((await login({ kind: "code", code })).status).toBe(200);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("refuses a code a newer one superseded, and takes the newer one", async () => {
+    const older = await generate(TEST_AGENT);
+    const newer = await generate(TEST_AGENT);
+    expect((await login({ kind: "code", code: older.code })).status).toBe(401);
+    expect((await login({ kind: "code", code: newer.code })).status).toBe(200);
+  });
+
+  it("refuses the code of a user deactivated since", async () => {
+    const { code } = await generate(TEST_AGENT);
+    // Behind the route's back, so the code row is still there.
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
+    expect((await login({ kind: "code", code })).status).toBe(401);
+  });
+
+  it("lets exactly one of two concurrent logins spend a code", async () => {
+    const { code } = await generate(TEST_AGENT);
+    const responses = await Promise.all([
+      login({ kind: "code", code }),
+      login({ kind: "code", code: typed(code) }),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 401]);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("opens no session for the loser of a race in the same millisecond", async () => {
+    const { code } = await generate(TEST_AGENT);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    expect((await login({ kind: "code", code })).status).toBe(200);
+    expect((await login({ kind: "code", code })).status).toBe(401);
+    expect(await agentSessions()).toHaveLength(1);
+  });
+
+  it("answers 15 minutes from generation in expiresAt", async () => {
+    const before = Date.now();
+    const { expiresAt } = await generate(TEST_AGENT);
+    expect(expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+  });
+
+  it("never logs the code nor stores it in plaintext", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+
+    const { code } = await generate(TEST_AGENT);
+    await login({ kind: "code", code: "WRONG000" });
+    const token = tokenFrom(await login({ kind: "code", code: typed(code) }));
+
+    const hash = await hmacHex(PEPPER, code);
+    const logged = JSON.stringify(calls);
+    for (const secret of [code, typed(code), hash, token]) {
+      expect(logged).not.toContain(secret);
+    }
+    const [row] = await db().select().from(loginCodes);
+    expect(row?.codeHash).toBe(hash);
+    expect(JSON.stringify(row)).not.toContain(code);
+  });
+});
+
+describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
+  /** Generates the signed-in admin's own passphrase the way the Agents page does. */
+  async function generatePassphrase(email = TEST_ADMIN): Promise<string> {
+    const response = await call("/api/admin/me/passphrase", {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(email) },
+    });
+    expect(response.status).toBe(200);
+    return ((await response.json()) as PassphraseResponse).passphrase;
+  }
+
+  /** "K7QM2XPA…" as an admin might type it: lowercase, hyphen-grouped, O for 0. */
+  const typed = (passphrase: string) =>
+    (passphrase.match(/.{4}/g) ?? []).join("-").toLowerCase().replace(/0/g, "o");
+
+  it("opens a 30-day admin session from the passphrase typed loosely", async () => {
+    // Fixed, with both 0 and 1, so O-for-0 and I/L-for-1 are exercised on every run.
+    const passphrase = "K7QM2XPA9DWE10TN8B01";
+    await db()
+      .update(users)
+      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
+      .where(eq(users.email, TEST_ADMIN));
+
+    const response = await login({
+      kind: "passphrase",
+      email: ` ${TEST_ADMIN.toUpperCase()} `,
+      passphrase: "k7qm-2xpa-9dwe-iotn-8bol",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
+    const [session] = await db().select().from(sessions);
+    expect(session?.userEmail).toBe(TEST_ADMIN);
+    expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
+    expect((await me(cookie(tokenFrom(response)))).status).toBe(200);
+  });
+
+  it("works with break-glass configured but missed, and without it", async () => {
+    const passphrase = await generatePassphrase();
+    const body = { kind: "passphrase", email: TEST_ADMIN, passphrase };
+    expect((await login(body)).status).toBe(200);
+    env.BREAK_GLASS = undefined;
+    env.OWNER_EMAIL = undefined;
+    expect((await login(body)).status).toBe(200);
+  });
+
+  it("lets the owner sign in with a generated passphrase as well as break-glass", async () => {
+    await signIn();
+    const passphrase = await generatePassphrase(OWNER);
+    expect((await login({ kind: "passphrase", email: OWNER, passphrase })).status).toBe(200);
+    expect(
+      (await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS })).status,
+    ).toBe(200);
+  });
+
+  it("refuses the old passphrase once a new one is generated", async () => {
+    const old = await generatePassphrase();
+    const fresh = await generatePassphrase();
+    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: old })).status).toBe(
+      401,
+    );
+    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: fresh })).status).toBe(
+      200,
+    );
+  });
+
+  it("refuses every failure with the same body and opens no session", async () => {
+    const passphrase = await generatePassphrase();
+    const agentHash = await hmacHex(PEPPER, normaliseCredential(passphrase));
+    await db()
+      .insert(users)
+      .values([
+        {
+          email: "gone@x.be",
+          role: "admin",
+          active: false,
+          passphraseHash: agentHash,
+          createdAt: 1,
+        },
+        { email: "nohash@x.be", role: "admin", active: true, createdAt: 1 },
+      ]);
+    // An agent row holding a hash is not reachable through the routes, but must still be refused.
+    await db().update(users).set({ passphraseHash: agentHash }).where(eq(users.email, TEST_AGENT));
+    await db().delete(sessions);
+
+    const responses = await Promise.all([
+      login({ kind: "passphrase", email: "unknown@x.be", passphrase }),
+      login({ kind: "passphrase", email: "nohash@x.be", passphrase }),
+      login({ kind: "passphrase", email: "gone@x.be", passphrase }),
+      login({ kind: "passphrase", email: TEST_AGENT, passphrase }),
+      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: `${passphrase.slice(0, -1)}X` }),
+      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "0".repeat(64) }),
+    ]);
+    const bodies = await Promise.all(responses.map((r) => r.text()));
+    expect(responses.map((r) => r.status)).toEqual([401, 401, 401, 401, 401, 401]);
+    expect(new Set(bodies).size).toBe(1);
+    expect(responses.every((r) => r.headers.get("Set-Cookie") === null)).toBe(true);
+    expect(await db().select().from(sessions)).toEqual([]);
+  });
+
+  it("stores only the HMAC of the passphrase and never logs it", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    const passphrase = await generatePassphrase();
+    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: typed(passphrase) });
+    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "wrong" });
+
+    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
+    const hash = await hmacHex(PEPPER, passphrase);
+    expect(row?.passphraseHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row?.passphraseHash).toBe(hash);
+    expect(JSON.stringify(row)).not.toContain(passphrase);
+    const logged = JSON.stringify(calls);
+    for (const secret of [passphrase, typed(passphrase), hash]) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+});
+
 describe("login throttle (CAP-7)", () => {
   const IP_A = "203.0.113.7";
   const IP_B = "198.51.100.23";
@@ -468,6 +736,21 @@ describe("login throttle (CAP-7)", () => {
   it("counts the 401 a Worker without OWNER_EMAIL answers", async () => {
     env.OWNER_EMAIL = undefined;
     await fail(IP_A, LOGIN_MAX_FAILURES);
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("counts a refused generated passphrase", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      const body = { kind: "passphrase", email: TEST_ADMIN, passphrase: "ZZZZ-ZZZZ" };
+      expect((await loginFrom(IP_A, body)).status).toBe(401);
+    }
+    expect((await loginFrom(IP_A, VALID)).status).toBe(429);
+  });
+
+  it("counts a refused code like a refused passphrase", async () => {
+    for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
+      expect((await loginFrom(IP_A, { kind: "code", code: "ZZZZZZZZ" })).status).toBe(401);
+    }
     expect((await loginFrom(IP_A, VALID)).status).toBe(429);
   });
 
@@ -624,5 +907,187 @@ describe("requireIdentity — DEV_USER_EMAIL on a local host (GH #300)", () => {
   it("is ignored off a local host", async () => {
     env.DEV_USER_EMAIL = TEST_ADMIN;
     expect((await me()).status).toBe(401);
+  });
+});
+
+describe("device sessions (GH #307)", () => {
+  const IPHONE_SAFARI =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+  const ANDROID_CHROME =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
+  const WINDOWS_EDGE =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0";
+  const HOUR_MS = 60 * 60 * 1000;
+
+  function loginAs(body: unknown, userAgent?: string): Promise<Response> {
+    return call("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(userAgent ? { "User-Agent": userAgent } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function sessionOf(response: Response) {
+    const [row] = await db()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
+    return row;
+  }
+
+  async function sessionByHash(tokenHash: string) {
+    const [row] = await db().select().from(sessions).where(eq(sessions.tokenHash, tokenHash));
+    return row;
+  }
+
+  it("stores an id and the device label on a break-glass login", async () => {
+    const response = await loginAs(
+      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
+      IPHONE_SAFARI,
+    );
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("iPhone · Safari");
+  });
+
+  it("stores an id and the device label on a code login", async () => {
+    const generated = await call(`/api/admin/users/${encodeURIComponent(TEST_AGENT)}/code`, {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
+    });
+    const { code } = (await generated.json()) as LoginCodeResponse;
+    const response = await loginAs({ kind: "code", code }, ANDROID_CHROME);
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.userEmail).toBe(TEST_AGENT);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("Android · Chrome");
+    expect(row && row.expiresAt - row.createdAt).toBe(90 * DAY_MS);
+  });
+
+  it("stores an id and the device label on a generated-passphrase login", async () => {
+    const passphrase = "K7QM2XPA9DWE10TN8B01";
+    await db()
+      .update(users)
+      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
+      .where(eq(users.email, TEST_ADMIN));
+    const response = await loginAs(
+      { kind: "passphrase", email: TEST_ADMIN, passphrase },
+      WINDOWS_EDGE,
+    );
+    expect(response.status).toBe(200);
+    const row = await sessionOf(response);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.deviceLabel).toBe("Windows · Edge");
+  });
+
+  it("stores a null label for an empty or bot User-Agent, and distinct ids", async () => {
+    const body = { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS };
+    const bare = await sessionOf(await loginAs(body));
+    const bot = await sessionOf(
+      await loginAs(body, "Googlebot/2.1 (+http://www.google.com/bot.html)"),
+    );
+    expect(bare?.deviceLabel).toBeNull();
+    expect(bot?.deviceLabel).toBeNull();
+    expect(bare?.id).not.toBe(bot?.id);
+  });
+
+  it("writes nothing and sends no cookie within the hour", async () => {
+    const lastSeenAt = Date.now() - 10 * 60 * 1000;
+    const session = await testSession(TEST_AGENT, { lastSeenAt });
+    const before = await sessionByHash(session.tokenHash);
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await sessionByHash(session.tokenHash)).toEqual(before);
+  });
+
+  it("slides a stale agent session by 90 days and re-sends the same token", async () => {
+    const session = await testSession(TEST_AGENT, {
+      lastSeenAt: Date.now() - 2 * HOUR_MS,
+      expiresAt: Date.now() + DAY_MS,
+    });
+    const startedAt = Date.now();
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    const setCookie = response.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain(`${session.cookie};`);
+    expect(setCookie).toContain("Max-Age=7776000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row?.lastSeenAt).toBeGreaterThanOrEqual(startedAt);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(90 * DAY_MS);
+    expect(row?.id).toBe(session.id);
+
+    // Slid just now: the next request is inside the hour again.
+    expect((await me({ Cookie: session.cookie })).headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("slides a stale admin session by 30 days", async () => {
+    const session = await testSession(TEST_ADMIN, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=2592000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(30 * DAY_MS);
+  });
+
+  it("slides by the current role's lifetime after a demotion", async () => {
+    await db().insert(users).values({ email: OWNER, role: "admin", active: true, createdAt: 1 });
+    const session = await testSession(OWNER, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+    await db().update(users).set({ role: "agent" }).where(eq(users.email, OWNER));
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(90 * DAY_MS) / 1000}`);
+    const row = await sessionByHash(session.tokenHash);
+    expect(row && row.expiresAt - row.lastSeenAt).toBe(90 * DAY_MS);
+  });
+
+  it("gives a row the previous Worker wrote its id on the first request, and slides it", async () => {
+    const session = await testSession(TEST_AGENT, { id: null });
+
+    const response = await me({ Cookie: session.cookie });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=7776000");
+    const row = await sessionByHash(session.tokenHash);
+    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("keeps the refreshed cookie on an error response", async () => {
+    const session = await testSession(TEST_AGENT, { lastSeenAt: Date.now() - 2 * HOUR_MS });
+
+    const response = await call("/api/admin/users", { headers: { Cookie: session.cookie } });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("Set-Cookie")).toContain(`${session.cookie};`);
+  });
+
+  it("never logs the User-Agent", async () => {
+    const calls: unknown[][] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+      });
+    }
+    const ua = `${IPHONE_SAFARI} marker-7f3a`;
+
+    const response = await loginAs(
+      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
+      ua,
+    );
+    await loginAs({ kind: "passphrase", email: OWNER, passphrase: "wrong" }, ua);
+    await call("/api/me", { headers: { ...cookie(tokenFrom(response)), "User-Agent": ua } });
+
+    expect(JSON.stringify(calls)).not.toContain("marker-7f3a");
   });
 });

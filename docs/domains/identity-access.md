@@ -8,7 +8,11 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
 
 1. **A session.** The `__Host-cp_session` cookie's token, hashed with `AUTH_PEPPER`, names a
    `sessions` row that has not expired and whose user is `active`. The role is the `users` row's.
-   Without `AUTH_PEPPER` this step is skipped, never guessed.
+   Without `AUTH_PEPPER` this step is skipped, never guessed. The expiry slides: a request an hour
+   or more after the last slide pushes it to now + the role's lifetime (30 days admin, 90 days
+   agent) and re-sends the cookie, so a device in use stays signed in. Each session carries a public
+   id and a device label from the User-Agent at login; an admin revokes one device by that id from
+   the Agents page, and its next request is a 401.
 2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
    through `/login` is who the session says.
 3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker
@@ -23,16 +27,37 @@ Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admi
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
 dashboard rows, position gate) is the active `users` rows.
 
-**Break-glass** is the only sign-in so far. In `/login`'s passphrase form, `OWNER_EMAIL` (any case,
+**A one-time code** enrols a device. An admin picks "Générer un code" on a user's row of the Agents
+page (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
+15 minutes and once ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
+deactivating the user cancels it too. On `/login`'s default form the agent types it as given; the
+server reads it case-insensitively, ignoring spaces and hyphens, with I/L read as 1 and O as 0
+(`src/shared/credential.ts`). The code opens a session with the user's own role. A wrong, expired,
+used, superseded or deactivated-user code gets the same 401. Only the code's HMAC is stored and
+nothing logs it.
+
+**Break-glass** is the admin form, behind "Accès administrateur" on `/login`. In it, `OWNER_EMAIL` (any case,
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
 admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
 repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
-`POST /api/auth/logout` deletes the device's session. Codes for agents and generated passphrases for
-admins are later entries of the own-login epic.
+`POST /api/auth/logout` deletes the device's session.
 
-After 10 failed logins from one IP in a 15-minute window, that IP's logins get 429 until the window
+**An admin's passphrase** is the same admin form, for everyday sign-ins. An admin picks "Nouvelle
+phrase de passe" on their own row of the Agents page, and only there: after a confirmation, the
+server generates 20 Crockford base32 characters (100 bits), shows them once and stores only their
+HMAC ([api](../api.md#admin)). Nobody chooses a passphrase or sees another user's. Generating a new
+one replaces the old at once; sessions stay. The login tries break-glass first, then the user's
+passphrase, read like a code (case, spaces and hyphens ignored, I/L as 1, O as 0): it opens a
+30-day admin session for an active admin whose hash matches. Demoting or deactivating a user clears
+their passphrase. Every refusal — unknown email, no passphrase, deactivated, agent, wrong
+passphrase — gets the same 401 after the same work, and nothing logs a passphrase or its hash.
+
+After 10 failed logins (codes and passphrases alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
 foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
+
+The nightly sweep deletes expired codes, expired sessions and `login_attempts` rows whose window has
+ended ([data-model](../data-model.md)).
 
 ## Permissions
 | Action | Agent | Admin |
@@ -43,16 +68,22 @@ foreign gets 403, so no other site can act with a user's session ([api](../api.m
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |
 | Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
+| Manage users: add one, change a role, deactivate or reactivate | | ✓ |
+| Generate a one-time code for any user, their own row included | | ✓ |
+| Revoke one device's session | | ✓ |
+| Regenerate one's own passphrase | | ✓ |
 
 ## Local development
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
-Access sessions expire. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
+Sessions expire or are revoked. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
 
-**"Se reconnecter" is a marker navigation, not a reload.** The service worker serves every ordinary navigation from precache (`navigateFallback`), which never reaches Access, so a plain reload cannot re-authenticate. The button instead navigates to the current URL plus `?reconnect=1`, an entry `navigateFallbackDenylist` excludes from that fallback (`vite.config.ts`), so this one navigation goes to the network and through Access; the app strips the marker back out of the URL once it has landed (`docs/design.md` § "Sync is ambient, never a toast"). The outbox is untouched either way — INVARIANT 5.
+**The Worker's own 401 and an Access redirect are told apart** (`apiFetch`: a plain 401 status against `response.type === "opaqueredirect"`; both are `ApiError` status 401, with `code` `unauthorized` or `access_redirect`). The Worker's 401 means `/login` is the way back: at launch the app drops the cache as below and opens `/login` (`replace`), the sync strip's button opens `/login` through the leave guard (so a dirty form asks first), and any admin query, mutation or CSV export that gets one opens `/login`. Nothing on these paths touches the outbox. An Access redirect keeps the marker navigation below. `/login` asks `/api/me` once on mount: a device that still has an identity goes to its landing; a 401, an Access redirect or a network error leaves the form.
 
-**The admin top bar's "Se déconnecter" (GH #64) hits the same wall the other way round.** It is a plain `<a href="/cdn-cgi/access/logout">`, not a router `Link`: a SPA navigation never leaves `App.tsx`, and a normal `<a>` click would still be swallowed by `navigateFallback`. `navigateFallbackDenylist` also excludes `/^\/cdn-cgi\//` (GH #76) so this one anchor's click reaches the network and Access's own logout endpoint instead of the precached shell.
+**For an Access redirect, "Se reconnecter" is a marker navigation, not a reload.** The service worker serves every ordinary navigation from precache (`navigateFallback`), which never reaches Access, so a plain reload cannot re-authenticate. The button instead navigates to the current URL plus `?reconnect=1`, an entry `navigateFallbackDenylist` excludes from that fallback (`vite.config.ts`), so this one navigation goes to the network and through Access; the app strips the marker back out of the URL once it has landed (`docs/design.md` § "Sync is ambient, never a toast"). The outbox is untouched either way — INVARIANT 5.
+
+**The admin top bar's "Se déconnecter" (GH #64, #309)** calls `POST /api/auth/logout`, then asks `/api/me` once. If it still answers, Access is signing this device in, so the page is sent to `/cdn-cgi/access/logout` with `window.location` (a SPA navigation never leaves `App.tsx`, and `navigateFallbackDenylist` excludes `/^\/cdn-cgi\//`, GH #76, so that request reaches Access instead of the precached shell). Otherwise the session was all there was and the app opens `/login`. If the POST never reaches the server the menu stays put and a toast says so: the cookie would survive, and `/login` would send the user straight back to their landing. The `?reconnect=1` marker, the `/cdn-cgi/` denylist entry and the Access logout path stay until Access is gone (phase 3).
 
 **The app shell itself has the same offline fallback, with the same limit.**
 On load it calls `GET /api/me`; if that genuinely cannot be reached (no network
@@ -60,11 +91,12 @@ route to the Worker at all), it falls back to the last identity Dexie cached
 and opens the field screens from what the phone already has. It does **not**
 fall back on a 401 — that is the Worker answering that the session is no
 longer valid, which is different from being unreachable, and is exactly the
-"stolen phone" mitigation in [security.md](../security.md) (an admin removes
-the email from the Access policy; the next `/api/me` the phone manages to send
-comes back 401, not cached-and-accepted). A 401 shows the error with the same
-"Se reconnecter" marker navigation as the sync strip (GH #75): a reload would
-come back from precache and straight into the same 401.
+"stolen phone" mitigation in [security.md](../security.md) (an admin revokes
+the device's session or deactivates the user; the next `/api/me` the phone
+manages to send comes back 401, not cached-and-accepted). The Worker's 401 opens `/login`
+(above). An Access redirect shows the error with the same "Se reconnecter"
+marker navigation as the sync strip (GH #75): a reload would come back from
+precache and straight into the same redirect.
 
 **A 401 also deletes the cache, not merely declines to read it.** Refusing the
 fallback on its own would leave the mitigation one aeroplane-mode toggle wide:
@@ -77,9 +109,9 @@ outbox survives it — a revoked session is not the server listing those rows in
 
 **A refused sync clears it too.** A PWA resumed from the app switcher does not
 remount, so it never re-asks `/api/me`. `runSync` therefore calls
-`clearAgentCache` on every response it reports as `auth` — a 401, a 403 or an
-Access redirect, since an expired session and a revoked one look the same from
-the phone (GH #35). A network failure clears nothing. An agent online with an
+`clearAgentCache` on every refusal it reports, as `unauthorized` (the Worker's
+401) or `auth` (a 403 or an Access redirect). An expired session and a revoked
+one look the same from the phone (GH #35). A network failure clears nothing. An agent online with an
 expired session sees an empty round until "Se reconnecter" brings it back.
 
 **The cached identity opens the field side only.** An admin identity read from
@@ -97,8 +129,8 @@ admin screens the moment that re-check lands (spec-gh-115,
 never re-checks — going offline and back costs it nothing.
 
 The cached identity is a rendering convenience, never proof: the Worker
-re-derives identity from the verified JWT on every request regardless of what
-the client claims to be. Its only other effect is that if the identity that
+re-derives identity on every request from the session (or, in phase 1, the
+verified Access JWT) regardless of what the client claims to be. Its only other effect is that if the identity that
 comes back from a successful `/api/me` names a **different** email than the
 cached one — a different agent has signed in on this device — the locally
 cached round (`prospects`) and cached visit history are cleared before
@@ -111,8 +143,8 @@ again (`docs/domains/field-operations.md#local-store-dexie`, backlog 005).
 
 **A cache-sourced session is unconfirmed, and syncs nothing until a live
 `/api/me` says otherwise (docs/backlog/013).** The cached email is a rendering
-convenience, not proof of who holds the Access cookie the next request will
-actually carry — if agent B signs in through Access on agent A's phone and
+convenience, not proof of whose session cookie the next request will
+actually carry — if agent B signs in with a code on agent A's phone and
 that launch's `/api/me` hits a network blip or a 5xx, `resolveIdentity` falls
 back to A's cached identity (above) while the cookie is really B's. Backlog
 005 stamps every outbox row with the identity active when it was written, but

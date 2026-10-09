@@ -180,6 +180,7 @@ export function DashboardScreen() {
                   dueBefore={data.to}
                   orphans={orphanCount}
                   duplicates={duplicates}
+                  inactiveAgentProspects={data.inactiveAgentProspects}
                 />
               ) : (
                 <TodoPanelSkeleton />

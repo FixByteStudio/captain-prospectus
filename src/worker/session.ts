@@ -6,14 +6,15 @@
  * credential in Workers observability (docs/security.md).
  */
 import type { Role } from "../shared/constants";
+import { CROCKFORD } from "../shared/credential";
 
 export const SESSION_COOKIE = "__Host-cp_session";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Fixed lifetime from creation, per role. ADR-0029 wants a sliding expiry;
- * that and `last_seen_at` writes are a later entry of epic-own-login.
+ * Lifetime per role, sliding (ADR-0029): `requireIdentity` pushes `expires_at`
+ * to now + this whenever it bumps `last_seen_at`, at most every SESSION_SLIDE_MS.
  */
 export const SESSION_TTL_MS: Record<Role, number> = {
   admin: 30 * DAY_MS,
@@ -54,12 +55,58 @@ export async function hmacHex(pepper: string, value: string): Promise<string> {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * How stale `last_seen_at` must be before a request slides the session: one
+ * write per device per hour, not one per request (INVARIANT 13).
+ */
+export const SESSION_SLIDE_MS = 60 * 60 * 1000;
+
+/**
+ * A session's public id (GH #307): 16 random bytes as 32 lowercase hex, never
+ * derived from the token, so an admin revokes a device without the hash ever
+ * leaving the Worker.
+ */
+export function newSessionId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** 32 random bytes, base64url without padding. */
 export function newSessionToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** How long a one-time code works once generated (identity-access.md). */
+export const LOGIN_CODE_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * `length` random Crockford characters, 5 bits each, read most significant
+ * first from ceil(length × 5 / 8) random bytes; the spare low bits are dropped.
+ */
+function crockfordRandom(length: number): string {
+  const byteCount = Math.ceil((length * 5) / 8);
+  const spare = BigInt(byteCount * 8 - length * 5);
+  const bytes = crypto.getRandomValues(new Uint8Array(byteCount));
+  let bits = 0n;
+  for (const b of bytes) bits = (bits << 8n) | BigInt(b);
+  bits >>= spare;
+  let out = "";
+  for (let i = length - 1; i >= 0; i--)
+    out += CROCKFORD.charAt(Number((bits >> BigInt(i * 5)) & 31n));
+  return out;
+}
+
+/** 8 Crockford characters from 5 random bytes: 40 bits per code. */
+export function newLoginCode(): string {
+  return crockfordRandom(8);
+}
+
+/** An admin's passphrase (identity-access.md): 20 Crockford characters, 100 bits. */
+export function newPassphrase(): string {
+  return crockfordRandom(20);
 }
 
 /** One named cookie from a Cookie header, or null. */

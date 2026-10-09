@@ -186,10 +186,17 @@ export const copy = {
     reconnect: "Se reconnecter",
   },
 
-  /** `/login` (docs/design.md › The login page, ADR-0029). The admin form
-   * only for now; the code form and its switch come with one-time codes. */
+  /** `/login` (docs/design.md › The login page, ADR-0029): the code form by
+   * default, the admin form behind "Accès administrateur". */
   login: {
     title: "Connexion",
+    codeLede: "Entrez le code que vous a donné un administrateur.",
+    code: "Code",
+    codeRequired: "Saisissez votre code.",
+    codeRefused:
+      "Ce code ne fonctionne pas. Il a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
+    toAdmin: "Accès administrateur",
+    toCode: "Retour au code",
     adminLede: "Connectez-vous avec votre adresse e-mail et votre phrase de passe.",
     email: "Adresse e-mail",
     passphrase: "Phrase de passe",
@@ -201,6 +208,12 @@ export const copy = {
     unreachable: "Connexion impossible. Vérifiez le réseau et réessayez.",
     failed: "Connexion impossible pour le moment. Réessayez dans un instant.",
     offline: "Hors ligne. Connectez-vous dès que le réseau revient.",
+    /** 429: `time` is Brussels "HH:MM", now plus Retry-After. */
+    lockedUntil: (time: string) =>
+      `Trop de tentatives depuis cette connexion. Réessayez à ${time}, ou changez de réseau.`,
+    /** 429 without a usable Retry-After. */
+    lockedForMinutes:
+      "Trop de tentatives depuis cette connexion. Réessayez dans quelques minutes, ou changez de réseau.",
   },
 
   /** The service worker has a new build waiting (registerType: "prompt"). */

@@ -108,7 +108,10 @@ export function Toolbar({
           />
           <Filter
             label={copy.prospects.filters.agent}
-            value={filters.assignedTo ?? ANY}
+            // "Agent désactivé" is not an agent: "" shows the placeholder, as
+            // Statut does for several statuses, and any choice clears it.
+            value={filters.inactiveAgent ? "" : (filters.assignedTo ?? ANY)}
+            placeholder={copy.prospects.filters.inactiveAgentSelect}
             onChange={(v) => onFilterChange("assignedTo", v)}
             anyLabel={copy.prospects.filters.anyAgent}
             options={agentList.map((email) => ({ value: email, label: email }))}

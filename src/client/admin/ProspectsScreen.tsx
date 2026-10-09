@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { EXPORT_ROWS } from "../../shared/constants";
 import type { Status } from "../../shared/constants";
 import type { Prospect } from "../../shared/schemas";
 import { STATUS_LABELS, copy } from "../copy";
 import { formatBrusselsDate } from "../format";
-import { ApiError } from "../api";
+import { ApiError, isWorkerUnauthorized } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
@@ -49,6 +49,7 @@ export function ProspectsScreen() {
   // The URL holds the filters, so a reload or a shared link (and the
   // dashboard's cards, GH #114) opens the same list.
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filters = useMemo(() => parseProspectFilters(searchParams), [searchParams]);
   const query = searchParams.toString();
   const isMobile = useIsMobile();
@@ -137,7 +138,8 @@ export function ProspectsScreen() {
     filters.assignedTo ||
     filters.source ||
     filters.q ||
-    filters.outOfTarget,
+    filters.outOfTarget ||
+    filters.inactiveAgent,
   );
 
   /** Replace, not push: a filter tweak is not a page Back should step through. */
@@ -151,6 +153,9 @@ export function ProspectsScreen() {
 
   function setFilter(key: "status" | "assignedTo" | "source", value: string) {
     const next = { ...filters };
+    // The Agent select stands in for "Agent désactivé" while that filter is
+    // on, so any choice there, "Tous les agents" included, replaces it.
+    if (key === "assignedTo") delete next.inactiveAgent;
     if (value === ANY) delete next[key];
     else if (key === "status") next.status = [value as Status];
     else if (key === "source") next.source = value as ProspectFilters["source"];
@@ -202,6 +207,9 @@ export function ProspectsScreen() {
       key: "dueBefore",
       label: copy.prospects.filters.dueBefore(formatBrusselsDate(filters.dueBefore)),
     });
+  }
+  if (filters.inactiveAgent) {
+    chips.push({ key: "inactiveAgent", label: copy.prospects.filters.inactiveAgentChip });
   }
 
   function toggle(id: string) {
@@ -256,6 +264,11 @@ export function ProspectsScreen() {
       );
       if (truncated) toast.warning(copy.prospects.export.truncated(EXPORT_ROWS));
     } catch (error) {
+      // A file download is outside the query client, so it opens `/login` itself.
+      if (isWorkerUnauthorized(error)) {
+        void navigate("/login");
+        return;
+      }
       toast.error(error instanceof ApiError ? error.message : copy.prospects.export.failed);
     } finally {
       setExporting(false);
