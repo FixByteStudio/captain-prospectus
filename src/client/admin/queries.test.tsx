@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, useLocation } from "react-router";
 import { createAdminQueryClient } from "./query-client";
 import {
   adminKeys,
@@ -19,6 +20,14 @@ import {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+function wrapperFor(client: ReturnType<typeof createAdminQueryClient>) {
+  return ({ children }: { children: ReactNode }) => (
+    <MemoryRouter initialEntries={["/admin/import"]}>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </MemoryRouter>
+  );
+}
 
 describe("useImportBatches", () => {
   it("marks the dashboard stale once an import has run", async () => {
@@ -34,14 +43,50 @@ describe("useImportBatches", () => {
     );
     const client = createAdminQueryClient();
     client.setQueryData(adminKeys.dashboard(30), { openProspects: 3 });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-
-    const { result } = renderHook(() => useImportBatches(), { wrapper });
+    const { result } = renderHook(() => useImportBatches(), { wrapper: wrapperFor(client) });
     await act(() => result.current.start([{ name: "Chez Léa", type: "restaurant" }]));
 
     expect(client.getQueryState(adminKeys.dashboard(30))?.isInvalidated).toBe(true);
+  });
+
+  const ROW = [{ name: "Chez Léa", type: "restaurant" as const }];
+
+  it("opens /login when a batch gets the Worker's 401, without an in-screen error (GH #309)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    const { result } = renderHook(
+      () => ({ import: useImportBatches(), path: useLocation().pathname }),
+      {
+        wrapper: wrapperFor(createAdminQueryClient()),
+      },
+    );
+
+    await act(() => result.current.import.start(ROW));
+
+    expect(result.current.path).toBe("/login");
+    expect(result.current.import.error).toBeNull();
+  });
+
+  it("keeps the in-screen error for an Access redirect", async () => {
+    const redirect = new Response(null, { status: 200 });
+    Object.defineProperty(redirect, "type", { value: "opaqueredirect" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => redirect),
+    );
+    const { result } = renderHook(
+      () => ({ import: useImportBatches(), path: useLocation().pathname }),
+      {
+        wrapper: wrapperFor(createAdminQueryClient()),
+      },
+    );
+
+    await act(() => result.current.import.start(ROW));
+
+    expect(result.current.path).toBe("/admin/import");
+    expect(result.current.import.error).not.toBeNull();
   });
 });
 

@@ -4,8 +4,9 @@
  * is how visits get lost.
  */
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiFetch } from "../api";
+import { ApiError, apiFetch, authError, isWorkerUnauthorized } from "../api";
 import { copy } from "../copy";
 import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
@@ -329,6 +330,7 @@ export function useAssign() {
  */
 export function useImportBatches(source: Source = "csv") {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const invalidate = useInvalidateProspects();
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -358,6 +360,11 @@ export function useImportBatches(source: Source = "csv") {
       }
       setResult(totals);
     } catch (cause) {
+      // Outside the MutationCache, so the Worker's 401 is handled here (GH #309).
+      if (isWorkerUnauthorized(cause)) {
+        void navigate("/login");
+        return;
+      }
       setError(cause instanceof ApiError ? cause.message : copy.import.failed);
     } finally {
       setIsRunning(false);
@@ -563,8 +570,9 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
  * inclusive) and, by the same helper, Prospects' (#179).
  *
  * Not `apiFetch`: that parses JSON, and this response is a file. The auth
- * failure it recognises is the same one (ADR-0006's opaque redirect), so it is
- * thrown as the same `ApiError` for a caller to handle identically.
+ * failures it recognises are the same two (the Worker's 401 and ADR-0006's
+ * opaque redirect), thrown as the same `ApiError`s for a caller to handle
+ * identically.
  *
  * Resolves to whether the server flagged `x-truncated`, so the caller can warn
  * about the row cap without re-parsing headers itself.
@@ -580,9 +588,8 @@ export async function downloadCsv(
 ): Promise<boolean> {
   const response = await fetch(path, { redirect: "manual" });
 
-  if (response.type === "opaqueredirect" || response.status === 401) {
-    throw new ApiError(401, "auth", copy.errors.sessionExpired);
-  }
+  const authFailure = authError(response, copy.errors.sessionExpired);
+  if (authFailure) throw authFailure;
   if (!response.ok) {
     throw new ApiError(response.status, "error", failed);
   }

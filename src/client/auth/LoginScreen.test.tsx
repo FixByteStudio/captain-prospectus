@@ -28,9 +28,22 @@ function renderLogin() {
   );
 }
 
-function stubFetch(reply: () => Promise<Response>) {
+/** How many times the mount check asked `/api/me`; reset by every `stubFetch`. */
+let meCalls = 0;
+
+/**
+ * `reply` answers the sign-in; `/api/me` (the mount check, GH #309) has its
+ * own answer, a 401 unless a case says otherwise, and its calls stay out of
+ * the returned list so the sign-in assertions read as before.
+ */
+function stubFetch(reply: () => Promise<Response>, me: () => Promise<Response> = json(401, {})) {
   const calls: { url: string; init: RequestInit | undefined }[] = [];
+  meCalls = 0;
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/me") {
+      meCalls += 1;
+      return me();
+    }
     calls.push({ url: String(input), init });
     return reply();
   });
@@ -165,6 +178,7 @@ describe("LoginScreen — code form", () => {
   }
 
   it("is the default form, with the one-time-code field design.md asks for", () => {
+    stubFetch(json(401, {}));
     renderLogin();
     expect(screen.getByText(copy.login.codeLede)).toBeTruthy();
     const input = codeInput();
@@ -336,5 +350,41 @@ describe("LoginScreen — lockout", () => {
       window.dispatchEvent(new Event("online"));
     });
     expect(screen.getByRole("alert").textContent).toMatch(/^Trop de tentatives/);
+  });
+});
+
+describe("LoginScreen — a device that already has an identity (GH #309)", () => {
+  const redirected = () => {
+    const response = new Response(null, { status: 200 });
+    Object.defineProperty(response, "type", { value: "opaqueredirect" });
+    return Promise.resolve(response);
+  };
+
+  it.each([
+    ["an admin", "admin", "admin landing"],
+    ["an agent", "agent", "round landing"],
+  ])("sends %s straight to their landing, replacing /login", async (_who, role, landing) => {
+    stubFetch(json(200, {}), json(200, { email: OWNER, role }));
+    renderLogin();
+
+    expect(await screen.findByText(landing)).toBeTruthy();
+    expect(meCalls).toBe(1);
+  });
+
+  it.each([
+    ["a 401", json(401, { error: "unauthorized", message: "x" })],
+    ["an Access redirect", redirected],
+    ["a network error", () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["an answer that is not an identity", json(200, { nope: true })],
+  ])("keeps the form on %s, asking only once", async (_what, me) => {
+    stubFetch(json(200, {}), me);
+    renderLogin();
+
+    expect(await screen.findByLabelText(copy.login.code)).toBeTruthy();
+    // Let the mount check settle; it must neither retry nor redirect.
+    await act(async () => {});
+    expect(screen.queryByText("admin landing")).toBeNull();
+    expect(screen.queryByText("round landing")).toBeNull();
+    expect(meCalls).toBe(1);
   });
 });

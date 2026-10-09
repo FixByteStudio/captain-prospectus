@@ -332,3 +332,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
   summary: Contract step for `sessions.id` — make it NOT NULL and drop the null-id branches in auth.ts and identity.ts once no pre-#307 session can remain.
   evidence: 0012 adds `id` nullable so the Worker deployed before it keeps inserting; the null handling has no end date until this is scheduled.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-309-401-to-login.md`
+  summary: The identity re-check of a cache-started session (`GatedApp`, after the network returns) opens `/login` on a Worker 401 without asking the leave guard, so an open visit form is dropped.
+  evidence: Edge-case lens; before #309 the same 401 replaced the whole app with the error frame, so the draft was lost equally (pre-existing). The field `LeaveGuardProvider` lives in `FieldFrame`, below the identity effect, so a fix needs the guard lifted or the jump deferred to the strip.

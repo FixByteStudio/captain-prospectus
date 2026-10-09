@@ -259,9 +259,10 @@ that; the button and ⌘K/Ctrl+K open a shadcn `CommandDialog` whose only
 content is its input and an explanatory empty state — there is no back end
 yet, and no request is made. The bell is a disabled icon button with no
 content. The avatar is initials on `primary` with a `primary-edge` ring,
-opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a real
-anchor to `/cdn-cgi/access/logout` rather than a router link — see
-[identity-access.md](domains/identity-access.md) for why.
+opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a menu
+item that ends the session with `POST /api/auth/logout` and then opens `/login`,
+or Access's logout endpoint while Access still signs the device in — see
+[identity-access.md](domains/identity-access.md). The field avatar has no menu.
 
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build
@@ -2057,21 +2058,25 @@ one place rather than letting the band and the strip each branch on their own:
 | Syncing | pulsing `band-muted`, with a halo | none, unless also waiting | as waiting | — |
 | Offline | `warn` + count | `secondary` | `copy.sync.offline` | — |
 | Failed | `warn` + count | `secondary` | `copy.sync.failed` | — |
-| Session expired | `destructive` + count | `destructive`, `on-destructive` text | `copy.sync.authExpired` | Se reconnecter |
+| Session expired | `destructive` + count | `destructive`, `on-destructive` text | `copy.sync.authExpired` | Se reconnecter (opens `/login`; through Access for an Access redirect) |
 | Update needed | `warn` + count | `warn`, `on-destructive` text | `copy.sync.upgrade` | Mettre à jour |
 
 Only two states carry a button, because only two ask the agent for something
 the app cannot do by itself:
 
-- **Se reconnecter** navigates to the current URL plus `?reconnect=1`. The
-  service worker serves every other navigation from precache
-  (`navigateFallback: "index.html"`), which never reaches Cloudflare Access, so
-  a plain reload cannot re-authenticate an expired session — this marker is the
-  one entry `navigateFallbackDenylist` excludes from that fallback
-  (`vite.config.ts`), so this one navigation goes to the network and through
-  Access. The app removes the marker from the URL once it has landed
-  (`withoutReconnectMarker`, `App.tsx`). The outbox is never touched by this —
-  a session expiring is not a reason to lose a visit (INVARIANT 5).
+- **Se reconnecter** depends on who refused the session. When the Worker itself
+  answered 401, it opens `/login` by router navigation, through the leave guard
+  like the other strip buttons (a dirty form asks first); `/login` is part of
+  the shell, so it needs no network. When Access answered with a redirect (or a
+  403), it navigates to the current URL plus `?reconnect=1`, and with no network
+  it stays put. The marker is needed because the service worker serves every
+  other navigation from precache (`navigateFallback: "index.html"`), which never
+  reaches Cloudflare Access, so a plain reload cannot re-authenticate an
+  expired session. `navigateFallbackDenylist` (`vite.config.ts`) excludes the
+  marker from that fallback, so this one navigation goes to the network and
+  through Access. The app removes the marker from the URL once it has landed
+  (`withoutReconnectMarker`, `App.tsx`). The outbox is never touched by either
+  path: a session expiring is not a reason to lose a visit (INVARIANT 5).
 - **Mettre à jour** takes a build already waiting, or reloads if the browser
   has not noticed one yet — either way the *next* sync's 426 can call
   `applyUpdateNow` again from a fresh page load. The shared `UpdatePrompt`

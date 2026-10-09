@@ -11,20 +11,30 @@
  * `AdminLayout` would pull in TanStack Query, sonner and the whole Sidebar.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { copy } from "../copy";
 import { THEME_STORAGE_KEY } from "../theme";
+import { Toaster } from "../ui/sonner";
 import { LOGOUT_PATH } from "./access-logout";
 import { TopBar } from "./TopBar";
 
 const EMAIL = "admin@example.com";
 
-function renderTopBar(pathname = "/admin/prospects") {
+function Where() {
+  return <output data-testid="where">{useLocation().pathname}</output>;
+}
+
+// The Toaster reads the system theme through `matchMedia` too, which would
+// take the one listener `stubSystemTheme` keeps, so only the case that reads a
+// toast mounts it.
+function renderTopBar(pathname = "/admin/prospects", { toaster = false } = {}) {
   return render(
     <MemoryRouter initialEntries={[pathname]}>
       <TopBar pathname={pathname} email={EMAIL} />
+      <Where />
+      {toaster && <Toaster />}
     </MemoryRouter>,
   );
 }
@@ -158,16 +168,122 @@ describe("TopBar", () => {
     }
   });
 
-  it("signs out through a plain anchor to Access, not a router link", async () => {
-    const user = userEvent.setup();
-    renderTopBar();
+  describe("Se déconnecter (GH #309)", () => {
+    const realLocation = Object.getOwnPropertyDescriptor(window, "location");
 
-    await user.click(screen.getByRole("button", { name: copy.account.menu(EMAIL) }));
+    function stubLocation() {
+      const location = { href: "https://app.example/admin" };
+      Object.defineProperty(window, "location", { configurable: true, value: location });
+      return location;
+    }
 
-    // A router <Link> would be served the precached shell by the service
-    // worker's navigateFallback and never reach Access (AccountMenu.tsx).
-    const logout = await screen.findByRole("menuitem", { name: copy.account.logout });
-    expect(logout.tagName).toBe("A");
-    expect(logout.getAttribute("href")).toBe(LOGOUT_PATH);
+    /** `/api/auth/logout` and `/api/me` answered separately; the calls are kept in order. */
+    function stubApi(logout: () => Promise<Response>, me: () => Promise<Response>) {
+      const calls: { url: string; method: string }[] = [];
+      vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, method: init?.method ?? "GET" });
+        return url === "/api/auth/logout" ? logout() : me();
+      });
+      return calls;
+    }
+
+    const noContent = () => Promise.resolve(new Response(null, { status: 204 }));
+    const unauthorized = () => Promise.resolve(new Response("{}", { status: 401 }));
+    const identity = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ email: EMAIL, role: "admin" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      if (realLocation) Object.defineProperty(window, "location", realLocation);
+    });
+
+    async function chooseLogout() {
+      const user = userEvent.setup();
+      renderTopBar("/admin/prospects", { toaster: true });
+      await user.click(screen.getByRole("button", { name: copy.account.menu(EMAIL) }));
+      await user.click(await screen.findByRole("menuitem", { name: copy.account.logout }));
+    }
+
+    it("is a menu item, not a link: it ends the session before going anywhere", async () => {
+      stubLocation();
+      stubApi(noContent, unauthorized);
+      const user = userEvent.setup();
+      renderTopBar();
+
+      await user.click(screen.getByRole("button", { name: copy.account.menu(EMAIL) }));
+
+      const item = await screen.findByRole("menuitem", { name: copy.account.logout });
+      expect(item.tagName).not.toBe("A");
+      expect(item.getAttribute("href")).toBeNull();
+    });
+
+    it("opens /login when the session was all there was (POST ok, /api/me 401)", async () => {
+      const location = stubLocation();
+      const calls = stubApi(noContent, unauthorized);
+
+      await chooseLogout();
+
+      await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/login"));
+      expect(calls).toEqual([
+        { url: "/api/auth/logout", method: "POST" },
+        { url: "/api/me", method: "GET" },
+      ]);
+      expect(location.href).toBe("https://app.example/admin");
+    });
+
+    it("treats a Worker 401 on the POST as no session left: no toast, /api/me asked, /login", async () => {
+      stubLocation();
+      const calls = stubApi(unauthorized, unauthorized);
+
+      await chooseLogout();
+
+      await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/login"));
+      expect(calls.map((c) => c.url)).toEqual(["/api/auth/logout", "/api/me"]);
+      expect(screen.queryByText(copy.errors.generic)).toBeNull();
+    });
+
+    it("treats an Access redirect on the POST the same way", async () => {
+      stubLocation();
+      const redirected = () => {
+        const response = new Response(null, { status: 200 });
+        Object.defineProperty(response, "type", { value: "opaqueredirect" });
+        return Promise.resolve(response);
+      };
+      const calls = stubApi(redirected, redirected);
+
+      await chooseLogout();
+
+      await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/login"));
+      expect(calls.map((c) => c.url)).toEqual(["/api/auth/logout", "/api/me"]);
+      expect(screen.queryByText(copy.errors.generic)).toBeNull();
+    });
+
+    it("finishes with Access's logout when /api/me still answers", async () => {
+      const location = stubLocation();
+      stubApi(noContent, identity);
+
+      await chooseLogout();
+
+      await waitFor(() => expect(location.href).toBe(LOGOUT_PATH));
+      expect(screen.getByTestId("where").textContent).not.toBe("/login");
+    });
+
+    it("stays put and says so when the POST never reaches the server", async () => {
+      const location = stubLocation();
+      const calls = stubApi(() => Promise.reject(new TypeError("Failed to fetch")), identity);
+
+      await chooseLogout();
+
+      expect(await screen.findByText(copy.errors.generic)).toBeTruthy();
+      expect(calls).toEqual([{ url: "/api/auth/logout", method: "POST" }]);
+      expect(screen.getByTestId("where").textContent).not.toBe("/login");
+      expect(location.href).toBe("https://app.example/admin");
+    });
   });
 });

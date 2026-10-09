@@ -58,9 +58,11 @@ const stub = vi.hoisted(() => ({
   identityPending: false,
   /** True while `/api/me` should fail unreachably, for the error-state case. */
   identityUnreachable: false,
-  /** True while `/api/me` should answer 401 — the Worker revoking this
-   * identity, which is not the same as being unreachable (identity.ts). */
+  /** True while `/api/me` should answer with an Access redirect — an expired
+   * Access session, which is not the same as being unreachable (identity.ts). */
   identityRevoked: false,
+  /** True while `/api/me` should answer the Worker's own 401 (GH #309). */
+  identityUnauthorized: false,
   /** Counts every `/api/me` fetch, so a test can pin that a live-confirmed
    * session going offline and back costs it no extra request (spec-gh-115). */
   identityCalls: 0,
@@ -79,7 +81,9 @@ vi.mock("./api", async (importOriginal) => {
       stub.identityCalls += 1;
       if (stub.identityPending) return new Promise(() => {});
       if (stub.identityRevoked)
-        return Promise.reject(new actual.ApiError(401, "auth", REVOKED_MESSAGE));
+        return Promise.reject(new actual.ApiError(401, "access_redirect", REVOKED_MESSAGE));
+      if (stub.identityUnauthorized)
+        return Promise.reject(new actual.ApiError(401, "unauthorized", REVOKED_MESSAGE));
       // Not an ApiError: a bare failure is "unreachable", which with no cached
       // identity is resolveIdentity's offline-first-run error (identity.ts).
       if (stub.identityUnreachable) return Promise.reject(new Error("unreachable"));
@@ -166,6 +170,7 @@ beforeEach(async () => {
   stub.identityPending = false;
   stub.identityUnreachable = false;
   stub.identityRevoked = false;
+  stub.identityUnauthorized = false;
   stub.identityCalls = 0;
 });
 
@@ -174,10 +179,12 @@ afterEach(async () => {
 });
 
 describe("App routing", () => {
-  it("renders /login outside the identity gate, without asking /api/me", async () => {
+  it("renders /login outside the identity gate: its own single /api/me check, no field frame", async () => {
+    stub.identityUnauthorized = true;
     renderApp("/login");
     expect(await screen.findByText(copy.login.title)).toBeTruthy();
-    expect(stub.identityCalls).toBe(0);
+    expect(stub.identityCalls).toBe(1);
+    expect(fieldBand()).toBeNull();
   });
 
   it("marks main busy while /api/me is still in flight", () => {
@@ -703,6 +710,27 @@ describe("App update prompt", () => {
     expect(assertive?.textContent).toContain(copy.sync.upgrade);
     const button = screen.getByRole("button", { name: copy.update.apply });
     expect(assertive?.contains(button)).toBe(true);
+  });
+});
+
+describe("App, the Worker's 401 at launch (GH #309)", () => {
+  afterEach(async () => {
+    await fieldDb.outboxVisits.clear();
+  });
+
+  it("opens /login, drops the cached round and identity, and keeps every outbox row", async () => {
+    await setMeta(fieldDb, "identity", AGENT);
+    await fieldDb.outboxVisits.bulkAdd([visit(), visit()]);
+    stub.identityUnauthorized = true;
+    renderApp("/tournee");
+
+    expect(await screen.findByText(copy.login.title)).toBeTruthy();
+    expect(screen.getByTestId("pathname").textContent).toBe("/login");
+    expect(await getMeta(fieldDb, "identity")).toBeUndefined();
+    expect(await fieldDb.outboxVisits.count()).toBe(2);
+    // Not the error frame, and no marker button.
+    expect(screen.queryByText(REVOKED_MESSAGE)).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.sync.reconnect })).toBeNull();
   });
 });
 

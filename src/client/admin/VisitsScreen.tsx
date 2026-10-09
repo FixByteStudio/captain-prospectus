@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   DASHBOARD_DEFAULT_PERIOD,
@@ -10,7 +10,7 @@ import {
 } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
 import { dashboardQuerySchema, refusalReasonSchema } from "../../shared/schemas";
-import { ApiError } from "../api";
+import { ApiError, isWorkerUnauthorized } from "../api";
 import { REFUSAL_REASON_LABELS, copy } from "../copy";
 import { PeriodToggle } from "./PeriodToggle";
 import { ANY, Filter } from "./prospects/Filter";
@@ -114,6 +114,7 @@ function VisitsScreenBody({
   onReasonChange: (reason: string) => void;
 }) {
   const feed = useVisitsFeed(period, reason);
+  const navigate = useNavigate();
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -132,6 +133,11 @@ function VisitsScreenBody({
       );
       if (truncated) toast.warning(copy.visits.export.truncated(EXPORT_ROWS));
     } catch (error) {
+      // A file download is outside the query client, so it opens `/login` itself.
+      if (isWorkerUnauthorized(error)) {
+        void navigate("/login");
+        return;
+      }
       toast.error(error instanceof ApiError ? error.message : copy.visits.export.failed);
     } finally {
       setExporting(false);

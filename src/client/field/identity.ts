@@ -11,7 +11,7 @@
  * tells the caller to delete it. Every branch below exists because of a
  * specific failure mode; see the comment on each.
  */
-import { ApiError } from "../api";
+import { ApiError, isWorkerUnauthorized } from "../api";
 import { meResponseSchema, type MeResponse } from "../../shared/schemas";
 import { copy } from "../copy/field";
 
@@ -36,6 +36,12 @@ export type IdentityOutcome =
        * revocation is undone by turning on airplane mode.
        */
       revoked: boolean;
+      /**
+       * Set only with `revoked`: true when the Worker itself answered 401, so `/login`
+       * is the way back; false for an Access redirect, whose "Se reconnecter"
+       * marker navigation stays (GH #309).
+       */
+      toLogin?: boolean;
     };
 
 export type AdminAccess = {
@@ -97,7 +103,12 @@ export function resolveIdentity(result: IdentityFetchResult, cached: unknown): I
   // about *this* identity, so it falls through to the cache like a genuine
   // network failure would.
   if (result.error instanceof ApiError && result.error.status === 401) {
-    return { kind: "error", message: result.error.message, revoked: true };
+    return {
+      kind: "error",
+      message: result.error.message,
+      revoked: true,
+      toLogin: isWorkerUnauthorized(result.error),
+    };
   }
 
   const cachedParsed = cached ? meResponseSchema.safeParse(cached) : null;

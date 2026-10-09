@@ -1,4 +1,7 @@
 import { LogOutIcon } from "lucide-react";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { ApiError, apiFetch } from "../api";
 import { copy } from "../copy";
 import { initials } from "../format";
 import { LOGOUT_PATH } from "./access-logout";
@@ -12,15 +15,40 @@ import {
 } from "../ui/dropdown-menu";
 
 /**
- * The top bar's avatar menu (GH #64). "Se déconnecter" is a real `<a>` to
- * `/cdn-cgi/access/logout`, not a router `Link`: the service worker answers
- * every navigation with the precached shell (`navigateFallback`), so a SPA
- * navigation would never reach Access at all. `vite.config.ts`'s
- * `navigateFallbackDenylist` exempts `/cdn-cgi/` (GH #76) so this one anchor's
- * click goes to the network instead — the same trick "Se reconnecter" uses
- * for its own URL (docs/domains/identity-access.md).
+ * The top bar's avatar menu (GH #64). "Se déconnecter" ends the own-login
+ * session with `POST /api/auth/logout`, then asks `/api/me` once (GH #309):
+ * still answered means Access is signing this device in, so Access's own
+ * logout endpoint finishes the job, as a full navigation — the service worker
+ * answers every SPA navigation with the precached shell (`navigateFallback`),
+ * and `vite.config.ts` exempts `/cdn-cgi/` (GH #76) for exactly this. Any
+ * other answer means the session was all there was: `/login`.
+ *
+ * A POST that never reached the server stays put: the cookie would survive,
+ * and `/login` would send the user straight back to their landing.
  */
 export function AccountMenu({ email }: { email: string }) {
+  const navigate = useNavigate();
+
+  const logout = async () => {
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+    } catch (error) {
+      // A 401 (either kind) means there was no session left to end, which is
+      // the goal; `/api/me` below then sends the user on.
+      if (!(error instanceof ApiError && error.status === 401)) {
+        toast.error(copy.errors.generic);
+        return;
+      }
+    }
+    try {
+      await apiFetch("/api/me");
+    } catch {
+      void navigate("/login");
+      return;
+    }
+    window.location.href = LOGOUT_PATH;
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -39,11 +67,9 @@ export function AccountMenu({ email }: { email: string }) {
           {email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <a href={LOGOUT_PATH}>
-            <LogOutIcon aria-hidden="true" />
-            {copy.account.logout}
-          </a>
+        <DropdownMenuItem onSelect={() => void logout()}>
+          <LogOutIcon aria-hidden="true" />
+          {copy.account.logout}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
