@@ -326,3 +326,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-306-admin-passphrase.md`
   summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
   evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
+  summary: No test exercises a migration's backfill against rows that exist before it runs (e.g. 0012's `sessions.id` backfill).
+  evidence: test/setup-worker.ts applies every migration once to an empty database, so a broken backfill UPDATE passes CI; checked by hand on a scratch SQLite file for #307.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
+  summary: Contract step for `sessions.id` — make it NOT NULL and drop the null-id branches in auth.ts and identity.ts once no pre-#307 session can remain.
+  evidence: 0012 adds `id` nullable so the Worker deployed before it keeps inserting; the null handling has no end date until this is scheduled.

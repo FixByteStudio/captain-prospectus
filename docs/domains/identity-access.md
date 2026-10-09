@@ -8,7 +8,11 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
 
 1. **A session.** The `__Host-cp_session` cookie's token, hashed with `AUTH_PEPPER`, names a
    `sessions` row that has not expired and whose user is `active`. The role is the `users` row's.
-   Without `AUTH_PEPPER` this step is skipped, never guessed.
+   Without `AUTH_PEPPER` this step is skipped, never guessed. The expiry slides: a request an hour
+   or more after the last slide pushes it to now + the role's lifetime (30 days admin, 90 days
+   agent) and re-sends the cookie, so a device in use stays signed in. Each session carries a public
+   id and a device label from the User-Agent at login; an admin revokes one device by that id from
+   the Agents page, and its next request is a 401.
 2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
    through `/login` is who the session says.
 3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker

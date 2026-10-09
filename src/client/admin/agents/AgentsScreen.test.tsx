@@ -4,9 +4,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
-import type { User } from "../../../shared/schemas";
+import type { Device, User } from "../../../shared/schemas";
 import { copy } from "../../copy";
-import { formatBrusselsTime } from "../../format";
+import { formatBrusselsTime, formatDateTime, formatShortDate } from "../../format";
 import { toast } from "sonner";
 import { Toaster } from "../../ui/sonner";
 import { adminKeys } from "../queries";
@@ -42,6 +42,7 @@ function user(email: string, over: Partial<User> = {}): User {
     active: true,
     sessions: 0,
     openProspects: 0,
+    devices: [],
     ...over,
   };
 }
@@ -667,6 +668,163 @@ describe("AgentsScreen", () => {
     await userEvent.click(await screen.findByRole("button", { name: t.reactivate }));
     expect(await screen.findByText(t.toast.failed)).toBeTruthy();
     expect(screen.getByRole("button", { name: t.reactivate })).toBeTruthy();
+  });
+
+  describe("devices (GH #307)", () => {
+    const PHONE: Device = {
+      id: "a".repeat(32),
+      label: "iPhone · Safari",
+      createdAt: Date.UTC(2026, 8, 24, 10),
+      lastSeenAt: Date.UTC(2026, 9, 7, 13, 24),
+      current: false,
+    };
+    const MYSTERY: Device = { ...PHONE, id: "b".repeat(32), label: null };
+    const HERE: Device = { ...PHONE, id: "c".repeat(32), label: "Mac · Safari", current: true };
+    const lea = user("lea@example.com", {
+      name: "Léa Dupont",
+      sessions: 2,
+      devices: [PHONE, MYSTERY],
+    });
+    const sam = user("sam@example.com", {
+      name: "Sam Owner",
+      role: "admin",
+      sessions: 1,
+      devices: [HERE],
+    });
+    const marc = user("marc@example.com", { name: "Marc Peeters" });
+    const expand = (name: string) => screen.findByRole("button", { name: t.devices.expand(name) });
+
+    it("opens a row's device lines from the chevron, with label and dates", async () => {
+      stubFetch([[lea, sam]]);
+      renderScreen();
+      const chevron = await expand("Léa Dupont");
+      expect(chevron.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByText("iPhone · Safari")).toBeNull();
+
+      await userEvent.click(chevron);
+
+      expect(chevron.getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByText("iPhone · Safari")).toBeTruthy();
+      expect(screen.getByText(t.devices.unknown)).toBeTruthy();
+      expect(
+        screen.getAllByText(t.devices.enrolledOn(formatShortDate(PHONE.createdAt))),
+      ).toHaveLength(2);
+      expect(screen.getAllByText(t.devices.seenOn(formatDateTime(PHONE.lastSeenAt)))).toHaveLength(
+        2,
+      );
+      expect(
+        screen.getByRole("button", { name: t.devices.revokeLabel("iPhone · Safari") }).textContent,
+      ).toBe(t.devices.revoke);
+      expect(
+        screen.getByRole("button", { name: t.devices.revokeLabel(t.devices.unknown) }),
+      ).toBeTruthy();
+    });
+
+    it("reads Cet appareil, not Révoquer, on the session the page is open on", async () => {
+      stubFetch([[lea, sam]]);
+      renderScreen();
+      await userEvent.click(await expand("Sam Owner"));
+      expect(screen.getByText("Mac · Safari")).toBeTruthy();
+      expect(screen.getByText(t.devices.current)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /^Révoquer/ })).toBeNull();
+    });
+
+    it("says Aucun appareil inscrit. for a user with no session", async () => {
+      stubFetch([[sam, marc]]);
+      renderScreen();
+      await userEvent.click(await expand("Marc Peeters"));
+      expect(screen.getByText(t.devices.none)).toBeTruthy();
+    });
+
+    it("puts no chevron on a deactivated row", async () => {
+      stubFetch([[sam, { ...marc, active: false }]]);
+      renderScreen();
+      await userEvent.click(await screen.findByRole("button", { name: t.deactivated(1) }));
+      expect(screen.queryByRole("button", { name: t.devices.expand("Marc Peeters") })).toBeNull();
+    });
+
+    it("revokes without confirmation, toasts, and invalidates users", async () => {
+      const calls = stubFetch([[lea, sam]], {
+        [`DELETE /api/admin/sessions/${PHONE.id}`]: () => new Response(null, { status: 204 }),
+      });
+      const { invalidate } = renderScreen();
+      await userEvent.click(await expand("Léa Dupont"));
+      const first = screen.getByRole("button", { name: t.devices.revokeLabel("iPhone · Safari") });
+
+      await userEvent.click(first);
+
+      expect(await screen.findByText(t.toast.revoked)).toBeTruthy();
+      expect(calls.some((c) => c.method === "DELETE")).toBe(true);
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: adminKeys.users() });
+    });
+
+    it("toasts the generic failure when revoking fails", async () => {
+      stubFetch([[lea, sam]], {
+        [`DELETE /api/admin/sessions/${PHONE.id}`]: () => json({}, 500),
+      });
+      renderScreen();
+      await userEvent.click(await expand("Léa Dupont"));
+      const first = screen.getByRole("button", { name: t.devices.revokeLabel("iPhone · Safari") });
+      await userEvent.click(first);
+      expect(await screen.findByText(t.toast.failed)).toBeTruthy();
+      expect(screen.getByText("iPhone · Safari")).toBeTruthy();
+    });
+
+    it("reads a 404 as already revoked: success toast, users refetched", async () => {
+      stubFetch([[lea, sam]], {
+        [`DELETE /api/admin/sessions/${PHONE.id}`]: () => json({ error: "not_found" }, 404),
+      });
+      const { invalidate } = renderScreen();
+      await userEvent.click(await expand("Léa Dupont"));
+      await userEvent.click(
+        screen.getByRole("button", { name: t.devices.revokeLabel("iPhone · Safari") }),
+      );
+      expect(await screen.findByText(t.toast.revoked)).toBeTruthy();
+      expect(screen.queryByText(t.toast.failed)).toBeNull();
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: adminKeys.users() });
+    });
+
+    it("disables Révoquer while that device's revoke is in flight", async () => {
+      let answer: (response: Response) => void = () => {};
+      stubFetch([[lea, sam]], {
+        [`DELETE /api/admin/sessions/${PHONE.id}`]: () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }) as unknown as Response,
+      });
+      renderScreen();
+      await userEvent.click(await expand("Léa Dupont"));
+      const button = screen.getByRole("button", { name: t.devices.revokeLabel("iPhone · Safari") });
+      await userEvent.click(button);
+      await waitFor(() => expect(button.hasAttribute("disabled")).toBe(true));
+      expect(
+        screen
+          .getByRole("button", { name: t.devices.revokeLabel(t.devices.unknown) })
+          .hasAttribute("disabled"),
+      ).toBe(false);
+      answer(new Response(null, { status: 204 }));
+      expect(await screen.findByText(t.toast.revoked)).toBeTruthy();
+    });
+
+    it("lists the devices under the row below 768px, and revokes from there", async () => {
+      setMobile(true);
+      const calls = stubFetch([[lea, sam]], {
+        [`DELETE /api/admin/sessions/${PHONE.id}`]: () => new Response(null, { status: 204 }),
+      });
+      renderScreen();
+      await userEvent.click(await expand("Léa Dupont"));
+      const row = screen.getByText("Léa Dupont").closest("li");
+      if (!row) throw new Error("no row");
+      expect(within(row).getByText("iPhone · Safari")).toBeTruthy();
+      const first = within(row).getByRole("button", {
+        name: t.devices.revokeLabel("iPhone · Safari"),
+      });
+      await userEvent.click(first);
+      expect(await screen.findByText(t.toast.revoked)).toBeTruthy();
+      expect(calls.find((c) => c.method === "DELETE")?.path).toBe(
+        `/api/admin/sessions/${PHONE.id}`,
+      );
+    });
   });
 
   describe("below 768px", () => {

@@ -13,8 +13,8 @@ export const SESSION_COOKIE = "__Host-cp_session";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Fixed lifetime from creation, per role. ADR-0029 wants a sliding expiry;
- * that and `last_seen_at` writes are a later entry of epic-own-login.
+ * Lifetime per role, sliding (ADR-0029): `requireIdentity` pushes `expires_at`
+ * to now + this whenever it bumps `last_seen_at`, at most every SESSION_SLIDE_MS.
  */
 export const SESSION_TTL_MS: Record<Role, number> = {
   admin: 30 * DAY_MS,
@@ -52,6 +52,22 @@ export async function hmacBytes(pepper: string, value: string): Promise<ArrayBuf
 /** HMAC-SHA-256 as lowercase hex: the only form a secret is stored in. */
 export async function hmacHex(pepper: string, value: string): Promise<string> {
   const bytes = new Uint8Array(await hmacBytes(pepper, value));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * How stale `last_seen_at` must be before a request slides the session: one
+ * write per device per hour, not one per request (INVARIANT 13).
+ */
+export const SESSION_SLIDE_MS = 60 * 60 * 1000;
+
+/**
+ * A session's public id (GH #307): 16 random bytes as 32 lowercase hex, never
+ * derived from the token, so an admin revokes a device without the hash ever
+ * leaving the Worker.
+ */
+export function newSessionId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 

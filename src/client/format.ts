@@ -2,6 +2,7 @@
 
 const dateTime = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 const date = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
+const shortDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
 export function formatDateTime(epochMs: number): string {
   return dateTime.format(new Date(epochMs));
@@ -9,6 +10,11 @@ export function formatDateTime(epochMs: number): string {
 
 export function formatDate(epochMs: number): string {
   return date.format(new Date(epochMs));
+}
+
+/** "24/09/2026". */
+export function formatShortDate(epochMs: number): string {
+  return shortDate.format(new Date(epochMs));
 }
 
 const brusselsDate = new Intl.DateTimeFormat("fr-FR", {

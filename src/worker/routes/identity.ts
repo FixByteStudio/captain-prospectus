@@ -6,15 +6,20 @@
  * deactivated. A one-time code, and the signed-in admin's own passphrase, are
  * generated here and shown once; only their HMAC is stored, and nothing here
  * logs them. Demoting or deactivating a user clears their passphrase.
+ *
+ * Each user's devices are their live sessions with a public id (GH #307); an
+ * admin revokes one by that id. The token's hash never leaves the Worker.
  */
 import { Hono } from "hono";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { OPEN_STATUSES } from "../../shared/constants";
 import { normaliseCredential } from "../../shared/credential";
 import {
   agentEmailParamSchema,
+  sessionIdParamSchema,
   userCreateSchema,
   userUpdateSchema,
+  type Device,
   type LoginCodeResponse,
   type PassphraseResponse,
   type User,
@@ -32,8 +37,13 @@ export const identityRoutes = new Hono<AppEnv>();
 // SQLite's NOCASE folds ASCII only, so names sort here: case and accents ignored.
 const nameOrder = new Intl.Collator("fr", { sensitivity: "base" });
 
-async function userRows(db: Db, email?: string): Promise<User[]> {
-  const liveSessions = sql<number>`(SELECT count(*) FROM ${sessions} WHERE ${sessions.userEmail} = ${users.email} AND ${sessions.expiresAt} > ${Date.now()})`;
+/**
+ * The Agents list's rows, or one of them. `sessionId` is the caller's own
+ * session, flagged `current` among the devices.
+ */
+async function userRows(db: Db, sessionId: string | undefined, email?: string): Promise<User[]> {
+  const now = Date.now();
+  const liveSessions = sql<number>`(SELECT count(*) FROM ${sessions} WHERE ${sessions.userEmail} = ${users.email} AND ${sessions.expiresAt} > ${now})`;
   const openProspects = db
     .select({ n: sql<number>`count(*)`.as("n"), assignedTo: prospects.assignedTo })
     .from(prospects)
@@ -52,16 +62,46 @@ async function userRows(db: Db, email?: string): Promise<User[]> {
     .from(users)
     .leftJoin(openProspects, eq(openProspects.assignedTo, users.email))
     .where(email === undefined ? undefined : eq(users.email, email));
+
+  // A row the previous Worker wrote has no id until its next request slides
+  // it (auth.ts); until then it counts in `sessions` but cannot be revoked.
+  const deviceRows = await db
+    .select({
+      id: sessions.id,
+      userEmail: sessions.userEmail,
+      label: sessions.deviceLabel,
+      createdAt: sessions.createdAt,
+      lastSeenAt: sessions.lastSeenAt,
+    })
+    .from(sessions)
+    .where(
+      and(
+        gt(sessions.expiresAt, now),
+        isNotNull(sessions.id),
+        email === undefined ? undefined : eq(sessions.userEmail, email),
+      ),
+    )
+    .orderBy(desc(sessions.lastSeenAt));
+  const devicesByUser = new Map<string, Device[]>();
+  for (const { id, userEmail, label, createdAt, lastSeenAt } of deviceRows) {
+    if (id === null) continue;
+    const list = devicesByUser.get(userEmail) ?? [];
+    list.push({ id, label, createdAt, lastSeenAt, current: id === sessionId });
+    devicesByUser.set(userEmail, list);
+  }
+
   // Unnamed rows (the break-glass owner) last, then name, then email.
-  return rows.sort((a, b) => {
-    if ((a.name === null) !== (b.name === null)) return a.name === null ? 1 : -1;
-    const byName = a.name === null || b.name === null ? 0 : nameOrder.compare(a.name, b.name);
-    return byName || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0);
-  });
+  return rows
+    .map((row) => ({ ...row, devices: devicesByUser.get(row.email) ?? [] }))
+    .sort((a, b) => {
+      if ((a.name === null) !== (b.name === null)) return a.name === null ? 1 : -1;
+      const byName = a.name === null || b.name === null ? 0 : nameOrder.compare(a.name, b.name);
+      return byName || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0);
+    });
 }
 
 identityRoutes.get("/users", async (c) => {
-  const rows = await userRows(getDb(c.env.DB));
+  const rows = await userRows(getDb(c.env.DB), c.get("sessionId"));
   return c.json<UsersResponse>({ users: rows });
 });
 
@@ -79,7 +119,7 @@ identityRoutes.post("/users", validate("json", userCreateSchema), async (c) => {
     return c.json({ error: "email_taken", message: "This email already has an account." }, 409);
   }
 
-  const [row] = await userRows(db, email);
+  const [row] = await userRows(db, undefined, email);
   if (!row)
     return c.json({ error: "internal", message: "Une erreur est survenue. Réessayez." }, 500);
   return c.json<User>(row, 201);
@@ -202,4 +242,18 @@ identityRoutes.post("/me/passphrase", async (c) => {
   // The secret in clear: no cache, browser or proxy, may keep a copy.
   c.header("Cache-Control", "no-store");
   return c.json<PassphraseResponse>({ passphrase });
+});
+
+/**
+ * Signs one device out: its session row goes, so its next request is a 401.
+ * The admin's own current session may go too; only the page hides that button.
+ */
+identityRoutes.delete("/sessions/:id", validate("param", sessionIdParamSchema), async (c) => {
+  const { id } = c.req.valid("param");
+  const deleted = await getDb(c.env.DB)
+    .delete(sessions)
+    .where(eq(sessions.id, id))
+    .returning({ id: sessions.id });
+  if (deleted.length === 0) return c.json({ error: "not_found" }, 404);
+  return c.body(null, 204);
 });

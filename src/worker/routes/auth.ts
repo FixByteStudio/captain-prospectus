@@ -8,7 +8,8 @@
  * a one-time code an admin generated (identity-access.md) and opens a session
  * with the user's own role.
  * Nothing here logs — not the passphrase, not the code, not the token, not a
- * hash (docs/security.md).
+ * hash, not the User-Agent (docs/security.md). A session stores only the
+ * device label parsed from it (GH #307).
  *
  * Every login goes through loginThrottle first (CAP-7), so later login kinds
  * share its per-IP counter.
@@ -20,6 +21,7 @@ import { normaliseCredential } from "../../shared/credential";
 import { loginRequestSchema, type MeResponse } from "../../shared/schemas";
 import { misconfigured, unauthorized } from "../auth";
 import { getDb } from "../db/client";
+import { deviceLabel } from "../device-label";
 import { loginThrottle } from "../login-throttle";
 import { loginCodes, sessions, users } from "../db/schema";
 import {
@@ -28,6 +30,7 @@ import {
   clearedSessionCookie,
   hmacBytes,
   hmacHex,
+  newSessionId,
   newSessionToken,
   readCookie,
   sessionCookie,
@@ -45,7 +48,13 @@ const DUMMY_HASH = "0".repeat(64);
 const CODE_REFUSED = "This code does not work.";
 
 /** A new session's row and the token its cookie carries; the TTL is the role's. */
-async function newSession(pepper: string, email: string, role: Role, now: number) {
+async function newSession(
+  pepper: string,
+  email: string,
+  role: Role,
+  now: number,
+  label: string | null,
+) {
   const token = newSessionToken();
   const ttl = SESSION_TTL_MS[role];
   const row = {
@@ -54,6 +63,8 @@ async function newSession(pepper: string, email: string, role: Role, now: number
     createdAt: now,
     lastSeenAt: now,
     expiresAt: now + ttl,
+    id: newSessionId(),
+    deviceLabel: label,
   };
   return { row, cookie: sessionCookie(token, ttl) };
 }
@@ -64,6 +75,7 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
 
   const body = c.req.valid("json");
   const db = getDb(c.env.DB);
+  const label = deviceLabel(c.req.header("User-Agent"));
 
   if (body.kind === "code") {
     const now = Date.now();
@@ -75,6 +87,7 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
     // two land or fail together: no spent code without its session, and no
     // session slipping in after a deactivation. `changes() = 1` keeps a loser
     // that ran in the same millisecond from matching the winner's used_at.
+    // The SELECT is positional, so its columns follow the schema's order.
     const [spentRows] = await db.batch([
       db
         .update(loginCodes)
@@ -93,7 +106,8 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
         }),
       db.insert(sessions).select(
         sql`SELECT ${tokenHash}, ${loginCodes.userEmail}, ${now}, ${now},
-            ${now} + CASE ${users.role} WHEN 'admin' THEN ${SESSION_TTL_MS.admin} ELSE ${SESSION_TTL_MS.agent} END
+            ${now} + CASE ${users.role} WHEN 'admin' THEN ${SESSION_TTL_MS.admin} ELSE ${SESSION_TTL_MS.agent} END,
+            ${newSessionId()}, ${label}
             FROM ${loginCodes} JOIN ${users} ON ${users.email} = ${loginCodes.userEmail}
             WHERE ${loginCodes.codeHash} = ${codeHash} AND ${loginCodes.usedAt} = ${now}
               AND ${users.active} = 1 AND changes() = 1`,
@@ -119,7 +133,7 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
     if (secretOk && body.email === owner) {
       const now = Date.now();
       const role = "admin" as const;
-      const session = await newSession(pepper, owner, role, now);
+      const session = await newSession(pepper, owner, role, now, label);
 
       // Break-glass creates the owner, or puts a deactivated or demoted owner back
       // as an active admin (ADR-0029 decision 7). One batch, so a session never
@@ -159,14 +173,16 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
   }
 
   // The insert re-reads the row as it is when it runs, so a demotion,
-  // deactivation or regeneration that lands first opens no session.
+  // deactivation or regeneration that lands first opens no session. The SELECT
+  // is positional, so its columns follow the schema's order.
   const now = Date.now();
   const token = newSessionToken();
   const tokenHash = await hmacHex(pepper, token);
   const inserted = await db
     .insert(sessions)
     .select(
-      sql`SELECT ${tokenHash}, ${users.email}, ${now}, ${now}, ${now + SESSION_TTL_MS.admin}
+      sql`SELECT ${tokenHash}, ${users.email}, ${now}, ${now}, ${now + SESSION_TTL_MS.admin},
+          ${newSessionId()}, ${label}
           FROM ${users}
           WHERE ${users.email} = ${body.email} AND ${users.role} = 'admin'
             AND ${users.active} = 1 AND ${users.passphraseHash} = ${typedHash}`,

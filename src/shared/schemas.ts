@@ -471,6 +471,21 @@ export const agentEmailParamSchema = z.object({ email: emailSchema });
 
 /* ------------------------------------------------------------ /api/admin/users */
 
+/**
+ * One signed-in device of a user (GH #307): a live session with a public id.
+ * The token's hash never leaves the Worker; `id` is what revokes it.
+ */
+export const deviceSchema = z.object({
+  id: z.string(),
+  /** "iPhone · Safari"; null when the User-Agent gave no summary. */
+  label: z.nullable(z.string()),
+  createdAt: epochMsSchema,
+  lastSeenAt: epochMsSchema,
+  /** The session this request was made from. */
+  current: z.boolean(),
+});
+export type Device = z.infer<typeof deviceSchema>;
+
 /** One row of the Agents list: every user, active or not (ADR-0029). */
 export const userSchema = z.object({
   email: emailSchema,
@@ -482,6 +497,8 @@ export const userSchema = z.object({
   sessions: countSchema,
   /** Prospects assigned to them that are still open and not merged away. */
   openProspects: countSchema,
+  /** Live sessions that have an id, newest `lastSeenAt` first. */
+  devices: z.array(deviceSchema),
 });
 export type User = z.infer<typeof userSchema>;
 
@@ -506,6 +523,11 @@ export const userUpdateSchema = z
   })
   .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
 export type UserUpdate = z.infer<typeof userUpdateSchema>;
+
+/** DELETE /api/admin/sessions/:id. */
+export const sessionIdParamSchema = z.object({
+  id: z.string().check(z.regex(/^[0-9a-f]{32}$/)),
+});
 
 /** POST /api/admin/users/:email/code: the only time the code is ever shown. */
 export const loginCodeResponseSchema = z.object({

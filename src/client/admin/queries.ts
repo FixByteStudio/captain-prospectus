@@ -220,6 +220,21 @@ export function useUpdateUser() {
 }
 
 /**
+ * Signs one device out (GH #307); its line leaves the list on the refetch,
+ * which runs on failure too, since a 404 means it was already gone.
+ */
+export function useRevokeSession() {
+  const invalidate = useInvalidateUsers();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/api/admin/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    onSettled: () => {
+      void invalidate();
+    },
+  });
+}
+
+/**
  * A one-time code for a user's next device. The list does not change, so
  * nothing is invalidated; gcTime 0 drops the code from the cache once the
  * dialog is done with it, since it is shown once.
