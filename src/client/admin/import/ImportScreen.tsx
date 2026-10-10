@@ -116,9 +116,9 @@ export function ImportScreen() {
 
   return (
     <section>
-      <ScreenHeader className="mb-4" title={copy.import.title} />
-
       <ImportStepper steps={steps} current={step} />
+
+      <ScreenHeader className="mb-4" title={copy.import.title} />
 
       {step === "source" && <SourceStep onChoose={chooseSource} />}
 
