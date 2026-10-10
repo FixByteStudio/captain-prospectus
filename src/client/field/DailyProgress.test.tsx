@@ -29,6 +29,7 @@ describe("DailyProgress", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("40");
     const indicator = bar.querySelector('[data-slot="progress-indicator"]');
     expect(indicator).not.toBeNull();
+    expect((indicator as HTMLElement).className).toContain("bg-primary");
     expect((indicator as HTMLElement).style.transform).toBe("translateX(-60%)");
   });
 

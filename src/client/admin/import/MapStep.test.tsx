@@ -299,6 +299,33 @@ describe("MapStep", () => {
     expect(screen.getByRole("button", { name: copy.map.clear }).dataset.variant).toBe("outline");
   });
 
+  it("shows the Zone bar in ink with an accessible name, and no floating card (#370, #231)", async () => {
+    const pending: { resolve: (() => void) | null } = { resolve: null };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: RequestInfo | URL) => {
+        if (String(url).includes("/import/overpass"))
+          return Promise.resolve(json(answer({ candidates: [candidate()] })));
+        return new Promise((resolve) => {
+          pending.resolve = () => resolve(json({ created: 1, updated: 0 }));
+        });
+      }),
+    );
+    await goToMap();
+    await drawPolygon();
+    await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
+    await userEvent.click(await screen.findByRole("button", { name: copy.map.results.start(1) }));
+
+    const bar = await screen.findByRole("progressbar", { name: copy.import.progressLabel });
+    expect(bar.querySelector('[data-slot="progress-indicator"]')?.className).toContain(
+      "bg-foreground",
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+
+    pending.resolve?.();
+    await screen.findByText(copy.import.result.title);
+  });
+
   it("shows a failed search as a destructive Alert under the map (#185)", async () => {
     vi.stubGlobal(
       "fetch",

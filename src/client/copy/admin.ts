@@ -490,6 +490,11 @@ export const adminCopy = {
 
     running: (done: number, total: number) =>
       `Import en cours : ${formatCount(done)} / ${formatCount(total)}`,
+    /** The floating card's title and count, split so the count can be `.tnum`. */
+    runningTitle: "Import en cours",
+    runningCount: (done: number, total: number) => `${formatCount(done)} / ${formatCount(total)}`,
+    /** The import bars' accessible name (Radix gives the root none, #231). */
+    progressLabel: "Progression de l'import",
     result: {
       title: "Import terminé",
       created: (n: number) => (n === 1 ? "1 prospect créé" : `${formatCount(n)} prospects créés`),

@@ -309,7 +309,7 @@ export function MapStep({
 
         {isRunning && (
           <div className="mt-4">
-            <Progress value={percent} />
+            <Progress value={percent} variant="ink" aria-label={copy.import.progressLabel} />
             <p className="text-muted-foreground tnum mt-2">
               {copy.import.running(progress.done, progress.total)}
             </p>
