@@ -1,0 +1,113 @@
+# The stories of epic-import-a4-a6, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "docs/design.md follows the Import A4–A6 update"
+description = "Rewrites docs/design.md › The CSV import to the 2026-10-10 UX update; shipped as 06884ed."
+verify = "docs/design.md › The CSV import agrees with EXPERIENCE.md, DESIGN.md and key-a4-a6-import.html."
+covers = ["R8"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "The import rail is shared by both paths"
+description = "ImportStepper becomes the full-width rail (32px circles, « Étape n » / « En cours » overlines, gold line after a done step, only the current label at phone width) on the CSV and map paths, in ImportStepper.tsx, its placement in ImportScreen.tsx and adminCopy.import.steps in src/client/copy/admin.ts; the step lists stay as they are until entry 4 merges Fichier into Colonnes."
+verify = "Component tests assert the done, current and future states with the hidden « (terminée) » and aria-current=\"step\"; on a local build the rail shows on both paths in light, dark and at phone width."
+covers = ["R1", "R7"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "ADR: the server keeps an import log"
+description = "An ADR (new-adr skill) decides how the server records an import: what groups the 250-row batches into one import, what a log row stores (source, file name or zone summary, created and updated counts, the rejected count the client sends since rejected rows never reach the server, the admin, timestamps), how a retry or re-sent batch avoids counting twice (invariant 4), when an import reads « Interrompu », retention, the glossary term, and the additive change to POST /api/admin/prospects/batch; the owner accepts it."
+verify = "The ADR is merged as Accepted and names the table, the request field and the read route that entries 7 and 8 build."
+covers = ["R3"]
+after = []
+hitl = true
+risk = "medium"
+unknown = "Whether « Interrompu » can be known server-side without a closing call from the client."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Source offers two source cards"
+description = "SourceStep becomes the two source cards; the CSV card's button opens the file picker, parse errors show under the cards, and the file-reading handler moves to Source, where entry 5's « Changer de fichier » reuses it; FileStep goes away, so the CSV path becomes Source · Fichier & colonnes · Aperçu & validation with today's ColumnsStep as step 2 until entry 5 rebuilds it."
+verify = "ImportScreen tests: a file picked from the CSV card lands on step 2 of 3, an empty file shows the Alert on Source, « Dessiner une zone » opens Zone; on a local build the cards match the mockup in light and dark and stack below md."
+covers = ["R2", "R1", "R7"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Fichier & colonnes shows the file and the mapping table"
+description = "The step opens with the file card, whose « Changer de fichier » reuses entry 4's file-reading handler, then the mapping table with Exemple, Statut chips, « Ignoré » rows and the head and foot counters, and a bottom bar component (Retour secondary, « Étape 2 sur 3 », « Voir l'aperçu ») that entries 6 and 10 reuse; it corrects design.md's « outline » Retour to secondary."
+verify = "Tests assert each chip rule (Requis, Coordonnées GPS, Clé unique, Détecté, Optionnel, Ignoré) and that « Voir l'aperçu » stays disabled until Nom has a column; on a local build the step matches the mockup in light and dark and shows one block per field at phone width."
+covers = ["R4", "R7", "R8"]
+after = [4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Aperçu & validation counts and filters the rows"
+description = "The preview gets the summary banner with the separator chip, the two count cards with share chips, « Prêt » / « Sans coordonnées » and reason chips in the ledger, and the « Toutes les lignes » / « Voir les {n} erreurs » filter, on entry 5's bottom bar."
+verify = "Tests assert the counts and shares, that the filter shows only rejected rows, and that rejected rows come first; on a local build the step matches the mockup in light and dark."
+covers = ["R5"]
+after = [5]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "A running import shows a named progress card"
+description = "While batches run, a progress card floats bottom right over entry 5's bottom bar with « Import en cours », the tabular count and an ink Progress bar through a new variant on src/client/ui/progress.tsx (other callers, including the field DailyProgress, stay gold), and both import progress bars (PreviewStep and MapStep) get an aria-label from adminCopy.import, closing #231."
+verify = "Tests assert Retour and « Importer {n} lignes » are disabled while running and that both progressbars have an accessible name; on a local build the card matches the mockup; the PR quotes the field precache total against 1,000 KiB."
+covers = ["R6"]
+after = [6]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "The server logs each import"
+description = "Builds what entry 3's ADR decides: the D1 table and migration (d1-migration skill), the additive field on the batch request in src/shared/schemas.ts, the log write on each batch, a GET of the last 5 imports, and docs/api.md, data-model.md, domains/ingestion.md and the glossary; server and shared schema only, since entry 8 sends the field and reads the GET."
+verify = "Worker tests: batches with one import id give one log row with summed counts, a re-sent batch is not counted twice, a batch without the field still imports and logs nothing, and the GET returns the last 5 newest first."
+covers = ["R3"]
+after = [3]
+hitl = false
+risk = "medium"
+unknown = "The table and request shape wait on entry 3's ADR."
+
+[[entry]]
+id = 8
+type = "story"
+title = "Source lists the last five imports"
+description = "Both paths send the import details entry 7 accepts (CSV file name and rejected count; map vertex count or radius) through useImportBatches, and Source shows Derniers imports from entry 7's GET, with the empty state and the phone rows; it drops design.md's « Nothing records an import today » line, and comes after 10 because it touches ImportScreen and MapStep."
+verify = "On a local build, after a CSV and a map import the table lists both newest first with « Terminé »; a 300-row import with the batch request blocked in devtools after the first batch reads « Interrompu »; an empty database shows « Aucun import pour l'instant. »."
+covers = ["R3", "R7", "R8"]
+after = [7, 10]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup from the epic's build records and deferred review findings, and a last check that docs/design.md matches what shipped."
+verify = "lint, typecheck, test and build are green with no behaviour change."
+covers = ["R8"]
+after = [2, 3, 4, 5, 6, 10, 7, 8]
+hitl = false
+risk = "low"
