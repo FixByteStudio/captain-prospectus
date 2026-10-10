@@ -54,6 +54,7 @@ export function ImportScreen() {
    */
   const [provider, setProvider] = useState<MapProvider>("osm");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState<number | null>(null);
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [columns, setColumns] = useState<ColumnMap>({});
 
@@ -68,8 +69,11 @@ export function ImportScreen() {
   const ready = useMemo(() => mapped.flatMap((row) => (row.ok ? [row.row] : [])), [mapped]);
   const rejected = useMemo(() => mapped.filter((row) => !row.ok), [mapped]);
 
-  function onParsed(name: string, csv: ParsedCsv) {
-    setFileName(name);
+  // Source's first file and Fichier & colonnes' « Changer de fichier » both
+  // land here: a readable file replaces the current one and re-guesses.
+  function onParsed(file: File, csv: ParsedCsv) {
+    setFileName(file.name);
+    setFileSize(file.size);
     setParsed(csv);
     setColumns(guessColumns(csv.headers));
     setStep("columns");
@@ -80,6 +84,7 @@ export function ImportScreen() {
     setFork("csv");
     setProvider("osm");
     setFileName(null);
+    setFileSize(null);
     setParsed(null);
     setColumns({});
     // MapStep holds the polygon, so remounting it at the fork is what clears
@@ -136,8 +141,10 @@ export function ImportScreen() {
         <ColumnsStep
           parsed={parsed}
           fileName={fileName}
+          fileSize={fileSize}
           columns={columns}
           onChange={setColumns}
+          onReplace={onParsed}
           onBack={() => setStep("source")}
           onNext={() => setStep("preview")}
         />

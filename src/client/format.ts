@@ -102,6 +102,13 @@ export function formatCount(n: number): string {
 
 const radiusKm = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 
+/** A file's size as the French read it: "18 Ko", "1,2 Mo". */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1000) return `${bytes} o`;
+  if (bytes < 1_000_000) return `${formatCount(Math.round(bytes / 1000))} Ko`;
+  return `${radiusKm.format(bytes / 1_000_000)} Mo`;
+}
+
 /** The map import's circle radius in km, fr-FR decimal comma: "1,5". */
 export function formatRadiusKm(km: number): string {
   return radiusKm.format(km);

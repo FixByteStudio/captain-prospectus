@@ -30,7 +30,7 @@ export function SourceStep({
   onParsed,
   onChooseMap,
 }: {
-  onParsed: (name: string, csv: ParsedCsv) => void;
+  onParsed: (file: File, csv: ParsedCsv) => void;
   onChooseMap: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -40,7 +40,7 @@ export function SourceStep({
     setError(null);
     const result = await readCsvFile(file);
     if ("error" in result) setError(result.error);
-    else onParsed(file.name, result.parsed);
+    else onParsed(file, result.parsed);
   }
 
   return (

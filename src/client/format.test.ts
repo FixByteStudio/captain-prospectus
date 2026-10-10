@@ -4,6 +4,7 @@ import {
   formatBrusselsTime,
   formatCoordinate,
   formatCount,
+  formatFileSize,
   formatDay,
   formatDayTick,
   formatDelta,
@@ -123,6 +124,16 @@ describe("formatCount", () => {
     expect(formatCount(386)).toBe("386");
     // fr-FR groups with a narrow no-break space.
     expect(formatCount(1284)).toBe("1\u202f284");
+  });
+});
+
+describe("formatFileSize", () => {
+  it.each([
+    [512, "512 o"],
+    [18_432, "18 Ko"],
+    [1_250_000, "1,3 Mo"],
+  ])("reads %i bytes as %s", (bytes, expected) => {
+    expect(formatFileSize(bytes)).toBe(expected);
   });
 });
 
