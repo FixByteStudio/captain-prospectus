@@ -7,7 +7,7 @@ import { Surface } from "../Surface";
  * The card under each CSV step: Retour on the left, « Étape n sur 3 » and the
  * one gold action on the right (DESIGN.md › Components › Admin). Retour is
  * `secondary`, not the outline docs/design.md used to say. Shared by Fichier &
- * colonnes now and by Aperçu & validation later.
+ * colonnes and Aperçu & validation.
  */
 export function ImportBottomBar({
   step,

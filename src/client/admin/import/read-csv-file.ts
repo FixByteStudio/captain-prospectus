@@ -4,7 +4,7 @@ import type { ParsedCsv } from "./csv";
 
 /**
  * Read a chosen file in the browser, never sending or storing it
- * (ingestion.md). A French message instead of a throw, so Source and a later
+ * (ingestion.md). A French message instead of a throw, so Source and
  * « Changer de fichier » show the same Alert for the same fault.
  */
 export async function readCsvFile(file: File): Promise<{ parsed: ParsedCsv } | { error: string }> {
