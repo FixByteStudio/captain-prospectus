@@ -3,7 +3,7 @@ import type { ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
 // twMerge's default font-size group doesn't know app.css's --text-* tokens
-// (display/title/heading/body-field/body/label/meta/overline), so it reads
+// (display/brand/title/heading/body-field/body/label/meta/overline), so it reads
 // `text-meta` beside `text-success` as two colours and drops one (GH #136).
 // Registering them as their own font-size group lets a size token and a
 // colour coexist, while `extend` (not `override`) keeps Tailwind's own
@@ -15,7 +15,17 @@ const twMerge = extendTailwindMerge({
     classGroups: {
       "font-size": [
         {
-          text: ["display", "title", "heading", "body-field", "body", "label", "meta", "overline"],
+          text: [
+            "display",
+            "brand",
+            "title",
+            "heading",
+            "body-field",
+            "body",
+            "label",
+            "meta",
+            "overline",
+          ],
         },
       ],
     },

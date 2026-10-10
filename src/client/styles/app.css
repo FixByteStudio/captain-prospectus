@@ -164,6 +164,11 @@
   --text-display--line-height: 1.15;
   --text-display--letter-spacing: -0.01em;
   --text-display--font-weight: 700;
+  /* The app's name above the login card, one step over the title under it. */
+  --text-brand: 1.375rem;
+  --text-brand--line-height: 1.2;
+  --text-brand--letter-spacing: -0.015em;
+  --text-brand--font-weight: 700;
   /* Screen titles. */
   --text-title: 1.25rem;
   --text-title--line-height: 1.3;
