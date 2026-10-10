@@ -8,21 +8,31 @@ title: "The import rail is shared by both paths"
 parent: epic-import-a4-a6
 covers: [R1, R7]
 risk: low
+refined: true
 ---
 
 # The import rail is shared by both paths
 
 ## Description
 
-ImportStepper becomes the full-width rail (32px circles, « Étape n » / « En cours » overlines, gold line after a done step, only the current label at phone width) on the CSV and map paths, in ImportStepper.tsx, its placement in ImportScreen.tsx and adminCopy.import.steps in src/client/copy/admin.ts; the step lists stay as they are until entry 4 merges Fichier into Colonnes.
+The import stepper becomes the full-width rail of DESIGN.md › `import-rail` on both the CSV and map paths. It is a band directly under the top bar, above the screen title. Each step's overline (« Étape {n} », or « En cours » on the current step) sits above its label, and the line after a done step is gold. The preview step's label becomes « Aperçu & validation ». The CSV path keeps its four steps until entry 4 replaces Fichier and Colonnes with « Fichier & colonnes ». At phone width the rail names only the current step, and the other labels stay for screen readers.
 
 ## Acceptance Criteria
 
-Verify: Component tests assert the done, current and future states with the hidden « (terminée) » and aria-current="step"; on a local build the rail shows on both paths in light, dark and at phone width.
+Verify: ImportScreen tests assert, on each path, that the `aria-current="step"` step has the « En cours » overline, the others have « Étape {n} », done steps keep the hidden « (terminée) », and the preview label reads « Aperçu & validation ». On a local build, the rail under the top bar matches the mockup on both paths in light, dark and at 390px, where only the current step's label shows.
 
 ## References
 
 - parent — _bmad-output/initiative-import-refresh/epic-import-a4-a6/epic-import-a4-a6.md
+- design — _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/DESIGN.md, component `import-rail` and section Components › Admin › Import stepper
+- design — _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md, section Component Patterns, copy row "Import › Stepper"
+- mockup — _bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-a4-a6-import.html, sections 1–4 (4 is the phone)
+
+## Notes
+
+- Decision (2026-10-10): the rail breaks out of the admin page padding inside the Import screen; the admin layout does not change (epic Boundaries).
+- Decision (2026-10-10): the preview label becomes « Aperçu & validation » in this story; entry 4 only merges Fichier and Colonnes.
+- Files named at inception: `src/client/admin/import/ImportStepper.tsx`, its placement in `ImportScreen.tsx`, and `adminCopy.import.steps` in `src/client/copy/admin.ts`.
 
 ## Plan
 
