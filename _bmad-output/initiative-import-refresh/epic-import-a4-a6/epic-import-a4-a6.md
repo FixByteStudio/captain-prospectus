@@ -67,3 +67,4 @@ The admin Import screen (`src/client/admin/import/`), the batch import route and
 - Decision (2026-10-10): GH #362 (Google map imports refused by `prospectBatchSchema`) is fixed on its own, not inside entry 7. Done when 3 cannot show « Carte Google » until it closes.
 - Source conflict: R4 — `docs/design.md` says Retour on the Fichier & colonnes bottom bar is outline; DESIGN.md › Components › Admin and the mockup show it secondary. Decision (2026-10-10): follow DESIGN.md and the mockup; entry 5 corrects design.md.
 - Unknown: whether the server can tell an import is « Interrompu » without a closing call from the client; entries 7 and 8 wait on the ADR (entry 3).
+- Decision (2026-10-10): entry 8 (#372) is split in two: 8 sends the import log from both paths, and new entry 11 shows Derniers imports on Source and owns the imports query and its invalidation. Entry 9 waits on 11 too.
