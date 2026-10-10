@@ -54,7 +54,10 @@ function fileInput(): HTMLInputElement {
   return input;
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("ColumnsStep", () => {
   it("shows one Statut chip per row, the field's own first", () => {
@@ -114,6 +117,11 @@ describe("ColumnsStep", () => {
 
 describe("« Changer de fichier »", () => {
   function renderScreen() {
+    // Source reads the import log (GH #390); nothing in these tests is about it.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ imports: [] }))),
+    );
     const client = createAdminQueryClient();
     render(
       <MemoryRouter initialEntries={["/admin/import"]}>

@@ -47,6 +47,7 @@ import type {
   OrphansResponse,
   OrphanRepairResult,
   ImportLog,
+  ImportsResponse,
 } from "../../shared/schemas";
 import type { DashboardPeriod, RefusalReason, Source, Status } from "../../shared/constants";
 
@@ -76,6 +77,7 @@ export const adminKeys = {
   duplicates: () => ["admin", "duplicates"] as const,
   visitsFeed: () => ["admin", "visits", "feed"] as const,
   scripts: () => ["admin", "scripts"] as const,
+  imports: () => ["admin", "imports"] as const,
   orphans: () => ["admin", "visits", "orphans"] as const,
   agentRound: (email: string) => ["admin", "agents", email, "round"] as const,
 };
@@ -385,6 +387,9 @@ export function useImportBatches(source: Source = "csv") {
       await Promise.all([
         invalidate(),
         client.invalidateQueries({ queryKey: adminKeys.dashboards() }),
+        // Reload the log for a finished or failed run. A part-finished one is not
+        // listed until IMPORT_STALE_MS has passed (ADR-0030), so this does not show it.
+        client.invalidateQueries({ queryKey: adminKeys.imports() }),
       ]);
     }
   }
@@ -396,6 +401,14 @@ export function useImportBatches(source: Source = "csv") {
   }
 
   return { start, reset, progress, result, error, isRunning };
+}
+
+/** The five newest settled imports, newest first (ADR-0030). No polling: the run's end invalidates it. */
+export function useImports() {
+  return useQuery({
+    queryKey: adminKeys.imports(),
+    queryFn: () => apiFetch<ImportsResponse>("/api/admin/imports"),
+  });
 }
 
 /**

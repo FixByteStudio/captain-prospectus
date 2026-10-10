@@ -47,6 +47,22 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Source also reads the import log (GH #390): answer that GET here so each
+ * test's stub only has to know the map and batch calls. The stub passed in
+ * never sees it, so its own `mock.calls` stay the map and batch calls.
+ */
+function stubFetch(inner: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: RequestInfo | URL, init?: RequestInit) =>
+      String(url) === "/api/admin/imports"
+        ? Promise.resolve(json({ imports: [] }))
+        : inner(url, init),
+    ),
+  );
+}
+
 function candidate(over: Partial<AreaCandidate> = {}): AreaCandidate {
   return {
     sourceRef: "node/1",
@@ -93,10 +109,7 @@ async function drawPolygon() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => json(answer())),
-  );
+  stubFetch(vi.fn(async () => json(answer())));
 });
 
 afterEach(() => {
@@ -106,10 +119,7 @@ afterEach(() => {
 
 describe("MapStep", () => {
   it("switching provider clears the drawing and both results", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ candidates: [candidate()] }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ candidates: [candidate()] }))));
     await goToMap();
     await drawPolygon();
     expect(screen.getByTestId("polygon-length").textContent).toBe("3");
@@ -131,8 +141,7 @@ describe("MapStep", () => {
   });
 
   it("excludes an unnamed candidate from the tally, the count and the import", async () => {
-    vi.stubGlobal(
-      "fetch",
+    stubFetch(
       vi.fn(async () =>
         json(
           answer({
@@ -156,7 +165,9 @@ describe("MapStep", () => {
 
     const startButton = screen.getByRole("button", { name: copy.map.results.start(2) });
     await userEvent.click(startButton);
-    const [, sent] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const [, sent] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => String(url) !== "/api/admin/imports",
+    );
     const body = JSON.parse(String(sent?.[1]?.body)) as {
       rows: { sourceRef: string }[];
       importLog: Record<string, unknown>;
@@ -180,10 +191,7 @@ describe("MapStep", () => {
       name: "Le Sablon",
       likelyDuplicateOf: { id: "p1", name: "Le Sablon" },
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ candidates: [named1, named2, likely] }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ candidates: [named1, named2, likely] }))));
     await goToMap();
     await drawPolygon();
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
@@ -201,37 +209,25 @@ describe("MapStep", () => {
 
   it("shows the cached answer's age, in days, hours or under an hour, and a plain line with no age", async () => {
     const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ cached: true, cachedAt: threeDaysAgo }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ cached: true, cachedAt: threeDaysAgo }))));
     await goToMap();
     await drawPolygon();
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
     expect(await screen.findByText("Résultat en cache, obtenu il y a 3 jours.")).toBeTruthy();
 
     const fiveHoursAgo = Date.now() - 5 * 60 * 60 * 1000;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ cached: true, cachedAt: fiveHoursAgo }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ cached: true, cachedAt: fiveHoursAgo }))));
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
     expect(await screen.findByText("Résultat en cache, obtenu il y a 5 heures.")).toBeTruthy();
 
     const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ cached: true, cachedAt: tenMinutesAgo }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ cached: true, cachedAt: tenMinutesAgo }))));
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
     expect(
       await screen.findByText("Résultat en cache, obtenu il y a moins d'une heure."),
     ).toBeTruthy();
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(answer({ cached: true }))),
-    );
+    stubFetch(vi.fn(async () => json(answer({ cached: true }))));
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
     expect(await screen.findByText("Résultat en cache, actualisé sous 7 jours.")).toBeTruthy();
   });
@@ -259,8 +255,7 @@ describe("MapStep", () => {
     const candidates = Array.from({ length: 300 }, (_, i) =>
       candidate({ sourceRef: `node/${i}`, name: `Lieu ${i}` }),
     );
-    vi.stubGlobal(
-      "fetch",
+    stubFetch(
       vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
         if (String(url).includes("/import/overpass")) return json(answer({ candidates }));
         const sent = JSON.parse(String(init?.body)) as {
@@ -322,12 +317,11 @@ describe("MapStep", () => {
 
   it("shows the Zone bar in ink with an accessible name, and no floating card (#370, #231)", async () => {
     const pending: { resolve: (() => void) | null } = { resolve: null };
-    vi.stubGlobal(
-      "fetch",
+    stubFetch(
       vi.fn((url: RequestInfo | URL) => {
         if (String(url).includes("/import/overpass"))
           return Promise.resolve(json(answer({ candidates: [candidate()] })));
-        return new Promise((resolve) => {
+        return new Promise<Response>((resolve) => {
           pending.resolve = () => resolve(json({ created: 1, updated: 0 }));
         });
       }),
@@ -348,10 +342,7 @@ describe("MapStep", () => {
   });
 
   it("shows a failed search as a destructive Alert under the map (#185)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ error: "internal" }, 500)),
-    );
+    stubFetch(vi.fn(async () => json({ error: "internal" }, 500)));
     await goToMap();
     await drawPolygon();
     await userEvent.click(screen.getByRole("button", { name: copy.map.search }));

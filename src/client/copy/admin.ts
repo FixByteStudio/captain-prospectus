@@ -381,6 +381,34 @@ export const adminCopy = {
       },
     },
 
+    /** Derniers imports on Source: the server's import log (ADR-0030). */
+    recent: {
+      title: "Derniers imports",
+      head: {
+        date: "Date & heure",
+        source: "Source",
+        target: "Fichier ou zone",
+        volume: "Volume",
+        by: "Par",
+        status: "Statut",
+      },
+      // `source` is not an enum on the server: an unknown key shows its raw value.
+      sources: {
+        csv: "CSV",
+        osm: "Carte OpenStreetMap",
+        google: "Carte Google",
+      } as Readonly<Record<string, string>>,
+      volume: (created: number, updated: number, rejected: number) =>
+        `+${formatCount(created)} ${created === 1 ? "créé" : "créés"} · ${formatCount(updated)} mis à jour · ${formatCount(rejected)} ${rejected === 1 ? "rejeté" : "rejetés"}`,
+      status: {
+        done: "Terminé",
+        interrupted: "Interrompu",
+      },
+      empty: "Aucun import pour l'instant.",
+      loadFailed: "Impossible de charger les derniers imports. Réessayez.",
+      loading: "Chargement des derniers imports…",
+    },
+
     file: {
       chosen: (name: string, rows: number) =>
         rows === 1 ? `${name} — 1 ligne` : `${name} — ${formatCount(rows)} lignes`,
