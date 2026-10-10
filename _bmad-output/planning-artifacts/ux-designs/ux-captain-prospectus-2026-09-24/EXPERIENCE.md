@@ -1,7 +1,7 @@
 ---
 name: Captain Prospectus
 status: final
-updated: 2026-09-26
+updated: 2026-10-10
 sources:
   - .memlog.md
   - DESIGN.md
@@ -30,6 +30,7 @@ This is one product with two surfaces, built on shadcn/ui + Tailwind CSS v4 (ADR
   | Admin charts | Recharts via shadcn Chart in the admin chunk, justified in the PR that adds it |
   | Admin round view | Agent position at sync: security review, data-model change, additive sync-contract change, and probably an ADR (agent-position retention is still undecided in field-operations.md) |
   | Top-bar search and notifications | Designed now, built later, once their back end exists |
+  | Import › Derniers imports | An import log the server writes: stored data, so an ADR and its own story first |
 
 ## Information Architecture
 
@@ -118,6 +119,12 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre." · Converti: "Déjà inscrit sur la liste d'attente." |
 | Visit | Step indicators "Étape 1 sur 2 · Résultat" / "Étape 2 sur 2 · Questions" · stepper aria "Diminuer" / "Augmenter" |
 | Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui. La tournée est triée par nom." · "{17} arrêts" |
+| Import › Stepper | Steps "Source" · "Fichier & colonnes" · "Aperçu & validation" · "Zone" · overlines "Étape {1}" / "En cours" · visually hidden "(terminée)" |
+| Import › Source, CSV card | "Un fichier CSV" · tag "Lu dans le navigateur" · ".csv" · "Un export de tableur, lu dans votre navigateur. Idéal pour vos listes existantes." · "Colonnes reconnues automatiquement" · "Aperçu avant tout enregistrement" · "Lignes rejetées expliquées" · "Réimport sans doublon" · "Flux direct : 3 étapes" · "Importer un fichier" |
+| Import › Source, map card | "Une zone sur la carte" · tag "Gratuit avec OpenStreetMap" · "Les commerces répertoriés sur OpenStreetMap ou Google Places, dans la zone que vous tracez." · "Zone tracée à main levée" · "Adresse et type de commerce" · "Lieux déjà listés écartés" · "Lieux sans nom ignorés" · "Flux rapide : 2 étapes" · "Dessiner une zone" |
+| Import › Derniers imports | "Derniers imports" · columns "Date & heure" · "Source" · "Fichier ou zone" · "Volume" · "Par" · "Statut" · "CSV" / "Carte OpenStreetMap" / "Carte Google" · "{7} sommets" / "Rayon {300} m" · "+{118} créés · {6} mis à jour · {4} rejetés" · "Terminé" / "Interrompu" · "Aucun import pour l'instant." |
+| Import › Fichier & colonnes | "{128} lignes" · "Changer de fichier" · field hints: Nom "Enseigne ou raison sociale", Type "Restaurant, café, food truck…", Latitude "En degrés décimaux, ex. 50,8466", Longitude "En degrés décimaux, ex. 4,3528", Adresse "Rue, numéro et code postal", Téléphone "Numéro de l'établissement", Site web "Site ou page de l'établissement", Cuisine "Spécialité, ex. belge, italienne" (Identifiant source keeps its existing hint) · "Indiquez quelle colonne correspond à quel champ." · columns "Exemple" · "Statut" · chips "Requis", "Détecté", "Coordonnées GPS", "Clé unique", "Optionnel", "Ignoré" · "{9} champs configurés sur 9" · "{128} lignes à traiter · {9} colonnes associées" · "Étape {2} sur 3" |
+| Import › Aperçu & validation | "{124} valides sur {128} lignes" · "Séparateur : {point-virgule}" · "{96,8} % exploitables" · "{3,2} % écartées" · "Toutes les lignes" · "Voir les {4} erreurs" · chips "Prêt", "Nom manquant", "Valeur invalide", "Sans coordonnées" · "Import en cours" · "Importer {124} lignes". "{124} lignes à importer" and "{4} lignes rejetées" are already in `copy.ts`. |
 | Save sheet | Overline "Validation" · "Enregistrer cette visite ?" · "{Curry House} · {Intéressé} · Flyer remis · {4} réponses" · "La visite reste sur ce téléphone jusqu'à la prochaine synchronisation." · "Modifier" / "Enregistrer" |
 
 ## Component Patterns
@@ -136,7 +143,11 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | **Top-bar search** | Admin | ⌘K / Ctrl+K opens a Command palette. It matches prospect names and opens the prospect's row in Prospects. *(Built later.)* |
 | **Table pagination** | Prospects, Visites | 25 rows per page, with "Précédent", page numbers and "Suivant". The page scrolls; tables never get a scroll area of their own. |
 | **Live feed** | Visites | Ordered by `received_at` (the server's clock), newest first. Notes show on a second line, in quotes. A visit to a merged prospect still appears, under the name it was made against. Arrivals are ambient: no toast. |
-| **Import stepper** | Import | CSV path: Source · Fichier · Colonnes · Aperçu. Map path: Source · Zone. The file is read in the browser and never uploaded. Rejected CSV rows are listed first, struck through, with their reason. |
+| **Import stepper** | Import | CSV path: Source · Fichier & colonnes · Aperçu & validation. Map path: Source · Zone. Both paths use the same rail. The file is read in the browser and never uploaded. The result shows in the "Import terminé" dialog; there is no "Terminé" step. |
+| **Source cards** | Import › Source | The heading "D'où viennent les prospects ?" is answered by two cards: "Un fichier CSV" and "Une zone sur la carte". "Importer un fichier" opens the browser's file picker immediately and, after the file is read, lands on Fichier & colonnes; "Dessiner une zone" opens Zone. If a file can't be read or holds no rows, the page stays on Source with a destructive Alert under the cards. Every bullet on a card states something the app does today. |
+| **Derniers imports** | Import › Source | The last 5 imports, newest first: Date & heure · Source (CSV / Carte OpenStreetMap / Carte Google) · Fichier ou zone (the file name, or "{7} sommets" / "Rayon {300} m") · Volume · Par (the admin's email) · Statut ("Terminé", or "Interrompu" when a batch failed). Read-only: no row action, no link to a full history. |
+| **Fichier & colonnes** | Import › Fichier & colonnes | Exemple shows the file's first-row value, and each Select includes "Ne pas importer". Statut is one chip per row, the field's own chip first: "Requis" (Nom), "Coordonnées GPS" (Latitude, Longitude), "Clé unique" (Identifiant source); on the other fields, "Détecté" when the column was guessed and "Optionnel" when none is chosen. A file column that feeds no field gets "Ignoré". "Voir l'aperçu" stays disabled until Nom has a column. |
+| **Aperçu & validation** | Import › Aperçu & validation | Rejected rows are listed first, struck through, with their reason. A valid row reads "Prêt", or "Sans coordonnées" when it has no coordinates. "Voir les {4} erreurs" filters the ledger to rejected rows. No per-row checkboxes: every valid row is sent. Created and updated counts are known only after the import runs, in the result dialog. |
 | **Map import** | Import › Zone | The map and the results sit side by side, so the admin can move a vertex and search again. The provider select sits above the map. Changing the provider clears the drawing. Actions sit under the map: vertex count, "Annuler le dernier point", "Effacer", then the gold "Rechercher dans la zone". Unnamed places are listed struck through and can't be imported. Places that look already listed are left out unless the single checkbox is ticked, and that checkbox resets on every new search. A cached result says so, with its age. |
 | **Doublons pair** | Doublons | Two stacked rows with the distance shown once for the pair. "Garder" on either row keeps that one and merges the other into it, with no confirmation (merging keeps every visit). |
 | **Repair row** | À rattacher | The outcome edge previews the effect, and the page lede says the effect has not happened yet. Candidate buttons show the distance inside the button, nearest first; the server proposes them. "Supprimer" sits far right and opens the destructive confirmation. |
@@ -166,7 +177,8 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Session expired | Admin | A blocking dialog, because a write on an expired session looks like it worked: "Votre session a expiré" / "Reconnectez-vous pour continuer." with "Se reconnecter" as its only action. Nothing behind it is usable, so it takes the one dialog level, and Esc and the scrim do not close it. "Se reconnecter" is the field strip's marker navigation, the only one that reaches Access through the precached shell (`identity-access.md`); being a real navigation it loses a half-filled import or script draft, so the dialog interrupts rather than waits. |
 | Not an admin | Admin routes | A signed-in agent gets the field band and an empty state with a lock icon: "Vous n'avez pas accès à cette page." with "Retour à la tournée". The route never renders the admin shell, and the Worker answers 403 on every `/api/admin/*` call whatever the client renders (invariant 10, `identity-access.md`). |
 | New build available | Admin, Field | A banner: "Une nouvelle version est disponible." with "Plus tard" and "Mettre à jour". The admin offline banner takes this slot ahead of it; they never both apply, since a build cannot be fetched offline. |
-| Import running | Import › Aperçu | A progress bar with "Import en cours : {50} / {124}". Batches of 250 rows (invariant 13). The page can't be left without a browser confirmation. |
+| Import running | Import › Aperçu & validation | The progress card shows "Import en cours", "{50} / {124}" and a bar. "Retour" and "Importer {124} lignes" are disabled until the server answers the last batch. Batches of 250 rows (invariant 13). The page can't be left without a browser confirmation. |
+| No import yet | Import › Source | "Derniers imports" shows one muted line, "Aucun import pour l'instant.", in place of its rows. |
 | Import done | Import | A dialog: "Import terminé" with "{118} prospects créés · {6} mis à jour · {4} lignes rejetées", then "Terminer" and "Voir les prospects". |
 | Import failed mid-way | Import | An inline Alert naming how many rows went in. A retry re-sends from the start; it's safe because every write is idempotent (invariant 4). |
 | Saving a script | Scripts | The dialog button shows a spinner and is disabled until the server answers, then the toast "Version {3} enregistrée et activée." |
@@ -218,6 +230,7 @@ Visual contrast is in `DESIGN.md` and asserted in `palette.test.ts`.
 - New feed rows are announced politely, at most one announcement per poll.
 - Charts come with a text equivalent: the Pipeline list already *is* text, and "Visites dans le temps" gets a visually hidden summary table.
 - **Stacked segments are told apart by more than hue.** Each series is 3:1 against the card (`{colors.outcome-no-contact}` and the rest — see DESIGN.md), and neighbouring segments are separated by a 1px card-coloured stroke plus an in-segment count. Series are *not* 3:1 against one another and cannot be: five such series need an 81:1 luminance range, sRGB has 21:1. The stroke and the count are what satisfy WCAG 1.4.11 here, so neither is decorative and neither may be dropped for density. Each series' measured ratio is tabulated in [`mockups/key-a1-outcome-chart.html`](mockups/key-a1-outcome-chart.html).
+- The import stepper marks a done step with a visually hidden "(terminée)" and the current one with `aria-current="step"`.
 - Script reordering works from the keyboard, and swipe actions have tap equivalents.
 - Field text is at least 16px, and inputs are 16px so iOS never zooms.
 - Screens reflow at 200 % text size without cutting off controls.
@@ -226,7 +239,7 @@ Visual contrast is in `DESIGN.md` and asserted in `palette.test.ts`.
 
 | Width | Admin | Field |
 |---|---|---|
-| < 768px (phone) | The sidebar becomes a Sheet behind the menu button. KPIs and panels stack in one column. Prospects becomes a list of rows (name, type, status, agent). The selection toolbar wraps onto two lines. | Bottom tabs. One pane. Sticky actions sit above the tab bar. |
+| < 768px (phone) | The sidebar becomes a Sheet behind the menu button. KPIs and panels stack in one column. Prospects becomes a list of rows (name, type, status, agent). The selection toolbar wraps onto two lines. Import's source cards stack, the stepper shows only the current step's label, the mapping table becomes one block per field (label, Select, example, chip), and Derniers imports becomes a list of rows: date, source and file on the first line, volume and statut on the second, without Par. | Bottom tabs. One pane. Sticky actions sit above the tab bar. |
 | 768–1023px (tablet) | The sidebar collapses to icons. KPIs go 2×2; the chart and panels stack. | Tabs move into the navy band. Tournée: list left, next stop right. Carte: list left, map right. Visite: form left, history and map right. Save confirmation becomes a centred dialog. |
 | ≥ 1024px | Full sidebar. The dashboard grid from DESIGN.md. | Same as tablet. |
 
@@ -264,11 +277,13 @@ Each figure is defined once here, and the Worker computes it. "Period" is the da
   - Script questions as cards.
   - The full top bar.
   - The bottom sheet for saving a visit.
+  - Import (A4–A6): the source cards, Derniers imports, the merged Fichier & colonnes step and its Statut chips, the Aperçu count cards and error filter, the rail stepper. Zone stays as built.
 - **Rejected from Stitch:**
   - Business-register matching (SIRET/BCE), automatic address lookup, NAF codes.
   - Route optimisation, printing a route sheet, battery and network readings.
   - Voice notes, prices shown to agents, an extra "Qualification terrain" import step.
-  - Import history, the "Aperçu mobile agent" panel, a proximity-tolerance card.
+  - The "Aperçu mobile agent" panel, a proximity-tolerance card.
+  - Import (A4–A6): the import history's row action and full-history page, the RGPD panel, the "Moteur d'indexation" badge, the encoding chip, a "Terminé" step, per-row checkboxes and the created/updated forecast before the import runs.
   - A duplicate pending card on Tournée du jour.
   - Downloading map tiles in bulk for offline use.
 - **Rejected on principle:**

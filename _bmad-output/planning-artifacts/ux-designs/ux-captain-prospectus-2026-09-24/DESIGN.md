@@ -2,7 +2,7 @@
 name: Captain Prospectus
 description: Field-canvassing app for Brussels, with an admin dashboard and an offline-first field PWA. Built on shadcn/ui + Tailwind CSS v4; this file specifies the brand layer on top of shadcn's defaults.
 status: final
-updated: 2026-09-26
+updated: 2026-10-10
 sources:
   - .memlog.md
   - stitch/ (Stitch exports, light mode only; see "Sources and mockups")
@@ -242,6 +242,18 @@ components:
     numeral: '{colors.foreground}'
   map-position:
     dot: '{colors.foreground}, 12px, with a 24px {colors.foreground} halo at 20 %'
+  source-card:
+    extends: card
+    icon-tile: '{colors.secondary}, 56px, {rounded.lg}'
+    tag: '{colors.secondary} pill, {typography.meta}'
+    bullet: 'Lucide CircleCheck in {colors.success}, label in {typography.meta}'
+  import-rail:
+    circle: 32px
+    done: '{colors.foreground} fill, {colors.card} check'
+    current: '{colors.primary} fill, {colors.primary-foreground} numeral, 1px {colors.primary-edge}'
+    future: '{colors.secondary} fill, {colors.muted-foreground} numeral'
+    overline: '{typography.overline} in {colors.muted-foreground}; the current step''s in {colors.foreground}'
+    line: '2px, {colors.primary} once the step before it is done, {colors.border} otherwise'
 ---
 
 ## Brand & Style
@@ -365,7 +377,11 @@ Components not listed here are shadcn defaults, restyled only through tokens: Bu
 - **KPI card** (`{components.kpi-card}`). From top to bottom: the label (overline) with a 32px icon tile at top right, the figure (display), then the delta chip followed by "vs période précédente" in meta, then a 32px-tall sparkline or mini-bar across the bottom. Prospects ouverts shows a thin stacked bar of Nouveau, Assigné and À relancer instead of a delta. Taux de conversion shows a thin gold progress bar, under the same exception as daily progress. There is no coloured edge.
 - **Visites KPI strip.** Four compact KPI cards in one row, with no icon tile and no sparkline: an overline label, a display figure, and a meta context line ("sur 47 visites").
 - **À traiter row.** A 40px `{colors.secondary}` icon tile, the title in label weight with a meta sub-line, the count right-aligned in heading weight with tabular figures, then a secondary button. Rows are separated by `{colors.border}` hairlines.
-- **Stepper (import).** Numbered circles joined by a line. A done step shows navy with a check, the current step gold with navy text, and a future step secondary. The step label sits beside or below the circle.
+- **Import stepper** (`{components.import-rail}`, Stitch A5). A full-width rail under the top bar, shared by the CSV and map paths. Each step is a circle followed by an overline ("Étape 1", or "En cours" on the current step) stacked above its label. The line between two steps turns gold once the step before it is done.
+- **Source cards** (`{components.source-card}`, Stitch A4). Two equal cards side by side. Each one has, top to bottom: an icon tile (`FileSpreadsheet`, `Map`) with the tag pill at top right, the title in heading weight with a format chip (".csv"), the explainer, four bullets in two columns, then a footer line ("Flux direct : 3 étapes") with the card's button at right. The CSV card's button is primary, the map card's secondary. No coloured left edge and no faded watermark icon.
+- **Derniers imports** (Stitch A4). A table panel (`{components.ledger-row}`) under the source cards, with the title and its `History` icon in the panel head. Source shows a `FileSpreadsheet` or `Map` icon before its label. Volume is right-aligned in tabular figures. Statut is a badge: "Terminé" on the success tint, "Interrompu" on the warn tint.
+- **Fichier & colonnes** (Stitch A5). A file card first: a file icon tile, the name in label weight, size and line count as secondary chips, the in-browser hint with a `Lock` icon in meta, and a secondary "Changer de fichier" at right. Then a panel with the instruction ("Indiquez quelle colonne correspond à quel champ.") as heading, the configured-field counter as a chip at right, and the table: the overline header row on `{colors.secondary}`, then one row per field. Each row holds the field's Lucide icon, label and meta hint, the Select, the example on a `{colors.secondary}` chip, and the Statut chip right-aligned. "Requis" uses the destructive tint, "Clé unique" the warn tint, and the others secondary. A file column that feeds no field closes the table as a muted "Ignoré" row. The bottom bar is a card with "Retour" (secondary), "Étape 2 sur 3" in meta, and the gold "Voir l'aperçu".
+- **Aperçu & validation** (Stitch A6). The summary banner is a `{colors.secondary}` panel with a 40px icon tile, the count line in heading weight, and the separator chip. The two count cards are `{components.kpi-card}`s: the figure in display, an overline label, and a tinted percentage chip at top right (success for exploitable, destructive for rejected). The preview ledger keeps the status edge and badge column. A rejected row is struck through on a destructive tint, with its reason chip. The progress card floats bottom right over the bottom bar: a meta title, "{50} / {124}" in tabular figures, and the shadcn Progress bar.
 - **Script question card.** A card with a `GripVertical` drag handle and the number in label weight. A row holds the label input and the type select. A footer on `{colors.secondary}` holds the "Obligatoire" checkbox, a `Lock` icon with the key (Archivo, not monospace) and a ghost "Modifier la clé". The locked-key warning is a meta line with an `Info` icon.
 - **Admin round view.** Inside the admin shell: an agent Select with the position age beside it in meta, then two panes, the stop list left and the map right. Stops and pins look the same as on the field Carte.
 
@@ -418,5 +434,7 @@ The Stitch exports in `stitch/admin/` and `stitch/terrain/` are composition refe
 - [`mockups/key-f8-sync.html`](mockups/key-f8-sync.html): the band dot and sync strip in all 7 states, light and dark.
 - [`mockups/key-admin-round.html`](mockups/key-admin-round.html): the admin round view in light and dark, plus the no-position state.
 - [`mockups/key-a1-outcome-chart.html`](mockups/key-a1-outcome-chart.html): "Visites dans le temps" in light and dark with the revised outcome colours, the 1px separator and the in-segment counts, over a table of each series' measured ratio against the card (issue #91).
+- [`mockups/key-a4-a6-import.html`](mockups/key-a4-a6-import.html): Import › Source (source cards, Derniers imports), Fichier & colonnes, and Aperçu & validation while the import runs, in light and dark at 1280px, plus Source on a phone.
+- `stitch/admin/a4…a6`: the visual reference for Import's Source, Fichier & colonnes and Aperçu & validation, as adjusted in Components › Admin; A7 (Zone) is not followed. What was kept and dropped is in EXPERIENCE.md › Inspiration & Anti-patterns.
 
 The mocks load Archivo and the mark from the repo by relative path, so open them from inside the checkout.
