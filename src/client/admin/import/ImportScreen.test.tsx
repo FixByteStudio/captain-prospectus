@@ -93,7 +93,7 @@ describe("ImportScreen", () => {
     renderScreen();
     const nav = screen.getByRole("navigation", { name: copy.import.steps.label });
     expect(nav.querySelector('[aria-current="step"]')?.textContent).toBe(
-      `1${copy.import.steps.source}`,
+      `1${copy.import.steps.current}${copy.import.steps.source}`,
     );
 
     await userEvent.click(screen.getByText(copy.import.source.csv));
@@ -101,13 +101,14 @@ describe("ImportScreen", () => {
     expect(screen.getByRole("button", { name: copy.import.file.choose })).toBeTruthy();
     const items = within(nav).getAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
-      `${copy.import.steps.source} (${copy.import.steps.done})`,
-      `2${copy.import.steps.file}`,
-      `3${copy.import.steps.columns}`,
-      `4${copy.import.steps.preview}`,
+      `${copy.import.steps.upcoming(1)}${copy.import.steps.source} (${copy.import.steps.done})`,
+      `2${copy.import.steps.current}${copy.import.steps.file}`,
+      `3${copy.import.steps.upcoming(3)}${copy.import.steps.columns}`,
+      `4${copy.import.steps.upcoming(4)}${copy.import.steps.preview}`,
     ]);
+    expect(copy.import.steps.preview).toBe("Aperçu & validation");
     expect(nav.querySelector('[aria-current="step"]')?.textContent).toBe(
-      `2${copy.import.steps.file}`,
+      `2${copy.import.steps.current}${copy.import.steps.file}`,
     );
   });
 

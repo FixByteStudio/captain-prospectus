@@ -341,10 +341,12 @@ export const adminCopy = {
       source: "Source",
       file: "Fichier",
       columns: "Colonnes",
-      preview: "Aperçu",
+      preview: "Aperçu & validation",
       map: "Zone",
       label: "Étapes",
       done: "terminée",
+      current: "En cours",
+      upcoming: (n: number) => `Étape ${n}`,
     },
 
     source: {
