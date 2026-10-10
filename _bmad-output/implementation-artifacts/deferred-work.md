@@ -272,6 +272,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-147-progress-value.md`
   summary: The MapStep and PreviewStep import progress bars have no accessible name (GH #231).
   evidence: Radix does not name the progressbar root, and both call sites pass no aria-label (MapStep.tsx:312, PreviewStep.tsx:131). DailyProgress and ConversionBar each set one.
+  closed_by: GH #370 (PR #386) — both import progress bars carry `copy.import.progressLabel`. Recorded by GH #373.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-161-agent-activity-overflow.md`
   summary: Check Activité par agent's lg truncation (`lg:w-full lg:max-w-0 lg:min-w-40` on a th) in Firefox and Safari at 1024 and 1280 px.

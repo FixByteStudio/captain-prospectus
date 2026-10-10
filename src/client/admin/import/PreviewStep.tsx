@@ -17,6 +17,10 @@ import type { MappedRow } from "./csv";
 /** Enough to judge the file by; the full list is the import itself. */
 const SHOWN = 50;
 
+/** The filter's two items look alike: a pill on the `secondary` track. */
+const FILTER_ITEM =
+  "text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground rounded-md px-3 first:rounded-md last:rounded-md hover:bg-transparent data-[state=on]:shadow-sm";
+
 /**
  * Step three: see what will happen, then decide.
  *
@@ -104,17 +108,10 @@ export function PreviewStep({
         aria-label={copy.import.preview.filterLabel}
         className="bg-secondary mb-3 w-fit rounded-lg p-0.5"
       >
-        <ToggleGroupItem
-          value="all"
-          className="text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground rounded-md px-3 first:rounded-md last:rounded-md hover:bg-transparent data-[state=on]:shadow-sm"
-        >
+        <ToggleGroupItem value="all" className={FILTER_ITEM}>
           {copy.import.preview.all}
         </ToggleGroupItem>
-        <ToggleGroupItem
-          value="errors"
-          disabled={rejected.length === 0}
-          className="text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground rounded-md px-3 first:rounded-md last:rounded-md hover:bg-transparent data-[state=on]:shadow-sm"
-        >
+        <ToggleGroupItem value="errors" disabled={rejected.length === 0} className={FILTER_ITEM}>
           {copy.import.preview.errors(rejected.length)}
         </ToggleGroupItem>
       </ToggleGroup>

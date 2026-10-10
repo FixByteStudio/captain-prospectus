@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import type { ImportRow } from "../../../shared/schemas";
+import { IMPORT_LOG_FILE_NAME_MAX, type Source } from "../../../shared/constants";
 import { copy } from "../../copy";
-import { useImportBatches, type ImportLogFacts } from "../queries";
+import { useImportBatches } from "../queries";
 import { ScreenHeader } from "../ScreenHeader";
 import { ColumnsStep } from "./ColumnsStep";
 import { ImportStepper } from "./ImportStepper";
@@ -10,9 +10,7 @@ import { MapStep, type MapProvider } from "./MapStep";
 import { PreviewStep } from "./PreviewStep";
 import { ResultDialog } from "./ResultDialog";
 import { SourceStep } from "./SourceStep";
-import { guessColumns, mapRows } from "./csv";
-import { IMPORT_LOG_FILE_NAME_MAX, type Source } from "../../../shared/constants";
-import type { ColumnMap, ParsedCsv } from "./csv";
+import { guessColumns, mapRows, type ColumnMap, type ParsedCsv } from "./csv";
 
 type Step = "source" | "columns" | "map" | "preview";
 
@@ -97,10 +95,6 @@ export function ImportScreen() {
     setStep("map");
   }
 
-  function run(rows: ImportRow[], log: ImportLogFacts) {
-    importer.start(rows, log);
-  }
-
   // A reload, a tab close or an outside navigation would lose every batch the
   // Worker has not yet answered; an in-app sidebar click is a router
   // navigation, not covered here: `useBlocker` needs a data router
@@ -133,7 +127,7 @@ export function ImportScreen() {
           isRunning={importer.isRunning}
           error={importer.error}
           onBack={startOver}
-          onStart={run}
+          onStart={importer.start}
         />
       )}
 
@@ -165,7 +159,7 @@ export function ImportScreen() {
             setStep("columns");
           }}
           onStart={() =>
-            run(ready, {
+            importer.start(ready, {
               rejected: rejected.length,
               // The log's cap (ADR-0030), so a long name cannot refuse the batch.
               ...(fileName && { fileName: fileName.slice(0, IMPORT_LOG_FILE_NAME_MAX) }),

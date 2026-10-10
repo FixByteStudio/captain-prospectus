@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { cn } from "../../lib/utils";
 import { Surface } from "../Surface";
 import { STATUS_EDGE } from "../status";
+import { percentDone } from "./ImportProgressCard";
 import { MapCanvas } from "./MapCanvas";
 import {
   addVertex,
@@ -115,7 +116,6 @@ export function MapStep({
   const toImport = includeLikely
     ? importable
     : importable.filter((c) => c.likelyDuplicateOf === null);
-  const percent = progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -309,7 +309,11 @@ export function MapStep({
 
         {isRunning && (
           <div className="mt-4">
-            <Progress value={percent} variant="ink" aria-label={copy.import.progressLabel} />
+            <Progress
+              value={percentDone(progress)}
+              variant="ink"
+              aria-label={copy.import.progressLabel}
+            />
             <p className="text-muted-foreground tnum mt-2">
               {copy.import.running(progress.done, progress.total)}
             </p>

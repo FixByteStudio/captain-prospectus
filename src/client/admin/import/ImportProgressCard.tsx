@@ -2,13 +2,17 @@ import { copy } from "../../copy";
 import { Progress } from "../../ui/progress";
 import { Surface } from "../Surface";
 
+/** Whole percent for a `Progress` value; an empty run reads 0, not NaN. */
+export function percentDone({ done, total }: { done: number; total: number }): number {
+  return total === 0 ? 0 : Math.round((done / total) * 100);
+}
+
 /**
  * The card that floats over Aperçu & validation's bottom bar while batches
  * run (docs/design.md › The CSV import › Running). Zone has no bottom bar, so
  * it keeps its inline bar.
  */
 export function ImportProgressCard({ progress }: { progress: { done: number; total: number } }) {
-  const percent = progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100);
   return (
     <Surface
       role="status"
@@ -21,7 +25,7 @@ export function ImportProgressCard({ progress }: { progress: { done: number; tot
         </span>
       </div>
       <Progress
-        value={percent}
+        value={percentDone(progress)}
         variant="ink"
         className="mt-2"
         aria-label={copy.import.progressLabel}
