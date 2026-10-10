@@ -46,6 +46,7 @@ import type {
   UsersResponse,
   OrphansResponse,
   OrphanRepairResult,
+  ImportLog,
 } from "../../shared/schemas";
 import type { DashboardPeriod, RefusalReason, Source, Status } from "../../shared/constants";
 
@@ -320,6 +321,9 @@ export function useAssign() {
   });
 }
 
+/** What only the screen knows about a run: the rest of `importLog` is the hook's own. */
+export type ImportLogFacts = Omit<ImportLog, "importId" | "batchIndex" | "batchCount">;
+
 /**
  * Send an import one request at a time.
  *
@@ -337,21 +341,29 @@ export function useImportBatches(source: Source = "csv") {
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
-  async function start(rows: ImportRow[]) {
+  async function start(rows: ImportRow[], log: ImportLogFacts = { rejected: 0 }) {
     setIsRunning(true);
     setError(null);
     setResult(null);
 
     const batches = batched(rows, IMPORT_ROWS_PER_REQUEST);
     const totals = { created: 0, updated: 0 };
+    // One id per run: a retry is a new run, so it is logged as its own import (ADR-0030).
+    const importId = crypto.randomUUID();
     let done = 0;
     setProgress({ done: 0, total: rows.length });
 
     try {
-      for (const batch of batches) {
+      for (const [batchIndex, batch] of batches.entries()) {
+        const importLog: ImportLog = {
+          ...log,
+          importId,
+          batchIndex,
+          batchCount: batches.length,
+        };
         const outcome = await apiFetch<ImportResult>("/api/admin/prospects/batch", {
           method: "POST",
-          body: JSON.stringify({ source, rows: batch }),
+          body: JSON.stringify({ source, rows: batch, importLog }),
         });
         totals.created += outcome.created;
         totals.updated += outcome.updated;

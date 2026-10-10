@@ -157,8 +157,19 @@ describe("MapStep", () => {
     const startButton = screen.getByRole("button", { name: copy.map.results.start(2) });
     await userEvent.click(startButton);
     const [, sent] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    const body = JSON.parse(String(sent?.[1]?.body)) as { rows: { sourceRef: string }[] };
+    const body = JSON.parse(String(sent?.[1]?.body)) as {
+      rows: { sourceRef: string }[];
+      importLog: Record<string, unknown>;
+    };
     expect(body.rows.map((r) => r.sourceRef)).toEqual(["node/1", "node/2"]);
+    // The unnamed place is the rejection; the polygon's vertices are the zone (ADR-0030).
+    expect(body.importLog).toMatchObject({
+      batchIndex: 0,
+      batchCount: 1,
+      rejected: 1,
+      zoneVertices: 3,
+    });
+    expect(body.importLog).not.toHaveProperty("zoneRadiusM");
   });
 
   it("keeps a likely duplicate out unless ticked, and resets the tick on a new search", async () => {
@@ -244,6 +255,7 @@ describe("MapStep", () => {
 
   it("names how many rows already went in when a later batch fails, and Réessayer re-sends", async () => {
     const sizes: number[] = [];
+    const importIds: string[] = [];
     const candidates = Array.from({ length: 300 }, (_, i) =>
       candidate({ sourceRef: `node/${i}`, name: `Lieu ${i}` }),
     );
@@ -251,7 +263,12 @@ describe("MapStep", () => {
       "fetch",
       vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
         if (String(url).includes("/import/overpass")) return json(answer({ candidates }));
-        sizes.push((JSON.parse(String(init?.body)) as { rows: unknown[] }).rows.length);
+        const sent = JSON.parse(String(init?.body)) as {
+          rows: unknown[];
+          importLog: { importId: string };
+        };
+        sizes.push(sent.rows.length);
+        importIds.push(sent.importLog.importId);
         if (sizes.length === 2) return json({ error: "failed" }, 500);
         return json({ created: 1, updated: 0 });
       }),
@@ -274,6 +291,10 @@ describe("MapStep", () => {
     await userEvent.click(retry);
     await screen.findByText(copy.import.result.title);
     expect(sizes).toEqual([250, 50, 250, 50]);
+    // A retry is a new run, so a new import in the log (ADR-0030).
+    expect(importIds[0]).toBe(importIds[1]);
+    expect(importIds[2]).toBe(importIds[3]);
+    expect(importIds[2]).not.toBe(importIds[0]);
   });
 
   it("puts the provider above the map, and under it the vertex count, undo, clear, then the gold search (#185)", async () => {

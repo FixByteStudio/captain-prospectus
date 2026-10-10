@@ -24,7 +24,7 @@ import {
   removeLastVertex,
 } from "./map";
 import type { Circle, Vertex } from "./map";
-import { useOverpassImport, usePlacesImport } from "../queries";
+import { useOverpassImport, usePlacesImport, type ImportLogFacts } from "../queries";
 
 /** The two map providers. Not `Source`: CSV is not something you draw. */
 export type MapProvider = "osm" | "google";
@@ -56,7 +56,7 @@ export function MapStep({
   isRunning: boolean;
   error: string | null;
   onBack: () => void;
-  onStart: (rows: ImportRow[]) => void;
+  onStart: (rows: ImportRow[], log: ImportLogFacts) => void;
 }) {
   const [polygon, setPolygon] = useState<Vertex[]>([]);
   const [circle, setCircle] = useState<Circle | null>(null);
@@ -328,7 +328,16 @@ export function MapStep({
           </Button>
           {search.data && (
             <Button
-              onClick={() => onStart(toImport.map(toImportRow))}
+              onClick={() =>
+                onStart(toImport.map(toImportRow), {
+                  // Unnamed places are the only rejection here; a likely duplicate
+                  // the admin left out is a choice (ADR-0030).
+                  rejected: unnamed,
+                  ...(google && circle
+                    ? { zoneRadiusM: circle.radius }
+                    : { zoneVertices: polygon.length }),
+                })
+              }
               disabled={isRunning || toImport.length === 0}
             >
               {error ? copy.import.actions.retry : copy.map.results.start(toImport.length)}

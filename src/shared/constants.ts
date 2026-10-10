@@ -283,6 +283,9 @@ export const IMPORT_STALE_MS = 5 * 60 * 1000;
 /** Cap on `importLog.batchCount`: 10 000 batches of 250 rows is 2.5 M rows. */
 export const IMPORT_LOG_BATCH_COUNT_MAX = 10_000;
 
+/** Longest `importLog.fileName`, the same cap as the shared short text. */
+export const IMPORT_LOG_FILE_NAME_MAX = 200;
+
 /** Cap on the log's other counts (`rejected`, zone size); a 250-row batch cannot reach it. */
 export const IMPORT_LOG_COUNT_MAX = 10_000_000;
 

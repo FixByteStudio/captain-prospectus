@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import type { ImportRow } from "../../../shared/schemas";
 import { copy } from "../../copy";
-import { useImportBatches } from "../queries";
+import { useImportBatches, type ImportLogFacts } from "../queries";
 import { ScreenHeader } from "../ScreenHeader";
 import { ColumnsStep } from "./ColumnsStep";
 import { ImportStepper } from "./ImportStepper";
@@ -11,7 +11,7 @@ import { PreviewStep } from "./PreviewStep";
 import { ResultDialog } from "./ResultDialog";
 import { SourceStep } from "./SourceStep";
 import { guessColumns, mapRows } from "./csv";
-import type { Source } from "../../../shared/constants";
+import { IMPORT_LOG_FILE_NAME_MAX, type Source } from "../../../shared/constants";
 import type { ColumnMap, ParsedCsv } from "./csv";
 
 type Step = "source" | "columns" | "map" | "preview";
@@ -97,8 +97,8 @@ export function ImportScreen() {
     setStep("map");
   }
 
-  function run(rows: ImportRow[]) {
-    importer.start(rows);
+  function run(rows: ImportRow[], log: ImportLogFacts) {
+    importer.start(rows, log);
   }
 
   // A reload, a tab close or an outside navigation would lose every batch the
@@ -164,7 +164,13 @@ export function ImportScreen() {
             importer.reset();
             setStep("columns");
           }}
-          onStart={() => run(ready)}
+          onStart={() =>
+            run(ready, {
+              rejected: rejected.length,
+              // The log's cap (ADR-0030), so a long name cannot refuse the batch.
+              ...(fileName && { fileName: fileName.slice(0, IMPORT_LOG_FILE_NAME_MAX) }),
+            })
+          }
         />
       )}
 
