@@ -1,4 +1,7 @@
 ---
+tracker_id: "390"
+remote: "https://github.com/FixByteStudio/captain-prospectus/issues/390"
+tracker_status: backlog
 id: 11
 type: story
 title: "Source lists the last five imports"
