@@ -21,6 +21,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Script** | Script | Versioned list of questions an agent asks during a visit | survey, form |
 | **Answers** | Réponses | Responses to a script, stored on the visit | |
 | **Import** | Import | Bulk creation of prospects from CSV or map | upload |
+| **Import log** | Journal des imports | The server's record of one import, built from its batches. Not the *Import* itself, which is the act | history |
 | **Map import** | Import carte | Import from an OpenStreetMap area via Overpass | scrape |
 | **Field prospect** | Prospect terrain | Prospect created by an agent on the ground (`source = field`) | |
 | **Sync** | Synchronisation | One request that pushes pending local writes and pulls the agent's list | |

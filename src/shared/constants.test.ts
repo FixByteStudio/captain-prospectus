@@ -83,6 +83,16 @@ describe("MAX_REQUEST_BYTES", () => {
         cuisine: maxShortText,
         sourceRef: maxShortText,
       })),
+      // The log field rides on every batch (ADR-0030), so the budget counts it.
+      importLog: {
+        importId: crypto.randomUUID(),
+        batchIndex: 0,
+        batchCount: 10_000,
+        rejected: 10_000_000,
+        fileName: maxShortText,
+        zoneVertices: 10_000_000,
+        zoneRadiusM: 10_000_000,
+      },
     };
     expect(prospectBatchSchema.safeParse(batch).success).toBe(true);
     expect(bytes(batch)).toBeLessThan(MAX_REQUEST_BYTES);

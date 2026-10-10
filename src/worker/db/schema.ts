@@ -345,6 +345,44 @@ export const loginAttempts = sqliteTable(
   (t) => [primaryKey({ columns: [t.ipHash, t.windowStart] })],
 );
 
+/**
+ * One import run, written by whichever of its batches arrives first
+ * (ADR-0030). `created_by` and `file_name` are personal and nulled by the
+ * retention sweep after RETENTION_DAYS; the counts stay. Status is derived on
+ * read from `import_batches`, never stored.
+ */
+export const imports = sqliteTable(
+  "imports",
+  {
+    /** The client's `importId` (crypto.randomUUID()). */
+    id: text("id").primaryKey(),
+    /** The batch's own `source`; not an enum, so a new source needs no migration. */
+    source: text("source").notNull(),
+    fileName: text("file_name"),
+    zoneVertices: integer("zone_vertices"),
+    zoneRadiusM: integer("zone_radius_m"),
+    rejected: integer("rejected").notNull(),
+    batchCount: integer("batch_count").notNull(),
+    createdBy: text("created_by"),
+    /** The server's `now` at the first batch, never a client clock. */
+    startedAt: integer("started_at").notNull(),
+  },
+  (t) => [index("imports_started_idx").on(t.startedAt)],
+);
+
+/** One batch of an import. An import's counts are the sum of these rows. */
+export const importBatches = sqliteTable(
+  "import_batches",
+  {
+    importId: text("import_id").notNull(),
+    batchIndex: integer("batch_index").notNull(),
+    created: integer("created").notNull(),
+    updated: integer("updated").notNull(),
+    receivedAt: integer("received_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.importId, t.batchIndex] })],
+);
+
 export type ProspectRow = typeof prospects.$inferSelect;
 export type NewProspectRow = typeof prospects.$inferInsert;
 export type VisitRow = typeof visits.$inferSelect;
@@ -354,6 +392,8 @@ export type NewOrphanedVisitRow = typeof visitsOrphaned.$inferInsert;
 export type ScriptRow = typeof scripts.$inferSelect;
 export type AgentPositionRow = typeof agentPositions.$inferSelect;
 export type OverpassCacheRow = typeof overpassCache.$inferSelect;
+export type ImportLogRow = typeof imports.$inferSelect;
+export type ImportLogBatchRow = typeof importBatches.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type LoginCodeRow = typeof loginCodes.$inferSelect;

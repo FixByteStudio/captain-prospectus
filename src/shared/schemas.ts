@@ -25,6 +25,8 @@ import {
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
   EXPORT_DEFAULT_WINDOW_MS,
+  IMPORT_LOG_BATCH_COUNT_MAX,
+  IMPORT_LOG_COUNT_MAX,
   IMPORT_ROWS_PER_REQUEST,
   ORPHAN_CANDIDATES,
   ORPHAN_REASONS,
@@ -259,9 +261,29 @@ export const importRowSchema = z.object({
 });
 export type ImportRow = z.infer<typeof importRowSchema>;
 
+/**
+ * Optional, additive (INVARIANT 9): a batch without it imports and logs nothing.
+ * `batchIndex < batchCount` is checked here so a bad field is a 400 with nothing
+ * written (ADR-0030).
+ */
+const logCountSchema = z.int().check(z.nonnegative(), z.maximum(IMPORT_LOG_COUNT_MAX));
+export const importLogSchema = z
+  .object({
+    importId: uuidSchema,
+    batchIndex: logCountSchema,
+    batchCount: z.int().check(z.minimum(1), z.maximum(IMPORT_LOG_BATCH_COUNT_MAX)),
+    rejected: logCountSchema,
+    fileName: z.optional(shortText),
+    zoneVertices: z.optional(logCountSchema),
+    zoneRadiusM: z.optional(logCountSchema),
+  })
+  .check(z.refine((v) => v.batchIndex < v.batchCount, { error: "batchIndex out of range" }));
+export type ImportLog = z.infer<typeof importLogSchema>;
+
 export const prospectBatchSchema = z.object({
   source: z.enum(["csv", "osm"]),
   rows: z.array(importRowSchema).check(z.minLength(1), z.maxLength(IMPORT_ROWS_PER_REQUEST)),
+  importLog: z.optional(importLogSchema),
 });
 
 /**
@@ -396,6 +418,25 @@ export const importResultSchema = z.object({
   updated: z.int().check(z.nonnegative()),
 });
 export type ImportResult = z.infer<typeof importResultSchema>;
+
+/** One settled import of `GET /api/admin/imports` (ADR-0030). */
+export const importLogEntrySchema = z.object({
+  id: uuidSchema,
+  source: z.string(),
+  fileName: z.nullable(z.string()),
+  zoneVertices: z.nullable(countSchema),
+  zoneRadiusM: z.nullable(countSchema),
+  created: countSchema,
+  updated: countSchema,
+  rejected: countSchema,
+  createdBy: z.nullable(z.string()),
+  startedAt: epochMsSchema,
+  status: z.enum(["done", "interrupted"]),
+});
+export type ImportLogEntry = z.infer<typeof importLogEntrySchema>;
+
+export const importsResponseSchema = z.object({ imports: z.array(importLogEntrySchema) });
+export type ImportsResponse = z.infer<typeof importsResponseSchema>;
 
 export const assignResultSchema = z.object({
   /** Rows whose assignment was written. Unknown ids are silently not counted. */

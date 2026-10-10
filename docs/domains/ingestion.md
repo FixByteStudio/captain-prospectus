@@ -27,6 +27,11 @@ The admin always sees a preview before anything is written.
 - Batches go **in order, one at a time**, with a progress line. If one fails, the admin is told that
   the rows already sent are stored and that resending the whole file is safe — which is true, because
   the upsert is keyed on the dedupe key.
+- **Import log** ([ADR-0030](../adr/0030-the-server-keeps-an-import-log.md)): each batch may carry an
+  `importLog` (one `importId` per run, `batchIndex`, `batchCount`, the rejected count, the file name
+  or zone size). The server records the run from those batches, with no start or finish call; a
+  run with batches missing and none received for 5 minutes (`IMPORT_STALE_MS`) reads « Interrompu ».
+  A batch without the field logs nothing.
 - The result says what happened in the app's own words: created, updated, and how many lines were
   rejected. It never reports "skipped" for a row that matched an existing prospect — that is an
   update, and it is the point of re-importing.

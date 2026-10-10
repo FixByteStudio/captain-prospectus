@@ -5,6 +5,8 @@ import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
 import {
   agentPositions,
+  importBatches,
+  imports,
   loginAttempts,
   loginCodes,
   overpassCache,
@@ -17,6 +19,7 @@ import {
 import {
   AUTH_SWEEP_BATCH,
   D1_MAX_BOUND_PARAMS,
+  IMPORT_LOG_SWEEP_BATCH,
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
   RETENTION_BATCH,
@@ -87,6 +90,8 @@ async function seedVisit(
   });
   return id;
 }
+
+const ADMIN_EMAIL = "admin@example.com";
 
 /** Comfortably past the window. */
 const OLD = NOW - RETENTION_MS - 24 * 60 * 60 * 1000;
@@ -235,6 +240,7 @@ describe("runRetention", () => {
       loginCodesDeleted: 0,
       sessionsDeleted: 0,
       loginAttemptsDeleted: 0,
+      importsRedacted: 0,
     });
     expect(line).toContain("3 visit(s)");
     expect(line).toContain("2026-06-25");
@@ -270,6 +276,100 @@ describe("the agent position sweep (ADR-0028)", () => {
     expect(result.positionsDeleted).toBe(2);
     expect((await db.select().from(agentPositions)).map((r) => r.agentEmail)).toEqual([AGENT]);
     expect(describeSweep(result)).toContain("deleted 2 agent position(s)");
+  });
+});
+
+describe("the import log sweep (ADR-0030)", () => {
+  const importRow = (id: string, startedAt: number) => ({
+    id,
+    source: "csv",
+    fileName: "clients.csv",
+    zoneVertices: null,
+    zoneRadiusM: null,
+    rejected: 2,
+    batchCount: 1,
+    createdBy: ADMIN_EMAIL,
+    startedAt,
+  });
+
+  beforeEach(async () => {
+    const db = getDb(env.DB);
+    await db.delete(importBatches);
+    await db.delete(imports);
+  });
+
+  it("nulls created_by and file_name past RETENTION_DAYS, keeps counts, and is idempotent", async () => {
+    const db = getDb(env.DB);
+    await db.insert(imports).values([importRow("old", OLD), importRow("recent", RECENT)]);
+    await db
+      .insert(importBatches)
+      .values({ importId: "old", batchIndex: 0, created: 3, updated: 1, receivedAt: OLD });
+
+    const first = await runRetention(db, NOW);
+    expect(first.importsRedacted).toBe(1);
+    expect(describeSweep(first)).toContain("redacted 1 import log row(s)");
+
+    const rows = await db.select().from(imports);
+    const old = rows.find((r) => r.id === "old");
+    const recent = rows.find((r) => r.id === "recent");
+    expect(old).toMatchObject({ createdBy: null, fileName: null, rejected: 2, batchCount: 1 });
+    expect(recent).toMatchObject({ createdBy: ADMIN_EMAIL, fileName: "clients.csv" });
+    expect(await db.select().from(importBatches)).toHaveLength(1);
+
+    expect((await runRetention(db, NOW)).importsRedacted).toBe(0);
+  });
+
+  it("is bounded per run", async () => {
+    const db = getDb(env.DB);
+    const rows = Array.from({ length: IMPORT_LOG_SWEEP_BATCH + 10 }, () =>
+      importRow(crypto.randomUUID(), OLD),
+    );
+    for (const batch of chunk(rows, Math.floor(D1_MAX_BOUND_PARAMS / 9))) {
+      await db.insert(imports).values(batch);
+    }
+    expect((await runRetention(db, NOW)).importsRedacted).toBe(IMPORT_LOG_SWEEP_BATCH);
+    expect((await runRetention(db, NOW)).importsRedacted).toBe(10);
+  });
+
+  it("failing logs by name and does not stop the visit redaction", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("p-imp");
+    await getDb(env.DB).insert(visits).values({
+      id: "v-imp",
+      prospectId: "p-imp",
+      agentEmail: AGENT,
+      visitedAt: OLD,
+      clientVisitedAt: OLD,
+      receivedAt: OLD,
+      lat: 50.85,
+      lng: 4.35,
+      flyerGiven: false,
+      outcome: "interested",
+      notes: "secret",
+      answers: {},
+      clientVersion: 1,
+    });
+    const broken = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes('"imports"') || sql.includes("`imports`")) {
+              throw new Error("imports unavailable");
+            }
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const result = await runRetention(getDb(broken), NOW);
+
+    expect(result.importsRedacted).toBe(0);
+    expect(result.redacted).toBe(1);
+    expect(error).toHaveBeenCalledWith("import log sweep failed", "Error");
+    error.mockRestore();
   });
 });
 
