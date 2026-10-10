@@ -1,0 +1,7 @@
+# The epics of initiative-import-refresh, in build order.
+
+[[epic]]
+id = 1
+slug = "epic-import-a4-a6"
+title = "The Import screens follow Stitch A4–A6"
+covers = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"]
