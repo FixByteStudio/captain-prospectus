@@ -5,7 +5,6 @@ import { copy } from "../../copy";
 import { useImportBatches } from "../queries";
 import { ScreenHeader } from "../ScreenHeader";
 import { ColumnsStep } from "./ColumnsStep";
-import { FileStep } from "./FileStep";
 import { ImportStepper } from "./ImportStepper";
 import { MapStep, type MapProvider } from "./MapStep";
 import { PreviewStep } from "./PreviewStep";
@@ -15,7 +14,7 @@ import { guessColumns, mapRows } from "./csv";
 import type { Source } from "../../../shared/constants";
 import type { ColumnMap, ParsedCsv } from "./csv";
 
-type Step = "source" | "file" | "columns" | "map" | "preview";
+type Step = "source" | "columns" | "map" | "preview";
 
 /**
  * The stepper shows the path the admin is on, not every path there is. The map
@@ -25,7 +24,6 @@ type Step = "source" | "file" | "columns" | "map" | "preview";
  */
 const CSV_STEPS: readonly { id: Step; label: string }[] = [
   { id: "source", label: copy.import.steps.source },
-  { id: "file", label: copy.import.steps.file },
   { id: "columns", label: copy.import.steps.columns },
   { id: "preview", label: copy.import.steps.preview },
 ];
@@ -89,9 +87,9 @@ export function ImportScreen() {
     importer.reset();
   }
 
-  function chooseSource(chosen: "csv" | "map") {
-    setFork(chosen);
-    setStep(chosen === "csv" ? "file" : "map");
+  function chooseMap() {
+    setFork("map");
+    setStep("map");
   }
 
   function run(rows: ImportRow[]) {
@@ -120,7 +118,7 @@ export function ImportScreen() {
 
       <ScreenHeader className="mb-4" title={copy.import.title} />
 
-      {step === "source" && <SourceStep onChoose={chooseSource} />}
+      {step === "source" && <SourceStep onParsed={onParsed} onChooseMap={chooseMap} />}
 
       {step === "map" && (
         <MapStep
@@ -134,15 +132,13 @@ export function ImportScreen() {
         />
       )}
 
-      {step === "file" && <FileStep onParsed={onParsed} />}
-
       {step === "columns" && parsed && (
         <ColumnsStep
           parsed={parsed}
           fileName={fileName}
           columns={columns}
           onChange={setColumns}
-          onBack={() => setStep("file")}
+          onBack={() => setStep("source")}
           onNext={() => setStep("preview")}
         />
       )}

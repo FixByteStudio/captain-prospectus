@@ -82,7 +82,7 @@ function renderScreen() {
 
 async function goToMap() {
   renderScreen();
-  await userEvent.click(screen.getByText(copy.import.source.map));
+  await userEvent.click(screen.getByRole("button", { name: copy.import.source.map.action }));
   await screen.findByTestId("map-canvas");
 }
 

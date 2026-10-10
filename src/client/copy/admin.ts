@@ -339,8 +339,7 @@ export const adminCopy = {
     title: "Importer des prospects",
     steps: {
       source: "Source",
-      file: "Fichier",
-      columns: "Colonnes",
+      columns: "Fichier & colonnes",
       preview: "Aperçu & validation",
       map: "Zone",
       label: "Étapes",
@@ -351,18 +350,38 @@ export const adminCopy = {
 
     source: {
       lede: "D'où viennent les prospects ?",
-      csv: "Un fichier CSV",
-      csvHint: "Un export de tableur, lu dans votre navigateur.",
-      map: "Une zone sur la carte",
-      // Two providers since ADR-0020, so the fork names the gesture and not
-      // one of them; the choice between them lives on the map step.
-      mapHint:
-        "Les commerces qu'OpenStreetMap ou Google connaissent dans la zone que vous dessinez.",
+      csv: {
+        tag: "Lu dans le navigateur",
+        format: ".csv",
+        title: "Un fichier CSV",
+        hint: "Un export de tableur, lu dans votre navigateur. Idéal pour vos listes existantes.",
+        bullets: [
+          "Colonnes reconnues automatiquement",
+          "Aperçu avant tout enregistrement",
+          "Lignes rejetées expliquées",
+          "Réimport sans doublon",
+        ],
+        flow: "Flux direct : 3 étapes",
+        action: "Importer un fichier",
+      },
+      map: {
+        tag: "Gratuit avec OpenStreetMap",
+        title: "Une zone sur la carte",
+        // Two providers since ADR-0020, so the card names the gesture and not
+        // one of them; the choice between them lives on the map step.
+        hint: "Les commerces répertoriés sur OpenStreetMap ou Google Places, dans la zone que vous tracez.",
+        bullets: [
+          "Zone tracée à main levée",
+          "Adresse et type de commerce",
+          "Lieux déjà listés écartés",
+          "Lieux sans nom ignorés",
+        ],
+        flow: "Flux rapide : 2 étapes",
+        action: "Dessiner une zone",
+      },
     },
 
     file: {
-      choose: "Choisir un fichier CSV",
-      hint: "Le fichier est lu dans votre navigateur. Il n'est jamais envoyé ni conservé.",
       chosen: (name: string, rows: number) =>
         rows === 1 ? `${name} — 1 ligne` : `${name} — ${formatCount(rows)} lignes`,
       unreadable: "Ce fichier ne se lit pas comme un CSV. Vérifiez le format et réessayez.",

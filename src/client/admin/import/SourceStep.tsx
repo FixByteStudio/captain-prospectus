@@ -1,19 +1,22 @@
-import { FileSpreadsheet, Map as MapIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { CircleCheck, FileSpreadsheet, Map as MapIcon } from "lucide-react";
 import { copy } from "../../copy";
+import { Alert, AlertDescription } from "../../ui/alert";
+import { Badge } from "../../ui/badge";
+import { Button } from "../../ui/button";
 import { Surface } from "../Surface";
+import type { ParsedCsv } from "./csv";
+import { readCsvFile } from "./read-csv-file";
 
 /**
  * Step one: which source — docs/domains/ingestion.md, "two sources, one
  * pipeline".
  *
- * A fork, not a setting. The map is not a seventh nav link (the band already
- * carries six), and not a toggle on the file step either: the two paths ask
- * completely different second questions.
- *
- * A bordered, divided list rather than two tiles — design.md forbids cards on
- * the admin side, and the script editor already establishes the dense ledger
- * row as what this app uses instead.
+ * Two equal cards (DESIGN.md › `source-card`), side by side from md and
+ * stacked below it. « Importer un fichier » opens the file picker straight
+ * away and the file is read here, so a bad file leaves the admin on Source
+ * with the Alert under the cards; only a readable one moves on.
  *
  * The fork is the file or the map — not the provider. Which map provider is
  * searched is a choice inside the map step, because it changes the drawing
@@ -23,56 +26,120 @@ import { Surface } from "../Surface";
  * this screen, and everything down the CSV path, is reachable from a keyboard
  * (design.md, "The map import").
  */
-export function SourceStep({ onChoose }: { onChoose: (source: "csv" | "map") => void }) {
+export function SourceStep({
+  onParsed,
+  onChooseMap,
+}: {
+  onParsed: (name: string, csv: ParsedCsv) => void;
+  onChooseMap: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function read(file: File) {
+    setError(null);
+    const result = await readCsvFile(file);
+    if ("error" in result) setError(result.error);
+    else onParsed(file.name, result.parsed);
+  }
+
   return (
     <div>
       <p className="text-muted-foreground mb-4">{copy.import.source.lede}</p>
-      <Surface className="max-w-2xl overflow-hidden">
-        <ul className="divide-border divide-y">
-          <Choice
-            icon={<FileSpreadsheet aria-hidden="true" />}
-            label={copy.import.source.csv}
-            hint={copy.import.source.csvHint}
-            onClick={() => onChoose("csv")}
-          />
-          <Choice
-            icon={<MapIcon aria-hidden="true" />}
-            label={copy.import.source.map}
-            hint={copy.import.source.mapHint}
-            onClick={() => onChoose("map")}
-          />
-        </ul>
-      </Surface>
+
+      <input
+        ref={input}
+        type="file"
+        accept=".csv,text/csv"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void read(file);
+          // Let the same file be chosen twice in a row after a correction.
+          event.target.value = "";
+        }}
+      />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <SourceCard
+          icon={<FileSpreadsheet aria-hidden="true" />}
+          card={copy.import.source.csv}
+          chip={copy.import.source.csv.format}
+          variant="default"
+          onClick={() => input.current?.click()}
+        />
+        <SourceCard
+          icon={<MapIcon aria-hidden="true" />}
+          card={copy.import.source.map}
+          variant="secondary"
+          onClick={onChooseMap}
+        />
+      </div>
+
+      {error && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 }
 
-function Choice({
+function SourceCard({
   icon,
-  label,
-  hint,
+  card,
+  chip,
+  variant,
   onClick,
 }: {
   icon: ReactNode;
-  label: string;
-  hint: string;
+  card: {
+    tag: string;
+    title: string;
+    hint: string;
+    bullets: readonly string[];
+    flow: string;
+    action: string;
+  };
+  chip?: string;
+  variant: "default" | "secondary";
   onClick: () => void;
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="hover:bg-accent focus-visible:bg-accent flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors"
-      >
-        <span className="bg-secondary text-foreground grid size-10 shrink-0 place-items-center rounded-lg">
+    <Surface className="flex flex-col p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <span className="bg-secondary text-foreground grid size-14 shrink-0 place-items-center rounded-lg">
           {icon}
         </span>
-        <span className="flex flex-col gap-0.5">
-          <span className="font-medium">{label}</span>
-          <span className="text-muted-foreground text-xs">{hint}</span>
-        </span>
-      </button>
-    </li>
+        <Badge variant="secondary">{card.tag}</Badge>
+      </div>
+
+      <h2 className="text-heading flex flex-wrap items-center gap-2">
+        {card.title}
+        {chip && (
+          <Badge variant="outline" className="tnum">
+            {chip}
+          </Badge>
+        )}
+      </h2>
+      <p className="text-muted-foreground mt-1.5 max-w-prose">{card.hint}</p>
+
+      <ul className="text-meta mt-4 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        {card.bullets.map((bullet) => (
+          <li key={bullet} className="flex items-start gap-1.5">
+            <CircleCheck aria-hidden="true" className="text-success mt-px size-4 shrink-0" />
+            {bullet}
+          </li>
+        ))}
+      </ul>
+
+      <div className="border-border mt-auto flex items-center justify-between gap-3 border-t pt-4">
+        <span className="text-meta text-muted-foreground">{card.flow}</span>
+        <Button variant={variant} onClick={onClick}>
+          {card.action}
+        </Button>
+      </div>
+    </Surface>
   );
 }
