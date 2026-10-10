@@ -5,13 +5,13 @@ import { formatCoordinate, formatCount } from "../../format";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
-import { Progress } from "../../ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group";
 import { cn } from "../../lib/utils";
 import { Surface } from "../Surface";
 import { STATUS_EDGE } from "../status";
 import { ImportBottomBar } from "./ImportBottomBar";
+import { ImportProgressCard } from "./ImportProgressCard";
 import type { MappedRow } from "./csv";
 
 /** Enough to judge the file by; the full list is the import itself. */
@@ -46,7 +46,6 @@ export function PreviewStep({
 }) {
   const [filter, setFilter] = useState<"all" | "errors">("all");
   const total = ready.length + rejected.length;
-  const percent = progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100);
   const share = (n: number) => Math.round((n / total) * 100);
   const showReady = filter === "all";
   const shown = showReady ? ready.slice(0, SHOWN) : [];
@@ -190,14 +189,7 @@ export function PreviewStep({
         </p>
       )}
 
-      {isRunning && (
-        <div className="mt-5 max-w-md">
-          <Progress value={percent} />
-          <p className="text-muted-foreground tnum mt-2">
-            {copy.import.running(progress.done, progress.total)}
-          </p>
-        </div>
-      )}
+      {isRunning && <ImportProgressCard progress={progress} />}
 
       {error && !isRunning && (
         <Alert variant="destructive" className="mt-5 max-w-2xl">

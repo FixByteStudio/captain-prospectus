@@ -217,8 +217,12 @@ describe("ImportScreen", () => {
     expect(beforeUnloadCancelled()).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(1) }));
 
-    expect(await screen.findByText(copy.import.running(0, 1))).toBeTruthy();
-    expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(await screen.findByText(copy.import.runningTitle)).toBeTruthy();
+    expect(screen.getByText(copy.import.runningCount(0, 1))).toBeTruthy();
+    const bar = screen.getByRole("progressbar", { name: copy.import.progressLabel });
+    expect(bar.querySelector('[data-slot="progress-indicator"]')?.className).toContain(
+      "bg-foreground",
+    );
     expect(screen.getByRole("button", { name: copy.import.actions.back })).toHaveProperty(
       "disabled",
       true,
@@ -231,6 +235,7 @@ describe("ImportScreen", () => {
 
     pending.resolve?.();
     await screen.findByText(copy.import.result.title);
+    expect(screen.queryByText(copy.import.runningTitle)).toBeNull();
     expect(beforeUnloadCancelled()).toBe(false);
   });
 
@@ -250,7 +255,7 @@ describe("ImportScreen", () => {
     await goToPreview(300);
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(300) }));
 
-    expect(await screen.findByText(copy.import.running(250, 300))).toBeTruthy();
+    expect(await screen.findByText(copy.import.runningCount(250, 300))).toBeTruthy();
     expect(bodies.map((b) => b.rows.length)).toEqual([250, 50]);
 
     second.resolve?.();
