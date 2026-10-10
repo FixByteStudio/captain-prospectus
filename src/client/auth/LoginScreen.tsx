@@ -26,7 +26,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { Spinner } from "@/ui/spinner";
 import { ApiError, apiFetch } from "../api";
-import { Band, BandBrand } from "../Band";
 import { copy } from "../copy/field";
 import { formatBrusselsTime } from "../format";
 import { useOnline } from "../hooks/use-online";
@@ -198,13 +197,29 @@ export function LoginScreen() {
   );
 
   return (
-    <>
-      <Band>
-        <BandBrand />
-      </Band>
-      <main className="px-4 pt-6 pb-page">
-        <Card className="mx-auto w-full max-w-sm">
-          <CardHeader>
+    // No band here: the brand sits above the card (design.md › The login page).
+    // `.safe-top` is on the outer element so it doesn't fight the inner `pt-12`.
+    <main className="safe-top flex min-h-dvh flex-col">
+      <div className="flex flex-1 flex-col items-center px-4 pt-12 pb-page md:justify-center md:pb-20">
+        {/* The navy ink vanishes on the dark page, so the dark theme takes the band's light-ink mark.
+            width/height are the SVG's own, so its box is reserved before it loads and the card never jumps. */}
+        <img
+          src="/mark-ink.svg"
+          alt=""
+          width={1018}
+          height={1178}
+          className="h-auto w-12 md:w-14 dark:hidden"
+        />
+        <img
+          src="/mark.svg"
+          alt=""
+          width={1018}
+          height={1178}
+          className="hidden h-auto w-12 md:w-14 dark:block"
+        />
+        <p className="text-brand mt-2.5 text-center">{copy.appName}</p>
+        <Card className="border-t-primary mt-6 w-full max-w-sm border-t-4 shadow-lg md:py-8">
+          <CardHeader className="text-center md:px-8">
             <CardTitle>
               <h1 className="text-title">{copy.login.title}</h1>
             </CardTitle>
@@ -212,7 +227,7 @@ export function LoginScreen() {
               {mode === "code" ? copy.login.codeLede : copy.login.adminLede}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="md:px-8">
             {mode === "code" ? (
               <Form {...codeForm}>
                 <form
@@ -301,7 +316,7 @@ export function LoginScreen() {
             )}
           </CardContent>
         </Card>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

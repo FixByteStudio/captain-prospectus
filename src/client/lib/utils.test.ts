@@ -7,14 +7,24 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { cn } from "./utils";
 
-const TOKENS = ["display", "title", "heading", "body-field", "body", "label", "meta", "overline"];
+const TOKENS = [
+  "display",
+  "brand",
+  "title",
+  "heading",
+  "body-field",
+  "body",
+  "label",
+  "meta",
+  "overline",
+];
 
 describe("cn", () => {
   it.each(TOKENS)("keeps text-%s beside a colour", (token) => {
     expect(cn(`text-${token}`, "text-success")).toBe(`text-${token} text-success`);
   });
 
-  it("reads every --text-* token app.css declares, so a ninth one fails here first", () => {
+  it("reads every --text-* token app.css declares, so an unregistered one fails here first", () => {
     const css = readFileSync(fileURLToPath(new URL("../styles/app.css", import.meta.url)), "utf-8");
     const declared = [...css.matchAll(/--text-([a-z-]+):/g)]
       .map((m) => m[1] ?? "")

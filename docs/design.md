@@ -42,6 +42,9 @@ jobs and no others: it marks **the main action** on a view (Visiter,
 Enregistrer, Importer…) and **what is selected** (the current sidebar item and
 tab, the chosen outcome card or answer, the next stop). Gold is always a fill,
 with navy on top and a `primary-edge` border.
+One decorative exception: the 4px top edge of the login card
+([The login page](#the-login-page)) — the first screen anyone sees carries the
+brand's gold once more. Nowhere else.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -206,6 +209,7 @@ weight, so one utility sets all four; an explicit `font-*` utility still wins.
 | Role | Token | Size / weight | Use |
 |---|---|---|---|
 | Display | `text-display` | 28px / 700 | KPI figures, import tallies |
+| Brand | `text-brand` | 22px / 700, -0.015em | The app's name above the login card, and nowhere else |
 | Title | `text-title` | 20px / 600 | Screen titles, the prospect name on a visit |
 | Heading | `text-heading` | 16px / 600 | Card and panel titles, the next stop's name on a phone |
 | Body (field) | `text-body-field` | 16px / 400 | All field text and **every input on both sides**, so iOS never zooms |
@@ -1336,7 +1340,8 @@ else needs editing:
 | File | Size | Why |
 |---|---|---|
 | `favicon.ico` | 48×48 + 32×32 | The browser tab. |
-| `mark.svg` | scalable | The mark in the band, with its navy swapped for the band's foreground — a navy wheel on a navy band is 1:1. |
+| `mark.svg` | scalable | The mark in the band, with its navy swapped for the band's foreground — a navy wheel on a navy band is 1:1. Also the login page's mark in the dark theme. |
+| `mark-ink.svg` | scalable | The mark in its own navy ink (`docs/brand/logo.svg`), above the login card on the light page. |
 | `apple-touch-icon.png` | 180×180 | The iOS home screen. iOS ignores the manifest's icons for this, so without it an agent's iPhone renders a screenshot of the page. |
 | `icon-192.png` | 192×192 | Android install prompt. |
 | `icon-512.png` | 512×512 | Android splash screen. |
@@ -1376,12 +1381,13 @@ targets are 48 px and its text `text-base`
 the 1,000 KiB precache.
 
 ```
-┌────────────────────────────────┐     ┌────────────────────────────────┐
-│ ⎈ Captain Prospectus     (band)│     │ ⎈ Captain Prospectus     (band)│
-│                                │     │                                │
-│ Connexion                      │     │ Connexion                      │
-│ Entrez le code que vous a      │     │ Connectez-vous avec votre      │
-│ donné un administrateur.       │     │ adresse e-mail et votre…       │
+               ⎈                                      ⎈
+       Captain Prospectus                     Captain Prospectus
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+│           Connexion            │     │           Connexion            │
+│   Entrez le code que vous a    │     │   Connectez-vous avec votre    │
+│   donné un administrateur.     │     │   adresse e-mail et votre…     │
 │                                │     │                                │
 │ Code                           │     │ Adresse e-mail                 │
 │ [ K7QM 2XPA               ]    │     │ [ sam@example.com         ]    │
@@ -1391,13 +1397,24 @@ the 1,000 KiB precache.
 │     Accès administrateur       │     │ [        Se connecter       ]  │
 └────────────────────────────────┘     │        Retour au code          │
                                        └────────────────────────────────┘
+   ━━━ the card's 4px gold top edge
 ```
 
-- **One column, one card.** The field band with the mark and the app name,
-  no tab bar and no sync strip; under it a `Card` at most 24rem wide,
-  centred, a 16px gutter on a phone. "Connexion" in `text-title`, a one-line
-  lede, the fields, a full-width `default` Button "Se connecter", and under it
-  the switch.
+- **No band, one card.** The page is plain `background`, with no band, no
+  tab bar and no sync strip. Everything is centred horizontally, and from
+  `md` up vertically too; on a phone it starts 48px from the top, under the
+  safe-area inset.
+- **The brand sits above the card**, centred: the mark (48px wide on a
+  phone, 56px from `md` up) in its navy ink, `mark-ink.svg` — the dark theme
+  shows the band's light-ink `mark.svg` instead — then "Captain Prospectus"
+  in `text-brand`. Type steps down from there: the name at 22/700,
+  "Connexion" at 20/600, the field labels at 16/500.
+- **The card** is at most 24rem wide with a 16px gutter on a phone, a soft
+  shadow, and a 4px `primary` top edge — gold's one decorative use
+  ([Colour](#colour)). Its header is centred: "Connexion", the page's `h1`,
+  in `text-title`, and the lede under it. The fields stay left-aligned,
+  then a full-width `default` Button "Se connecter", and under it the
+  switch.
 - **The code form is the default.** Lede "Entrez le code que vous a donné un
   administrateur." One field, "Code": `type="text"`,
   `autocomplete="one-time-code"`, `autocapitalize="characters"`, spellcheck
@@ -1427,7 +1444,7 @@ the 1,000 KiB precache.
   passe incorrecte." A request that never reached the server says
   "Connexion impossible. Vérifiez le réseau et réessayez."; any other
   failure (a 5xx) says "Connexion impossible pour le moment. Réessayez dans
-  un instant.", and a 426 shows the band's usual update prompt instead. While
+  un instant.", and a 426 shows the usual update prompt instead. While
   a request is in flight the button holds a `Spinner` and is disabled.
 - **Lockout** (429): the Alert reads "Trop de tentatives depuis cette
   connexion. Réessayez à {heure}, ou changez de réseau.", `{heure}` being
