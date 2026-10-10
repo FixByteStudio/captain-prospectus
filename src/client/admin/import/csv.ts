@@ -31,6 +31,8 @@ export type ColumnMap = Partial<Record<MappableField, string>>;
 export type ParsedCsv = {
   headers: string[];
   rows: Record<string, string>[];
+  /** What Papa detected; Aperçu & validation names it so a wrong guess shows. */
+  delimiter: string;
 };
 
 /**
@@ -58,7 +60,7 @@ export function parseCsv(text: string): ParsedCsv {
   });
 
   const headers = result.meta.fields?.filter((h) => h.length > 0) ?? [];
-  return { headers, rows: result.data };
+  return { headers, rows: result.data, delimiter: result.meta.delimiter };
 }
 
 /**

@@ -157,6 +157,7 @@ export function ImportScreen() {
           progress={importer.progress}
           isRunning={importer.isRunning}
           error={importer.error}
+          delimiter={parsed.delimiter}
           onBack={() => {
             // Otherwise a stale failure Alert (and its old count) would still
             // show after Retour → change columns → back to Aperçu.
