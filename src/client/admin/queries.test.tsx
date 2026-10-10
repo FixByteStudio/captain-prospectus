@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
+import { IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { createAdminQueryClient } from "./query-client";
 import {
   adminKeys,
@@ -47,6 +48,39 @@ describe("useImportBatches", () => {
     await act(() => result.current.start([{ name: "Chez Léa", type: "restaurant" }]));
 
     expect(client.getQueryState(adminKeys.dashboard(30))?.isInvalidated).toBe(true);
+  });
+
+  it("sends one importId across a run's batches, indexed and counted, and a new one on retry (ADR-0030)", async () => {
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+      async () =>
+        new Response(JSON.stringify({ created: 1, updated: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const rows = Array.from({ length: IMPORT_ROWS_PER_REQUEST * 2 + 1 }, (_, i) => ({
+      name: `Chez ${i}`,
+      type: "restaurant" as const,
+    }));
+    const { result } = renderHook(() => useImportBatches(), {
+      wrapper: wrapperFor(createAdminQueryClient()),
+    });
+
+    await act(() => result.current.start(rows, { rejected: 4, fileName: "lyon.csv" }));
+    await act(() => result.current.start(rows, { rejected: 4, fileName: "lyon.csv" }));
+
+    const logs = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(String(init?.body)).importLog as Record<string, unknown>,
+    );
+    expect(logs).toHaveLength(6);
+    const [first, second] = [logs.slice(0, 3), logs.slice(3)];
+    expect(new Set(first.map((l) => l.importId)).size).toBe(1);
+    expect(first.map((l) => l.batchIndex)).toEqual([0, 1, 2]);
+    expect(first.every((l) => l.batchCount === 3 && l.rejected === 4)).toBe(true);
+    expect(first[0]).toMatchObject({ fileName: "lyon.csv" });
+    expect(new Set(second.map((l) => l.importId)).size).toBe(1);
+    expect(second[0]?.importId).not.toBe(first[0]?.importId);
   });
 
   const ROW = [{ name: "Chez Léa", type: "restaurant" as const }];

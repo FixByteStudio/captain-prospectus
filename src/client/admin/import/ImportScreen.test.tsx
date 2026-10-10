@@ -239,6 +239,27 @@ describe("ImportScreen", () => {
     expect(beforeUnloadCancelled()).toBe(false);
   });
 
+  it("sends the file name and the rejected-row count with the import log (ADR-0030)", async () => {
+    const fetchMock = vi.fn<(url: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => json({ created: 3, updated: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await goToPreview(3, { withReject: true });
+    await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(3) }));
+    await screen.findByText(copy.import.result.title);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      importLog: Record<string, unknown>;
+    };
+    expect(body.importLog).toMatchObject({
+      batchIndex: 0,
+      batchCount: 1,
+      rejected: 1,
+      fileName: "prospects.csv",
+    });
+    expect(body.importLog).not.toHaveProperty("zoneVertices");
+  });
+
   it("sends 300 rows as 250 then 50, reading 250 / 300 in between", async () => {
     const bodies: { rows: unknown[] }[] = [];
     const second: { resolve: (() => void) | null } = { resolve: null };
