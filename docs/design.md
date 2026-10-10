@@ -727,11 +727,15 @@ unchanged apart from its rail.
   per row, the field's own chip first: « Requis » on Nom (destructive tint),
   « Coordonnées GPS » on Latitude and Longitude, « Clé unique » on
   Identifiant source (warn tint); on the other fields « Détecté » when the
-  column was guessed and « Optionnel » when none is chosen. A file column
+  column was guessed or picked and « Optionnel » when none is chosen. A file column
   that feeds no field closes the table as a muted « Ignoré » row. The head
   counts configured fields, the foot counts lines and mapped columns. A
-  bottom bar holds Retour (outline), « Étape 2 sur 3 » in meta and the gold
-  « Voir l'aperçu », disabled until Nom has a column.
+  bottom bar holds Retour (secondary), « Étape 2 sur 3 » in meta and the gold
+  « Voir l'aperçu », disabled until Nom has a column. « Changer de fichier »
+  reads the new file like Source does: a good one replaces the file and
+  re-guesses the columns; an unreadable, headerless or empty one keeps the
+  current file and mapping and shows the destructive Alert under the file
+  card. At phone width each field is one block.
 - **Aperçu & validation** opens with a `secondary` summary banner
   (« {124} valides sur {128} lignes » and the detected separator as a chip)
   and two KPI-style count cards, lines to import and lines rejected, each

@@ -390,7 +390,7 @@ export const adminCopy = {
     },
 
     columns: {
-      lede: "Indiquez quelle colonne correspond à quel champ. La valeur de la première ligne s'affiche sous chaque choix.",
+      lede: "Indiquez quelle colonne correspond à quel champ.",
       skip: "Ne pas importer",
       noSample: "Vide sur la première ligne",
       required: "Le nom est obligatoire : choisissez la colonne qui le contient.",
@@ -398,6 +398,8 @@ export const adminCopy = {
       head: {
         field: "Champ",
         column: "Colonne du fichier",
+        sample: "Exemple",
+        status: "Statut",
       },
       fields: {
         name: "Nom",
@@ -410,8 +412,34 @@ export const adminCopy = {
         cuisine: "Cuisine",
         sourceRef: "Identifiant source",
       },
-      sourceRefHint:
-        "Si votre fichier a un identifiant stable, un nom corrigé mettra à jour au lieu de créer un doublon.",
+      hints: {
+        name: "Enseigne ou raison sociale",
+        type: "Restaurant, café, food truck…",
+        lat: "En degrés décimaux, ex. 50,8466",
+        lng: "En degrés décimaux, ex. 4,3528",
+        address: "Rue, numéro et code postal",
+        phone: "Numéro de l'établissement",
+        website: "Site ou page de l'établissement",
+        cuisine: "Spécialité, ex. belge, italienne",
+        sourceRef:
+          "Si votre fichier a un identifiant stable, un nom corrigé mettra à jour au lieu de créer un doublon.",
+      },
+      status: {
+        required: "Requis",
+        gps: "Coordonnées GPS",
+        uniqueKey: "Clé unique",
+        detected: "Détecté",
+        optional: "Optionnel",
+        ignored: "Ignoré",
+      },
+      changeFile: "Changer de fichier",
+      inBrowser: "Le fichier est lu dans votre navigateur. Il n'est jamais envoyé ni conservé.",
+      lines: (n: number) => (n === 1 ? "1 ligne" : `${formatCount(n)} lignes`),
+      configured: (done: number, total: number) =>
+        done === 1 ? `1 champ configuré sur ${total}` : `${done} champs configurés sur ${total}`,
+      footer: (rows: number, mapped: number) =>
+        `${rows === 1 ? "1 ligne" : `${formatCount(rows)} lignes`} à traiter · ${mapped === 1 ? "1 colonne associée" : `${mapped} colonnes associées`}`,
+      step: (n: number, total: number) => `Étape ${n} sur ${total}`,
     },
 
     preview: {
