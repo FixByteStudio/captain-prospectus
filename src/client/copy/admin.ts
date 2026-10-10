@@ -446,13 +446,32 @@ export const adminCopy = {
       ready: (n: number) =>
         n === 1 ? "1 ligne à importer" : `${formatCount(n)} lignes à importer`,
       rejected: (n: number) => (n === 1 ? "1 ligne rejetée" : `${formatCount(n)} lignes rejetées`),
+      summary: (valid: number, total: number) =>
+        `${formatCount(valid)} ${valid === 1 ? "valide" : "valides"} sur ${total === 1 ? "1 ligne" : `${formatCount(total)} lignes`}`,
+      // Papa reports the character; the admin reads its name.
+      separator: (delimiter: string) =>
+        `Séparateur : ${
+          (
+            {
+              ",": "virgule",
+              ";": "point-virgule",
+              "\t": "tabulation",
+              "|": "barre verticale",
+            } as Record<string, string>
+          )[delimiter] ?? delimiter
+        }`,
+      share: (percent: number) => `${percent} %`,
+      filterLabel: "Filtrer les lignes",
+      all: "Toutes les lignes",
+      errors: (n: number) => (n === 1 ? "Voir l'erreur" : `Voir les ${formatCount(n)} erreurs`),
       coordinates: "Coordonnées",
-      // Anything the admin should know about a line; blank when all is well.
-      note: "Remarque",
-      noCoordinates: "Sans coordonnées",
+      status: "Statut",
+      // A line that will be imported as it stands.
+      readyChip: "Prêt",
       line: (n: number) => `Ligne ${n}`,
       nothingToImport: "Aucune ligne valide à importer. Revenez aux colonnes.",
       showingFirst: (n: number) => `Les ${formatCount(n)} premières lignes sont affichées.`,
+      noCoordinates: "Sans coordonnées",
     },
 
     reasons: {

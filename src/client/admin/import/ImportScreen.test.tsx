@@ -175,6 +175,33 @@ describe("ImportScreen", () => {
     expect(within(second).getByText("50,8466 · 4,3528")).toBeTruthy();
   });
 
+  it("summarises the counts, shares and separator, flags ready rows and shows step 3 of 3", async () => {
+    // 3 valid + 1 rejected: 75 % / 25 %.
+    await goToPreview(3, { withReject: true });
+
+    expect(screen.getByText(copy.import.preview.summary(3, 4))).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.separator(","))).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.ready(3))).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.rejected(1))).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.share(75))).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.share(25))).toBeTruthy();
+    expect(screen.getAllByText(copy.import.preview.readyChip)).toHaveLength(3);
+    expect(screen.getByText(copy.import.columns.step(3, 3))).toBeTruthy();
+  });
+
+  it("filters the ledger to the rejected rows and back", async () => {
+    await goToPreview(3, { withReject: true });
+    expect(bodyRows()).toHaveLength(4);
+
+    await userEvent.click(screen.getByRole("radio", { name: copy.import.preview.errors(1) }));
+    const rows = bodyRows();
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0] as HTMLElement).getByText(copy.import.reasons.missingName)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("radio", { name: copy.import.preview.all }));
+    expect(bodyRows()).toHaveLength(4);
+  });
+
   it("blocks leaving the page while running, disables Retour and Importer, and shows batch progress", async () => {
     const pending: { resolve: (() => void) | null } = { resolve: null };
     vi.stubGlobal(
