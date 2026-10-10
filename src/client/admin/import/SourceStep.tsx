@@ -8,6 +8,7 @@ import { Button } from "../../ui/button";
 import { Surface } from "../Surface";
 import type { ParsedCsv } from "./csv";
 import { readCsvFile } from "./read-csv-file";
+import { RecentImports } from "./RecentImports";
 
 /**
  * Step one: which source — docs/domains/ingestion.md, "two sources, one
@@ -82,6 +83,8 @@ export function SourceStep({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      <RecentImports />
     </div>
   );
 }

@@ -714,12 +714,14 @@ unchanged apart from its rail.
   No coloured left edge (the cards carry no status) and no watermark icon.
   An unreadable or empty file stays on Source with a destructive Alert
   under the cards.
-- **Derniers imports sits under the cards, once the server logs imports.**
-  The last 5 imports in a ledger table: Date & heure · Source · Fichier ou
-  zone · Volume · Par · Statut (« Terminé » on the success tint,
-  « Interrompu » on the warn tint), read-only, with no link to a full
-  history. Nothing records an import today, so the table waits for an ADR
-  and its own story; the rest of this section does not depend on it.
+- **Derniers imports sits under the cards.** The last 5 imports in a ledger
+  table, read from `GET /api/admin/imports` (ADR-0030): Date & heure ·
+  Source · Fichier ou zone · Volume · Par · Statut (« Terminé » on the
+  success tint, « Interrompu » on the warn tint, each also as the row's
+  leading edge), read-only, with no link to a full history. A file or admin
+  redacted by the retention sweep reads « — ». « Interrompu » appears no sooner
+  than `IMPORT_STALE_MS` after the last batch, and only on the next load of
+  Source: the list does not poll. It reloads when an import ends.
 - **Fichier & colonnes** opens with a file card (icon tile, name, size and
   line count as chips, the in-browser hint with a `Lock`, a secondary
   « Changer de fichier »), then the mapping table: Champ (icon, label and a

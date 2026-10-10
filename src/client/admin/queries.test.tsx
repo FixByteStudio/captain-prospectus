@@ -50,6 +50,32 @@ describe("useImportBatches", () => {
     expect(client.getQueryState(adminKeys.dashboard(30))?.isInvalidated).toBe(true);
   });
 
+  it("marks the import log stale once a run ends, whether it succeeded or failed (GH #390)", async () => {
+    const answers = [200, 500];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ created: 1, updated: 0 }), {
+            status: answers.shift() ?? 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+    const client = createAdminQueryClient();
+    const { result } = renderHook(() => useImportBatches(), { wrapper: wrapperFor(client) });
+
+    client.setQueryData(adminKeys.imports(), { imports: [] });
+    await act(() => result.current.start([{ name: "Chez Léa", type: "restaurant" }]));
+    expect(client.getQueryState(adminKeys.imports())?.isInvalidated).toBe(true);
+
+    client.setQueryData(adminKeys.imports(), { imports: [] });
+    expect(client.getQueryState(adminKeys.imports())?.isInvalidated).toBe(false);
+    await act(() => result.current.start([{ name: "Chez Léa", type: "restaurant" }]));
+    expect(result.current.error).not.toBeNull();
+    expect(client.getQueryState(adminKeys.imports())?.isInvalidated).toBe(true);
+  });
+
   it("sends one importId across a run's batches, indexed and counted, and a new one on retry (ADR-0030)", async () => {
     const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
       async () =>

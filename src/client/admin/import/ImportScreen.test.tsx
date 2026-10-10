@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { copy } from "../../copy";
+import type { ImportsResponse } from "../../../shared/schemas";
 import { createAdminQueryClient } from "../query-client";
 import { ImportScreen } from "./ImportScreen";
 
@@ -49,6 +50,24 @@ function bodyRows(): HTMLElement[] {
   return screen.getAllByRole("row").slice(1);
 }
 
+/**
+ * Source also reads the import log, so every stub answers that GET itself and
+ * hands only the batch POSTs to `batch` (GH #390).
+ */
+type Handler = (url: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>;
+function stubFetch(batch: Handler, imports: () => ImportsResponse = () => ({ imports: [] })) {
+  const fetchMock = vi.fn<Handler>((url, init) =>
+    String(url) === "/api/admin/imports" ? json(imports()) : batch(url, init),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/** The batch POSTs only, in order. */
+function batchCalls(fetchMock: ReturnType<typeof stubFetch>) {
+  return fetchMock.mock.calls.filter(([url]) => String(url) !== "/api/admin/imports");
+}
+
 function beforeUnloadCancelled(): boolean {
   const event = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(event);
@@ -76,10 +95,7 @@ async function goToPreview(rows: number, opts: { withReject?: boolean } = {}) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => json({ created: 0, updated: 0 })),
-  );
+  stubFetch(() => json({ created: 0, updated: 0 }));
 });
 
 afterEach(() => {
@@ -204,14 +220,11 @@ describe("ImportScreen", () => {
 
   it("blocks leaving the page while running, disables Retour and Importer, and shows batch progress", async () => {
     const pending: { resolve: (() => void) | null } = { resolve: null };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise((resolve) => {
-            pending.resolve = () => resolve(json({ created: 1, updated: 0 }));
-          }),
-      ),
+    stubFetch(
+      () =>
+        new Promise<Response>((resolve) => {
+          pending.resolve = () => resolve(json({ created: 1, updated: 0 }));
+        }),
     );
     await goToPreview(1);
     expect(beforeUnloadCancelled()).toBe(false);
@@ -240,15 +253,12 @@ describe("ImportScreen", () => {
   });
 
   it("sends the file name and the rejected-row count with the import log (ADR-0030)", async () => {
-    const fetchMock = vi.fn<(url: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
-      async () => json({ created: 3, updated: 0 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetch(() => json({ created: 3, updated: 0 }));
     await goToPreview(3, { withReject: true });
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(3) }));
     await screen.findByText(copy.import.result.title);
 
-    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+    const body = JSON.parse(String(batchCalls(fetchMock)[0]?.[1]?.body)) as {
       importLog: Record<string, unknown>;
     };
     expect(body.importLog).toMatchObject({
@@ -263,16 +273,13 @@ describe("ImportScreen", () => {
   it("sends 300 rows as 250 then 50, reading 250 / 300 in between", async () => {
     const bodies: { rows: unknown[] }[] = [];
     const second: { resolve: (() => void) | null } = { resolve: null };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
-        bodies.push(JSON.parse(String(init?.body)) as { rows: unknown[] });
-        if (bodies.length === 1) return Promise.resolve(json({ created: 250, updated: 0 }));
-        return new Promise((resolve) => {
-          second.resolve = () => resolve(json({ created: 50, updated: 0 }));
-        });
-      }),
-    );
+    stubFetch((_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)) as { rows: unknown[] });
+      if (bodies.length === 1) return json({ created: 250, updated: 0 });
+      return new Promise<Response>((resolve) => {
+        second.resolve = () => resolve(json({ created: 50, updated: 0 }));
+      });
+    });
     await goToPreview(300);
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(300) }));
 
@@ -284,10 +291,7 @@ describe("ImportScreen", () => {
   });
 
   it("ends in a result dialog naming created, updated and rejected, and Terminer returns to Source", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ created: 1, updated: 0 })),
-    );
+    stubFetch(() => json({ created: 1, updated: 0 }));
     await goToPreview(1, { withReject: true });
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(1) }));
 
@@ -302,16 +306,56 @@ describe("ImportScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("shows Derniers imports on Source, empty at first", async () => {
+    renderScreen();
+    expect(screen.getByRole("heading", { name: copy.import.recent.title })).toBeTruthy();
+    expect(await screen.findByText(copy.import.recent.empty)).toBeTruthy();
+  });
+
+  it("lists the import that just ran when Terminer returns to Source (GH #390)", async () => {
+    let reads = 0;
+    stubFetch(
+      () => json({ created: 1, updated: 0 }),
+      () => {
+        reads += 1;
+        return {
+          imports:
+            reads === 1
+              ? []
+              : [
+                  {
+                    id: crypto.randomUUID(),
+                    source: "csv",
+                    fileName: "prospects.csv",
+                    zoneVertices: null,
+                    zoneRadiusM: null,
+                    created: 1,
+                    updated: 0,
+                    rejected: 0,
+                    createdBy: "admin@exemple.be",
+                    startedAt: Date.now(),
+                    status: "done",
+                  },
+                ],
+        };
+      },
+    );
+    await goToPreview(1);
+    await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(1) }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: copy.import.actions.done }));
+
+    const table = await screen.findByRole("table", { name: copy.import.recent.title });
+    expect(within(table).getByText("prospects.csv")).toBeTruthy();
+  });
+
   it("names the rows already sent when a later batch fails, and Réessayer re-sends from the start", async () => {
     const sizes: number[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-        sizes.push((JSON.parse(String(init?.body)) as { rows: unknown[] }).rows.length);
-        if (sizes.length === 2) return json({ error: "failed" }, 500);
-        return json({ created: 1, updated: 0 });
-      }),
-    );
+    stubFetch((_url, init) => {
+      sizes.push((JSON.parse(String(init?.body)) as { rows: unknown[] }).rows.length);
+      if (sizes.length === 2) return json({ error: "failed" }, 500);
+      return json({ created: 1, updated: 0 });
+    });
     await goToPreview(300);
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(300) }));
 
@@ -324,10 +368,7 @@ describe("ImportScreen", () => {
   });
 
   it("names zero rows sent when the very first batch fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ error: "failed" }, 500)),
-    );
+    stubFetch(() => json({ error: "failed" }, 500));
     await goToPreview(1);
     await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(1) }));
 
