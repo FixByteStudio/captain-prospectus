@@ -673,66 +673,88 @@ choice. `[L]` is the `Lock` icon and `░` the `secondary` footer.
 
 ### The CSV import
 
-Rebuilt on the #175 primitives for GH #180: a `ScreenHeader`, a numbered
-`ImportStepper` shared with the map path below, and each step's own `Surface`.
+Redesigned after Stitch A4–A6 for the 2026-10-10 UX update. The spines own the
+detail: [EXPERIENCE.md › Component Patterns](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/EXPERIENCE.md)
+for behaviour and approved copy,
+[DESIGN.md › Components › Admin](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/DESIGN.md)
+for the look, and [`key-a4-a6-import.html`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-a4-a6-import.html)
+for the composition in light, dark and at phone width. The Zone step below is
+unchanged apart from its rail.
 
 ```
-① Source ──② Fichier ──③ Colonnes ──④ Aperçu     CSV
-① Source ──② Zone                                carte
+① Source ──② Fichier & colonnes ──③ Aperçu & validation     CSV
+① Source ──② Zone                                          carte
 ```
 
-- **The stepper is numbered circles, not text alone.** Done is an ink circle
-  (`bg-foreground`) with a `Check`; current is gold (`bg-primary
-  text-primary-foreground`) with its `primary-edge`; future is `secondary`.
-  Colour never carries the state alone (§ The six rules): a done
-  step also gets a visually hidden "(terminée)" after its label, and the
-  current step carries `aria-current="step"`. The `nav` is labelled from
-  `copy.import.steps.label` ("Étapes"). The map fork gets its own two-step
-  rail (Source → Zone) rather than the four-step one, since the polygon and
-  its results are one screen (below) — a three-step rail above it would
-  describe a flow that does not exist.
-- **Source** is the bordered, divided list from before (no cards — this
-  file rules them out on the admin side), each row now carrying a
-  `secondary` icon tile (`FileSpreadsheet` for the CSV choice, `Map` for the
-  area choice) so the fork reads at a glance, not just from its label.
-- **Fichier** is a `Surface` holding a file icon tile, the gold "Choisir un
-  fichier CSV" button and the hint that the file is read in the browser and
-  never sent or stored. An unreadable or empty file shows a destructive
-  Alert inline and stays on this step.
-- **Colonnes** is a `Surface` with an overline head row (Champ / Colonne du
-  fichier) above the field list, so the grid reads as a small table rather
-  than a stack of unrelated selects; the sample value from the file's first
-  row still sits under each choice. Retour is outline, "Voir l'aperçu" is
-  the one gold action, disabled until a name column is chosen.
-- **Aperçu** is a `Surface`'d table using the same `STATUS_EDGE` the
-  prospect ledger and the map path's candidate list use: `status-rejected`
-  for a struck-through row shown first with its reason, `status-new` for a
-  row that will be imported. Coordinates go through `formatCoordinate` and
-  `copy.fieldProspect.positionSet` ("50,8466 · 4,3528"), the same helper the
-  field "Add a prospect" screen uses, replacing a raw `toFixed(4)` (GH #154).
-  All counts here and in the result dialog route through `formatCount`.
-- **Running** shows a `Progress` bar and "Import en cours : {done} /
-  {total}", both in `.tnum`; Retour and the gold action disable for the
-  batches' duration. A `beforeunload` guard is registered for exactly as
-  long as `useImportBatches().isRunning` is true, so a reload, a tab close
-  or an outside navigation asks first — an in-app sidebar click is a router
-  navigation instead, which `useBlocker` would catch but needs a data
-  router; out of scope here.
-- **Done** opens the "Import terminé" result dialog: created · updated ·
-  rejected, unchanged from before. **Failed mid-way** — a batch's request
-  throws — the destructive Alert always names how many rows went in
-  (`copy.import.failedAfter`, e.g. "L'import s'est interrompu après 250
-  lignes envoyées…", or that none was sent when the first batch fails),
-  because `progress.done` already holds that count when a batch fails
-  (`useImportBatches`), and the button reads "Réessayer". Retour clears
-  that failure, so a remapped preview never shows a stale count. A retry re-sends
-  every row from the start, which is safe because the batch write is
-  idempotent (CLAUDE.md invariant 4).
-
-The `beforeunload` guard and the failure count are the two behaviours the
-UX spine's "Import running" and "failed mid-way" rows ask for that the
-first build never had; nothing about `useImportBatches`, the 250-row batch
-size or the result dialog's shape changed to add them.
+- **One rail for both paths.** `ImportStepper` becomes a full-width rail under
+  the top bar: each step is a 32px circle, then an overline ("Étape 1", or
+  « En cours » on the current step) above its label, and the line between two
+  steps turns gold once the step before it is done. Done is an ink circle
+  with a `Check`, current is gold with its `primary-edge`, future is
+  `secondary`. Colour never carries the state alone (§ The six rules): a done
+  step keeps its visually hidden "(terminée)", the current one
+  `aria-current="step"`, and the `nav` stays labelled « Étapes ». The CSV
+  path drops from four steps to three: choosing a file and mapping its
+  columns are one screen, as in Stitch A5. There is still no « Terminé »
+  step; the result stays a dialog.
+- **Source is two cards, not a list.** Same reasoning as the script editor
+  above: "no cards" is about cards around data rows, and a source is a
+  choice the admin makes once, with a short pitch each. Two equal cards side
+  by side, stacked below `md`: an icon tile (`FileSpreadsheet`, `Map`), a
+  tag pill, the title with a format chip, a one-line explainer, four
+  `CircleCheck` bullets, then the step count and one button. Every bullet
+  states something the app does today; Stitch's "Dédoublonnage live",
+  "Jusqu'à 50 000 lignes" and "Filtrage par code NAF" did not. The CSV
+  card's « Importer un fichier » is the one gold action and opens the file
+  picker straight away; the map card's « Dessiner une zone » is secondary.
+  No coloured left edge (the cards carry no status) and no watermark icon.
+  An unreadable or empty file stays on Source with a destructive Alert
+  under the cards.
+- **Derniers imports sits under the cards, once the server logs imports.**
+  The last 5 imports in a ledger table: Date & heure · Source · Fichier ou
+  zone · Volume · Par · Statut (« Terminé » on the success tint,
+  « Interrompu » on the warn tint), read-only, with no link to a full
+  history. Nothing records an import today, so the table waits for an ADR
+  and its own story; the rest of this section does not depend on it.
+- **Fichier & colonnes** opens with a file card (icon tile, name, size and
+  line count as chips, the in-browser hint with a `Lock`, a secondary
+  « Changer de fichier »), then the mapping table: Champ (icon, label and a
+  one-line hint) · Colonne du fichier · Exemple · Statut. Statut is one chip
+  per row, the field's own chip first: « Requis » on Nom (destructive tint),
+  « Coordonnées GPS » on Latitude and Longitude, « Clé unique » on
+  Identifiant source (warn tint); on the other fields « Détecté » when the
+  column was guessed and « Optionnel » when none is chosen. A file column
+  that feeds no field closes the table as a muted « Ignoré » row. The head
+  counts configured fields, the foot counts lines and mapped columns. A
+  bottom bar holds Retour (outline), « Étape 2 sur 3 » in meta and the gold
+  « Voir l'aperçu », disabled until Nom has a column.
+- **Aperçu & validation** opens with a `secondary` summary banner
+  (« {124} valides sur {128} lignes » and the detected separator as a chip)
+  and two KPI-style count cards, lines to import and lines rejected, each
+  with its share as a tinted chip. The ledger keeps `STATUS_EDGE`:
+  `status-rejected` rows first, struck through, with their reason chip;
+  ready rows read « Prêt », or « Sans coordonnées » on the warn tint.
+  « Toutes les lignes » / « Voir les {4} erreurs » filters it. Coordinates
+  still go through `formatCoordinate` and every count through `formatCount`.
+  No per-row checkboxes (every valid row is sent) and no created/updated
+  forecast: that split is only known after, in the result dialog.
+- **Running** floats a progress card bottom right over the bottom bar:
+  « Import en cours », "{done} / {total}" in `.tnum`, and a `Progress` bar in
+  ink, not gold (the gold-progress exception is daily progress and Taux de
+  conversion only). Retour and « Importer {n} lignes » disable until the
+  server answers the last batch. The `beforeunload` guard is registered for
+  exactly as long as `useImportBatches().isRunning` is true; an in-app
+  sidebar click is a router navigation, which `useBlocker` would catch but
+  needs a data router, so it stays out of scope.
+- **Done and failed mid-way** are unchanged: the « Import terminé » dialog
+  (created · updated · rejected), and on a failed batch a destructive Alert
+  that names how many rows went in (`copy.import.failedAfter`) with
+  « Réessayer ». Retour clears that failure, and a retry re-sends every row
+  from the start, which is safe because the batch write is idempotent
+  (CLAUDE.md invariant 4).
+- **Phone width.** The cards stack, the rail names only the current step,
+  the mapping table becomes one block per field, and Derniers imports
+  becomes rows (date, source and file, then volume and statut, without Par).
 
 ### The map import
 
@@ -741,8 +763,8 @@ one pipeline", and the band already carries six links — so drawing an area is 
 first step inside **Import**, not a seventh nav item:
 
 ```
-Source → Fichier → Colonnes → Aperçu     CSV
-Source → Zone                             carte
+Source → Fichier & colonnes → Aperçu & validation     CSV
+Source → Zone                                         carte
 ```
 
 Step one asks one question, « D'où viennent les prospects ? », and the two
