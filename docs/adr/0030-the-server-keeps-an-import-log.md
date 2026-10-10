@@ -1,6 +1,6 @@
 # ADR-0030: The server keeps an import log
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Deciders: owner
 

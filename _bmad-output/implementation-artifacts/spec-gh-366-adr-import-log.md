@@ -2,7 +2,7 @@
 title: 'ADR: the server keeps an import log'
 type: 'chore'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'oneshot'
 route_source: 'auto'
 review: 'quick'
