@@ -69,7 +69,6 @@ function renderScreen() {
 
 async function goToPreview(rows: number, opts: { withReject?: boolean } = {}) {
   renderScreen();
-  await userEvent.click(screen.getByText(copy.import.source.csv));
   await userEvent.upload(fileInput(), csvFile(rows, opts));
   await screen.findByText(copy.import.columns.lede);
   await userEvent.click(screen.getByText(copy.import.actions.toPreview));
@@ -89,32 +88,46 @@ afterEach(() => {
 });
 
 describe("ImportScreen", () => {
-  it("forks to Fichier · Colonnes · Aperçu on the CSV path, Source marked done", async () => {
+  it("lands a file picked on Source on Fichier & colonnes, step 2 of 3, Source done", async () => {
     renderScreen();
     const nav = screen.getByRole("navigation", { name: copy.import.steps.label });
     expect(nav.querySelector('[aria-current="step"]')?.textContent).toBe(
       `1${copy.import.steps.current}${copy.import.steps.source}`,
     );
 
-    await userEvent.click(screen.getByText(copy.import.source.csv));
+    await userEvent.upload(fileInput(), csvFile(1));
+    await screen.findByText(copy.import.columns.lede);
 
-    expect(screen.getByRole("button", { name: copy.import.file.choose })).toBeTruthy();
     const items = within(nav).getAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
       `${copy.import.steps.upcoming(1)}${copy.import.steps.source} (${copy.import.steps.done})`,
-      `2${copy.import.steps.current}${copy.import.steps.file}`,
-      `3${copy.import.steps.upcoming(3)}${copy.import.steps.columns}`,
-      `4${copy.import.steps.upcoming(4)}${copy.import.steps.preview}`,
+      `2${copy.import.steps.current}${copy.import.steps.columns}`,
+      `3${copy.import.steps.upcoming(3)}${copy.import.steps.preview}`,
     ]);
+    expect(copy.import.steps.columns).toBe("Fichier & colonnes");
     expect(copy.import.steps.preview).toBe("Aperçu & validation");
-    expect(nav.querySelector('[aria-current="step"]')?.textContent).toBe(
-      `2${copy.import.steps.current}${copy.import.steps.file}`,
-    );
   });
 
-  it("forks to Zone, two steps only, on the map path", async () => {
+  it("opens the file picker from « Importer un fichier »", async () => {
     renderScreen();
-    await userEvent.click(screen.getByText(copy.import.source.map));
+    const click = vi.spyOn(fileInput(), "click");
+    await userEvent.click(screen.getByRole("button", { name: copy.import.source.csv.action }));
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to Source from Retour on step 2", async () => {
+    renderScreen();
+    await userEvent.upload(fileInput(), csvFile(1));
+    await screen.findByText(copy.import.columns.lede);
+    await userEvent.click(screen.getByRole("button", { name: copy.import.actions.back }));
+
+    expect(screen.getByRole("button", { name: copy.import.source.csv.action })).toBeTruthy();
+    expect(screen.queryByText(copy.import.columns.lede)).toBeNull();
+  });
+
+  it("opens Zone from « Dessiner une zone », two steps only on the map path", async () => {
+    renderScreen();
+    await userEvent.click(screen.getByRole("button", { name: copy.import.source.map.action }));
 
     expect(screen.getByTestId("map-canvas")).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: copy.import.steps.label });
@@ -127,16 +140,25 @@ describe("ImportScreen", () => {
     );
   });
 
-  it("shows an empty file as an Alert and stays on Fichier", async () => {
+  it.each([
+    ["an empty file", "nom,latitude\n", copy.import.file.emptyFile],
+    ["a file with no header", "", copy.import.file.noHeaders],
+  ])("shows %s as an Alert and stays on Source", async (_name, content, message) => {
     renderScreen();
-    await userEvent.click(screen.getByText(copy.import.source.csv));
-    await userEvent.upload(
-      fileInput(),
-      new File(["nom,latitude\n"], "vide.csv", { type: "text/csv" }),
-    );
+    await userEvent.upload(fileInput(), new File([content], "x.csv", { type: "text/csv" }));
 
-    expect(await screen.findByText(copy.import.file.emptyFile)).toBeTruthy();
-    expect(screen.getByRole("button", { name: copy.import.file.choose })).toBeTruthy();
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.getByRole("button", { name: copy.import.source.csv.action })).toBeTruthy();
+    expect(screen.queryByText(copy.import.columns.lede)).toBeNull();
+  });
+
+  it("shows an unreadable file as an Alert and stays on Source", async () => {
+    renderScreen();
+    const file = new File(["x"], "x.csv", { type: "text/csv" });
+    vi.spyOn(file, "text").mockRejectedValue(new Error("unreadable"));
+    await userEvent.upload(fileInput(), file);
+
+    expect(await screen.findByText(copy.import.file.unreadable)).toBeTruthy();
     expect(screen.queryByText(copy.import.columns.lede)).toBeNull();
   });
 
@@ -223,7 +245,7 @@ describe("ImportScreen", () => {
     expect(within(dialog).getByText(copy.import.result.skipped(1), { exact: false })).toBeTruthy();
 
     await userEvent.click(within(dialog).getByRole("button", { name: copy.import.actions.done }));
-    expect(await screen.findByText(copy.import.source.csv)).toBeTruthy();
+    expect(await screen.findByText(copy.import.source.csv.title)).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
