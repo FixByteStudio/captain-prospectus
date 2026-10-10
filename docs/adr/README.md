@@ -35,5 +35,6 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0027](0027-interested-is-its-own-closed-status.md) | An "Intéressé" visit gives the prospect its own closed status | accepted |
 | [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | accepted |
 | [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted |
+| [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | proposed |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.
