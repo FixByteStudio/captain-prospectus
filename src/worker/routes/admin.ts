@@ -89,6 +89,7 @@ import type {
   DashboardResponse,
   DuplicatesResponse,
   ImportResult,
+  ImportsResponse,
   MergeResult,
   AreaSearchResponse,
   Prospect,
@@ -98,6 +99,7 @@ import type {
 } from "../../shared/schemas";
 import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
+import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
@@ -744,7 +746,7 @@ adminRoutes.get("/prospects", validate("query", prospectsQuerySchema), async (c)
  * never touched by an import (prospecting.md).
  */
 adminRoutes.post("/prospects/batch", validate("json", prospectBatchSchema), async (c) => {
-  const { source, rows: incoming } = c.req.valid("json");
+  const { source, rows: incoming, importLog } = c.req.valid("json");
   const { email } = c.get("identity");
   const db = getDb(c.env.DB);
   const now = Date.now();
@@ -881,7 +883,19 @@ adminRoutes.post("/prospects/batch", validate("json", prospectBatchSchema), asyn
     }
   }
 
+  // After the prospects, so a failure here fails the request and the client
+  // re-sends; the upsert above is idempotent (ADR-0030).
+  if (importLog) {
+    await writeImportLog(db, { log: importLog, source, createdBy: email, created, updated, now });
+  }
+
   return c.json<ImportResult>({ created, updated });
+});
+
+/** The five newest settled imports for the Import screen (ADR-0030). */
+adminRoutes.get("/imports", async (c) => {
+  const db = getDb(c.env.DB);
+  return c.json<ImportsResponse>({ imports: await listImports(db, Date.now()) });
 });
 
 /**

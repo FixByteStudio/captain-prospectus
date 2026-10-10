@@ -1,9 +1,9 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { ADMIN_VISITS_PAGE_SIZE, type RefusalReason } from "../shared/constants";
-import { agentPositions, prospects, scripts, visits } from "./db/schema";
+import { ADMIN_VISITS_PAGE_SIZE, IMPORT_STALE_MS, type RefusalReason } from "../shared/constants";
+import { agentPositions, importBatches, imports, prospects, scripts, visits } from "./db/schema";
 import type {
   AdminVisitsResponse,
   AgentRoundResponse,
@@ -11,6 +11,7 @@ import type {
   AssignResult,
   DuplicatesResponse,
   ImportResult,
+  ImportsResponse,
   MergeResult,
   Prospect,
   ProspectsResponse,
@@ -791,6 +792,203 @@ describe("POST /api/admin/prospects/batch", () => {
   });
 });
 
+/** The import log (ADR-0030, GH #371). */
+describe("the import log", () => {
+  const rows = (tag: string, n = 1): Row[] =>
+    Array.from({ length: n }, (_, i) => ({ name: `${tag} ${i}`, lat: 50.8 + i / 1000, lng: 4.3 }));
+
+  function logged(
+    importId: string,
+    batchIndex: number,
+    batchCount: number,
+    tag: string,
+    extra: Record<string, unknown> = {},
+    n = 1,
+  ): Promise<Response> {
+    return post("/api/admin/prospects/batch", {
+      source: "csv",
+      rows: rows(tag, n),
+      importLog: { importId, batchIndex, batchCount, rejected: 2, fileName: "a.csv", ...extra },
+    });
+  }
+
+  const listed = async () =>
+    ((await (await call("/api/admin/imports")).json()) as ImportsResponse).imports;
+
+  beforeEach(async () => {
+    const db = getDb(env.DB);
+    await db.delete(importBatches);
+    await db.delete(imports);
+  });
+
+  it("logs nothing for a batch without importLog", async () => {
+    const response = await importRows(rows("plain"));
+    expect(await response.json()).toEqual<ImportResult>({ created: 1, updated: 0 });
+    expect(await getDb(env.DB).select().from(imports)).toHaveLength(0);
+    expect(await getDb(env.DB).select().from(importBatches)).toHaveLength(0);
+  });
+
+  it("fails the request when the log write fails, and a re-send then counts the batch once", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.exec(
+      "CREATE TRIGGER fail_log BEFORE INSERT ON import_batches BEGIN SELECT RAISE(ABORT, 'log down'); END",
+    );
+    let failed: Response;
+    try {
+      failed = await logged(id, 0, 1, "retry");
+    } finally {
+      await env.DB.exec("DROP TRIGGER fail_log");
+    }
+    expect(failed.status).toBeGreaterThanOrEqual(500);
+
+    expect((await logged(id, 0, 1, "retry")).status).toBe(200);
+    expect(await getDb(env.DB).select().from(importBatches)).toHaveLength(1);
+  });
+
+  it("writes the import from the first batch with the server's clock and the admin", async () => {
+    const id = crypto.randomUUID();
+    const before = Date.now();
+    await logged(id, 0, 2, "a", { zoneVertices: 7, zoneRadiusM: 300 });
+    const [row] = await getDb(env.DB).select().from(imports);
+    expect(row).toMatchObject({
+      id,
+      source: "csv",
+      fileName: "a.csv",
+      zoneVertices: 7,
+      zoneRadiusM: 300,
+      rejected: 2,
+      batchCount: 2,
+      createdBy: ADMIN,
+    });
+    expect(row?.startedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("shows one import with summed counts across batches", async () => {
+    const id = crypto.randomUUID();
+    await logged(id, 0, 2, "a", {}, 3);
+    // The second batch re-sends one place: 1 updated, 2 created.
+    await post("/api/admin/prospects/batch", {
+      source: "csv",
+      rows: [...rows("a", 1), ...rows("b", 2)],
+      importLog: {
+        importId: id,
+        batchIndex: 1,
+        batchCount: 2,
+        rejected: 99,
+        fileName: "other.csv",
+      },
+    });
+
+    const [entry, ...rest] = await listed();
+    expect(rest).toHaveLength(0);
+    expect(entry).toMatchObject({
+      id,
+      created: 5,
+      updated: 1,
+      rejected: 2,
+      fileName: "a.csv",
+      createdBy: ADMIN,
+      status: "done",
+    });
+  });
+
+  it("counts a re-sent batch once with its first counts, and answers live", async () => {
+    const id = crypto.randomUUID();
+    expect(await (await logged(id, 0, 1, "r", {}, 2)).json()).toEqual({ created: 2, updated: 0 });
+    expect(await (await logged(id, 0, 1, "r", {}, 2)).json()).toEqual({ created: 0, updated: 2 });
+
+    const [entry] = await listed();
+    expect(entry).toMatchObject({ created: 2, updated: 0, status: "done" });
+    expect(await getDb(env.DB).select().from(importBatches)).toHaveLength(1);
+  });
+
+  it("400s a bad log field and writes nothing", async () => {
+    const id = crypto.randomUUID();
+    for (const extra of [
+      { batchIndex: 2 },
+      { batchIndex: -1 },
+      { rejected: 1e12 },
+      { batchCount: 10_001 },
+    ]) {
+      const response = await logged(id, 0, 2, "bad", extra);
+      expect(response.status).toBe(400);
+    }
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(0);
+    expect(await getDb(env.DB).select().from(imports)).toHaveLength(0);
+  });
+
+  it("lists done, hides running, and reads stalled as interrupted", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const stale = now - IMPORT_STALE_MS - 1000;
+    const base = {
+      source: "csv",
+      rejected: 0,
+      createdBy: null,
+      fileName: null,
+      zoneVertices: null,
+      zoneRadiusM: null,
+    };
+    await db.insert(imports).values([
+      { ...base, id: "done", batchCount: 1, startedAt: now - 3000 },
+      { ...base, id: "running", batchCount: 2, startedAt: now - 2000 },
+      { ...base, id: "stalled", batchCount: 2, startedAt: stale - 1000 },
+    ]);
+    await db.insert(importBatches).values([
+      { importId: "done", batchIndex: 0, created: 4, updated: 0, receivedAt: now - 3000 },
+      { importId: "running", batchIndex: 0, created: 1, updated: 0, receivedAt: now - 2000 },
+      { importId: "stalled", batchIndex: 0, created: 2, updated: 1, receivedAt: stale },
+    ]);
+
+    const result = await listed();
+    expect(result.map((r) => [r.id, r.status])).toEqual([
+      ["done", "done"],
+      ["stalled", "interrupted"],
+    ]);
+    expect(result[1]).toMatchObject({ created: 2, updated: 1 });
+  });
+
+  it("keeps the five newest settled of the 20 newest, never settling older ones", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const base = {
+      source: "csv",
+      rejected: 0,
+      createdBy: null,
+      fileName: null,
+      zoneVertices: null,
+      zoneRadiusM: null,
+      batchCount: 1,
+    };
+    // 22 complete imports; startedAt grows with i.
+    const ids = Array.from({ length: 22 }, (_, i) => `imp-${i}`);
+    for (const [i, id] of ids.entries()) {
+      await db.insert(imports).values({ ...base, id, startedAt: now - 100_000 + i });
+      await db
+        .insert(importBatches)
+        .values({ importId: id, batchIndex: 0, created: 1, updated: 0, receivedAt: now - 100_000 });
+    }
+    expect((await listed()).map((r) => r.id)).toEqual([
+      "imp-21",
+      "imp-20",
+      "imp-19",
+      "imp-18",
+      "imp-17",
+    ]);
+
+    // Make the 20 newest all running: the older complete ones are out of the window.
+    await db.delete(importBatches).where(inArray(importBatches.importId, ids.slice(2)));
+    expect(await listed()).toEqual([]);
+  });
+
+  it("serves the list from the started_at index", async () => {
+    const { results } = await env.DB.prepare(
+      "EXPLAIN QUERY PLAN SELECT * FROM imports ORDER BY started_at DESC, id DESC LIMIT 20",
+    ).all<{ detail: string }>();
+    expect(results.some((r) => r.detail.includes("imports_started_idx"))).toBe(true);
+  });
+});
+
 describe("PATCH /api/admin/prospects/:id", () => {
   it("edits a prospect and leaves its dedupe key alone", async () => {
     await importRows([{ name: "Chez Léa", lat: 50.84, lng: 4.35 }]);
@@ -1378,6 +1576,7 @@ describe("authorization", () => {
     expect((await call("/api/me")).status).toBe(200);
     expect((await call("/api/admin/prospects")).status).toBe(403);
     expect((await call("/api/admin/agents")).status).toBe(403);
+    expect((await call("/api/admin/imports")).status).toBe(403);
     expect((await call(`/api/admin/agents/${AGENT}/round`)).status).toBe(403);
     expect((await importRows([{ name: "Chez Léa" }])).status).toBe(403);
     expect(

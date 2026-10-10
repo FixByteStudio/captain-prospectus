@@ -18,6 +18,7 @@ import { D1_MAX_BOUND_PARAMS, RETENTION_BATCH, RETENTION_MS } from "../shared/co
 import { chunk } from "../shared/chunk";
 import { visits } from "./db/schema";
 import { sweepAgentPositions } from "./agent-position";
+import { sweepImportLog } from "./import-log";
 import { sweepAuthRows, type AuthSweepCounts } from "./auth-sweep";
 import type { Db } from "./db/client";
 
@@ -28,6 +29,8 @@ export type SweepResult = {
   cutoff: number;
   /** Agent positions deleted (ADR-0028); counts only, never coordinates. */
   positionsDeleted: number;
+  /** Import-log rows whose created_by and file_name were nulled (ADR-0030). */
+  importsRedacted: number;
 } & AuthSweepCounts;
 
 /**
@@ -52,6 +55,14 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
     console.error("agent position sweep failed", err instanceof Error ? err.name : "unknown");
   }
 
+  // Its own try/catch too: a failed import-log sweep must not stop visit redaction.
+  let importsRedacted = 0;
+  try {
+    importsRedacted = await sweepImportLog(db, now);
+  } catch (err) {
+    console.error("import log sweep failed", err instanceof Error ? err.name : "unknown");
+  }
+
   // Never throws: sweepAuthRows guards each table itself (CAP-10).
   const auth = await sweepAuthRows(db, now);
 
@@ -71,7 +82,8 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
     )
     .limit(RETENTION_BATCH);
 
-  if (expired.length === 0) return { redacted: 0, cutoff, positionsDeleted, ...auth };
+  if (expired.length === 0)
+    return { redacted: 0, cutoff, positionsDeleted, importsRedacted, ...auth };
 
   // One bound parameter per id, so the batch is chunked to D1's limit of 100
   // (INVARIANT 7). RETENTION_BATCH is deliberately larger than that: the cap
@@ -84,12 +96,12 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
       .where(inArray(visits.id, batch));
   }
 
-  return { redacted: ids.length, cutoff, positionsDeleted, ...auth };
+  return { redacted: ids.length, cutoff, positionsDeleted, importsRedacted, ...auth };
 }
 
 /** The line the scheduled handler logs, so a silent cron is a visible gap. */
 export function describeSweep(result: SweepResult): string {
   return `retention: redacted ${result.redacted} visit(s) received before ${new Date(
     result.cutoff,
-  ).toISOString()}; deleted ${result.positionsDeleted} agent position(s), ${result.loginCodesDeleted} login code(s), ${result.sessionsDeleted} session(s), ${result.loginAttemptsDeleted} login attempt(s)`;
+  ).toISOString()}; deleted ${result.positionsDeleted} agent position(s), ${result.loginCodesDeleted} login code(s), ${result.sessionsDeleted} session(s), ${result.loginAttemptsDeleted} login attempt(s); redacted ${result.importsRedacted} import log row(s)`;
 }

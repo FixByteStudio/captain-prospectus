@@ -118,6 +118,24 @@ erDiagram
     int expires_at "created_at + 15 min"
     int used_at "nullable; set by the login that spends it"
   }
+  IMPORTS {
+    text id PK "client importId (uuid)"
+    text source "the batch's source; not an enum"
+    text file_name "nullable; nulled after RETENTION_DAYS"
+    int zone_vertices "nullable"
+    int zone_radius_m "nullable"
+    int rejected
+    int batch_count
+    text created_by "nullable; nulled after RETENTION_DAYS"
+    int started_at "server now at the first batch"
+  }
+  IMPORT_BATCHES {
+    text import_id PK
+    int batch_index PK
+    int created
+    int updated
+    int received_at
+  }
   LOGIN_ATTEMPTS {
     text ip_hash PK "HMAC-SHA-256 hex of CF-Connecting-IP (IPv6 by /64), or of unknown"
     int window_start PK "epoch ms, a multiple of 15 min"
@@ -146,6 +164,14 @@ the same batch, so at most one works. A login spends a code with one conditional
 used_at` (unused, unexpired, user active), so of two racing logins only one gets the row. Used and
 expired rows go in the nightly sweep: it deletes every row past `expires_at`, and a used code expires
 15 minutes after it was made.
+
+`imports` and `import_batches` are the import log ([ADR-0030](adr/0030-the-server-keeps-an-import-log.md)).
+The first batch of a run writes the `imports` row (`started_at` is the server's `now`); every batch
+writes one `import_batches` row, both `onConflictDoNothing`, so a re-sent batch keeps its first
+counts. An import's `created` and `updated` are the sum of its batch rows and its status
+(`done`, `interrupted`, or still running and unlisted) is derived on read, never stored. The
+nightly sweep nulls `created_by` and `file_name` once `started_at` is older than `RETENTION_DAYS`
+and keeps the counts; `import_batches` holds nothing personal and is never redacted.
 
 `login_attempts` counts failed logins per IP in fixed 15-minute windows (CAP-7,
 `src/worker/login-throttle.ts`). The IP is personal data, so only its HMAC under `AUTH_PEPPER`
@@ -233,6 +259,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(is_active)` unique **where `is_active = 1`** | "exactly one active script at a time" |
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
+| `imports(started_at)` | `GET /api/admin/imports`, the 20 newest |
 | `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
 | `sessions(id)` unique | revoking one device by its public id |
 | `login_codes(user_email)` | a user's codes: superseding them on generate, deleting them on deactivation |

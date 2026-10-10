@@ -273,6 +273,29 @@ export const MAP_CACHE_EVICT_BATCH = 500;
  */
 export const AUTH_SWEEP_BATCH = 500;
 
+/**
+ * The import log (ADR-0030). An import with batches missing and none received
+ * for this long is read as « Interrompu »; a newer one is still running and is
+ * not listed. Read-time only, so changing it needs no migration.
+ */
+export const IMPORT_STALE_MS = 5 * 60 * 1000;
+
+/** Cap on `importLog.batchCount`: 10 000 batches of 250 rows is 2.5 M rows. */
+export const IMPORT_LOG_BATCH_COUNT_MAX = 10_000;
+
+/** Cap on the log's other counts (`rejected`, zone size); a 250-row batch cannot reach it. */
+export const IMPORT_LOG_COUNT_MAX = 10_000_000;
+
+/** `GET /api/admin/imports` reads this many newest imports, settles them, keeps the first few. */
+export const IMPORT_LOG_WINDOW = 20;
+export const IMPORT_LOG_LIST_SIZE = 5;
+
+/**
+ * Import-log rows the daily sweep redacts per run (ADR-0030), for the same
+ * reason as RETENTION_BATCH.
+ */
+export const IMPORT_LOG_SWEEP_BATCH = 500;
+
 /** Candidate duplicate pairs returned in one sweep. */
 export const DUPLICATES_PAGE_SIZE = 100;
 
