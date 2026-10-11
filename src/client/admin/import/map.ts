@@ -16,9 +16,7 @@ import {
   POLYGON_MIN_VERTICES,
 } from "../../../shared/constants";
 import { distanceMeters } from "../../../shared/geo";
-
-/** `[lat, lng]`, the order the wire contract and Overpass both use. */
-export type Vertex = [number, number];
+import type { Vertex } from "../../../shared/schemas";
 
 /**
  * The Grand-Place, Brussels — the area this canvasses (docs/vision.md).

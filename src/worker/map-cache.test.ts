@@ -8,7 +8,7 @@ import {
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
 } from "../shared/constants";
-import { describeEviction, evictMapCache } from "./map-cache";
+import { describeEviction, evictMapCache, readMapCache, writeMapCache } from "./map-cache";
 
 const NOW = Date.UTC(2026, 8, 23, 12, 0, 0);
 // From the imported TTLs, so a change to either keeps this test honest.
@@ -73,5 +73,41 @@ describe("evictMapCache", () => {
     expect(describeEviction({ evicted: 2, cutoff: CUTOFF })).toBe(
       `map cache: evicted 2 row(s) created before ${new Date(CUTOFF).toISOString()}`,
     );
+  });
+});
+
+describe("readMapCache and writeMapCache", () => {
+  const TTL = 60_000;
+  const parse = (body: string): { body: string } | null => (body === "bad" ? null : { body });
+
+  it("reads back what was written, with when it was cached", async () => {
+    const db = getDb(env.DB);
+    await writeMapCache(db, "h", "good");
+
+    const hit = await readMapCache(db, "h", TTL, parse);
+
+    expect(hit?.mapped).toEqual({ body: "good" });
+    expect(Date.now() - (hit?.cachedAt ?? 0)).toBeLessThan(TTL);
+  });
+
+  it("misses on an unknown hash, an expired row and a body that no longer parses", async () => {
+    const db = getDb(env.DB);
+    await db.insert(overpassCache).values([
+      { hash: "old", body: "good", createdAt: Date.now() - TTL },
+      { hash: "broken", body: "bad", createdAt: Date.now() },
+    ]);
+
+    expect(await readMapCache(db, "none", TTL, parse)).toBeNull();
+    expect(await readMapCache(db, "old", TTL, parse)).toBeNull();
+    expect(await readMapCache(db, "broken", TTL, parse)).toBeNull();
+  });
+
+  it("refreshes an existing row rather than keeping the older answer", async () => {
+    const db = getDb(env.DB);
+    await db.insert(overpassCache).values({ hash: "h", body: "old", createdAt: 0 });
+
+    await writeMapCache(db, "h", "new");
+
+    expect((await readMapCache(db, "h", TTL, parse))?.mapped).toEqual({ body: "new" });
   });
 });

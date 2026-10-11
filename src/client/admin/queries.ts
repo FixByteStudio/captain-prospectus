@@ -48,6 +48,7 @@ import type {
   OrphanRepairResult,
   ImportLog,
   ImportsResponse,
+  Vertex,
 } from "../../shared/schemas";
 import type { DashboardPeriod, RefusalReason, Source, Status } from "../../shared/constants";
 
@@ -437,7 +438,7 @@ export function useImports() {
  */
 export function useOverpassImport() {
   return useMutation({
-    mutationFn: (polygon: [number, number][]) =>
+    mutationFn: (polygon: Vertex[]) =>
       apiFetch<AreaSearchResponse>("/api/admin/import/overpass", {
         method: "POST",
         body: JSON.stringify({ polygon }),
@@ -456,7 +457,7 @@ export function useOverpassImport() {
  */
 export function usePlacesImport() {
   return useMutation({
-    mutationFn: (circle: { center: [number, number]; radius: number }) =>
+    mutationFn: (circle: { center: Vertex; radius: number }) =>
       apiFetch<AreaSearchResponse>("/api/admin/import/places", {
         method: "POST",
         body: JSON.stringify(circle),

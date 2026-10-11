@@ -74,7 +74,7 @@ const EMPTY = { acceptedProspects: 0, acceptedVisits: 0 };
  * MAX_REQUEST_BYTES.
  *
  * The count caps above bound how many rows go out; they cannot bound how many
- * bytes, because a visit may carry SCRIPT_QUESTIONS_MAX answers of 2000
+ * bytes, because a visit may carry SCRIPT_QUESTIONS_MAX answers of LONG_TEXT_MAX
  * characters each. A full batch of ordinary visits is about 1 MB and fits; a
  * batch of 200 visits each holding 50 such answers is 19.7 MB and does not,
  * and it is schema-valid all the same.

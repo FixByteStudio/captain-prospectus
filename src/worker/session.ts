@@ -5,7 +5,7 @@
  * Nothing here logs. A token, a hash or BREAK_GLASS in a log line would be a
  * credential in Workers observability (docs/security.md).
  */
-import { DAY_MS, type Role } from "../shared/constants";
+import { DAY_MS, HOUR_MS, type Role } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
 import { toHex } from "./hex";
 
@@ -57,7 +57,7 @@ export async function hmacHex(pepper: string, value: string): Promise<string> {
  * How stale `last_seen_at` must be before a request slides the session: one
  * write per device per hour, not one per request (INVARIANT 13).
  */
-export const SESSION_SLIDE_MS = 60 * 60 * 1000;
+export const SESSION_SLIDE_MS = HOUR_MS;
 
 /**
  * A session's public id (GH #307): 16 random bytes as 32 lowercase hex, never

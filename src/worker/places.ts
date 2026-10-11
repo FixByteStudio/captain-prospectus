@@ -6,9 +6,9 @@
  * (ADR-0020 §7). Everything here is pure; the route does the I/O.
  */
 import { PLACES_MAX_RESULTS, type ProspectType } from "../shared/constants";
-import type { FoundPlace } from "../shared/schemas";
+import type { FoundPlace, Vertex } from "../shared/schemas";
 import { sha256Hex } from "./hex";
-import { num, round5, text, type Vertex } from "./overpass";
+import { num, round5, text } from "./overpass";
 
 /**
  * Part of the cache key, so a changed request cannot be served a stale answer

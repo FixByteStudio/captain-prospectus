@@ -5,6 +5,7 @@
  * the tests seed with it, so the two can never disagree about where "today"
  * starts. Pure: `Intl` only, no DOM, no Worker API.
  */
+import { HOUR_MS } from "./constants";
 
 const ZONE = "Europe/Brussels";
 
@@ -131,14 +132,13 @@ export function periodOffsets(from: number, to: number): PeriodOffsets {
   const before = offsetAt(from);
   const after = offsetAt(to - 1);
   if (before === after) return { before, after, changeAt: to };
-  const HOUR = 60 * 60 * 1000;
   // Both bounds are Brussels midnights, hence whole UTC hours, and the clocks
   // never change at midnight, so offsetAt(to) is `after`. The loop keeps
   // offsetAt(lo) === before and offsetAt(hi) === after, both on the hour.
   let lo = from;
   let hi = to;
-  while (hi - lo > HOUR) {
-    const mid = lo + Math.floor((hi - lo) / 2 / HOUR) * HOUR;
+  while (hi - lo > HOUR_MS) {
+    const mid = lo + Math.floor((hi - lo) / 2 / HOUR_MS) * HOUR_MS;
     if (offsetAt(mid) === before) lo = mid;
     else hi = mid;
   }

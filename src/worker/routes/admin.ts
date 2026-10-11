@@ -103,7 +103,8 @@ import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
-import { overpassCache, prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
+import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
+import { readMapCache, writeMapCache } from "../map-cache";
 import {
   OVERPASS_ENDPOINT,
   OVERPASS_USER_AGENT,
@@ -1346,22 +1347,15 @@ adminRoutes.post("/import/overpass", validate("json", overpassImportSchema), asy
   const db = getDb(c.env.DB);
 
   const hash = await polygonHash(polygon);
-  const [hit] = await db.select().from(overpassCache).where(eq(overpassCache.hash, hash)).limit(1);
-
-  const fresh = hit && Date.now() - hit.createdAt < OVERPASS_CACHE_TTL_MS;
-  if (fresh) {
-    const mapped = toCandidates(hit.body);
-    // A cached body that no longer parses is a bug in what we stored, not
-    // something to hand the admin. Fall through and ask Overpass again.
-    if (mapped) {
-      const candidates = await markLikelyDuplicates(db, mapped.candidates);
-      return c.json<AreaSearchResponse>({
-        ...mapped,
-        candidates,
-        cached: true,
-        cachedAt: hit.createdAt,
-      });
-    }
+  const hit = await readMapCache(db, hash, OVERPASS_CACHE_TTL_MS, toCandidates);
+  if (hit) {
+    const candidates = await markLikelyDuplicates(db, hit.mapped.candidates);
+    return c.json<AreaSearchResponse>({
+      ...hit.mapped,
+      candidates,
+      cached: true,
+      cachedAt: hit.cachedAt,
+    });
   }
 
   let response: Response;
@@ -1388,19 +1382,7 @@ adminRoutes.post("/import/overpass", validate("json", overpassImportSchema), asy
   // Overpass answers a rate limit or an outage with HTML and a 200.
   if (!mapped) return c.json(OVERPASS_UNAVAILABLE, 502);
 
-  /**
-   * Upsert, not `onConflictDoNothing` (the INVARIANT 4 default): two admins
-   * drawing the same area a week apart must refresh the entry, not keep serving
-   * the older one until it expires. Replaying this request is still a no-op in
-   * every way the admin can observe.
-   */
-  await db
-    .insert(overpassCache)
-    .values({ hash, body, createdAt: Date.now() })
-    .onConflictDoUpdate({
-      target: overpassCache.hash,
-      set: { body, createdAt: Date.now() },
-    });
+  await writeMapCache(db, hash, body);
 
   const candidates = await markLikelyDuplicates(db, mapped.candidates);
   return c.json<AreaSearchResponse>({ ...mapped, candidates, cached: false });
@@ -1430,22 +1412,15 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
   const db = getDb(c.env.DB);
 
   const hash = await circleHash(center, radius);
-  const [hit] = await db.select().from(overpassCache).where(eq(overpassCache.hash, hash)).limit(1);
-
-  const fresh = hit && Date.now() - hit.createdAt < PLACES_CACHE_TTL_MS;
-  if (fresh) {
-    const mapped = toPlaceCandidates(hit.body);
-    // A cached body that no longer parses is a bug in what we stored, not
-    // something to hand the admin. Fall through and ask Google again.
-    if (mapped) {
-      const candidates = await markLikelyDuplicates(db, mapped.candidates);
-      return c.json<AreaSearchResponse>({
-        ...mapped,
-        candidates,
-        cached: true,
-        cachedAt: hit.createdAt,
-      });
-    }
+  const hit = await readMapCache(db, hash, PLACES_CACHE_TTL_MS, toPlaceCandidates);
+  if (hit) {
+    const candidates = await markLikelyDuplicates(db, hit.mapped.candidates);
+    return c.json<AreaSearchResponse>({
+      ...hit.mapped,
+      candidates,
+      cached: true,
+      cachedAt: hit.cachedAt,
+    });
   }
 
   let response: Response;
@@ -1476,16 +1451,7 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
   const mapped = toPlaceCandidates(body);
   if (!mapped) return c.json(PLACES_UNAVAILABLE, 502);
 
-  // Upsert for the same reason as the Overpass cache above, plus one: a refresh
-  // that keeps serving a week-old answer is a week of searches we do not pay
-  // for twice.
-  await db
-    .insert(overpassCache)
-    .values({ hash, body, createdAt: Date.now() })
-    .onConflictDoUpdate({
-      target: overpassCache.hash,
-      set: { body, createdAt: Date.now() },
-    });
+  await writeMapCache(db, hash, body);
 
   const candidates = await markLikelyDuplicates(db, mapped.candidates);
   return c.json<AreaSearchResponse>({ ...mapped, candidates, cached: false });

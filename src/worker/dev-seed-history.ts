@@ -6,12 +6,10 @@
  * second seed — any day later — computes the same ids and inserts nothing
  * (INVARIANT 4). Only the dashboard's windows slide over the rows as days pass.
  */
-import { CLIENT_VERSION, type Outcome } from "../shared/constants";
+import { CLIENT_VERSION, DAY_MS, HOUR_MS, type Outcome } from "../shared/constants";
 import { brusselsPeriod } from "../shared/period";
 import type { NewVisitRow } from "./db/schema";
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
 /** How far back the seeded walk may start. */
 export const SEED_HISTORY_DAYS = 180;
 
@@ -78,7 +76,7 @@ export function seedId(label: string): string {
  */
 export function seedDayStart(now: number, k: number): number {
   const todayStart = brusselsPeriod(now, 1).from;
-  return brusselsPeriod(todayStart + 12 * HOUR - k * DAY, 1).from;
+  return brusselsPeriod(todayStart + 12 * HOUR_MS - k * DAY_MS, 1).from;
 }
 
 type Step = {
@@ -183,7 +181,8 @@ export function seedHistory(prospect: SeedSubject, now: number): NewVisitRow[] {
   const rows: NewVisitRow[] = [];
 
   const visit = (k: number, outcome: Outcome, followUpK: number | null) => {
-    const planned = seedDayStart(now, k) + FIRST_VISIT_HOUR * HOUR + rand() * VISIT_HOURS * HOUR;
+    const planned =
+      seedDayStart(now, k) + FIRST_VISIT_HOUR * HOUR_MS + rand() * VISIT_HOURS * HOUR_MS;
     const visitedAt = Math.min(Math.floor(planned), now);
     const receivedAt = Math.min(visitedAt + Math.floor(rand() * 30 * 60_000), now);
     const flyerGiven = rand() < FLYER_SHARE;
@@ -198,7 +197,8 @@ export function seedHistory(prospect: SeedSubject, now: number): NewVisitRow[] {
       lng: prospect.lng,
       flyerGiven,
       outcome,
-      followUpAt: followUpK === null ? null : seedDayStart(now, followUpK) + FOLLOW_UP_HOUR * HOUR,
+      followUpAt:
+        followUpK === null ? null : seedDayStart(now, followUpK) + FOLLOW_UP_HOUR * HOUR_MS,
       notes: null,
       // No panel reads answers, and a script id would tie the row to one database.
       scriptId: null,

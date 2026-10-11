@@ -14,7 +14,7 @@
  * re-suggesting one). `draftToCreate` strips all three before the payload
  * goes to `scriptCreateSchema`.
  */
-import type { QuestionType } from "../../../shared/constants";
+import { QUESTION_KEY_MAX, type QuestionType } from "../../../shared/constants";
 import type { Question, Script } from "../../../shared/schemas";
 
 export type DraftQuestion = {
@@ -40,7 +40,6 @@ export type ScriptDraft = {
   questions: DraftQuestion[];
 };
 
-const KEY_MAX = 60;
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export function emptyDraft(): ScriptDraft {
@@ -73,7 +72,7 @@ function slugify(label: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .slice(0, KEY_MAX);
+    .slice(0, QUESTION_KEY_MAX);
 }
 
 /**
@@ -91,7 +90,7 @@ export function suggestKey(label: string, existingKeys: readonly string[]): stri
 
   for (let n = 2; ; n++) {
     const suffix = `_${n}`;
-    const candidate = `${base.slice(0, KEY_MAX - suffix.length)}${suffix}`;
+    const candidate = `${base.slice(0, QUESTION_KEY_MAX - suffix.length)}${suffix}`;
     if (!existingKeys.includes(candidate)) return candidate;
   }
 }
@@ -197,7 +196,7 @@ export function findDraftIssues(draft: ScriptDraft): DraftIssue[] {
 
     if (!label) issues.push({ kind: "empty_label", questionId: question.id });
 
-    if (!KEY_PATTERN.test(key) || key.length > KEY_MAX) {
+    if (!KEY_PATTERN.test(key) || key.length > QUESTION_KEY_MAX) {
       issues.push({ kind: "invalid_key", questionId: question.id });
     } else if (seenKeys.has(key)) {
       issues.push({ kind: "duplicate_key", questionId: question.id });

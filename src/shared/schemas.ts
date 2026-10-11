@@ -24,10 +24,12 @@ import {
   AGENT_POSITION_ACCURACY_MAX_M,
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
+  EMAIL_MAX,
   EXPORT_DEFAULT_WINDOW_MS,
   IMPORT_LOG_BATCH_COUNT_MAX,
   IMPORT_LOG_COUNT_MAX,
   IMPORT_ROWS_PER_REQUEST,
+  LONG_TEXT_MAX,
   ORPHAN_CANDIDATES,
   ORPHAN_REASONS,
   ORPHANS_PAGE_SIZE,
@@ -41,6 +43,8 @@ import {
   POLYGON_MAX_VERTICES,
   POLYGON_MIN_VERTICES,
   PROSPECT_TYPES,
+  QUESTION_KEY_MAX,
+  QUESTION_OPTIONS_MAX,
   QUESTION_TYPES,
   ROLES,
   SCRIPT_QUESTIONS_MAX,
@@ -65,12 +69,12 @@ export const lngSchema = z.number().check(z.gte(-180), z.lte(180));
  */
 export const emailSchema = z.email().check(
   z.overwrite((value) => value.toLowerCase()),
-  z.maxLength(320),
+  z.maxLength(EMAIL_MAX),
 );
 
 /** Free text from the field or an import. Capped so a payload cannot balloon. */
 const shortText = z.string().check(z.trim(), z.maxLength(SHORT_TEXT_MAX));
-const longText = z.string().check(z.trim(), z.maxLength(2000));
+const longText = z.string().check(z.trim(), z.maxLength(LONG_TEXT_MAX));
 /** `shortText` that may not be empty. Mini's `.check()` clones and appends. */
 const shortTextRequired = shortText.check(z.minLength(1));
 const countSchema = z.int().check(z.nonnegative());
@@ -108,7 +112,7 @@ const CREDENTIAL_MAX = 200;
 
 export const passphraseLoginSchema = z.object({
   kind: z.literal("passphrase"),
-  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(320)),
+  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(EMAIL_MAX)),
   passphrase: z.string().check(z.minLength(1), z.maxLength(CREDENTIAL_MAX)),
 });
 
@@ -138,11 +142,11 @@ export const questionSchema = z
       .string()
       .check(
         z.regex(/^[a-z][a-z0-9_]*$/, "key must be snake_case and start with a letter"),
-        z.maxLength(60),
+        z.maxLength(QUESTION_KEY_MAX),
       ),
     label: shortTextRequired,
     type: z.enum(QUESTION_TYPES),
-    options: z.optional(z.array(shortTextRequired).check(z.maxLength(30))),
+    options: z.optional(z.array(shortTextRequired).check(z.maxLength(QUESTION_OPTIONS_MAX))),
     required: z.optional(z.boolean()),
   })
   .check((ctx) => {
@@ -216,12 +220,14 @@ export type ScriptsResponse = z.infer<typeof scriptsResponseSchema>;
  */
 export const answersSchema = z
   .record(
-    z.string().check(z.maxLength(60)),
+    z.string().check(z.maxLength(QUESTION_KEY_MAX)),
     z.union([
       z.boolean(),
-      z.string().check(z.maxLength(2000)),
+      z.string().check(z.maxLength(LONG_TEXT_MAX)),
       z.number(),
-      z.array(z.string().check(z.maxLength(SHORT_TEXT_MAX))).check(z.maxLength(30)),
+      z
+        .array(z.string().check(z.maxLength(SHORT_TEXT_MAX)))
+        .check(z.maxLength(QUESTION_OPTIONS_MAX)),
     ]),
   )
   .check(
@@ -905,14 +911,18 @@ export const dashboardResponseSchema = z.object({
 });
 export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;
 
+/** `[lat, lng]`, the order Overpass and the map import's wire contract both use. */
+export const vertexSchema = z.tuple([latSchema, lngSchema]);
+export type Vertex = z.infer<typeof vertexSchema>;
+
 export const overpassImportSchema = z.object({
   polygon: z
-    .array(z.tuple([latSchema, lngSchema]))
+    .array(vertexSchema)
     .check(z.minLength(POLYGON_MIN_VERTICES), z.maxLength(POLYGON_MAX_VERTICES)),
 });
 
 export const placesImportSchema = z.object({
-  center: z.tuple([latSchema, lngSchema]),
+  center: vertexSchema,
   /**
    * Metres. Google's own limit is 50 km, but Nearby Search returns at most 20
    * places and has no pagination, so a circle wider than PLACES_RADIUS_MAX_M

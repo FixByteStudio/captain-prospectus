@@ -5,11 +5,25 @@
  * the values below are the ones the domain docs describe, and the docs win.
  */
 
+export const HOUR_MS = 60 * 60 * 1000;
+
 /** A day in ms. Brussels days are not all this long, which is why `periodOffsets` exists (shared/period.ts). */
-export const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * HOUR_MS;
 
 /** The cap on `shortText` and a multi-choice answer in the shared schemas; anything cut to fit one imports it. */
 export const SHORT_TEXT_MAX = 200;
+
+/** The cap on `longText` and a text answer: the shared schemas and the answer resolver (answers.ts) must agree. */
+export const LONG_TEXT_MAX = 2000;
+
+/** A question's `options`, and so the choices one multi answer can hold. */
+export const QUESTION_OPTIONS_MAX = 30;
+
+/** A question's `key`, and so an answer's: answers are keyed by question key. */
+export const QUESTION_KEY_MAX = 60;
+
+/** RFC 5321's longest address. */
+export const EMAIL_MAX = 320;
 
 /** docs/glossary.md — a prospect's lifecycle. */
 export const STATUSES = [

@@ -9,11 +9,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
-import type { AreaCandidate, AreaSearchResponse } from "../../../shared/schemas";
+import type { AreaCandidate, AreaSearchResponse, Vertex } from "../../../shared/schemas";
 import { copy } from "../../copy";
 import { createAdminQueryClient } from "../query-client";
 import { ImportScreen } from "./ImportScreen";
-import type { Circle, Vertex } from "./map";
+import type { Circle } from "./map";
 
 /**
  * A stub for the Leaflet-imperative canvas: buttons that call `onMapClick`
