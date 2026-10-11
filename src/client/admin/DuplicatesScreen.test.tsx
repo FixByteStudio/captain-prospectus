@@ -174,6 +174,70 @@ describe("DuplicatesScreen", () => {
     expect(await screen.findByText(copy.duplicates.merged("Le Bouchon"))).toBeTruthy();
   });
 
+  it("undoes a merge from the toast: unmerges the absorbed side and asks the sweep again", async () => {
+    const user = userEvent.setup();
+    // Names of its own: earlier tests' toasts are still on screen.
+    const marcel = pair({ a: prospect("m1", "Chez Marcel"), b: prospect("m2", "Marcel") });
+    const posts: string[] = [];
+    let duplicatesCalls = 0;
+    render_(async (input, init?: RequestInit) => {
+      const url = new URL(String(input), "http://admin");
+      if (init?.method === "POST") posts.push(url.pathname);
+      if (url.pathname === "/api/admin/prospects/duplicates") {
+        duplicatesCalls += 1;
+        return json({ pairs: [marcel], truncated: false });
+      }
+      if (url.pathname === "/api/admin/prospects/merge") return json({ dedupeKeyUpdated: false });
+      if (url.pathname === "/api/admin/prospects/m2/unmerge") return json(marcel.b);
+      return json({}, 404);
+    });
+
+    const item = await screen.findByRole("listitem", {
+      name: copy.duplicates.pairAria("Chez Marcel", "Marcel"),
+    });
+    await user.click(
+      within(item).getByRole("button", { name: copy.duplicates.keepAria("Chez Marcel") }),
+    );
+
+    const toastText = await screen.findByText(copy.duplicates.merged("Chez Marcel"));
+    const toastEl = toastText.closest("[data-sonner-toast]") as HTMLElement;
+    const before = duplicatesCalls;
+    await user.click(within(toastEl).getByRole("button", { name: copy.duplicates.undo }));
+
+    await waitFor(() =>
+      expect(posts).toEqual(["/api/admin/prospects/merge", "/api/admin/prospects/m2/unmerge"]),
+    );
+    expect(await screen.findByText(copy.duplicates.unmerged("Marcel"))).toBeTruthy();
+    await waitFor(() => expect(duplicatesCalls).toBeGreaterThan(before));
+  });
+
+  it("toasts a failed undo", async () => {
+    const user = userEvent.setup();
+    const roma = pair({ a: prospect("r1", "Pizza Roma"), b: prospect("r2", "Roma Express") });
+    render_(async (input) => {
+      const url = new URL(String(input), "http://admin");
+      if (url.pathname === "/api/admin/prospects/duplicates") {
+        return json({ pairs: [roma], truncated: false });
+      }
+      if (url.pathname === "/api/admin/prospects/merge") return json({ dedupeKeyUpdated: false });
+      if (url.pathname === "/api/admin/prospects/r2/unmerge") return json({}, 500);
+      return json({}, 404);
+    });
+
+    const item = await screen.findByRole("listitem", {
+      name: copy.duplicates.pairAria("Pizza Roma", "Roma Express"),
+    });
+    await user.click(
+      within(item).getByRole("button", { name: copy.duplicates.keepAria("Pizza Roma") }),
+    );
+    const toastEl = (await screen.findByText(copy.duplicates.merged("Pizza Roma"))).closest(
+      "[data-sonner-toast]",
+    ) as HTMLElement;
+    await user.click(within(toastEl).getByRole("button", { name: copy.duplicates.undo }));
+
+    expect(await screen.findByText(copy.duplicates.unmergeFailed)).toBeTruthy();
+  });
+
   it("disables both Garder buttons while a merge is in flight, and re-enables after", async () => {
     let release: (body: unknown) => void = () => {};
     render_(async (input) => {

@@ -14,7 +14,9 @@ import { ScreenHeader } from "./ScreenHeader";
 import { ScreenState } from "./ScreenState";
 import { Surface } from "./Surface";
 import { BADGE_SHAPE, STATUS_BADGE, STATUS_EDGE } from "./status";
-import { useDuplicates, useMerge } from "./queries";
+import { useDuplicates, useMerge, useUnmerge } from "./queries";
+
+const UNDO_TOAST_MS = 10_000;
 
 /**
  * Candidate duplicates, for a person to judge — docs/domains/prospecting.md.
@@ -28,6 +30,14 @@ import { useDuplicates, useMerge } from "./queries";
 export function DuplicatesScreen() {
   const duplicates = useDuplicates();
   const merge = useMerge();
+  const unmerge = useUnmerge();
+
+  function undo(merged: Prospect) {
+    unmerge.mutate(merged.id, {
+      onSuccess: () => toast.success(copy.duplicates.unmerged(merged.name)),
+      onError: () => toast.error(copy.duplicates.unmergeFailed),
+    });
+  }
 
   function keep(survivor: Prospect, merged: Prospect) {
     merge.mutate(
@@ -36,7 +46,13 @@ export function DuplicatesScreen() {
         // The response's dedupeKeyUpdated flag conflates "the key was already
         // right" with "the new key was taken", so it is not something to
         // report. A key that is still contested reappears in the next sweep.
-        onSuccess: () => toast.success(copy.duplicates.merged(survivor.name)),
+        // A merge is reversible (docs/domains/prospecting.md › What a merge
+        // does), so the toast carries the undo; it stays long enough to reach.
+        onSuccess: () =>
+          toast.success(copy.duplicates.merged(survivor.name), {
+            duration: UNDO_TOAST_MS,
+            action: { label: copy.duplicates.undo, onClick: () => undo(merged) },
+          }),
         onError: () => toast.error(copy.duplicates.mergeFailed),
       },
     );

@@ -804,6 +804,9 @@ export const adminCopy = {
     /** Says which one survived, because that is the thing the admin chose. */
     merged: (name: string) => `Fusionné dans « ${name} »`,
     mergeFailed: "La fusion a échoué. Réessayez.",
+    undo: "Annuler",
+    unmerged: (name: string) => `Fusion annulée : « ${name} » est de retour dans la liste.`,
+    unmergeFailed: "Impossible d'annuler la fusion. Réessayez.",
   },
 
   scripts: {
