@@ -104,7 +104,6 @@ function QuestionControl({
         <Textarea
           id={id}
           rows={2}
-          className="text-base md:text-base"
           value={typeof value === "string" ? value : ""}
           aria-invalid={invalid ? true : undefined}
           onChange={(event) => onChange(event.target.value)}
