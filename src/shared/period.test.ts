@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { DAY_MS } from "./constants";
 import {
-  DAY_MS,
   brusselsMidnightDaysFromNow,
   brusselsPeriod,
   deltaOf,

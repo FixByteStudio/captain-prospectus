@@ -1,5 +1,5 @@
 import { SearchIcon, XIcon } from "lucide-react";
-import { STATUSES } from "../../../shared/constants";
+import { SHORT_TEXT_MAX, STATUSES } from "../../../shared/constants";
 import type { Source } from "../../../shared/constants";
 import { SOURCE_LABELS, STATUS_LABELS, copy } from "../../copy";
 import { cn } from "../../lib/utils";
@@ -12,11 +12,6 @@ import type { ProspectFilters } from "../queries";
 import { ANY, Filter } from "./Filter";
 
 const SOURCES: readonly Source[] = ["csv", "osm", "field"];
-
-/** `searchQuerySchema`'s own cap (`shortText`'s `maxLength(200)`, src/shared/schemas.ts) — kept
- * here too so a search past it is refused at the keyboard rather than silently
- * dropped once `parseProspectFilters` rejects it. */
-const SEARCH_MAX_LENGTH = 200;
 
 /**
  * The one toolbar slot (docs/design.md): the filters and the search box, or —
@@ -86,7 +81,9 @@ export function Toolbar({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={copy.prospects.search.placeholder}
-              maxLength={SEARCH_MAX_LENGTH}
+              // `searchQuerySchema`'s cap: a longer search is refused at the keyboard
+              // rather than silently dropped once `parseProspectFilters` rejects it.
+              maxLength={SHORT_TEXT_MAX}
               className="h-8 w-48 pl-8"
             />
           </div>

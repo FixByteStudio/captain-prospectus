@@ -7,7 +7,8 @@
  */
 import { PLACES_MAX_RESULTS, type ProspectType } from "../shared/constants";
 import type { FoundPlace } from "../shared/schemas";
-import type { Vertex } from "./overpass";
+import { sha256Hex } from "./hex";
+import { num, round5, text, type Vertex } from "./overpass";
 
 /**
  * Part of the cache key, so a changed request cannot be served a stale answer
@@ -43,11 +44,6 @@ export const PLACES_INCLUDED_TYPES = [
   "ice_cream_shop",
   "food_court",
 ] as const;
-
-/** Same five decimals as the Overpass hash, and for the same reason. */
-function round5(value: number): string {
-  return value.toFixed(5);
-}
 
 /** Whole metres: a radius handle dragged a centimetre is the same search. */
 function roundRadius(radius: number): number {
@@ -86,8 +82,7 @@ export function buildPlacesBody(center: Vertex, radius: number): string {
 export async function circleHash(center: Vertex, radius: number): Promise<string> {
   const [lat, lng] = center;
   const input = `${PLACES_QUERY_VERSION}:${round5(lat)} ${round5(lng)}:${roundRadius(radius)}`;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return sha256Hex(input);
 }
 
 /* ------------------------------------------------------------ type mapping */
@@ -114,18 +109,6 @@ const GOOGLE_TYPE_TO_TYPE: Readonly<Record<string, ProspectType>> = {
   ice_cream_shop: "other",
   food_court: "other",
 };
-
-function text(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  // `shortText` caps at 200 and a formatted address can run longer; a 400 on
-  // one long address would fail the whole import.
-  return trimmed === "" ? null : trimmed.slice(0, 200);
-}
-
-function num(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
 
 /**
  * `primaryType` first, then the broader `types` array

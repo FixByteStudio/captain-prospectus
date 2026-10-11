@@ -5,12 +5,11 @@
  * Nothing here logs. A token, a hash or BREAK_GLASS in a log line would be a
  * credential in Workers observability (docs/security.md).
  */
-import type { Role } from "../shared/constants";
+import { DAY_MS, type Role } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
+import { toHex } from "./hex";
 
 export const SESSION_COOKIE = "__Host-cp_session";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Lifetime per role, sliding (ADR-0029): `requireIdentity` pushes `expires_at`
@@ -47,10 +46,6 @@ function hmacKey(pepper: string): Promise<CryptoKey> {
 /** HMAC-SHA-256 digest; always 32 bytes, so two of them compare in constant time. */
 export async function hmacBytes(pepper: string, value: string): Promise<ArrayBuffer> {
   return crypto.subtle.sign("HMAC", await hmacKey(pepper), new TextEncoder().encode(value));
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** HMAC-SHA-256 as lowercase hex: the only form a secret is stored in. */
