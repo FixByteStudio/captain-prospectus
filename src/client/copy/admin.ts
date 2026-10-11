@@ -749,6 +749,9 @@ export const adminCopy = {
     // left is named rather than implied.
     noPosition:
       "Aucune position enregistrée pour cette visite : aucun prospect à proposer. Si elle ne peut pas être rattachée, supprimez-la.",
+    // The visit has a position, but no live prospect has one to rank against.
+    noCandidates:
+      "Aucun prospect localisé à proposer pour cette visite. Si elle ne peut pas être rattachée, supprimez-la.",
     attached: (name: string) => `Visite rattachée à ${name}.`,
     attachFailed: "Impossible de rattacher cette visite. Réessayez.",
     // The row count the page could not show. Non-zero means look upstream.

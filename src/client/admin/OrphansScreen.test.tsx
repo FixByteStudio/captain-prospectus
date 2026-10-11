@@ -41,6 +41,7 @@ function visit(id: string, overrides: Partial<OrphanedVisit> = {}): OrphanedVisi
     followUpAt: null,
     notes: "patron absent, repasser jeudi",
     prospectName: null,
+    hasPosition: true,
     candidates: [candidate("pa", "Pizza Roma", 12), candidate("pb", "Roma Express", 48)],
     ...overrides,
   };
@@ -218,7 +219,7 @@ describe("OrphansScreen", () => {
   it("still offers the named prospect when the visit recorded no position", async () => {
     const user = userEvent.setup();
     const { posts } = render_(
-      queue({ visits: [{ ...NOT_ASSIGNED, candidates: [] }], remaining: 0 }),
+      queue({ visits: [{ ...NOT_ASSIGNED, hasPosition: false, candidates: [] }], remaining: 0 }),
     );
 
     const r = within(await row("karim@example.com"));
@@ -275,14 +276,24 @@ describe("OrphansScreen", () => {
   });
 
   it("says so when a visit recorded no position, and offers no candidate", async () => {
-    render_(queue({ visits: [visit("v1", { candidates: [] })], remaining: 0 }));
+    render_(queue({ visits: [visit("v1", { hasPosition: false, candidates: [] })], remaining: 0 }));
 
     const r = within(await row("lea@example.com"));
     expect(r.getByText(t.noPosition)).toBeTruthy();
+    expect(r.queryByText(t.noCandidates)).toBeNull();
     expect(r.queryByText(t.attachTo)).toBeNull();
     expect(r.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       t.discardAria(formatDateTime(VISITED_AT)),
     ]);
+  });
+
+  it("does not blame the position when the visit has one but nothing is near", async () => {
+    render_(queue({ visits: [visit("v1", { candidates: [] })], remaining: 0 }));
+
+    const r = within(await row("lea@example.com"));
+    expect(r.getByText(t.noCandidates)).toBeTruthy();
+    expect(r.queryByText(t.noPosition)).toBeNull();
+    expect(r.queryByText(t.attachTo)).toBeNull();
   });
 
   it("discards only after the destructive confirmation", async () => {

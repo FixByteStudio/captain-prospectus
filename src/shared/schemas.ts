@@ -1058,7 +1058,13 @@ export const orphanedVisitSchema = z.object({
    * `unknown_prospect` row, which is the whole reason that row is here.
    */
   prospectName: z.nullable(shortTextRequired),
-  /** Ranked nearest-first. Empty when the visit carries no coordinates. */
+  /** Whether the visit recorded where it happened; candidates need it. */
+  hasPosition: z.boolean(),
+  /**
+   * Ranked nearest-first. Empty when the visit has no position, and also when
+   * no live prospect it could be ranked against has one — `hasPosition` tells
+   * the two apart (GH #197).
+   */
   candidates: z.array(orphanCandidateSchema).check(z.maxLength(ORPHAN_CANDIDATES)),
 });
 export type OrphanedVisit = z.infer<typeof orphanedVisitSchema>;
