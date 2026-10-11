@@ -311,6 +311,22 @@ export function useMerge() {
   });
 }
 
+/** Undo a merge: the absorbed prospect returns to the list and, if still close, to the sweep. */
+export function useUnmerge() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (prospectId: string) =>
+      apiFetch<Prospect>(`/api/admin/prospects/${prospectId}/unmerge`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["admin", "prospects"] });
+      await client.invalidateQueries({ queryKey: adminKeys.duplicates() });
+    },
+  });
+}
+
 export function useAssign() {
   const invalidate = useInvalidateProspects();
   return useMutation({

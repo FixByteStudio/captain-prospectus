@@ -560,10 +560,11 @@ together.
 - **"Garder" is secondary, never gold**, and carries no confirmation: a merge
   only marks the other side absorbed — each keeps its own visits
   ([prospecting](domains/prospecting.md#prospect-lifecycle)) — so nothing a
-  visit recorded is lost. Undoing a merge is server-side only today; there is
-  no admin control for it. Both rows disable the moment a merge is in flight
-  — or while the sweep itself is refetching, since a stale pair could
-  otherwise be merged — so a second click cannot race the first.
+  visit recorded is lost. The success toast carries « Annuler » for 10 s,
+  which unmerges the absorbed side (`POST /api/admin/prospects/:id/unmerge`)
+  and asks the sweep again (GH #195). Both rows disable the moment a merge is
+  in flight — or while the sweep itself is refetching, since a stale pair
+  could otherwise be merged — so a second click cannot race the first.
 - **Status is edge and badge**, same as Prospects: `STATUS_EDGE` on the row,
   the tinted `STATUS_BADGE` beside the agent and the visit count, which now
   carries its own word ("3 visites", "Aucune visite") rather than relying on
