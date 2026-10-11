@@ -1,6 +1,5 @@
 import { SearchIcon, XIcon } from "lucide-react";
-import { SHORT_TEXT_MAX, STATUSES } from "../../../shared/constants";
-import type { Source } from "../../../shared/constants";
+import { SHORT_TEXT_MAX, SOURCES, STATUSES } from "../../../shared/constants";
 import { SOURCE_LABELS, STATUS_LABELS, copy } from "../../copy";
 import { cn } from "../../lib/utils";
 import { Badge } from "../../ui/badge";
@@ -10,8 +9,6 @@ import { Toggle } from "../../ui/toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import type { ProspectFilters } from "../queries";
 import { ANY, Filter } from "./Filter";
-
-const SOURCES: readonly Source[] = ["csv", "osm", "field"];
 
 /**
  * The one toolbar slot (docs/design.md): the filters and the search box, or —
