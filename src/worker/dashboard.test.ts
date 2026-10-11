@@ -96,7 +96,16 @@ async function seedVisits(
   );
 }
 
+/**
+ * Noon in Brussels, clear of midnight and of a DST switch. The seeds and the
+ * route both read `Date.now()`, so a frozen clock keeps them on the same day
+ * (GH #151); a test that needs another instant sets its own.
+ */
+const NOW = Date.parse("2026-06-17T10:00:00.000Z");
+
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   const db = getDb(env.DB);
   // Order matters: visits reference prospects by foreign key.
   await db.delete(visits);
@@ -104,6 +113,10 @@ beforeEach(async () => {
   await db.delete(prospects);
   await db.delete(scripts);
   await resetTestUsers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("GET /api/admin/dashboard", () => {
@@ -423,10 +436,6 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
     brusselsPeriod(from + i * DAY_MS + 12 * HOUR, 1).from;
   const zeros = () => Object.fromEntries(OUTCOMES.map((o) => [o, 0])) as Record<Outcome, number>;
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it.each(DASHBOARD_PERIODS)(
     "has one entry per Brussels day of period %i, oldest first (I/O matrix, shape and empty)",
     async (period) => {
@@ -503,7 +512,6 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
   ])(
     "on %s, counts 23:30 on the DST day %s on that date (I/O matrix, DST)",
     async (now, dstDate, late, midnight) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(Date.parse(now));
       const prospectId = await seedProspect();
       await seedVisits(prospectId, [Date.parse(late)], "no_contact");
@@ -529,10 +537,6 @@ describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
   /** The period's series with `n` on each listed day and 0 elsewhere. */
   const series = (period: number, days: Record<number, number>) =>
     Array.from({ length: period }, (_, i) => days[i] ?? 0);
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
 
   it.each(DASHBOARD_PERIODS)(
     "sums each series to its figure and has period %i entries (I/O matrix, sums and length)",
@@ -626,7 +630,6 @@ describe("GET /api/admin/dashboard › KPI series (GH #111)", () => {
   ])(
     "on %s, puts a conversion at 23:30 on the DST day %s on that date (I/O matrix, DST)",
     async (now, dstDate, late) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(Date.parse(now));
       await seedVisits(await seedProspect("converted"), [Date.parse(late)], "converted");
       await seedProspect("converted", null, Date.parse(late) + HOUR / 2);
@@ -831,10 +834,6 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
 });
 
 describe("À traiter › Relances dues (GH #113)", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   /** A live follow_up prospect by default, due at `nextVisitAt`. */
   async function seedDue(
     nextVisitAt: number | null,
@@ -878,7 +877,6 @@ describe("À traiter › Relances dues (GH #113)", () => {
   ])(
     "at %s, today ends at Brussels midnight (I/O matrix, Brussels boundary)",
     async (now, lastDue, firstNotDue) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(Date.parse(now));
       await seedDue(Date.parse(lastDue));
       await seedDue(Date.parse(firstNotDue));
@@ -1042,15 +1040,10 @@ describe("The Visites strip's flyers, agents and due-soon figures (GH #177)", ()
       expect(total).toBe(3);
     });
 
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     it.each([
       ["2026-03-29T21:30:00.000Z"], // spring DST, near the switch
       ["2026-10-25T22:30:00.000Z"], // autumn DST, near the switch
     ])("dueBefore is a Brussels midnight across a clock change, at %s", async (now) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(Date.parse(now));
 
       const { dueBefore } = (await dashboard()).followUpsDueSoon;
