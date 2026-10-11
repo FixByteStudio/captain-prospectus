@@ -5,7 +5,7 @@
  * object the Worker validates the payload with. That is the point: a form with
  * its own copy of the rules is a form that can disagree with the server about
  * whether a visit is savable, and on this side a disagreement loses a visit.
- * There is no form library here — ADR-0015.
+ * VisitScreen's react-hook-form resolver calls `toVisit` here (ADR-0018).
  */
 import { answersSchemaFor } from "../../shared/answers";
 import { visitSchema, type Answers, type Script, type Visit } from "../../shared/schemas";
