@@ -12,12 +12,7 @@ import { MIN_CLIENT_VERSION, VISIT_HISTORY_LIMIT } from "../../shared/constants"
 import { chunk } from "../../shared/chunk";
 import { dedupeKey } from "../../shared/dedupe";
 import { prospectIdParamSchema, syncRequestSchema } from "../../shared/schemas";
-import type {
-  Prospect,
-  SyncRequest,
-  SyncResponse,
-  VisitHistoryResponse,
-} from "../../shared/schemas";
+import type { SyncRequest, SyncResponse, VisitHistoryResponse } from "../../shared/schemas";
 import type { OrphanReason } from "../../shared/constants";
 import { validate, validationFailed } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
@@ -26,30 +21,11 @@ import { activeRosterMember } from "../auth";
 import { writeAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
 import { deriveProspectStatus } from "./status";
-import { toWireScript } from "./wire";
+import { toWireProspect, toWireScript } from "./wire";
 import type { AppEnv } from "../types";
-import type { NewOrphanedVisitRow, NewProspectRow, NewVisitRow, ProspectRow } from "../db/schema";
+import type { NewOrphanedVisitRow, NewProspectRow, NewVisitRow } from "../db/schema";
 
 export const agentRoutes = new Hono<AppEnv>();
-
-function toWireProspect(row: ProspectRow): Prospect {
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    lat: row.lat,
-    lng: row.lng,
-    address: row.address,
-    phone: row.phone,
-    website: row.website,
-    cuisine: row.cuisine,
-    source: row.source,
-    status: row.status,
-    assignedTo: row.assignedTo,
-    lastVisitAt: row.lastVisitAt,
-    nextVisitAt: row.nextVisitAt,
-  };
-}
 
 /**
  * The version check runs BEFORE the schema, on purpose.
