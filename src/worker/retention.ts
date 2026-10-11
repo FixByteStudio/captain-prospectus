@@ -85,11 +85,12 @@ export async function runRetention(db: Db, now: number): Promise<SweepResult> {
   if (expired.length === 0)
     return { redacted: 0, cutoff, positionsDeleted, importsRedacted, ...auth };
 
-  // One bound parameter per id, so the batch is chunked to D1's limit of 100
-  // (INVARIANT 7). RETENTION_BATCH is deliberately larger than that: the cap
-  // that matters is rows written per run, not per statement.
+  // One bound parameter per id plus the three NULLs, so the batch is chunked
+  // to fit D1's limit of 100 (INVARIANT 7). RETENTION_BATCH is deliberately
+  // larger than that: the cap that matters is rows written per run, not per
+  // statement.
   const ids = expired.map((v) => v.id);
-  for (const batch of chunk(ids, D1_MAX_BOUND_PARAMS)) {
+  for (const batch of chunk(ids, D1_MAX_BOUND_PARAMS - 3)) {
     await db
       .update(visits)
       .set({ lat: null, lng: null, notes: null })
