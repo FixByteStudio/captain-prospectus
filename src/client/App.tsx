@@ -263,7 +263,7 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginScreen />} />
+      <Route path="/login" element={<LoginScreen pwa={pwa} />} />
       {/* Above `GatedApp`, not inside `FieldFrame`: its identity re-check asks
           the guard before it opens /login (GH #356). Admin screens never
           register a dirty form, so there `leave` just runs. */}

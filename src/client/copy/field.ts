@@ -214,6 +214,11 @@ export const copy = {
     /** 429 without a usable Retry-After. */
     lockedForMinutes:
       "Trop de tentatives depuis cette connexion. Réessayez dans quelques minutes, ou changez de réseau.",
+    /** The outbox on this device, for a phone sent here by a 401; never zero. */
+    outboxWaiting: (count: number) =>
+      count === 1
+        ? "1 visite non envoyée est gardée sur ce téléphone. Elle partira après la connexion."
+        : `${count} visites non envoyées sont gardées sur ce téléphone. Elles partiront après la connexion.`,
   },
 
   /** The service worker has a new build waiting (registerType: "prompt"). */
