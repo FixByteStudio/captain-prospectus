@@ -90,7 +90,7 @@ One place must exist once. The **dedupe key** (unique) is computed server-side:
 2. otherwise `geo:<normalized name>:<lat 3dp>:<lng 3dp>` (≈110 m cell).
 3. otherwise `addr:<normalized name>:<normalized address>`.
 
-Normalisation: strip accents, lowercase, collapse non-alphanumerics.
+Normalisation: strip accents, lowercase, collapse non-alphanumerics. A name or address that this leaves empty — one written only in another script, such as "餃子館" — keeps its own letters instead, so two such places do not share a key.
 
 Known limits, accepted for v1; the admin can merge manually later (roadmap M5):
 
