@@ -5,6 +5,12 @@
  * the values below are the ones the domain docs describe, and the docs win.
  */
 
+/** A day in ms. Brussels days are not all this long, which is why `periodOffsets` exists (shared/period.ts). */
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The cap on `shortText` and a multi-choice answer in the shared schemas; anything cut to fit one imports it. */
+export const SHORT_TEXT_MAX = 200;
+
 /** docs/glossary.md — a prospect's lifecycle. */
 export const STATUSES = [
   "new",
@@ -199,14 +205,14 @@ export const ORPHAN_CANDIDATES = 5;
 export const EXPORT_ROWS = 500;
 
 /** Default window for the visits export: the last 30 days. */
-export const EXPORT_DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+export const EXPORT_DEFAULT_WINDOW_MS = 30 * DAY_MS;
 
 /**
  * How long a visit keeps `lat`, `lng` and `notes`, measured on `received_at`
  * because a phone's clock can be wrong (INVARIANT 12, ADR-0023).
  */
 export const RETENTION_DAYS = 90;
-export const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+export const RETENTION_MS = RETENTION_DAYS * DAY_MS;
 
 /**
  * Rows the sweep redacts per run.
@@ -245,8 +251,8 @@ export const IMPORT_STALE_MS = 5 * 60 * 1000;
 /** Cap on `importLog.batchCount`: 10 000 batches of 250 rows is 2.5 M rows. */
 export const IMPORT_LOG_BATCH_COUNT_MAX = 10_000;
 
-/** Longest `importLog.fileName`, the same cap as the shared short text. */
-export const IMPORT_LOG_FILE_NAME_MAX = 200;
+/** Longest `importLog.fileName`: a `shortText` on the wire. */
+export const IMPORT_LOG_FILE_NAME_MAX = SHORT_TEXT_MAX;
 
 /** Cap on the log's other counts (`rejected`, zone size); a 250-row batch cannot reach it. */
 export const IMPORT_LOG_COUNT_MAX = 10_000_000;
@@ -290,7 +296,7 @@ export const POLYGON_MAX_VERTICES = 200;
  * How long an Overpass answer stays good (ADR-0008): politeness to a shared
  * public service (docs/domains/ingestion.md, "Limits and etiquette").
  */
-export const OVERPASS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const OVERPASS_CACHE_TTL_MS = 7 * DAY_MS;
 
 /**
  * Candidates returned from one map import.
@@ -319,4 +325,4 @@ export const PLACES_MAX_RESULTS = 20;
  * cap caching at 30 days (ADR-0020, "Accepted risks", Storage), so it may shrink
  * but must never grow past 30 days.
  */
-export const PLACES_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const PLACES_CACHE_TTL_MS = 7 * DAY_MS;

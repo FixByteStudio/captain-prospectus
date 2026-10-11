@@ -25,6 +25,7 @@ import {
 } from "drizzle-orm";
 import { chunk } from "../../shared/chunk";
 import {
+  DAY_MS,
   DUPLICATES_PAGE_SIZE,
   DUPLICATES_SCAN_LIMIT,
   EXPORT_ROWS,
@@ -51,7 +52,6 @@ import {
 import { dedupeKey, normalize } from "../../shared/dedupe";
 import { foldForSearch } from "../../shared/search";
 import {
-  DAY_MS,
   brusselsMidnightDaysFromNow,
   brusselsPeriod,
   deltaOf,

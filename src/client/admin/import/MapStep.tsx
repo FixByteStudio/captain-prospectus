@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DAY_MS } from "../../../shared/constants";
 import type { AreaCandidate, AreaSearchResponse, ImportRow } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { TYPE_LABELS, copy } from "../../copy";
@@ -370,7 +371,7 @@ function cachedLine(cachedAt: number | undefined): string {
   if (cachedAt === undefined) return copy.map.results.cached;
   const ageMs = Math.max(0, Date.now() - cachedAt);
   const hours = Math.floor(ageMs / (60 * 60 * 1000));
-  const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+  const days = Math.floor(ageMs / DAY_MS);
   return copy.map.results.cachedAge(days, hours);
 }
 

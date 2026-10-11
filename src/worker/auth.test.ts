@@ -9,6 +9,7 @@ import { SignJWT, generateKeyPair } from "jose";
 import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
 import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
+import { DAY_MS } from "../shared/constants";
 import { normaliseCredential } from "../shared/credential";
 import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
 import { beforeStatement } from "../../test/d1-hook";
@@ -28,7 +29,6 @@ const HOST = "https://captain.example";
 const OWNER = "owner@example.com";
 const BREAK_GLASS = "test-break-glass";
 const PEPPER = "test-pepper";
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ORIGINAL = {
   AUTH_PEPPER: env.AUTH_PEPPER,

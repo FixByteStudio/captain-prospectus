@@ -108,9 +108,6 @@ export function deltaOf(value: number, previous: number): number | null {
   return previous === 0 ? null : (value - previous) / previous;
 }
 
-/** A day in ms. Brussels days are not all this long, which is why `offsets` exists. */
-export const DAY_MS = 24 * 60 * 60 * 1000;
-
 export type PeriodOffsets = {
   /** Brussels minus UTC, in ms, from `from` until `changeAt`. */
   before: number;

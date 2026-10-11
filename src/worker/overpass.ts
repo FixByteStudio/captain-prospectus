@@ -7,8 +7,9 @@
  *
  * Everything in this file is pure. The route does the I/O.
  */
-import { OVERPASS_CANDIDATES_LIMIT, type ProspectType } from "../shared/constants";
+import { OVERPASS_CANDIDATES_LIMIT, SHORT_TEXT_MAX, type ProspectType } from "../shared/constants";
 import type { FoundPlace } from "../shared/schemas";
+import { sha256Hex } from "./hex";
 
 /**
  * Part of the cache key, so a changed query cannot be served a stale answer
@@ -34,7 +35,7 @@ export type Vertex = readonly [number, number];
  * The skill fixes this number; it is part of the key, so changing it silently
  * invalidates every cached answer.
  */
-function round5(value: number): string {
+export function round5(value: number): string {
   return value.toFixed(5);
 }
 
@@ -75,8 +76,7 @@ export function buildOverpassQuery(polygon: readonly Vertex[]): string {
  */
 export async function polygonHash(polygon: readonly Vertex[]): Promise<string> {
   const input = `${OVERPASS_QUERY_VERSION}:${polyClause(polygon)}`;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return sha256Hex(input);
 }
 
 /* ------------------------------------------------------------- tag mapping */
@@ -100,15 +100,16 @@ const AMENITY_TO_TYPE: Readonly<Record<string, ProspectType>> = {
   ice_cream: "other",
 };
 
-function text(value: unknown): string | null {
+/** Trimmed, `null` when blank, cut to fit a `shortText`. */
+export function text(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  // `shortText` caps at 200; an OSM tag can be longer, and a 400 on an
-  // untrimmed website URL would fail the whole import for one bad element.
-  return trimmed === "" ? null : trimmed.slice(0, 200);
+  // An OSM tag or a Google address can run past the cap, and a 400 on one long
+  // value would fail the whole import for one bad element.
+  return trimmed === "" ? null : trimmed.slice(0, SHORT_TEXT_MAX);
 }
 
-function num(value: unknown): number | null {
+export function num(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
@@ -133,7 +134,7 @@ function address(tags: Record<string, unknown>): string | null {
     [text(tags["addr:housenumber"]), text(tags["addr:street"])].filter(Boolean).join(" "),
     text(tags["addr:city"]),
   ].filter((part) => part !== "" && part !== null);
-  return parts.length === 0 ? null : parts.join(", ").slice(0, 200);
+  return parts.length === 0 ? null : parts.join(", ").slice(0, SHORT_TEXT_MAX);
 }
 
 /**

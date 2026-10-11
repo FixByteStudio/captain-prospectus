@@ -344,9 +344,27 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-48-trim-restating-comments.md`
   summary: `places.ts` re-defines `round5`, `text`, `num` and the SHA-256 hex step that `overpass.ts` (and `session.ts`) already have (GH #419).
   evidence: Duplication-map lens; pre-existing, the #48 diff changes comments only.
+  closed_by: GH #419, `spec-gh-419-421-one-home-for-duplicated-helpers.md` (branch `refactor/one-home-shared-helpers-419`).
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-48-trim-restating-comments.md`
   summary: A day in ms is spelled out at six sites although `src/shared/period.ts` exports `DAY_MS` (GH #420).
   evidence: Duplication-map lens; pre-existing, the #48 diff changes comments only.
+  closed_by: GH #420, `spec-gh-419-421-one-home-for-duplicated-helpers.md` (branch `refactor/one-home-shared-helpers-419`).
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-48-trim-restating-comments.md`
   summary: The `shortText` 200-character cap is a bare literal at seven sites outside `schemas.ts` (GH #421).
   evidence: Duplication-map lens; pre-existing, the #48 diff changes comments only.
+  closed_by: GH #421, `spec-gh-419-421-one-home-for-duplicated-helpers.md` (branch `refactor/one-home-shared-helpers-419`).
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
+  summary: The `longText`, options-per-question, question-key and email caps are bare literals repeated across `schemas.ts` and `answers.ts` (GH #430).
+  evidence: Duplication-map lens; pre-existing, the #419–#421 diff did not touch them.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
+  summary: `Vertex` is declared in both `worker/overpass.ts` and `client/admin/import/map.ts`, and the lat/lng tuple schema twice in `schemas.ts` (GH #431).
+  evidence: Duplication-map lens; pre-existing.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
+  summary: The Overpass and Places routes repeat the map-cache lookup and upsert in `routes/admin.ts` (GH #432).
+  evidence: Duplication-map lens; pre-existing.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
+  summary: An hour in ms is spelled out in four source files (GH #433).
+  evidence: Duplication-map lens; pre-existing, next to the `DAY_MS` sites #420 fixed.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
+  summary: The prospects source filter's local `SOURCES` leaves out `google` (GH #434).
+  evidence: Duplication-map lens; pre-existing, unverified whether intentional.

@@ -44,6 +44,7 @@ import {
   QUESTION_TYPES,
   ROLES,
   SCRIPT_QUESTIONS_MAX,
+  SHORT_TEXT_MAX,
   STATUSES,
   SOURCES,
   SYNC_PROSPECTS_PER_REQUEST,
@@ -68,7 +69,7 @@ export const emailSchema = z.email().check(
 );
 
 /** Free text from the field or an import. Capped so a payload cannot balloon. */
-const shortText = z.string().check(z.trim(), z.maxLength(200));
+const shortText = z.string().check(z.trim(), z.maxLength(SHORT_TEXT_MAX));
 const longText = z.string().check(z.trim(), z.maxLength(2000));
 /** `shortText` that may not be empty. Mini's `.check()` clones and appends. */
 const shortTextRequired = shortText.check(z.minLength(1));
@@ -102,10 +103,13 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
  * what the exact break-glass comparison sees; the server normalises it only
  * for the generated-passphrase check (shared/credential.ts).
  */
+/** A typed credential's cap. Its own number, not `shortText`'s: a credential is never trimmed to fit. */
+const CREDENTIAL_MAX = 200;
+
 export const passphraseLoginSchema = z.object({
   kind: z.literal("passphrase"),
   email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(320)),
-  passphrase: z.string().check(z.minLength(1), z.maxLength(200)),
+  passphrase: z.string().check(z.minLength(1), z.maxLength(CREDENTIAL_MAX)),
 });
 
 /**
@@ -114,7 +118,7 @@ export const passphraseLoginSchema = z.object({
  */
 export const codeLoginSchema = z.object({
   kind: z.literal("code"),
-  code: z.string().check(z.minLength(1), z.maxLength(200)),
+  code: z.string().check(z.minLength(1), z.maxLength(CREDENTIAL_MAX)),
 });
 
 export const loginRequestSchema = z.discriminatedUnion("kind", [
@@ -217,7 +221,7 @@ export const answersSchema = z
       z.boolean(),
       z.string().check(z.maxLength(2000)),
       z.number(),
-      z.array(z.string().check(z.maxLength(200))).check(z.maxLength(30)),
+      z.array(z.string().check(z.maxLength(SHORT_TEXT_MAX))).check(z.maxLength(30)),
     ]),
   )
   .check(
