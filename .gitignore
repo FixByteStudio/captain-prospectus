@@ -9,3 +9,7 @@ dist
 backup*.sql
 coverage
 _bmad/render/
+
+# Local browser-driving artifacts: a Chrome profile and ad-hoc screenshots (#7).
+.chrome-profile/
+/.shot-*.png

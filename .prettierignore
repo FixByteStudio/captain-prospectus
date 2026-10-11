@@ -4,6 +4,9 @@ drizzle
 node_modules
 pnpm-lock.yaml
 
+# Local browser profile written by browser-driving tools (#7).
+.chrome-profile
+
 # Vendored agent skills (bmad). Third-party assets we do not author or reformat.
 .agents
 
