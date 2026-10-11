@@ -92,7 +92,6 @@ import type {
   ImportsResponse,
   MergeResult,
   AreaSearchResponse,
-  Prospect,
   ProspectsResponse,
   Script,
   ScriptsResponse,
@@ -121,7 +120,7 @@ import {
 import type { NewProspectRow, ProspectRow } from "../db/schema";
 import { markLikelyDuplicates } from "../likely-duplicates";
 import { deriveProspectStatus } from "./status";
-import { toWireScript } from "./wire";
+import { toWireProspect, toWireScript } from "./wire";
 import type { AppEnv } from "../types";
 
 export const adminRoutes = new Hono<AppEnv>();
@@ -152,25 +151,6 @@ const PLACES_UNCONFIGURED = {
   error: "places_unconfigured",
   message: "Le fournisseur Google n'est pas configuré sur ce serveur.",
 } as const;
-
-function toWireProspect(row: ProspectRow): Prospect {
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    lat: row.lat,
-    lng: row.lng,
-    address: row.address,
-    phone: row.phone,
-    website: row.website,
-    cuisine: row.cuisine,
-    source: row.source,
-    status: row.status,
-    assignedTo: row.assignedTo,
-    lastVisitAt: row.lastVisitAt,
-    nextVisitAt: row.nextVisitAt,
-  };
-}
 
 /* ------------------------------------------------------------------- people */
 
