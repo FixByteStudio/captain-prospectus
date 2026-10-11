@@ -12,15 +12,25 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { copy } from "../copy/field";
 import { formatBrusselsTime } from "../format";
+import { fieldDb } from "../field/db";
+import type { PwaState } from "../pwa";
+import type { Visit } from "../../shared/schemas";
 import { LoginScreen } from "./LoginScreen";
 
 const OWNER = "owner@example.com";
 
-function renderLogin() {
+const noBuild = (): PwaState => ({
+  needRefresh: false,
+  offlineReady: true,
+  update: vi.fn(),
+  dismiss: vi.fn(),
+});
+
+function renderLogin(pwa: PwaState = noBuild()) {
   return render(
     <MemoryRouter initialEntries={["/login"]}>
       <Routes>
-        <Route path="/login" element={<LoginScreen />} />
+        <Route path="/login" element={<LoginScreen pwa={pwa} />} />
         <Route path="/admin" element={<p>admin landing</p>} />
         <Route path="/tournee" element={<p>round landing</p>} />
       </Routes>
@@ -71,7 +81,9 @@ async function fillAndSubmit(email = OWNER, passphrase = "secret phrase") {
   await user.click(screen.getByRole("button", { name: copy.login.submit }));
 }
 
-afterEach(() => {
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await fieldDb.outboxVisits.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   act(() => {
@@ -386,5 +398,143 @@ describe("LoginScreen — a device that already has an identity (GH #309)", () =
     expect(screen.queryByText("admin landing")).toBeNull();
     expect(screen.queryByText("round landing")).toBeNull();
     expect(meCalls).toBe(1);
+  });
+});
+
+const queued = (): Visit => ({
+  id: crypto.randomUUID(),
+  prospectId: crypto.randomUUID(),
+  visitedAt: Date.now(),
+  lat: null,
+  lng: null,
+  flyerGiven: false,
+  outcome: "interested",
+  followUpAt: null,
+  notes: null,
+  scriptId: null,
+  answers: {},
+});
+
+async function queueRows(count: number) {
+  await fieldDb.outboxVisits.bulkAdd(
+    Array.from({ length: count }, () => ({ ...queued(), writtenBy: "agent@example.com" })),
+  );
+}
+
+describe("LoginScreen — visits waiting in the outbox", () => {
+  it("says how many are kept, in the plural, and leaves every row", async () => {
+    stubFetch(json(401, {}));
+    await queueRows(2);
+    renderLogin();
+
+    expect(await screen.findByText(copy.login.outboxWaiting(2))).toBeTruthy();
+    expect(copy.login.outboxWaiting(2)).toBe(
+      "2 visites non envoyées sont gardées sur ce téléphone. Elles partiront après la connexion.",
+    );
+    expect(await fieldDb.outboxVisits.count()).toBe(2);
+  });
+
+  it("says it in the singular for one", async () => {
+    stubFetch(json(401, {}));
+    await queueRows(1);
+    renderLogin();
+
+    expect(
+      await screen.findByText(
+        "1 visite non envoyée est gardée sur ce téléphone. Elle partira après la connexion.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("shows no line when the outbox is empty", async () => {
+    stubFetch(json(401, {}));
+    // Call-through spy: awaiting its promise is awaiting the screen's own read.
+    const count = vi.spyOn(fieldDb.outboxVisits, "count");
+    renderLogin();
+
+    await screen.findByLabelText(copy.login.code);
+    await waitFor(() => expect(count).toHaveBeenCalled());
+    await count.mock.results[0]?.value;
+    await act(async () => {});
+    expect(screen.queryByText(/non envoyée/)).toBeNull();
+  });
+
+  it("shows no line, and keeps the form, when the read fails", async () => {
+    stubFetch(json(401, {}));
+    await queueRows(2);
+    const count = vi
+      .spyOn(fieldDb.outboxVisits, "count")
+      .mockRejectedValue(new Error("idb closed"));
+    renderLogin();
+
+    expect(await screen.findByLabelText(copy.login.code)).toBeTruthy();
+    await waitFor(() => expect(count).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByText(/non envoyée/)).toBeNull();
+  });
+
+  it("keeps the line under the admin lede after the swap", async () => {
+    stubFetch(json(401, {}));
+    await queueRows(2);
+    renderLogin();
+    await screen.findByText(copy.login.outboxWaiting(2));
+
+    await toAdmin();
+
+    expect(screen.getByText(copy.login.adminLede)).toBeTruthy();
+    expect(screen.getByText(copy.login.outboxWaiting(2))).toBeTruthy();
+  });
+});
+
+describe("LoginScreen — a 426 on sign-in", () => {
+  const upgrade = json(426, { error: "client_too_old", message: "x" });
+
+  it("applies the waiting build when one is waiting, with no refusal Alert", async () => {
+    stubFetch(upgrade);
+    const pwa = { ...noBuild(), needRefresh: true };
+    renderLogin(pwa);
+    await fillAndSubmit();
+
+    const prompt = await screen.findByRole("status");
+    expect(prompt.textContent).toContain(copy.update.available);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: copy.update.apply }));
+    expect(pwa.update).toHaveBeenCalledOnce();
+  });
+
+  it("reloads the page when no build is waiting yet", async () => {
+    stubFetch(upgrade);
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    const pwa = noBuild();
+    renderLogin(pwa);
+    await fillAndSubmit();
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: copy.update.apply }));
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(pwa.update).not.toHaveBeenCalled();
+  });
+
+  it("hides the prompt on Plus tard and shows it again on the next 426", async () => {
+    stubFetch(upgrade);
+    renderLogin();
+    await fillAndSubmit();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: copy.update.dismiss }));
+    expect(screen.queryByRole("status")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: copy.login.submit }));
+    expect(await screen.findByRole("status")).toBeTruthy();
+  });
+
+  it("shows no prompt just because a build is waiting", async () => {
+    stubFetch(json(401, {}));
+    renderLogin({ ...noBuild(), needRefresh: true });
+
+    await screen.findByLabelText(copy.login.code);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });

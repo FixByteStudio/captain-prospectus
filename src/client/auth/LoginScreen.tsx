@@ -5,7 +5,9 @@
  * generated, as typed — the server normalises it. "Accès administrateur" swaps
  * in the admin form, which is also break-glass (`OWNER_EMAIL` plus
  * `BREAK_GLASS`), and nothing on screen names it. The swap is screen state,
- * not a URL. The outbox line comes with a later entry of epic-own-login.
+ * not a URL. A meta line under the lede counts the visits still in the outbox
+ * (read once, never written: INVARIANT 5), and a 426 raises the usual update
+ * prompt instead of an Alert.
  *
  * It renders outside the identity gate (App.tsx). It asks `/api/me` once on
  * mount, only to skip the form for a device that already has an identity
@@ -26,9 +28,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { Spinner } from "@/ui/spinner";
 import { ApiError, apiFetch } from "../api";
+import { UpdatePrompt } from "../Band";
 import { copy } from "../copy/field";
 import { formatBrusselsTime } from "../format";
+import { fieldDb } from "../field/db";
 import { useOnline } from "../hooks/use-online";
+import type { PwaState } from "../pwa";
 import {
   codeLoginSchema,
   meResponseSchema,
@@ -69,12 +74,16 @@ function landingFor(role: "admin" | "agent"): string {
 
 const labelClass = "text-base font-medium";
 
-export function LoginScreen() {
+export function LoginScreen({ pwa }: { pwa: PwaState }) {
   const navigate = useNavigate();
   const online = useOnline();
   const [mode, setMode] = useState<Mode>("code");
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [lockout, setLockout] = useState<Lockout | null>(null);
+  // A 426 raises the update prompt; "Plus tard" clears it until the next 426.
+  const [outdated, setOutdated] = useState(false);
+  // null while the read is pending or after it failed: no line either way.
+  const [waiting, setWaiting] = useState<number | null>(null);
 
   const codeForm = useForm({
     resolver: standardSchemaResolver(codeFormSchema),
@@ -107,6 +116,21 @@ export function LoginScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Read once, like the identity check: the line does not refresh live.
+  // Every row counts: there is no identity on this page to filter by.
+  useEffect(() => {
+    let cancelled = false;
+    fieldDb.outboxVisits
+      .count()
+      .then((count) => {
+        if (!cancelled) setWaiting(count);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // The lock lifts on its own at `until`, with no reload; unmounting clears it.
   useEffect(() => {
     if (!lockout) return;
@@ -131,6 +155,7 @@ export function LoginScreen() {
 
   const signIn = async (body: LoginRequest) => {
     setRefusal(null);
+    setOutdated(false);
     let role: "admin" | "agent";
     try {
       const response = await apiFetch<unknown>("/api/auth/login", {
@@ -143,6 +168,10 @@ export function LoginScreen() {
         const exact = error.retryAfter !== null;
         const wait = error.retryAfter !== null ? error.retryAfter * 1000 : LOCKOUT_FALLBACK_MS;
         setLockout({ until: Date.now() + wait, exact });
+        return;
+      }
+      if (error instanceof ApiError && error.status === 426) {
+        setOutdated(true);
         return;
       }
       // What was typed stays: react-hook-form keeps the values.
@@ -166,6 +195,15 @@ export function LoginScreen() {
       : refusal
         ? refusalCopy(refusal, mode)
         : null;
+
+  // The usual prompt, gated on the 426. With no build waiting yet, a reload is
+  // what lets the browser notice one (same choice as `stripEffect`).
+  const updatePrompt: PwaState = {
+    ...pwa,
+    needRefresh: outdated,
+    update: pwa.needRefresh ? pwa.update : () => window.location.reload(),
+    dismiss: () => setOutdated(false),
+  };
 
   const footer = (
     <>
@@ -200,6 +238,7 @@ export function LoginScreen() {
     // No band here: the brand sits above the card (design.md › The login page).
     // `.safe-top` is on the outer element so it doesn't fight the inner `pt-12`.
     <main className="safe-top flex min-h-dvh flex-col">
+      <UpdatePrompt pwa={updatePrompt} />
       <div className="flex flex-1 flex-col items-center px-4 pt-12 pb-page md:justify-center md:pb-20">
         {/* The navy ink vanishes on the dark page, so the dark theme takes the band's light-ink mark.
             width/height are the SVG's own, so its box is reserved before it loads and the card never jumps. */}
@@ -226,6 +265,9 @@ export function LoginScreen() {
             <CardDescription className="text-base">
               {mode === "code" ? copy.login.codeLede : copy.login.adminLede}
             </CardDescription>
+            {waiting !== null && waiting > 0 && (
+              <p className="text-meta text-muted-foreground">{copy.login.outboxWaiting(waiting)}</p>
+            )}
           </CardHeader>
           <CardContent className="md:px-8">
             {mode === "code" ? (

@@ -1458,8 +1458,10 @@ the 1,000 KiB precache.
   passe incorrecte." A request that never reached the server says
   "Connexion impossible. Vérifiez le réseau et réessayez."; any other
   failure (a 5xx) says "Connexion impossible pour le moment. Réessayez dans
-  un instant.", and a 426 shows the usual update prompt instead. While
-  a request is in flight the button holds a `Spinner` and is disabled.
+  un instant.", and a 426 shows the usual update prompt instead ("Mettre à
+  jour" reloads the page when no build is waiting yet). The prompt is the
+  full-width banner at the top of the page, above the brand. While a
+  request is in flight the button holds a `Spinner` and is disabled.
 - **Lockout** (429): the Alert reads "Trop de tentatives depuis cette
   connexion. Réessayez à {heure}, ou changez de réseau.", `{heure}` being
   `Retry-After` added to now, as a Brussels time ("15:24"). The button stays
@@ -2247,8 +2249,9 @@ no-op today, so it stays silent rather than opening a dialog for an action
 that would not do anything. The 426 forced update (`applyUpdateNow`, the sync
 engine's own reaction to a server that refuses the build) is not one of the
 three — it is not a tap the agent chooses, so there is nothing to ask about.
-Outside the field route (the admin update banner) there is no provider, so
-`leave` runs its action at once, unchanged from before #74.
+Outside the field route (the admin update banner, and the update prompt on
+`/login`) there is no provider, so `leave` runs its action at once, unchanged
+from before #74.
 
 ### Field principles
 
