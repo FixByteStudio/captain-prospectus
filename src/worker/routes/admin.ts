@@ -1829,7 +1829,7 @@ adminRoutes.post(
       db.delete(visitsOrphaned).where(eq(visitsOrphaned.id, id)),
     ]);
 
-    await deriveProspectStatus(db, attachTo, now);
+    await deriveProspectStatus(db, [attachTo], now);
 
     const result: OrphanRepairResult = { visitId: id, prospectId: attachTo, repaired: true };
     return c.json(result);

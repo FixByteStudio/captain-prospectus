@@ -185,9 +185,7 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   // 5. Status from visits, by the one function sync uses (INVARIANT 3). Only
   // for visits this call inserted, as sync does: a re-seed that inserts nothing
   // leaves `updated_at`, and so the admin list's order, alone.
-  for (const prospectId of touchedProspectIds) {
-    await deriveProspectStatus(db, prospectId, now);
-  }
+  await deriveProspectStatus(db, touchedProspectIds, now);
 
   // 6. The manual status and the merge, each written only while unset: a status
   // an admin has since set by hand is kept, but a prospect they have unmerged

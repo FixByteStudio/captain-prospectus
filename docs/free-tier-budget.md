@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~2,000 ≈ 3,000 / day | ~30× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a sync is a few ms; see watch-outs | thin — measure |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a sync of a few visits is a few ms; a full 200-visit batch is over (see watch-outs) | **over at a full sync batch** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | low tens of thousands | large |
@@ -81,6 +81,17 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   zod validation, dedupe-key normalisation and crypto are not. This is why the CSV batch is capped
   at 250 rows per request ([ingestion](domains/ingestion.md)) and why the Access JWKS is cached in
   module scope rather than refetched per request.
+- **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
+  `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
+  `measure-dashboard-cpu.mjs` (not committed), on the local seed, alternating the two builds three
+  times. Before #102 the status of each prospect was derived with two statements: **439 D1
+  statements**, 28.5 ms CPU warm median, 66 ms cold. Now there is one statement per 88 prospects
+  (`deriveProspectStatus`, `routes/status.ts`): **42 statements**, of which 40 are the 5-row visit
+  inserts, plus 3 for the derivation; 8.6 ms warm median, 14.5 ms worst warm, 37 ms cold. That is
+  well inside the 1,000 subrequests to Cloudflare services a Free invocation allows, **but still
+  over 10 ms of CPU** (GH #404). A sync of a few visits, the common case, is far below that. The
+  derivation reads each named prospect's visits through `visits_prospect_visited_idx` and writes
+  one row per prospect, as before.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
