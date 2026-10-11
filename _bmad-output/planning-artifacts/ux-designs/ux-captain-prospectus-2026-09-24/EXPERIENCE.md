@@ -139,7 +139,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | **À traiter queue** | Tableau de bord | Three rows, each with a count and a button to the screen that resolves it. A row whose count is 0 still shows, with the count in muted text and its button disabled. |
 | **Dernières visites** | Tableau de bord | The last 5 visits by `received_at`, refreshed by the 15 s poll. A new row gets a brief wash, then settles. "Tout voir" goes to Visites. |
 | **One toolbar slot** | Prospects (also Doublons and Visites filters) | The filter bar (search, Statut, Agent, Source) is **replaced in place** by the selection actions as soon as one row is ticked: "{n} sélectionnés", "Assigner à" select, "Assigner", "Désassigner", "Annuler". Same position and height, no floating bar. |
-| **Row menu** | Prospects | "Assigner à ›", "Retirer l'assignation", "Changer le statut ›". Submenus open to the side. |
+| **Row menu** | Prospects | "Assigner à ›", "Retirer l'assignation", "Changer le statut ›". "Retirer l'assignation" shows only when the prospect has an agent: an unassigned row has nothing to remove. Submenus open to the side. |
 | **Top-bar search** | Admin | ⌘K / Ctrl+K opens a Command palette. It matches prospect names and opens the prospect's row in Prospects. *(Built later.)* |
 | **Table pagination** | Prospects, Visites | 25 rows per page, with "Précédent", page numbers and "Suivant". The page scrolls; tables never get a scroll area of their own. |
 | **Live feed** | Visites | Ordered by `received_at` (the server's clock), newest first. Notes show on a second line, in quotes. A visit to a merged prospect still appears, under the name it was made against. Arrivals are ambient: no toast. |
