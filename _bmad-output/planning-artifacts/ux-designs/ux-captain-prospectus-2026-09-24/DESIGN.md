@@ -2,7 +2,7 @@
 name: Captain Prospectus
 description: Field-canvassing app for Brussels, with an admin dashboard and an offline-first field PWA. Built on shadcn/ui + Tailwind CSS v4; this file specifies the brand layer on top of shadcn's defaults.
 status: final
-updated: 2026-10-10
+updated: 2026-10-12
 sources:
   - .memlog.md
   - stitch/ (Stitch exports, light mode only; see "Sources and mockups")
@@ -369,8 +369,6 @@ Components not listed here are shadcn defaults, restyled only through tokens: Bu
 - **Toasts and banners.** Sonner toasts at bottom right, shadcn default, with the icon in the matching status colour (admin only). The update banner is a full-width Alert on `{colors.card}` with "Plus tard" (secondary) and "Mettre à jour" (primary). The admin **offline banner** takes that same slot and shape on `{colors.secondary}`, with a `WifiOff` icon and no button, matching the field strip's offline strip. EXPERIENCE.md § State Patterns says when each appears.
 
 ### Admin
-
-- **Session-expired dialog.** shadcn Dialog on the navy scrim, with a `{colors.destructive}` `ShieldAlert` icon, no close button in the corner, and "Se reconnecter" as its single primary button, full width (behaviour in EXPERIENCE.md § State Patterns).
 
 - **Sidebar** (`{components.sidebar}`). Groups are **Pilotage**, **Prospects** and **Terrain**, labelled in the overline style. An item is a 36px row with an icon and a label. The current item is `{components.nav-item-active}`. Count badges (Doublons, À rattacher) are small `{colors.warn}` pills with white numerals (4.9:1). The footer holds the signed-in email and a sync dot with its line ("Synchronisé à l'instant").
 - **Top bar** (`{components.top-bar}`). From left to right: the sidebar toggle (`PanelLeft`), the breadcrumb ("Captain Prospectus › {group} › {page}"), a flexible gap, then the search button, the notifications bell with an unread dot in `{colors.primary}`, the theme toggle (`Sun`/`Moon`) and the avatar (initials on `{colors.primary}`).

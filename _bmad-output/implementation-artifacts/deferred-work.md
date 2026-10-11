@@ -281,6 +281,7 @@
 - source_spec: none
   summary: The blocking admin « Votre session a expiré » dialog (EXPERIENCE.md State Patterns, Session expired · Admin) is not built (GH #209, story 2 of 3).
   evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own.
+  closed_by: Obsolete, not built — owner decision 2026-10-12 (GH #209): the dialog is dropped. The Worker's 401 opens `/login` (GH #309), and EXPERIENCE.md's Session expired · Admin row now says so.
 
 - source_spec: none
   summary: The admin « Hors ligne. Cette page a besoin du réseau… » page after an offline reload (EXPERIENCE.md State Patterns, Offline, after a reload) is not built (GH #209, story 3 of 3).
