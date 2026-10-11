@@ -221,6 +221,13 @@ export const copy = {
         : `${count} visites non envoyées sont gardées sur ce téléphone. Elles partiront après la connexion.`,
   },
 
+  /** An `/admin` route opened on a cached identity (GH #209, EXPERIENCE.md §
+   * State Patterns, Offline after a reload). The field shell renders it, so it
+   * lives here and not in `copy/admin.ts`. */
+  adminRoute: {
+    offline: "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible.",
+  },
+
   /** The service worker has a new build waiting (registerType: "prompt"). */
   update: {
     available: "Une nouvelle version est disponible.",

@@ -286,6 +286,7 @@
 - source_spec: none
   summary: The admin « Hors ligne. Cette page a besoin du réseau… » page after an offline reload (EXPERIENCE.md State Patterns, Offline, after a reload) is not built (GH #209, story 3 of 3).
   evidence: Split from GH #209 at the owner's instruction (one story per state, banner first); each state ships and reviews on its own. Decision (owner, 2026-09-29): the page renders in the field band from the entry chunk, so its strings go in `copy/field`.
+  closed_by: `spec-gh-209-offline-after-reload-page.md` — `App.tsx` answers `/admin/*` on a cached identity with `copy.adminRoute.offline` and « Retour à la tournée »; the forbidden state is kept for a role the server confirmed.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-admin-offline-banner.md`
   summary: A network drop while the lazy admin chunk is still loading should show the offline sentence with « Réessayer » (EXPERIENCE.md State Patterns, Offline · Admin, last sentence).
@@ -369,3 +370,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-419-421-one-home-for-duplicated-helpers.md`
   summary: The prospects source filter's local `SOURCES` leaves out `google` (GH #434).
   evidence: Duplication-map lens; pre-existing, unverified whether intentional.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-offline-after-reload-page.md`
+  summary: An `/admin/*` route on a cached identity says « Hors ligne. Cette page a besoin du réseau… » even when the browser is online and `/api/me` failed (a Worker 5xx, a captive portal), while the strip above it says « Vérification de votre session… ».
+  evidence: `App.tsx` keys the page on `identityFromCache`, which `resolveIdentity` sets for every non-401 failure. EXPERIENCE.md § State Patterns gives one sentence for the state; a second one for "reached nothing, but not offline" is the owner's wording to choose. Before GH #209 story 3 the same case read « Vous n'avez pas accès à cette page. », which was worse.
