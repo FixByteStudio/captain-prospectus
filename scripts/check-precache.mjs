@@ -4,9 +4,11 @@
  * ADR-0026 named that ceiling as a line a human reads off `pnpm build`'s own
  * Workbox output ("harder: the ceiling is still read by hand" — its
  * consequences, and the follow-up work at the end of that ADR). This is that
- * follow-up: it reads the same manifest Workbox already wrote to
- * `dist/client/sw.js`, sums the same bytes, and exits non-zero instead of
- * leaving the number for review to catch.
+ * follow-up: it reads the manifest Workbox wrote to `dist/client/sw.js`, sums
+ * the bytes of every entry a phone downloads on install, and exits non-zero
+ * instead of leaving the number for review to catch. That is more than
+ * Workbox's own printed total, which leaves out the web-manifest icons and
+ * `manifest.webmanifest` (ADR-0031).
  *
  * It also fails when a precached chunk holds an admin-only package (GH #95)
  * or admin-only source module such as the admin copy (GH #20),
@@ -109,35 +111,6 @@ if (declared !== urls.length) {
   process.exit(1);
 }
 
-// Workbox's own console line (vite-plugin-pwa, generateSW mode) sums bytes
-// only for entries it found by globbing `globPatterns` in vite.config.ts —
-// the web-manifest icons and manifest.webmanifest itself arrive afterwards as
-// pre-hashed `additionalManifestEntries` and are precached (real bytes on a
-// phone) without ever being sized into that total. Reading the same
-// extension list from vite.config.ts, rather than repeating it here,
-// reproduces that line exactly instead of drifting from it if it changes.
-let viteConfig;
-try {
-  viteConfig = readFileSync(join(ROOT, "vite.config.ts"), "utf8");
-} catch {
-  console.error(
-    `check:precache — no vite.config.ts under ${ROOT}; cannot tell which entries Workbox sizes into its own total.`,
-  );
-  process.exit(1);
-}
-const globExtensions = /globPatterns:\s*\[\s*"\*\*\/\*\.\{([^}]+)\}"/
-  .exec(viteConfig)?.[1]
-  // "{js, css}" (a space after the comma) is valid in vite.config.ts and must
-  // not silently shrink the total: an untrimmed " css" never matches a url's
-  // trailing ".css", so that entry would quietly stop counting.
-  ?.split(",")
-  .map((ext) => ext.trim());
-if (!globExtensions) {
-  console.error(`check:precache — no globPatterns: ["**/*.{...}"] found in vite.config.ts.`);
-  process.exit(1);
-}
-const countsTowardTotal = (url) => globExtensions.some((ext) => url.endsWith(`.${ext}`));
-
 const entries = urls.map((url) => {
   // Decode and stat in one try: a bad escape (a lone "%") must report its own
   // message, not fall through into `join()` with `undefined` and throw a
@@ -160,10 +133,10 @@ const entries = urls.map((url) => {
     }
     process.exit(1);
   }
-  return { url, path, bytes, counted: countsTowardTotal(url) };
+  return { url, path, bytes };
 });
 
-const totalBytes = entries.filter((e) => e.counted).reduce((sum, entry) => sum + entry.bytes, 0);
+const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
 const totalKiB = totalBytes / 1024;
 
 // Self-describing: with the env-var seam set (only ever true under
@@ -179,10 +152,7 @@ console.log(
   `check:precache — ${entries.length} entries (${totalKiB.toFixed(2)} KiB) against a ${CEILING_KIB} KiB ceiling${overrides ? ` [${overrides}]` : ""}`,
 );
 for (const entry of [...entries].sort((a, b) => b.bytes - a.bytes)) {
-  const note = entry.counted
-    ? ""
-    : "  (precached, not sized in the Workbox total — see comment above)";
-  console.log(`  ${(entry.bytes / 1024).toFixed(2)} KiB  ${entry.url}${note}`);
+  console.log(`  ${(entry.bytes / 1024).toFixed(2)} KiB  ${entry.url}`);
 }
 
 // Every check below reports before the script exits, so one run names both an

@@ -124,3 +124,9 @@ is tied to a city — moving is changing those three places, not a migration.
   389.20 kB, precache 899.71 KiB across 25 entries**, unchanged by the sweep. The rise from
   163.92 kB and 677.09 KiB came in over the dashboard redesign's epics (#104 and #117), each PR
   quoting its own before and after. Headroom is **100.29 KiB**.
+
+  **Measured on 2026-10-11 when the ceiling started counting every precached entry
+  ([ADR-0031](adr/0031-the-precache-ceiling-counts-every-precached-entry.md), GH #88): entry chunk
+  439.88 kB, precache 981.06 KiB across 25 entries**, of which 29.49 KiB is the web-manifest icons and
+  `manifest.webmanifest` that Workbox's printed 951.56 KiB leaves out. They were 65.76 KiB before
+  being recompressed in the same change. Headroom is **18.94 KiB**.
