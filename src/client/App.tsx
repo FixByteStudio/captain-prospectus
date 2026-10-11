@@ -9,7 +9,13 @@ import {
   useMatch,
   useNavigate,
 } from "react-router";
-import { LockIcon, MapPinOffIcon, TriangleAlertIcon, type LucideIcon } from "lucide-react";
+import {
+  LockIcon,
+  MapPinOffIcon,
+  TriangleAlertIcon,
+  WifiOffIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { apiFetch } from "./api";
 import { Band, BandBrand, UpdatePrompt } from "./Band";
 import { copy } from "./copy/field";
@@ -194,7 +200,8 @@ function FieldFrame({
 /**
  * DESIGN.md's empty-state pattern (a 64px `secondary` icon tile, one line,
  * one button) reused for the field route's fallback screens: not found,
- * forbidden, and the identity error below. That one carries an action only
+ * forbidden, an admin route on a cached identity, and the identity error below.
+ * That one carries an action only
  * for a revoked session ("Se reconnecter", GH #75); an agent who cannot be
  * identified for any other reason has nowhere useful to be sent.
  */
@@ -285,7 +292,8 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   /** True when the identity came from the cache rather than from the server.
    * Not a network signal — a Worker 500 or a captive portal lands here too —
    * so it must never be read as "offline" (that conflation is the bug
-   * spec-gh-115 removes; see `useOnline` below for the real one). */
+   * spec-gh-115 removes; see `useOnline` below for the real one). The
+   * `/admin/*` fallback below is the one reader that words it that way. */
   const [identityFromCache, setIdentityFromCache] = useState(false);
   /** Bumped to re-run the identity effect once the network is confirmed live
    * for a session that started on a cached identity (spec-gh-115). */
@@ -515,11 +523,24 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
             <Route
               path="/admin/*"
               element={
-                <FieldEmptyState
-                  icon={LockIcon}
-                  message={copy.errors.forbidden}
-                  action={{ to: "/tournee", label: copy.visit.back }}
-                />
+                // A cached identity proves neither role (invariant 10), so it
+                // gets the network's answer, never the permission one
+                // (EXPERIENCE.md § State Patterns, Offline after a reload).
+                // The same sentence shows when `/api/me` failed with the
+                // browser online: that case has no wording of its own yet.
+                identityFromCache ? (
+                  <FieldEmptyState
+                    icon={WifiOffIcon}
+                    message={copy.adminRoute.offline}
+                    action={{ to: "/tournee", label: copy.visit.back }}
+                  />
+                ) : (
+                  <FieldEmptyState
+                    icon={LockIcon}
+                    message={copy.errors.forbidden}
+                    action={{ to: "/tournee", label: copy.visit.back }}
+                  />
+                )
               }
             />
           )}

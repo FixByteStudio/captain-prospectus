@@ -128,6 +128,15 @@ admin screens the moment that re-check lands (spec-gh-115,
 `field/identity.ts`'s `adminAccess`). A session the server already confirmed
 never re-checks — going offline and back costs it nothing.
 
+**On a cached identity, an `/admin/*` route says it needs the network, not
+that access is denied** (GH #209): "Hors ligne. Cette page a besoin du réseau.
+Votre tournée reste accessible.", with "Retour à la tournée", in the field
+band. "Vous n'avez pas accès à cette page." is kept for a role the server
+confirmed. The cached role decides neither: it is no more proof of "agent"
+than of "admin". The same page shows when `/api/me` failed with the browser
+online (a Worker error, a captive portal), where "Hors ligne" is loose; the
+band's strip names that case ("Vérification de votre session…").
+
 The cached identity is a rendering convenience, never proof: the Worker
 re-derives identity on every request from the session (or, in phase 1, the
 verified Access JWT) regardless of what the client claims to be. Its only other effect is that if the identity that
