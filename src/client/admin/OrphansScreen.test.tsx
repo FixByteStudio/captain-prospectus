@@ -169,8 +169,9 @@ describe("OrphansScreen", () => {
     const user = userEvent.setup();
     // The server drops the repaired row, as it does: the toast must survive
     // the row unmounting.
-    const { posts } = render_((sent) =>
-      json({ visits: sent.length > 0 ? [] : [visit("v1")], remaining: 0 }),
+    const { posts } = render_(
+      (sent) => json({ visits: sent.length > 0 ? [] : [visit("v1")], remaining: 0 }),
+      () => json({ visitId: "v1", prospectId: "pa", repaired: true }),
     );
 
     const r = within(await row("lea@example.com"));
@@ -183,6 +184,30 @@ describe("OrphansScreen", () => {
     );
     expect(await screen.findByText(t.attached("Pizza Roma"))).toBeTruthy();
     expect(await screen.findByText(t.empty)).toBeTruthy();
+  });
+
+  it("says the visit went to the survivor when the server followed a merge", async () => {
+    const user = userEvent.setup();
+    render_(queue({ visits: [visit("v1")], remaining: 0 }), () =>
+      json({ visitId: "v1", prospectId: "survivor", repaired: true }),
+    );
+
+    const r = within(await row("lea@example.com"));
+    await user.click(r.getByRole("button", { name: t.attachAria("Pizza Roma", "12 m") }));
+
+    expect(await screen.findByText(t.attachedToSurvivor("Pizza Roma"))).toBeTruthy();
+  });
+
+  it("says the visit was already attached when the server answers a replay", async () => {
+    const user = userEvent.setup();
+    render_(queue({ visits: [visit("v1")], remaining: 0 }), () =>
+      json({ visitId: "v1", prospectId: "pa", repaired: false }),
+    );
+
+    const r = within(await row("lea@example.com"));
+    await user.click(r.getByRole("button", { name: t.attachAria("Pizza Roma", "12 m") }));
+
+    expect(await screen.findByText(t.alreadyAttached)).toBeTruthy();
   });
 
   it("reports a repair the server refused", async () => {

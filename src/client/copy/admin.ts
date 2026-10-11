@@ -750,6 +750,11 @@ export const adminCopy = {
     noPosition:
       "Aucune position enregistrée pour cette visite : aucun prospect à proposer. Si elle ne peut pas être rattachée, supprimez-la.",
     attached: (name: string) => `Visite rattachée à ${name}.`,
+    // The server followed a merge and does not name the survivor, so the
+    // prospect the admin chose is the one name the toast can give.
+    attachedToSurvivor: (name: string) =>
+      `${name} a été fusionné : visite rattachée au prospect qui le remplace.`,
+    alreadyAttached: "Cette visite était déjà rattachée.",
     attachFailed: "Impossible de rattacher cette visite. Réessayez.",
     // The row count the page could not show. Non-zero means look upstream.
     overflow: (n: number) =>
