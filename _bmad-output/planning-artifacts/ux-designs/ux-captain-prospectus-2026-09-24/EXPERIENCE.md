@@ -1,7 +1,7 @@
 ---
 name: Captain Prospectus
 status: final
-updated: 2026-10-10
+updated: 2026-10-12
 sources:
   - .memlog.md
   - DESIGN.md
@@ -9,6 +9,7 @@ sources:
   - docs/glossary.md
   - docs/domains/field-operations.md
   - docs/domains/prospecting.md
+  - docs/domains/identity-access.md
   - docs/design.md (screen sections superseded by this file)
 ---
 
@@ -53,7 +54,7 @@ The sidebar has three groups. A count badge shows the number waiting in a queue.
   - Search looks up prospects by name and opens the matching row in Prospects.
   - The avatar menu holds the email and "Se déconnecter".
   - `[OPEN QUESTION]` Notifications don't have a defined content yet. The À traiter queue already covers relances, visites à rattacher and doublons. Decide what the bell announces before building it.
-- **Dialogs** stack one level deep. The confirmations are: saving a script version, deleting a quarantined visit, and the import result. The session-expired dialog takes that one level from whatever is open rather than stacking on it — an expired session has already made the dialog underneath unactionable (§ State Patterns).
+- **Dialogs** stack one level deep. The confirmations are: saving a script version, deleting a quarantined visit, and the import result.
 
 ### Field
 
@@ -111,7 +112,7 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Area | Strings |
 |---|---|
 | Admin shell | Groups "Pilotage", "Prospects", "Terrain" · avatar menu "Se déconnecter" · search "Rechercher un prospect…" · "Notifications" · "Thème clair" / "Thème sombre" · aria "Ouvrir le menu" / "Réduire le menu" |
-| Admin shell — réseau et session | Offline banner "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." · offline on an admin route after a reload "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." · session dialog "Votre session a expiré" / "Reconnectez-vous pour continuer." The buttons these need — "Se reconnecter", "Retour à la tournée" — and "Vous n'avez pas accès à cette page." are already in `copy.ts`. |
+| Admin shell — réseau et accès | Offline banner "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." · offline on an admin route after a reload "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." The button the second needs — "Retour à la tournée" — and "Vous n'avez pas accès à cette page." are already in `copy.ts`. |
 | Tableau de bord | "Tableau de bord" · "Où en est la prospection." · "7 jours" / "30 jours" / "90 jours" · "Prospects ouverts" · "Visites" · "Convertis" · "Taux de conversion" · "{+12,4 %} vs période précédente" · "Visites dans le temps" · "Pipeline par statut" · "{412} prospects" · "Activité par agent" (columns Agent · Visites · Convertis · À relancer · Prospects ouverts) · "À traiter" · "Relances dues" → "Voir" · "Visites à rattacher" → "Rattacher" · "Doublons" "{3} paires" → "Fusionner" · "Dernières visites" · "Tout voir" |
 | Prospects, Visites | "Exporter en CSV" · Visites strip: "Taux de conversion", "Flyers remis", "Relances dues sous 7 jours", "Agents en tournée" |
 | Field shell | Tabs "Tournée", "Carte", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
@@ -174,7 +175,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Action done / failed | Admin | A Sonner toast at bottom right: "3 prospects assignés", "Version 3 enregistrée et activée.", "L'assignation a échoué. Réessayez." Toasts are for things the admin *did*. |
 | Offline | Admin | A full-width Alert takes the update banner's slot: "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." Panels keep their last-loaded values instead of each flipping to a Load-failed Alert. No button — the 15 s poll retries on its own, and the banner goes as soon as an answer comes back. A network drop while the admin chunk is still loading (ADR-0019: it is not precached) gets the same sentence with "Réessayer". |
 | Offline, after a reload | Admin routes | "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." with "Retour à la tournée", in the field band. A reload with no network can only open the precached field shell (ADR-0019), where `/api/me` is unreachable and the cached identity opens the field shell no matter which role it records. This is not the permission-denied state below, and must not borrow its words. |
-| Session expired | Admin | A blocking dialog, because a write on an expired session looks like it worked: "Votre session a expiré" / "Reconnectez-vous pour continuer." with "Se reconnecter" as its only action. Nothing behind it is usable, so it takes the one dialog level, and Esc and the scrim do not close it. "Se reconnecter" is the field strip's marker navigation, the only one that reaches Access through the precached shell (`identity-access.md`); being a real navigation it loses a half-filled import or script draft, so the dialog interrupts rather than waits. |
+| Session expired | Admin | Any admin query, mutation or CSV export that gets the Worker's 401 opens `/login` at once, so a write on an expired session cannot look like it worked. A half-filled import or script draft is lost without a prompt, and signing in again lands on Tableau de bord, not on the screen the 401 interrupted. This file does not specify `/login`: `docs/design.md` § The login page does. Until Access is gone, its redirect is a separate case (`identity-access.md`). |
 | Not an admin | Admin routes | A signed-in agent gets the field band and an empty state with a lock icon: "Vous n'avez pas accès à cette page." with "Retour à la tournée". The route never renders the admin shell, and the Worker answers 403 on every `/api/admin/*` call whatever the client renders (invariant 10, `identity-access.md`). |
 | New build available | Admin, Field | A banner: "Une nouvelle version est disponible." with "Plus tard" and "Mettre à jour". The admin offline banner takes this slot ahead of it; they never both apply, since a build cannot be fetched offline. |
 | Import running | Import › Aperçu & validation | The progress card shows "Import en cours", "{50} / {124}" and a bar. "Retour" and "Importer {124} lignes" are disabled until the server answers the last batch. Batches of 250 rows (invariant 13). The page can't be left without a browser confirmation. |
@@ -210,7 +211,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 - **Admin is pointer- and keyboard-friendly.**
   - ⌘K / Ctrl+K opens search.
   - Tab order follows reading order.
-  - Esc closes the top dialog, sheet or menu — except the session-expired dialog, which has nothing usable behind it (§ State Patterns).
+  - Esc closes the top dialog, sheet or menu.
   - Row checkboxes and the row menu are reachable from the keyboard.
   - Drawing a map zone needs a pointer, and the screen says so. The CSV path is the keyboard-accessible alternative.
 - **Motion only where something changed**: the toolbar swap, a new row settling, the swipe reveal, the sheet sliding up. Under `prefers-reduced-motion` all of these are instant.
@@ -226,7 +227,7 @@ Visual contrast is in `DESIGN.md` and asserted in `palette.test.ts`.
 - The selected outcome card, answer or chip also shows a check icon, not just a gold fill.
 - Every icon-only button has an aria-label from `copy.ts` (menu toggle, search, notifications, theme, re-centre, stepper − / +).
 - The sync strip is an `aria-live="polite"` region. Session expired and update required are `assertive`.
-- On the admin side, the offline banner is an `aria-live="polite"` region too, announced once when it appears and once when it goes. The session-expired dialog is an `alertdialog` that takes focus and keeps it (§ State Patterns).
+- On the admin side, the offline banner is an `aria-live="polite"` region too, announced once when it appears and once when it goes.
 - New feed rows are announced politely, at most one announcement per poll.
 - Charts come with a text equivalent: the Pipeline list already *is* text, and "Visites dans le temps" gets a visually hidden summary table.
 - **Stacked segments are told apart by more than hue.** Each series is 3:1 against the card (`{colors.outcome-no-contact}` and the rest — see DESIGN.md), and neighbouring segments are separated by a 1px card-coloured stroke plus an in-segment count. Series are *not* 3:1 against one another and cannot be: five such series need an 81:1 luminance range, sRGB has 21:1. The stroke and the count are what satisfy WCAG 1.4.11 here, so neither is decorative and neither may be dropped for density. Each series' measured ratio is tabulated in [`mockups/key-a1-outcome-chart.html`](mockups/key-a1-outcome-chart.html).
