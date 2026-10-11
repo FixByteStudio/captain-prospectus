@@ -319,7 +319,7 @@ export function VisitScreen() {
         <FormItem className="mt-6 gap-0">
           <FormLabel className="text-base font-medium">{copy.visit.notes}</FormLabel>
           <FormControl>
-            <Textarea className="mt-1.5 text-base md:text-base" rows={3} {...field} />
+            <Textarea className="mt-1.5" rows={3} {...field} />
           </FormControl>
           <FormMessage className="mt-1.5">
             {errors.notes?.type === "requiredForOther"
