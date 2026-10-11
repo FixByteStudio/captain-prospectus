@@ -52,4 +52,19 @@ describe("dedupeKey", () => {
     expect(dedupeKey({ name: "Le Bistrot" })).toBe("name:le-bistrot");
     expect(dedupeKey({ name: "Pizza Roma" })).not.toBe(dedupeKey({ name: "Le Bistrot" }));
   });
+
+  it("keeps two places named only in a non-Latin script apart", () => {
+    const at = { lat: 50.8466, lng: 4.3528 };
+    expect(dedupeKey({ name: "餃子館", ...at })).not.toBe(dedupeKey({ name: "مطعم", ...at }));
+    expect(dedupeKey({ name: "餃子館" })).not.toBe(dedupeKey({ name: "مطعم" }));
+    expect(dedupeKey({ name: "餃子館", address: "東京" })).toBe("addr:餃子館:東京");
+  });
+
+  it("still merges two imports of the same non-Latin name", () => {
+    expect(dedupeKey({ name: "  Ресторан  " })).toBe(dedupeKey({ name: "ресторан" }));
+  });
+
+  it("leaves the key of a name that has a Latin letter unchanged", () => {
+    expect(dedupeKey({ name: "Pho 越南", lat: 50.8466, lng: 4.3528 })).toBe("geo:pho:50.847:4.353");
+  });
 });
