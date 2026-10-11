@@ -125,6 +125,7 @@ describe("GET /api/admin/visits/orphaned", () => {
     const body = (await (await call("/api/admin/visits/orphaned")).json()) as OrphansResponse;
     const [row] = body.visits;
 
+    expect(row?.hasPosition).toBe(true);
     expect(row?.candidates.map((cand) => cand.id)).toEqual([near, far]);
     expect(row?.candidates[0]?.distanceM).toBeLessThan(row?.candidates[1]?.distanceM ?? 0);
   });
@@ -134,6 +135,16 @@ describe("GET /api/admin/visits/orphaned", () => {
     await quarantine({ lat: null, lng: null });
 
     const body = (await (await call("/api/admin/visits/orphaned")).json()) as OrphansResponse;
+    expect(body.visits[0]?.hasPosition).toBe(false);
+    expect(body.visits[0]?.candidates).toEqual([]);
+  });
+
+  it("keeps hasPosition when no live prospect has coordinates to rank against", async () => {
+    await seedProspect(crypto.randomUUID(), { lat: null, lng: null });
+    await quarantine({ lat: 50.85, lng: 4.35 });
+
+    const body = (await (await call("/api/admin/visits/orphaned")).json()) as OrphansResponse;
+    expect(body.visits[0]?.hasPosition).toBe(true);
     expect(body.visits[0]?.candidates).toEqual([]);
   });
 

@@ -1725,6 +1725,7 @@ adminRoutes.get("/visits/orphaned", async (c) => {
       followUpAt: row.followUpAt,
       notes: row.notes,
       prospectName: named?.name ?? null,
+      hasPosition: at !== null,
       candidates,
     };
   });

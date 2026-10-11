@@ -256,7 +256,9 @@ function OrphanRow({
             ))}
           </>
         ) : (
-          <p className="text-muted-foreground min-w-0 flex-1 text-xs">{copy.orphans.noPosition}</p>
+          <p className="text-muted-foreground min-w-0 flex-1 text-xs">
+            {visit.hasPosition ? copy.orphans.noCandidates : copy.orphans.noPosition}
+          </p>
         )}
 
         {/* Far right, away from the attach buttons: a misclick here cannot be

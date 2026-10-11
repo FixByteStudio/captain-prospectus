@@ -749,6 +749,9 @@ export const adminCopy = {
     // left is named rather than implied.
     noPosition:
       "Aucune position enregistrée pour cette visite : aucun prospect à proposer. Si elle ne peut pas être rattachée, supprimez-la.",
+    // The visit has a position, but no live prospect has one to rank against.
+    noCandidates:
+      "Aucun prospect localisé à proposer pour cette visite. Si elle ne peut pas être rattachée, supprimez-la.",
     attached: (name: string) => `Visite rattachée à ${name}.`,
     // The server followed a merge and does not name the survivor, so the
     // prospect the admin chose is the one name the toast can give.

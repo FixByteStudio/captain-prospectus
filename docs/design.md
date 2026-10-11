@@ -1109,7 +1109,9 @@ one `Surface` holding the rows.
   order, nearest first. There is no prospect picker in this app and this
   screen does not earn one. A visit with no recorded position gets no
   candidates, and the row says so in words rather than showing an arbitrary
-  list that would invite a wrong answer.
+  list that would invite a wrong answer. A visit with a position can still
+  get none when no live prospect has one; `hasPosition` lets the row say
+  that instead of blaming the visit (GH #197).
 - **Distance is inside the button.** It is the reason to press *that* button,
   so it belongs inside the target, not three columns away.
 - **Every row action is secondary, never gold.** Candidates are repeated row
