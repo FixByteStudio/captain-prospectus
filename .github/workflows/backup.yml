@@ -13,6 +13,10 @@ on:
   #   - cron: "17 3 * * 1" # Mondays, 03:17 UTC
   workflow_dispatch:
 
+# Least privilege (#290): checkout is the only step that uses GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   export:
     runs-on: ubuntu-latest
