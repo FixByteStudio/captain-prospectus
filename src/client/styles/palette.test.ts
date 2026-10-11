@@ -199,6 +199,7 @@ describe("the token set", () => {
     "band-accent",
     "band-border",
     "band-strip",
+    "overlay",
     "status-new",
     "status-assigned",
     "status-interested",
