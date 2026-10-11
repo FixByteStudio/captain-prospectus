@@ -299,6 +299,13 @@ export const IMPORT_LOG_LIST_SIZE = 5;
  */
 export const IMPORT_LOG_SWEEP_BATCH = 500;
 
+/**
+ * Prospects the daily sweep gives a `name_search` per run (ADR-0032), for the
+ * same reason as RETENTION_BATCH. Only rows written before the column existed,
+ * or inserted by the previous Worker during a deploy, are ever null.
+ */
+export const NAME_SEARCH_FOLD_BATCH = 500;
+
 /** Candidate duplicate pairs returned in one sweep. */
 export const DUPLICATES_PAGE_SIZE = 100;
 

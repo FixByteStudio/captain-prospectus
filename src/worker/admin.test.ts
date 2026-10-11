@@ -286,7 +286,7 @@ describe("GET /api/admin/prospects", () => {
     expect(await names("q=bistro")).toEqual({ names: ["Le Bistrot du Coin"], total: 1 });
   });
 
-  it("folds case, ASCII-only", async () => {
+  it("folds ASCII case", async () => {
     await importRows([{ name: "Le Bistrot du Coin", lat: 50.84, lng: 4.35 }]);
     expect(await names("q=BISTRO")).toEqual({ names: ["Le Bistrot du Coin"], total: 1 });
   });
@@ -336,21 +336,90 @@ describe("GET /api/admin/prospects", () => {
     expect(response.status).toBe(400);
   });
 
-  it("folds ASCII case only, so an accented character must match exactly", async () => {
+  it("folds accents and case on both sides (ADR-0032)", async () => {
     await importRows([
       { name: "Café du Port", lat: 50.84, lng: 4.35 },
       { name: "CAFÉ DU MIDI", lat: 50.85, lng: 4.36 },
+      { name: "Chez Marcel", lat: 50.86, lng: 4.37 },
     ]);
+    const both = { names: ["CAFÉ DU MIDI", "Café du Port"], total: 2 };
 
-    expect(await names("q=café")).toEqual({ names: ["Café du Port"], total: 1 });
-    expect(await names("q=CAFÉ")).toEqual({ names: ["CAFÉ DU MIDI"], total: 1 });
-    // Same accented letter, opposite case: neither side folds it, so no match.
-    expect(await names("q=Café DU MIDI")).toEqual({ names: [], total: 0 });
-    expect(await names("q=cafe")).toEqual({ names: [], total: 0 });
-    expect(await names("q=du")).toEqual({
-      names: ["CAFÉ DU MIDI", "Café du Port"],
-      total: 2,
+    expect(await names("q=cafe")).toEqual(both);
+    expect(await names("q=" + encodeURIComponent("café"))).toEqual(both);
+    expect(await names("q=" + encodeURIComponent("CAFÉ"))).toEqual(both);
+    expect(await names("q=" + encodeURIComponent("Café DU MIDI"))).toEqual({
+      names: ["CAFÉ DU MIDI"],
+      total: 1,
     });
+  });
+
+  it("matches a ligature, a Vietnamese name and a non-Latin one", async () => {
+    await importRows([
+      { name: "Le Bœuf Couronné", lat: 50.84, lng: 4.35 },
+      { name: "Phở 75", lat: 50.85, lng: 4.36 },
+      { name: "餃子館", lat: 50.86, lng: 4.37 },
+      { name: "Café du Port", lat: 50.87, lng: 4.38 },
+    ]);
+    const one = (name: string) => ({ names: [name], total: 1 });
+
+    expect(await names("q=boeuf")).toEqual(one("Le Bœuf Couronné"));
+    expect(await names("q=" + encodeURIComponent("bœuf"))).toEqual(one("Le Bœuf Couronné"));
+    expect(await names("q=" + encodeURIComponent("BŒUF"))).toEqual(one("Le Bœuf Couronné"));
+    expect(await names("q=pho")).toEqual(one("Phở 75"));
+    expect(await names("q=" + encodeURIComponent("餃子"))).toEqual(one("餃子館"));
+  });
+
+  it("matches a needle of combining marks alone raw, never every row", async () => {
+    await importRows([
+      // Decomposed: "e" then a combining acute, as some spreadsheets store it.
+      { name: "Cafe\u0301 du Port", lat: 50.84, lng: 4.35 },
+      { name: "Chez Marcel", lat: 50.85, lng: 4.36 },
+      { name: "Le Bistrot du Coin", lat: 50.86, lng: 4.37 },
+    ]);
+    const decomposed = { names: ["Cafe\u0301 du Port"], total: 1 };
+
+    expect(await names("q=" + encodeURIComponent("\u0301"))).toEqual(decomposed);
+    expect(await names("q=" + encodeURIComponent("\u0301 \u0301"))).toEqual({
+      names: [],
+      total: 0,
+    });
+  });
+
+  it("matches a row not folded yet the way it did before", async () => {
+    await importRows([{ name: "Café du Port", lat: 50.84, lng: 4.35 }]);
+    // As the previous Worker wrote it, before the nightly sweep reaches it.
+    await getDb(env.DB).update(prospects).set({ nameSearch: null });
+
+    expect(await names("q=" + encodeURIComponent("Café"))).toEqual({
+      names: ["Café du Port"],
+      total: 1,
+    });
+    expect(await names("q=PORT")).toEqual({ names: ["Café du Port"], total: 1 });
+    expect(await names("q=cafe")).toEqual({ names: [], total: 0 });
+  });
+
+  it("re-folds the name when a re-import renames the place", async () => {
+    await importRows([{ name: "Chez Marcel", sourceRef: "node/1", lat: 50.84, lng: 4.35 }], "osm");
+    await importRows(
+      [{ name: "Brasserie Étoile", sourceRef: "node/1", lat: 50.84, lng: 4.35 }],
+      "osm",
+    );
+
+    expect(await names("q=etoile")).toEqual({ names: ["Brasserie Étoile"], total: 1 });
+    expect(await names("q=marcel")).toEqual({ names: [], total: 0 });
+  });
+
+  it("re-folds the name when PATCH renames the prospect", async () => {
+    await importRows([{ name: "Chez Marcel", lat: 50.84, lng: 4.35 }]);
+    const [row] = await getDb(env.DB).select().from(prospects);
+    if (!row) throw new Error("the import wrote nothing");
+    expect(row.nameSearch).toBe("chez marcel");
+
+    const renamed = await patch(`/api/admin/prospects/${row.id}`, { name: "Crêperie Élise" });
+    expect(renamed.status).toBe(200);
+
+    expect(await names("q=creperie%20elise")).toEqual({ names: ["Crêperie Élise"], total: 1 });
+    expect(await names("q=marcel")).toEqual({ names: [], total: 0 });
   });
 
   it("treats % and _ in q as literal characters, not wildcards", async () => {

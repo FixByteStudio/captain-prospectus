@@ -594,6 +594,19 @@ describe("POST /api/agent/sync", () => {
     expect(await db.select().from(prospects)).toHaveLength(1);
   });
 
+  it("stores a field prospect's folded name for search (ADR-0032)", async () => {
+    const id = crypto.randomUUID();
+    const response = await sync({
+      prospects: [
+        { id, name: "Crêperie Élise", type: "restaurant", createdAt: Date.now() } as never,
+      ],
+    });
+    expect(response.status).toBe(200);
+
+    const [row] = await getDb(env.DB).select().from(prospects).where(eq(prospects.id, id));
+    expect(row?.nameSearch).toBe("creperie elise");
+  });
+
   it("inserts more rows than fit in one D1 statement", async () => {
     // Regression: the per-row parameter count used to be hand-counted and was
     // wrong, so any batch large enough to need chunking failed outright

@@ -531,8 +531,8 @@ chrome a hand-spelled split panel used to need.
   button. No prospects at all: « Aucun prospect. Importez un CSV pour
   commencer. » with « Importer un CSV ». Filters or a search matching nothing:
   « Aucun prospect ne correspond à ces filtres. » with « Effacer les
-  filtres »; when a search is set, the sentence names it and says accents
-  count, since `q` folds ASCII case only ([api.md](api.md)).
+  filtres »; when a search is set, the sentence names it. Accents and case
+  do not count ([api.md](api.md)).
 
 ### Doublons
 

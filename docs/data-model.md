@@ -20,6 +20,7 @@ erDiagram
     text source "csv|osm|google|field"
     text source_ref "e.g. osm node/123, google/ChIJ…"
     text dedupe_key UK
+    text name_search "foldForSearch(name), what q matches; null until folded"
     text status "new|assigned|follow_up|interested|converted|rejected"
     int status_set_at "last manual status change; null = visits decide"
     text assigned_to "agent email"
@@ -237,6 +238,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own
   status and its own dedupe key, which is what makes a merge reversible
   ([prospecting](domains/prospecting.md#merging)).
+- **`name_search` is `foldForSearch(name)`, written with `name` by every write** (import, PATCH, field prospect, dev seed). It is null only for a row written before the column existed or inserted by the previous Worker during a deploy; the daily sweep folds those, and `q` matches them the old way meanwhile. A rename by the previous Worker in that window leaves a stale fold the sweep does not see ([ADR-0032](adr/0032-a-stored-folded-name-for-search.md)). No index: a `%needle%` cannot use one.
 - **Every query that lists live prospects filters `merged_into IS NULL`.** That is the admin list and
   its count, the agent's sync pull, and the duplicate sweep. The import instead *follows* the
   pointer: a key landing on an absorbed row updates the survivor.

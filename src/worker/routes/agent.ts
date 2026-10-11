@@ -11,6 +11,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { MIN_CLIENT_VERSION, VISIT_HISTORY_LIMIT } from "../../shared/constants";
 import { chunk } from "../../shared/chunk";
 import { dedupeKey } from "../../shared/dedupe";
+import { foldForSearch } from "../../shared/search";
 import { prospectIdParamSchema, syncRequestSchema } from "../../shared/schemas";
 import type { SyncRequest, SyncResponse, VisitHistoryResponse } from "../../shared/schemas";
 import type { OrphanReason } from "../../shared/constants";
@@ -73,6 +74,7 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
     const rows: NewProspectRow[] = body.prospects.map((p) => ({
       id: p.id,
       name: p.name,
+      nameSearch: foldForSearch(p.name),
       type: p.type,
       lat: p.lat ?? null,
       lng: p.lng ?? null,

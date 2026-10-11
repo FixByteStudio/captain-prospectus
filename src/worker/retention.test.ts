@@ -241,6 +241,7 @@ describe("runRetention", () => {
       sessionsDeleted: 0,
       loginAttemptsDeleted: 0,
       importsRedacted: 0,
+      namesFolded: 0,
     });
     expect(line).toContain("3 visit(s)");
     expect(line).toContain("2026-06-25");
@@ -369,6 +370,52 @@ describe("the import log sweep (ADR-0030)", () => {
     expect(result.importsRedacted).toBe(0);
     expect(result.redacted).toBe(1);
     expect(error).toHaveBeenCalledWith("import log sweep failed", "Error");
+    error.mockRestore();
+  });
+});
+
+describe("the name_search fold (ADR-0032)", () => {
+  beforeEach(async () => {
+    const db = getDb(env.DB);
+    await db.delete(visits);
+    await db.delete(prospects);
+  });
+
+  it("folds a name still missing name_search in the same run, and logs it", async () => {
+    const db = getDb(env.DB);
+    await seedProspect("p-fold");
+    await db.update(prospects).set({ name: "Café Étoile" }).where(eq(prospects.id, "p-fold"));
+
+    const result = await runRetention(db, NOW);
+
+    expect(result.namesFolded).toBe(1);
+    expect(describeSweep(result)).toContain("folded 1 prospect name(s)");
+    const [row] = await db.select().from(prospects).where(eq(prospects.id, "p-fold"));
+    expect(row?.nameSearch).toBe("cafe etoile");
+  });
+
+  it("failing logs by name and does not stop the visit redaction", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await seedProspect("p-fold");
+    await seedVisit("p-fold", { receivedAt: NOW - RETENTION_MS - 1, notes: "secret" });
+    const broken = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("name_search")) throw new Error("prospects unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const result = await runRetention(getDb(broken), NOW);
+
+    expect(result.namesFolded).toBe(0);
+    expect(result.redacted).toBe(1);
+    expect(error).toHaveBeenCalledWith("name search fold failed", "Error");
     error.mockRestore();
   });
 });

@@ -65,8 +65,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   and there is no index on `lat`/`lng`, so each search scans the whole table. At 3,000 prospects and 30
   searches a day that is 90 k rows, about 2 % of the daily limit. An index on `lat` is the fix if it ever
   is not.
-- A second, similar exception: `GET /api/admin/prospects`'s `q` (GH #176) is a `%needle%` `LIKE` on `name`,
-  and there is no index on `name` — a leading wildcard would bypass one anyway, so an index would not remove
+- A second, similar exception: `GET /api/admin/prospects`'s `q` (GH #176, #188) is a `%needle%` `LIKE` on
+  `name_search`, and there is no index on it — a leading wildcard would bypass one anyway, so an index would not remove
   the scan. The list's own `WHERE` runs twice per search, once for the page of rows and once for `total`'s
   `count()`, so a search costs that scan twice. Accepted at this project's scale (two agents, one city); it is
   the reason `q` is not offered on the 500-row visits feed as well (INVARIANT 13).
@@ -151,6 +151,9 @@ sweep is bounded to `RETENTION_BATCH` (500) rows written per run, which keeps it
 the D1 daily write quota even on the first run after a backlog — the backlog drains over a
 few days rather than in one statement.
 The same run then deletes expired map-cache rows, bounded to `MAP_CACHE_EVICT_BATCH` (500).
+It also folds up to `NAME_SEARCH_FOLD_BATCH` (500) prospect names still missing `name_search`
+([ADR-0032](adr/0032-a-stored-folded-name-for-search.md)): the accented backlog once, then only rows the
+previous Worker wrote during a deploy. When none are left it costs one scan of `prospects`, a few thousand reads.
 It also deletes expired `login_codes` and `sessions` and finished-window `login_attempts` rows, each
 table bounded to `AUTH_SWEEP_BATCH` (500) per run: a flood of failed logins can write a day's request
 quota of `login_attempts` rows, and deleting them all at once could use the D1 write quota. There is
