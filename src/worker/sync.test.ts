@@ -492,6 +492,64 @@ describe("POST /api/agent/sync", () => {
     expect(await db.select().from(visitsOrphaned)).toHaveLength(0);
   });
 
+  /**
+   * #102. Deriving status took two D1 statements per distinct prospect, so a
+   * full batch was ~400 round trips in one request. It is now one statement
+   * per chunk of prospects; this pins both the result and that it stays a
+   * handful, on a real D1 so the chunk's bound parameters are checked too.
+   */
+  it("derives a full batch of distinct prospects in a handful of statements", async () => {
+    const db = getDb(env.DB);
+    const ids = Array.from({ length: SYNC_VISITS_PER_REQUEST }, () => crypto.randomUUID());
+    await seedProspects(ids);
+    const outcomeOf = (i: number): Outcome => OUTCOMES[i % OUTCOMES.length] as Outcome;
+
+    const statements: string[] = [];
+    const counted = new Proxy(env.DB, {
+      get(target, key) {
+        if (key === "prepare")
+          return (query: string) => (statements.push(query), target.prepare(query));
+        const value: unknown = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const now = Date.now();
+    const response = await workerFetch(
+      "http://localhost/api/agent/sync",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientVersion: 1,
+          prospects: [],
+          visits: ids.map((prospectId, i) => ({
+            id: crypto.randomUUID(),
+            prospectId,
+            visitedAt: now - i,
+            flyerGiven: false,
+            outcome: outcomeOf(i),
+            answers: {},
+            ...(outcomeOf(i) === "follow_up" && { followUpAt: now + 86_400_000 }),
+          })),
+        }),
+      },
+      { DB: counted },
+    );
+
+    expect(response.status).toBe(200);
+    const updates = statements.filter((q) => /^update "prospects"/i.test(q));
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates.length).toBeLessThanOrEqual(3);
+    const rows = await db.select().from(prospects);
+    expect(rows).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    for (const row of rows) {
+      const i = ids.indexOf(row.id);
+      expect(row.status).toBe(OUTCOME_TO_STATUS[outcomeOf(i)]);
+      expect(row.lastVisitAt).toBe(now - i);
+      expect(row.nextVisitAt).toBe(outcomeOf(i) === "follow_up" ? now + 86_400_000 : null);
+    }
+  });
+
   it("returns the existing prospect's id when a field prospect already exists", async () => {
     // Same name and position as the seeded prospect, so the dedupe key collides.
     const db = getDb(env.DB);

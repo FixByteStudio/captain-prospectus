@@ -283,9 +283,7 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
   // ---- 3. Derive prospect status from the newly stored visits (INVARIANT 3).
   // Quarantined visits are deliberately absent from touchedProspectIds: they
   // have no settled prospect yet, and derive nothing until repaired.
-  for (const prospectId of touchedProspectIds) {
-    await deriveProspectStatus(db, prospectId, now);
-  }
+  await deriveProspectStatus(db, touchedProspectIds, now);
 
   // ---- 3b. The agent's latest reading (ADR-0028). Active agents only: an
   // admin walking a round from the field route stores nothing. Re-checks
