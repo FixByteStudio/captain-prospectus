@@ -8,7 +8,7 @@
  * Everything in this file is pure. The route does the I/O.
  */
 import { OVERPASS_CANDIDATES_LIMIT, SHORT_TEXT_MAX, type ProspectType } from "../shared/constants";
-import type { FoundPlace } from "../shared/schemas";
+import type { FoundPlace, Vertex } from "../shared/schemas";
 import { sha256Hex } from "./hex";
 
 /**
@@ -25,9 +25,6 @@ export const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
  */
 export const OVERPASS_USER_AGENT =
   "CaptainProspectus/0.1 (+https://github.com/FixbyteStudio/captain-prospectus)";
-
-/** `[lat, lng]`, as the wire contract sends it. */
-export type Vertex = readonly [number, number];
 
 /**
  * Five decimals is ~1 m — far below the precision anyone can draw with a mouse,

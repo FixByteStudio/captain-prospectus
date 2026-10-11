@@ -10,8 +10,8 @@ import {
   edgePoint,
   isFull,
   type Circle,
-  type Vertex,
 } from "./map";
+import type { Vertex } from "../../../shared/schemas";
 
 /** Which shape the canvas draws — a polygon for Overpass, a circle for Google. */
 export type DrawMode = "polygon" | "circle";

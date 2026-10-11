@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { DAY_MS } from "../../../shared/constants";
-import type { AreaCandidate, AreaSearchResponse, ImportRow } from "../../../shared/schemas";
+import { DAY_MS, HOUR_MS } from "../../../shared/constants";
+import type { AreaCandidate, AreaSearchResponse, ImportRow, Vertex } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { TYPE_LABELS, copy } from "../../copy";
 import { formatCount } from "../../format";
@@ -25,7 +25,7 @@ import {
   moveVertex,
   removeLastVertex,
 } from "./map";
-import type { Circle, Vertex } from "./map";
+import type { Circle } from "./map";
 import { useOverpassImport, usePlacesImport, type ImportLogFacts } from "../queries";
 
 /** The two map providers. Not `Source`: CSV is not something you draw. */
@@ -370,7 +370,7 @@ export function MapStep({
 function cachedLine(cachedAt: number | undefined): string {
   if (cachedAt === undefined) return copy.map.results.cached;
   const ageMs = Math.max(0, Date.now() - cachedAt);
-  const hours = Math.floor(ageMs / (60 * 60 * 1000));
+  const hours = Math.floor(ageMs / HOUR_MS);
   const days = Math.floor(ageMs / DAY_MS);
   return copy.map.results.cachedAge(days, hours);
 }

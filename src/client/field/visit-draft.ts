@@ -258,7 +258,7 @@ export function toVisit(
   if (parsed.success) return { ok: true, visit: parsed.data };
 
   // The shared schema refused something the checks above did not catch — a
-  // note past 2000 characters, most likely. Map it back to a control rather
+  // note past LONG_TEXT_MAX characters, most likely. Map it back to a control rather
   // than showing a zod message, which would be English and mention a path.
   for (const issue of parsed.error.issues) {
     const field = issue.path[0];

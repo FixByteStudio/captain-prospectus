@@ -13,8 +13,8 @@ import {
   radiusBetween,
   removeLastVertex,
   type Circle,
-  type Vertex,
 } from "./map";
+import type { Vertex } from "../../../shared/schemas";
 import {
   PLACES_RADIUS_MAX_M,
   PLACES_RADIUS_MIN_M,

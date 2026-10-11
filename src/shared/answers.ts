@@ -9,12 +9,8 @@
  * Pure module: no DOM, no Worker APIs (CLAUDE.md).
  */
 import * as z from "zod/mini";
-import { QUESTION_TYPES } from "./constants";
+import { LONG_TEXT_MAX, QUESTION_OPTIONS_MAX, QUESTION_TYPES } from "./constants";
 import type { Question } from "./schemas";
-
-/** Same cap as `longText` in schemas.ts, which `answersSchema` also applies. */
-const MAX_TEXT = 2000;
-const MAX_OPTIONS = 30;
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(QUESTION_TYPES);
 
@@ -58,11 +54,11 @@ function answerSchemaFor(question: Question, mustAnswer: boolean) {
     case "single":
       return z.enum(options);
     case "multi": {
-      const chosen = z.array(z.enum(options)).check(z.maxLength(MAX_OPTIONS));
+      const chosen = z.array(z.enum(options)).check(z.maxLength(QUESTION_OPTIONS_MAX));
       return mustAnswer ? chosen.check(z.minLength(1)) : chosen;
     }
     case "text": {
-      const text = z.string().check(z.trim(), z.maxLength(MAX_TEXT));
+      const text = z.string().check(z.trim(), z.maxLength(LONG_TEXT_MAX));
       return mustAnswer ? text.check(z.minLength(1)) : text;
     }
     case "number":
