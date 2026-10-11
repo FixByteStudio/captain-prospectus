@@ -18,23 +18,17 @@ import { afterEach, describe, expect, it } from "vitest";
 const SCRIPT = fileURLToPath(new URL("./check-precache.mjs", import.meta.url));
 
 /**
- * A throwaway root with dist/client/sw.js and, optionally, vite.config.ts.
+ * A throwaway root with dist/client/sw.js.
  * `chunkModules` is dist/client-chunk-modules.json: by default every fixture
  * file with no modules, `null` to leave it out.
  */
-function makeFixture({ swBody, viteGlobPatterns, files = {}, chunkModules } = {}) {
+function makeFixture({ swBody, files = {}, chunkModules } = {}) {
   const root = mkdtempSync(join(tmpdir(), "check-precache-"));
   const distClient = join(root, "dist", "client");
   mkdirSync(distClient, { recursive: true });
 
   if (swBody !== undefined) {
     writeFileSync(join(distClient, "sw.js"), `precacheAndRoute([${swBody}],{})`);
-  }
-  if (viteGlobPatterns) {
-    writeFileSync(
-      join(root, "vite.config.ts"),
-      `export default { workbox: { globPatterns: ["${viteGlobPatterns}"] } };`,
-    );
   }
   for (const [name, bytes] of Object.entries(files)) {
     mkdirSync(dirname(join(distClient, name)), { recursive: true });
@@ -68,23 +62,34 @@ describe("check-precache.mjs", () => {
   it("exits 0 and prints the total when under the ceiling", () => {
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null},{url:"b.css",revision:"x"},{url:"c.png",revision:"y"}',
-      viteGlobPatterns: "**/*.{js,css}",
-      // 1 KiB + 1 KiB counted; c.png (not in globPatterns) is precached but
-      // uncounted, same as the real manifest icons (see the script's comment).
-      files: { "a.js": 1024, "b.css": 1024, "c.png": 5000 },
+      files: { "a.js": 1024, "b.css": 1024, "c.png": 1024 },
     });
     roots.push(root);
 
     const result = run(root, { ceilingKiB: 1000 });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("3 entries (2.00 KiB)");
+    expect(result.stdout).toContain("3 entries (3.00 KiB)");
+  });
+
+  it("counts the web-manifest icons and manifest.webmanifest, which Workbox's own total leaves out", () => {
+    // GH #88, ADR-0031: a phone downloads them on install, so the ceiling sees them.
+    const root = makeFixture({
+      swBody:
+        '{url:"a.js",revision:null},{url:"icon-512.png",revision:"y"},{url:"manifest.webmanifest",revision:"z"}',
+      files: { "a.js": 1024, "icon-512.png": 1024, "manifest.webmanifest": 1024 },
+    });
+    roots.push(root);
+
+    const result = run(root, { ceilingKiB: 2 });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("3.00 KiB exceeds the 2 KiB ceiling");
   });
 
   it("exits non-zero and still prints the total when over the ceiling", () => {
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null},{url:"b.css",revision:"x"}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "a.js": 1024, "b.css": 1024 },
     });
     roots.push(root);
@@ -116,16 +121,6 @@ describe("check-precache.mjs", () => {
     expect(result.stderr).toContain("lists no entries");
   });
 
-  it("exits non-zero when vite.config.ts has no globPatterns to size against", () => {
-    const root = makeFixture({ swBody: '{url:"a.js",revision:null}', files: { "a.js": 1024 } });
-    roots.push(root);
-
-    const result = run(root);
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/no vite\.config\.ts|no globPatterns/);
-  });
-
   it("exits non-zero when sw.js holds no precacheAndRoute call at all", () => {
     const root = mkdtempSync(join(tmpdir(), "check-precache-"));
     mkdirSync(join(root, "dist", "client"), { recursive: true });
@@ -142,7 +137,6 @@ describe("check-precache.mjs", () => {
     // A broken build, not a precache problem — and never a raw ENOENT stack.
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null},{url:"gone.js",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "a.js": 1024 },
     });
     roots.push(root);
@@ -158,7 +152,6 @@ describe("check-precache.mjs", () => {
     // false, so a typo'd ceiling would report success.
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "a.js": 1024 },
     });
     roots.push(root);
@@ -176,7 +169,6 @@ describe("check-precache.mjs", () => {
     // default moved. 999 KiB, just under it.
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',
-      viteGlobPatterns: "**/*.{js}",
       files: { "a.js": 999 * 1024 },
     });
     roots.push(root);
@@ -191,7 +183,6 @@ describe("check-precache.mjs", () => {
     // The mirror case, 1001 KiB: over the default with nothing set.
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',
-      viteGlobPatterns: "**/*.{js}",
       files: { "a.js": 1001 * 1024 },
     });
     roots.push(root);
@@ -207,7 +198,6 @@ describe("check-precache.mjs", () => {
     // a plausible subtotal under the ceiling.
     const root = makeFixture({
       swBody: "{url:\"a.js\",revision:null},{url:'b.js',revision:null}",
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "a.js": 1024, "b.js": 1024 },
     });
     roots.push(root);
@@ -223,7 +213,6 @@ describe("check-precache.mjs", () => {
     // ceiling. Here it is 2 KiB, far under it.
     const root = makeFixture({
       swBody: '{url:"assets/index-a1.js",revision:null},{url:"assets/index-a1.css",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "assets/index-a1.js": 1024, "assets/index-a1.css": 1024 },
       chunkModules: {
         "assets/index-a1.js": ["react", "@tanstack/react-query", "src/client/App.tsx"],
@@ -243,7 +232,6 @@ describe("check-precache.mjs", () => {
     // GH #20: a field module importing ../copy instead of ../copy/field.
     const root = makeFixture({
       swBody: '{url:"assets/constants-a1.js",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "assets/constants-a1.js": 1024 },
       chunkModules: {
         "assets/constants-a1.js": [
@@ -267,7 +255,6 @@ describe("check-precache.mjs", () => {
     // GH #20: copy.ts spreads the admin copy, so it must stay behind AdminApp too.
     const root = makeFixture({
       swBody: '{url:"assets/constants-a1.js",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "assets/constants-a1.js": 1024 },
       chunkModules: { "assets/constants-a1.js": ["src/client/copy.ts"] },
     });
@@ -283,7 +270,6 @@ describe("check-precache.mjs", () => {
   it("reports both the ceiling and the leak in one run", () => {
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',
-      viteGlobPatterns: "**/*.{js}",
       files: { "a.js": 2048 },
       chunkModules: { "a.js": ["cmdk"] },
     });
@@ -300,7 +286,6 @@ describe("check-precache.mjs", () => {
     // AdminApp-*.js is in globIgnores (ADR-0019), so it is absent from sw.js.
     const root = makeFixture({
       swBody: '{url:"assets/index-a1.js",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "assets/index-a1.js": 1024, "assets/AdminApp-b2.js": 1024 },
       chunkModules: {
         "assets/index-a1.js": ["react", "src/client/admin/status.ts"],
@@ -318,7 +303,6 @@ describe("check-precache.mjs", () => {
     // Fails closed: without the map the leak check would check nothing.
     const root = makeFixture({
       swBody: '{url:"a.js",revision:null}',
-      viteGlobPatterns: "**/*.{js}",
       files: { "a.js": 1024 },
       chunkModules: null,
     });
@@ -335,7 +319,6 @@ describe("check-precache.mjs", () => {
     // A stale map, from an older build: its hashes no longer match sw.js.
     const root = makeFixture({
       swBody: '{url:"assets/index-new.js",revision:null},{url:"b.css",revision:null}',
-      viteGlobPatterns: "**/*.{js,css}",
       files: { "assets/index-new.js": 1024, "b.css": 1024 },
       chunkModules: { "assets/index-old.js": [] },
     });
