@@ -199,7 +199,16 @@ function OrphanRow({
     repair.mutate(
       { visitId: visit.id, prospectId: target.id },
       {
-        onSuccess: () => toast.success(copy.orphans.attached(target.name)),
+        // The server may have followed a merge, or found the visit already
+        // repaired (orphanRepairResultSchema): the toast says what happened.
+        onSuccess: (result) =>
+          toast.success(
+            !result.repaired
+              ? copy.orphans.alreadyAttached
+              : result.prospectId === target.id
+                ? copy.orphans.attached(target.name)
+                : copy.orphans.attachedToSurvivor(target.name),
+          ),
         onError: () => toast.error(copy.orphans.attachFailed),
       },
     );

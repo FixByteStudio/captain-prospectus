@@ -1128,6 +1128,10 @@ one `Surface` holding the rows.
   other's pending state. Rows do not lock while the queue refetches (unlike
   Doublons): a repeated repair answers `repaired: false` and a repeated
   discard is a no-op.
+- **The toast reports what the server did.** It names the chosen prospect, or
+  says the visit went to the prospect that absorbed it (the server followed a
+  merge) or was already attached (`repaired: false`), never more than it knows
+  (GH #199).
 - **One total, everywhere.** The header count, the sidebar badge and
   Tableau de bord's "À traiter" all read `visits.length + remaining`
   (`orphanTotal` in `nav.ts`), so a queue longer than one page (200) is never
