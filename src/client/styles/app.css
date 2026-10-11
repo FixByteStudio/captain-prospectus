@@ -110,6 +110,9 @@
      the strip sits directly under the band and needs to read as a step down. */
   --color-band-strip: var(--band-strip);
 
+  /* The scrim behind a dialog, alert dialog or sheet (GH #94). */
+  --color-overlay: var(--overlay);
+
   /* shadcn Sidebar's own token names (GH #63), aliased onto the band above:
      no new hex values, just names so the vendored component's classes
      (bg-sidebar, text-sidebar-foreground…) match upstream. Item text stays
@@ -270,6 +273,7 @@
   --band-accent: #ffffff14;
   --band-border: #ffffff1f;
   --band-strip: #142038;
+  --overlay: #00000080;
   --outcome-no-contact: #8a92a4;
   --outcome-interested: #2e3f63;
   --outcome-not-interested: #5b5f63;
@@ -333,6 +337,7 @@
     --band-accent: #ffffff0f;
     --band-border: #ffffff14;
     --band-strip: #070b15;
+    --overlay: #00000080;
     --outcome-no-contact: #7c87a0;
     --outcome-interested: #aebbdb;
     --outcome-not-interested: #8e9399;
@@ -364,6 +369,7 @@
   --band-accent: #ffffff0f;
   --band-border: #ffffff14;
   --band-strip: #070b15;
+  --overlay: #00000080;
   --outcome-no-contact: #7c87a0;
   --outcome-interested: #aebbdb;
   --outcome-not-interested: #8e9399;

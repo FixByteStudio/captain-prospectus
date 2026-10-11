@@ -68,6 +68,7 @@ brand's gold once more. Nowhere else.
 | `band-accent` | `#FFFFFF14` | `#FFFFFF0F` | Hover wash on the band (white at 8 % / 6 %) |
 | `band-border` | `#FFFFFF1F` | `#FFFFFF14` | Hairlines on the band (white at 12 % / 8 %) |
 | `band-strip` | `#142038` | `#070B15` | The sync strip: the band, one step darker |
+| `overlay` | `#00000080` | `#00000080` | The scrim behind a dialog, alert dialog or sheet (black at 50 %) |
 | `status-new` | 16 % ink | 16 % ink | The `new` row edge |
 | `status-assigned` | 55 % ink | 55 % ink | The `assigned` row edge |
 | `outcome-no-contact` | `#8A92A4` | `#7C87A0` | `no_contact` in charts |
