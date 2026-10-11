@@ -114,7 +114,7 @@ describe("GET /api/admin/prospects/export.csv", () => {
     expect(rows[0]).toBe(
       "name,type,address,phone,website,cuisine,status,assigned_to,source,lat,lng,last_visit_at,next_visit_at",
     );
-    // INVARIANT 11 / architecture.md invariant 9.
+    // INVARIANT 11.
     expect(rows.at(-1)).toBe(CSV_ATTRIBUTION);
   });
 
