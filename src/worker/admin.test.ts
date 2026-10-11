@@ -62,7 +62,7 @@ type Row = {
   sourceRef?: string;
 };
 
-function importRows(rows: Row[], source: "csv" | "osm" = "csv"): Promise<Response> {
+function importRows(rows: Row[], source: "csv" | "osm" | "google" = "csv"): Promise<Response> {
   return post("/api/admin/prospects/batch", { source, rows });
 }
 
@@ -774,6 +774,21 @@ describe("POST /api/admin/prospects/batch", () => {
     expect(await renamed.json()).toEqual<ImportResult>({ created: 0, updated: 1 });
     const [after] = await getDb(env.DB).select().from(prospects);
     expect(after?.name).toBe("Chez Léa et Paul");
+  });
+
+  it("imports a Google map candidate under its own source (GH #362)", async () => {
+    // ADR-0020: Google rows take the same batch import as OSM ones, and the
+    // admin filters on the difference, so the source must survive the trip.
+    const response = await importRows(
+      [{ name: "Chez Léa", lat: 50.84, lng: 4.35, sourceRef: "google/ChIJabc" }],
+      "google",
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual<ImportResult>({ created: 1, updated: 0 });
+    const [row] = await getDb(env.DB).select().from(prospects);
+    expect(row?.source).toBe("google");
+    expect(row?.sourceRef).toBe("google/ChIJabc");
   });
 
   it("writes more rows than fit in one D1 statement", async () => {

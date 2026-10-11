@@ -281,7 +281,8 @@ export const importLogSchema = z
 export type ImportLog = z.infer<typeof importLogSchema>;
 
 export const prospectBatchSchema = z.object({
-  source: z.enum(["csv", "osm"]),
+  // Every SOURCES value but `field`, which only arrives through sync (ADR-0020).
+  source: z.enum(["csv", "osm", "google"]),
   rows: z.array(importRowSchema).check(z.minLength(1), z.maxLength(IMPORT_ROWS_PER_REQUEST)),
   importLog: z.optional(importLogSchema),
 });
