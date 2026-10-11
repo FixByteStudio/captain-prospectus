@@ -258,6 +258,24 @@ describe("POST /api/admin/visits/orphaned/:id/repair", () => {
     expect(await db.select().from(visits)).toHaveLength(1);
   });
 
+  it("a replay aimed elsewhere reports where the visit landed", async () => {
+    const landed = crypto.randomUUID();
+    const other = crypto.randomUUID();
+    await seedProspect(landed);
+    await seedProspect(other, { name: "Autre" });
+    const visitId = await quarantine();
+
+    await post(`/api/admin/visits/orphaned/${visitId}/repair`, { prospectId: landed });
+    const replay = await post(`/api/admin/visits/orphaned/${visitId}/repair`, {
+      prospectId: other,
+    });
+
+    expect((await replay.json()) as OrphanRepairResult).toMatchObject({
+      prospectId: landed,
+      repaired: false,
+    });
+  });
+
   it("follows a merge rather than attaching the visit to the absorbed prospect", async () => {
     const db = getDb(env.DB);
     const survivor = crypto.randomUUID();

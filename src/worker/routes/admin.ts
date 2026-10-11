@@ -1750,9 +1750,17 @@ adminRoutes.post(
     if (!held) {
       // Already repaired is a replay, not an error — the same reading merge
       // takes (INVARIANT 4). Distinguish it from an id that never existed.
-      const [already] = await db.select({ id: visits.id }).from(visits).where(eq(visits.id, id));
+      // Report where the visit actually is, not where this request aims.
+      const [already] = await db
+        .select({ prospectId: visits.prospectId })
+        .from(visits)
+        .where(eq(visits.id, id));
       if (already) {
-        const result: OrphanRepairResult = { visitId: id, prospectId, repaired: false };
+        const result: OrphanRepairResult = {
+          visitId: id,
+          prospectId: already.prospectId,
+          repaired: false,
+        };
         return c.json(result);
       }
       return c.json({ error: "not_found" }, 404);
