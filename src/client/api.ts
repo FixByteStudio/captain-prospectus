@@ -7,6 +7,8 @@
  * a plain status, so the two stay apart: both carry `status` 401, but the
  * Worker's has `code` "unauthorized" and Access's "access_redirect".
  */
+import { copy } from "./copy/field";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -49,14 +51,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     redirect: "manual",
   });
 
-  const authFailure = authError(response, "Votre session a expiré. Reconnectez-vous.");
+  const authFailure = authError(response, copy.errors.sessionExpired);
   if (authFailure) throw authFailure;
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
     throw new ApiError(
       response.status,
       body.error ?? "error",
-      body.message ?? "Une erreur est survenue. Réessayez.",
+      body.message ?? copy.errors.generic,
       response.status === 429 ? retryAfterSeconds(response.headers.get("Retry-After")) : null,
     );
   }

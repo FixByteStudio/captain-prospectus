@@ -102,7 +102,7 @@ export const sharedCopy = {
     /** The one button `ScreenState`'s shared retry Alert needs; the message
      *  above it stays the screen's own `loadFailed` string. */
     retry: "Réessayer",
-    /** `downloadCsv`'s 401: Access sent the file request to its login page. */
+    /** The 401 message from `apiFetch` and `downloadCsv`. */
     sessionExpired: "Votre session a expiré. Reconnectez-vous.",
   },
 
