@@ -2,6 +2,8 @@ dist
 drizzle
 .wrangler
 node_modules
+
+# Lockfiles are managed by the package manager, not by us.
 pnpm-lock.yaml
 
 # Local browser profile written by browser-driving tools (#7).
@@ -15,5 +17,3 @@ _bmad-output
 
 # Docs are hand-formatted prose and tables; Prettier reflows them into noise.
 *.md
-
-# Lockfiles are managed by the package manager, not by us.
