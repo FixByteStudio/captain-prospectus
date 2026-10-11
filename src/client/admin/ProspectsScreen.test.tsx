@@ -8,8 +8,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, MemoryRouter, useLocation, useNavigate } from "react-router";
-import { EXPORT_ROWS } from "../../shared/constants";
-import { STATUS_LABELS, copy } from "../copy";
+import { EXPORT_ROWS, SOURCES } from "../../shared/constants";
+import { SOURCE_LABELS, STATUS_LABELS, copy } from "../copy";
 import { formatBrusselsDate } from "../format";
 import type { Prospect } from "../../shared/schemas";
 import { createAdminQueryClient } from "./query-client";
@@ -305,6 +305,24 @@ describe("ProspectsScreen › URL filters", () => {
     if (!row) throw new Error("no table row for the lead");
     expect(row.textContent).toContain(STATUS_LABELS.interested);
     expect(row.innerHTML).toContain("--color-status-interested");
+  });
+
+  it("offers every source, Google Places included, and filters on it (#434)", async () => {
+    const asked = stubFetch();
+    renderAt("/admin/prospects");
+    await screen.findByText(copy.prospects.count(13));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: copy.prospects.filters.source }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual([
+      copy.prospects.filters.anySource,
+      ...SOURCES.map((s) => SOURCE_LABELS[s]),
+    ]);
+
+    await user.click(screen.getByRole("option", { name: SOURCE_LABELS.google }));
+    expect(location()).toBe("/admin/prospects?source=google");
+    await waitFor(() => expect(asked.at(-1)).toBe("/api/admin/prospects?source=google"));
   });
 
   it("clears every filter from the URL", async () => {
