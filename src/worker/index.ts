@@ -6,7 +6,9 @@
  * wrangler.jsonc lists only "/api/*", so asset requests never invoke this
  * Worker and stay free (INVARIANT 14).
  */
-import { Hono } from "hono";
+// The quick preset's LinearRouter skips compiling every route into one regex
+// on an isolate's first request, the case INVARIANT 13 has to fit (GH #341).
+import { Hono } from "hono/quick";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import type { ErrorHandler } from "hono";

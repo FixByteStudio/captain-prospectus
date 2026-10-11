@@ -114,6 +114,15 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (e6e6ffc) and this one, 14 cold first requests each: median 9.28 ms after vs 9.27 ms before
   (8.93–10.46 vs 8.87–11.16). Warm medians 0.56–0.65 ms. No measurable change, but the cold first
   request now reaches about 11 ms on either build, beyond the 10 ms budget on local hardware (GH #341).
+- **After GH #341.** The growth was not the dashboard's: bisected across the commits since GH #177,
+  cold medians stayed at 8.0–8.3 ms until the identity-access epic, then crept to 9.2 ms (#301
+  +0.2, #302/#303 +0.5, #307 +0.3), with every route and table that epic added. Two fixed costs
+  scaled with the app, not the request: Hono's default router compiling every route into one regex
+  on the first match, and Drizzle rebuilding its relational config from the whole schema on each
+  `getDb`, for a `db.query` nothing calls. The Worker now uses `hono/quick` and `getDb` passes no
+  schema. Same seeded D1 (313 prospects, 1,690 visits), alternating `main` and this build, 14 cold
+  first requests each: median 7.76 ms after vs 9.29 ms before (7.50–8.16 vs 9.09–11.51). Warm
+  medians 0.53–0.63 ms, unchanged. Every route's first request gains the same, sync's included.
 - **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
   GH #113, eleven since GH #177, the
   largest with 11 bound parameters. Every range read on `visits` — Visites and its previous period,
