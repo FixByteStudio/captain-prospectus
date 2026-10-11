@@ -49,6 +49,7 @@ import {
   csvTimestamp,
 } from "../../shared/csv";
 import { dedupeKey, normalize } from "../../shared/dedupe";
+import { foldForSearch } from "../../shared/search";
 import {
   DAY_MS,
   brusselsMidnightDaysFromNow,
@@ -604,12 +605,15 @@ async function conversionCounts(
 /* ---------------------------------------------------------------- prospects */
 
 /**
- * `name LIKE %needle% ESCAPE '!'`, shared by the list and the export so the
- * two cannot diverge (Intent). SQLite's `LIKE` already folds ASCII case on
- * both sides by itself — no `lower()` needed, and none wanted: JS's
- * `toLowerCase()` is Unicode-aware and SQLite's is not, so wrapping only one
- * side in it made an accented needle un-findable regardless of casing
- * (docs/api.md's limits prose).
+ * `q` against the folded name, shared by the list and the export so the two
+ * cannot diverge. The needle is folded by the same `foldForSearch` that wrote
+ * `name_search`, so accents and case drop out on both sides (ADR-0032).
+ *
+ * A row not folded yet (`name_search` null until the nightly sweep reaches it)
+ * keeps the match it had before: the raw needle against `name`, ASCII case
+ * folded by `LIKE` itself. A needle that folds to nothing but spaces —
+ * combining marks alone — is matched raw too, rather than as `%%` or `% %`,
+ * which would match every row or nearly.
  *
  * `%`, `_` and the escape character itself are all escaped, so each matches
  * literally. That third one is not optional: with `ESCAPE '!'`, a bare `!`
@@ -621,8 +625,12 @@ async function conversionCounts(
  * error-prone; `!` carries no such trap and is not a `LIKE` metacharacter.
  */
 function nameSearchFilter(q: string) {
-  const escaped = q.replace(/[!%_]/g, (ch) => `!${ch}`);
-  return sql`${prospects.name} LIKE ${`%${escaped}%`} ESCAPE '!'`;
+  const pattern = (needle: string) => `%${needle.replace(/[!%_]/g, (ch) => `!${ch}`)}%`;
+  const raw = sql`${prospects.name} LIKE ${pattern(q)} ESCAPE '!'`;
+  const folded = foldForSearch(q);
+  if (!folded.trim()) return raw;
+  return sql`(${prospects.nameSearch} LIKE ${pattern(folded)} ESCAPE '!'
+    or (${prospects.nameSearch} is null and ${raw}))`;
 }
 
 /**
@@ -749,6 +757,7 @@ adminRoutes.post("/prospects/batch", validate("json", prospectBatchSchema), asyn
     byKey.set(key, {
       id: crypto.randomUUID(),
       name: row.name,
+      nameSearch: foldForSearch(row.name),
       type: row.type,
       lat: row.lat ?? null,
       lng: row.lng ?? null,
@@ -840,6 +849,7 @@ adminRoutes.post("/prospects/batch", validate("json", prospectBatchSchema), asyn
          */
         set: {
           name: sql`excluded.name`,
+          nameSearch: sql`excluded.name_search`,
           type: sql`excluded.type`,
           lat: sql`coalesce(excluded.lat, ${prospects.lat})`,
           lng: sql`coalesce(excluded.lng, ${prospects.lng})`,
@@ -1007,6 +1017,7 @@ adminRoutes.patch(
       .update(prospects)
       .set({
         ...patch,
+        ...(patch.name !== undefined && { nameSearch: foldForSearch(patch.name) }),
         ...(patch.status !== undefined && { statusSetAt: now }),
         outOfTargetReviewedAt: now,
         updatedAt: now,

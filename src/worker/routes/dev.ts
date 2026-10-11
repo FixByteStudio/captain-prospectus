@@ -14,6 +14,7 @@ import { chunk } from "../../shared/chunk";
 import { CLIENT_VERSION } from "../../shared/constants";
 import type { Role } from "../../shared/constants";
 import { dedupeKey } from "../../shared/dedupe";
+import { foldForSearch } from "../../shared/search";
 import { devSeedSchema } from "../../shared/schemas";
 import type { DevSeed, DevSeedResult } from "../../shared/schemas";
 import { writeAgentPosition } from "../agent-position";
@@ -89,6 +90,7 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
     return {
       id: seedId(`prospect:${key}`),
       name: p.name,
+      nameSearch: foldForSearch(p.name),
       type: p.type,
       lat: p.lat,
       lng: p.lng,

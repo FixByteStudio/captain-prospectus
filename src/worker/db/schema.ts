@@ -44,6 +44,13 @@ export const prospects = sqliteTable(
     sourceRef: text("source_ref"),
     /** Unique. Computed server-side; see src/shared/dedupe.ts. */
     dedupeKey: text("dedupe_key").notNull(),
+    /**
+     * `foldForSearch(name)`, what `q` matches (ADR-0032). Written with `name`
+     * by every write; null only until the nightly sweep folds a row written
+     * before the column existed, or inserted by the previous Worker during a
+     * deploy. No index: a `%needle%` cannot use one.
+     */
+    nameSearch: text("name_search"),
 
     status: text("status", { enum: STATUSES }).notNull().default("new"),
     /**

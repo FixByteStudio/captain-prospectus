@@ -248,9 +248,9 @@ export const adminCopy = {
     importCta: "Importer un CSV",
     empty: "Aucun prospect. Importez un CSV pour commencer.",
     noMatch: "Aucun prospect ne correspond à ces filtres.",
-    /** Under `noMatch` when a search found nothing: names it, and says accents count (docs/api.md). */
+    /** Under `noMatch` when a search found nothing: names it. Accents and case do not count (docs/api.md). */
     noMatchSearch: (q: string) =>
-      `Aucun nom ne contient « ${q} ». Vérifiez l'orthographe et les accents, ou effacez les filtres.`,
+      `Aucun nom ne contient « ${q} ». Vérifiez l'orthographe ou effacez les filtres.`,
     /** Under `noMatch` when only filters are set. */
     noMatchFilters: "Retirez un filtre ou effacez-les tous pour revoir la liste.",
     clearFilters: "Effacer les filtres",

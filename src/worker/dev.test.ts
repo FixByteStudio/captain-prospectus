@@ -96,6 +96,7 @@ describe("POST /api/dev/seed", () => {
     const db = getDb(env.DB);
     const [row] = await db.select().from(prospects);
     expect(row?.name).toBe("Le Bistrot");
+    expect(row?.nameSearch).toBe("le bistrot");
     // The agent's first prospect takes the first fixed story, converted at
     // k=2, and its status is derived from those visits as sync would.
     expect(row?.status).toBe("converted");

@@ -4,6 +4,7 @@ import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
 import { CSV_ATTRIBUTION } from "../shared/csv";
+import { foldForSearch } from "../shared/search";
 import { EXPORT_ROWS } from "../shared/constants";
 import { workerFetch } from "../../test/worker-fetch";
 
@@ -186,6 +187,15 @@ describe("GET /api/admin/prospects/export.csv", () => {
     expect(listBody.prospects.map((p) => p.name)).toEqual(["Le Bistrot du Coin"]);
     expect(exportBody).toContain("Le Bistrot du Coin");
     expect(exportBody).not.toContain("Chez Marcel");
+  });
+
+  it("folds accents in q like the list (ADR-0032)", async () => {
+    await seedProspect({ name: "Café du Port", nameSearch: foldForSearch("Café du Port") });
+    await seedProspect({ name: "Chez Marcel", nameSearch: foldForSearch("Chez Marcel") });
+
+    const body = await (await call("/api/admin/prospects/export.csv?q=CAFE")).text();
+    expect(body).toContain("Café du Port");
+    expect(body).not.toContain("Chez Marcel");
   });
 
   it("excludes a merged prospect, like every other list", async () => {

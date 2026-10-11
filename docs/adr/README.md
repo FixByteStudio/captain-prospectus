@@ -37,5 +37,6 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted |
 | [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | accepted |
 | [0031](0031-the-precache-ceiling-counts-every-precached-entry.md) | The precache ceiling counts every precached entry | proposed |
+| [0032](0032-a-stored-folded-name-for-search.md) | A stored folded name for search | accepted |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.
