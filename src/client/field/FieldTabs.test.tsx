@@ -127,6 +127,27 @@ describe("FieldTabs", () => {
     expect(pathname()).toBe("/tournee/abc123");
   });
 
+  it("closes on Escape without navigating, and asks again on the next tap", async () => {
+    const user = userEvent.setup();
+    renderTabs({ children: <DirtyForm /> });
+
+    await user.click(screen.getByRole("link", { name: copy.nav.tabs.add }));
+    await user.keyboard("{Escape}");
+
+    // Escape goes through the dialog's `onOpenChange`, not Annuler (GH #86).
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(pathname()).toBe("/tournee/abc123");
+
+    // The dismissed tap is dropped, not kept: the next one, to another tab,
+    // asks afresh and Quitter follows it rather than the stale Ajouter.
+    await user.click(screen.getByRole("link", { name: copy.nav.tabs.map }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(pathname()).toBe("/tournee/abc123");
+
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
+    expect(pathname()).toBe("/tournee/carte");
+  });
+
   it("never asks when the dirty form's own tab is tapped", async () => {
     const user = userEvent.setup();
     // Ajouter is already current here, so tapping it navigates nowhere and
