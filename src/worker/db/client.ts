@@ -1,16 +1,18 @@
 import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
-import * as schema from "./schema";
 
 export type Db = ReturnType<typeof getDb>;
 
-/** JSON is camelCase, SQL is snake_case; Drizzle maps them via `casing`. */
+/**
+ * JSON is camelCase, SQL is snake_case; Drizzle maps them via `casing`.
+ *
+ * No `schema`: it only serves `db.query.*`, which nothing uses, and Drizzle
+ * walks every table to build it on each call, twice a request (GH #341).
+ */
 export function getDb(d1: D1Database) {
-  return drizzle(d1, { schema, casing: "snake_case" });
+  return drizzle(d1, { casing: "snake_case" });
 }
-
-export { schema };
 
 /**
  * Bound parameters a multi-row insert uses per row, for chunk().
