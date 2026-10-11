@@ -19,7 +19,7 @@ a mitigation nobody has verified is worse than one nobody claimed.
 | XSS through imported data (names, notes) | React escaping; no `dangerouslySetInnerHTML` |
 | Stolen phone | An admin revokes the device's session (`DELETE /api/admin/sessions/:id`) or deactivates the user, which deletes all their sessions (`users.test.ts`). The next request gets 401; the app drops the cached round, identity and visit history and keeps the outbox (`clearAgentCache`, `App.test.tsx`, INVARIANT 5). A session nobody revokes expires 90 days (agent) or 30 days (admin) after its last use (`SESSION_TTL_MS`, `src/worker/session.ts`). Until one of those, whoever holds the phone holds a working session. |
 | Leaked database | A dump holds only HMAC-SHA-256 digests under `AUTH_PEPPER` of login codes, passphrases, session tokens and IPs, so none of them can be replayed or reversed (`session.ts`, `auth.test.ts` "never logs the code nor stores it in plaintext", "stores only the HMAC of the passphrase", "stores the IP only as its HMAC"). It still holds business data, users' emails and names, and visit notes inside the 90-day retention window. Rotating `AUTH_PEPPER` voids every session (`auth.test.ts`), and every code and passphrase with it, because they are keyed by the same pepper; only the session case has a test |
-| Secret handling | `AUTH_PEPPER` and `BREAK_GLASS` are Worker secrets, `OWNER_EMAIL` a variable kept out of `wrangler.jsonc`; all three are set by the owner or CI, never in the repo (`src/worker/types.ts`). A Worker without them fails closed: no pepper is 500, no owner or break-glass is 401. **Not enforced:** `config.test.ts` guards only `GOOGLE_PLACES_KEY` ([#348](https://github.com/FixByteStudio/captain-prospectus/issues/348)) |
+| Secret handling | `AUTH_PEPPER` and `BREAK_GLASS` are Worker secrets, `OWNER_EMAIL` a variable kept out of `wrangler.jsonc`; all three are set by the owner or CI, never in the repo (`src/worker/types.ts`). A Worker without them fails closed: no pepper is 500, no owner or break-glass is 401. `config.test.ts` fails CI if any of them, or `GOOGLE_PLACES_KEY`, appears in `wrangler.jsonc` |
 | Log hygiene | No code, passphrase, token, hash, IP or User-Agent reaches a log line. The login, `/api/me` and throttle paths are tested with every console level spied (`auth.test.ts` "log hygiene", "never logs the User-Agent", "logs neither the IP nor the credential"); the unhandled-error log carries names and the route only (`errors.test.ts`) and the sweep logs counts (`retention.test.ts`). No test scans the other routes' log lines; the one `console` call in them (`routes/agent.ts`, a failed position write) logs an error name only |
 | Leaked Cloudflare token | Scoped token in GitHub secrets, never in the repo |
 
@@ -59,7 +59,8 @@ it — a payload the server always refuses is an outbox that never drains (INVAR
 - **`AUTH_PEPPER`** keys every stored HMAC; **`BREAK_GLASS`** is the owner's offline admin
   secret; **`OWNER_EMAIL`** names the owner and is a variable kept out of `wrangler.jsonc`
   (ADR-0029). Rotating `AUTH_PEPPER` voids every code, passphrase and session. How to set them
-  is in [deployment.md](deployment.md).
+  is in [deployment.md](deployment.md). `config.test.ts` fails CI if any of the three appears
+  in `wrangler.jsonc`.
 - **`GOOGLE_PLACES_KEY`** is a secret too (ADR-0020). It is set with
   `wrangler secret put GOOGLE_PLACES_KEY`, lives in `.dev.vars` locally, and appears in
   neither `wrangler.jsonc` nor the repo — `config.test.ts` fails CI if it ever does.
