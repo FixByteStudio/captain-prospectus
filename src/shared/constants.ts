@@ -110,13 +110,10 @@ export function isOpen(status: Status): boolean {
 }
 
 /**
- * Sync contract version (ADR-0007).
- *
- * Bump CLIENT_VERSION on any breaking change to the /api/agent/sync payload.
- * Raise MIN_CLIENT_VERSION only once every phone reports the new version:
- *   select agent_email, max(client_version) from visits group by agent_email;
- * Below MIN_CLIENT_VERSION the server answers 426 and the client updates
- * WITHOUT clearing its outbox. See the sync-contract-change skill.
+ * Sync contract version: docs/domains/field-operations.md "Versioning", and the
+ * sync-contract-change skill for how to bump it. Bump CLIENT_VERSION on any
+ * breaking change to the /api/agent/sync payload; raise MIN_CLIENT_VERSION only
+ * once every phone reports the new version.
  */
 export const CLIENT_VERSION = 1;
 export const MIN_CLIENT_VERSION = 1;
@@ -144,33 +141,13 @@ export const AGENT_POSITION_ACCURACY_MAX_M = 10_000;
 export const SCRIPT_QUESTIONS_MAX = 50;
 
 /**
- * Largest request body the Worker will read, in bytes.
+ * Largest request body the Worker will read, in bytes: about twice the largest
+ * sync a real client can build. The measurements and the 19.7 MiB schema-valid
+ * payload it refuses are in docs/security.md ("The body cap").
  *
- * Measured, not guessed. The biggest request a real client can build is a full
- * sync: 100 field prospects with every field at its cap, plus 200 visits each
- * carrying a 2000-character note and an answer to every question of a
- * 50-question script — **1060 KiB**. Nothing else is close: 250 import rows are
- * 325 KiB, the largest script 310 KiB, 500 assign ids 19 KiB, a 200-vertex
- * polygon 5 KiB. A sync carrying notes but no answers is 514 KiB, and a real
- * day's sync is well under 100 KiB.
- *
- * So the floor is 1060 KiB and this is roughly twice it. What the cap is for is
- * the other end: a visit carries up to SCRIPT_QUESTIONS_MAX answers of up to
- * 2000 characters each, so a payload of 200 visits each holding 50 of them is
- * 19.7 MiB and still schema-valid. That is what gets refused
- * before JSON.parse ever sees it (docs/security.md, "Malformed or oversized
- * payloads").
- *
- * This caps *reading*, and is not a second array cap — the per-request caps
- * above are what protect the 10 ms CPU budget (INVARIANT 13).
- *
- * The headroom is deliberate, because the two failure directions are not
- * symmetric. Too high costs one integer comparison. Too low answers 413 to a
- * payload the outbox rebuilds identically for ever — sync.ts keeps every row on
- * any non-auth error, so a cap under what a phone can build is a loop with no
- * exit, which is INVARIANT 5's failure mode. Raise SYNC_VISITS_PER_REQUEST,
- * IMPORT_ROWS_PER_REQUEST or longText and the budget tests in constants.test.ts
- * will tell you to raise this too.
+ * The client depends on it: sync.ts trims each batch to fit, so a cap below one
+ * worst-case visit is a 413 that never drains (INVARIANT 5). The budget tests in
+ * constants.test.ts fail when a count cap outgrows it.
  */
 export const MAX_REQUEST_BYTES = 2_097_152;
 
@@ -202,7 +179,7 @@ export const PROSPECTS_PAGE_SIZE = 200;
 /**
  * How deep the list can be paged. SQLite walks the index to reach an offset, so
  * an unbounded one is a full scan that returns nothing. 100 pages is far past
- * the few thousand prospects this project plans for (vision.md).
+ * the few thousand prospects this project plans for (docs/vision.md).
  */
 export const PROSPECTS_MAX_OFFSET = PROSPECTS_PAGE_SIZE * 100;
 
@@ -218,30 +195,15 @@ export const PROSPECTS_MAX_OFFSET = PROSPECTS_PAGE_SIZE * 100;
 export const ORPHANS_PAGE_SIZE = 200;
 export const ORPHAN_CANDIDATES = 5;
 
-/**
- * Rows in one CSV export.
- *
- * A CPU cap, not a payload one (INVARIANT 13): waiting on D1 is free, building
- * and escaping 500 rows of text is not, and D1 bills rows *scanned*. Past it the
- * response sets `x-truncated: true` rather than silently handing back a prefix
- * that looks complete. 500 is roughly two full pages of the admin list, which is
- * more than anyone opens a spreadsheet to read.
- */
+/** Rows in one CSV export: a CPU cap, not a page (docs/api.md, "CSV exports"). */
 export const EXPORT_ROWS = 500;
 
 /** Default window for the visits export: the last 30 days. */
 export const EXPORT_DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * How long a visit keeps its personal fields (ADR-0023).
- *
- * After this, `lat`, `lng` and `notes` are nulled by the retention sweep; the
- * visit itself — date, outcome, agent, answers — is kept for ever, because the
- * fact of the visit is business history and the position is not.
- *
- * Measured against `received_at`, never `visited_at`: a phone's clock can be
- * wrong (INVARIANT 12), and retention read against it could redact a visit the
- * day it arrives, or never redact one at all.
+ * How long a visit keeps `lat`, `lng` and `notes`, measured on `received_at`
+ * because a phone's clock can be wrong (INVARIANT 12, ADR-0023).
  */
 export const RETENTION_DAYS = 90;
 export const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -312,9 +274,8 @@ export const DUPLICATES_PAGE_SIZE = 100;
 /**
  * Prospects the duplicate sweep will compare in one request.
  *
- * Comparing pairs is CPU, and Workers Free allows 10 ms of it; waiting on D1 is
- * what is free. Bucketing by location keeps the comparisons near-linear, but the
- * scan itself still has to be bounded.
+ * Comparing pairs is CPU (INVARIANT 13). Bucketing by location keeps the
+ * comparisons near-linear, but the scan itself still has to be bounded.
  */
 export const DUPLICATES_SCAN_LIMIT = 5_000;
 
@@ -326,51 +287,36 @@ export const POLYGON_MIN_VERTICES = 3;
 export const POLYGON_MAX_VERTICES = 200;
 
 /**
- * How long an Overpass answer stays good (ADR-0008).
- *
- * Overpass is a shared public service run on donated hardware, and OSM does not
- * change much in a week. The cache is what makes a redraw-and-search-again loop
- * polite rather than abusive.
+ * How long an Overpass answer stays good (ADR-0008): politeness to a shared
+ * public service (docs/domains/ingestion.md, "Limits and etiquette").
  */
 export const OVERPASS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Candidates returned from one map import.
  *
- * Like DUPLICATES_SCAN_LIMIT, this is a CPU cap, not a payload one. Workers Free
- * allows 10 ms per request; waiting on Overpass is free, but `JSON.parse` of its
- * answer and mapping every element's tags are not. A polygon big enough to
- * return more than this is a polygon the admin should split anyway, so the
- * response says `truncated` rather than silently costing more.
+ * A CPU cap, not a payload one (INVARIANT 13): `JSON.parse` of the answer and
+ * mapping every element's tags cost CPU. A polygon that returns more is one the
+ * admin should split anyway, so the response says `truncated`.
  */
 export const OVERPASS_CANDIDATES_LIMIT = 1_000;
 
 /* ------------------------------------------------ Google Places (ADR-0020) */
 
 /**
- * Nearby Search has no polygon search, so the Google provider draws a circle.
- *
- * The 50 km Google allows is pointless behind a 20-result cap: a circle that
- * large returns the 20 places nearest its centre and nothing else. 2 km is
- * already more than one canvassing round.
+ * The Google provider's circle; why 2 km and not Google's 50 km:
+ * docs/domains/ingestion.md, "Limits".
  */
 export const PLACES_RADIUS_MIN_M = 50;
 export const PLACES_RADIUS_MAX_M = 2_000;
 
-/**
- * Google's own ceiling, not a choice of ours: `maxResultCount` caps at 20 and
- * Nearby Search has no page tokens. A circle holding more than this returns its
- * 20 nearest and sets `truncated`, and the screen tells the admin to shrink it.
- */
+/** Google's own ceiling, not a choice of ours (docs/domains/ingestion.md, "Limits"). */
 export const PLACES_MAX_RESULTS = 20;
 
 /**
- * How long a Google answer stays good (ADR-0020).
- *
- * The same seven days as OVERPASS_CACHE_TTL_MS, for a different reason, which
- * is why it is a separate constant: the Overpass cache is etiquette towards a
- * donated public service, this one is how we avoid paying twice for the same
- * circle. Google's terms also cap caching of Places content at 30 days, so this
- * number may shrink but must never grow past that.
+ * How long a Google answer stays good. Separate from OVERPASS_CACHE_TTL_MS
+ * because the reason differs: this one is the bill (ADR-0020). Google's terms
+ * cap caching at 30 days (ADR-0020, "Accepted risks", Storage), so it may shrink
+ * but must never grow past 30 days.
  */
 export const PLACES_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;

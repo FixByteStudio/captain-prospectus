@@ -1,16 +1,9 @@
 /**
  * The Google Places map import — ADR-0020, docs/domains/ingestion.md.
  *
- * The second provider behind the same screen as `overpass.ts`, deliberately
- * built to mirror it: same shape of module, same purity, same contract with the
- * route, so the two can be read side by side. What differs is forced by Google
- * and not by us — a circle instead of a polygon, twenty results instead of a
- * thousand, and a call that costs money.
- *
- * Worker-only. The key must never be reachable from the browser, which is the
- * same rule INVARIANT 11 already applies to Overpass for a weaker reason.
- *
- * Everything here is pure. The route does the I/O.
+ * Built to mirror `overpass.ts` (same shape, same purity, same contract with the
+ * route) so the two read side by side. Worker-only, because of the key
+ * (ADR-0020 §7). Everything here is pure; the route does the I/O.
  */
 import { PLACES_MAX_RESULTS, type ProspectType } from "../shared/constants";
 import type { FoundPlace } from "../shared/schemas";
@@ -28,26 +21,16 @@ export const PLACES_QUERY_VERSION = "gv1";
 export const PLACES_ENDPOINT = "https://places.googleapis.com/v1/places:searchNearby";
 
 /**
- * The field mask decides the bill, not just the payload.
- *
- * Every field here is **Pro** tier on Nearby Search. `nationalPhoneNumber` and
- * `websiteUri` are Enterprise, which would move every search — including one
- * that finds nothing — onto a smaller free allowance and a higher price per
- * call (ADR-0020). Phone numbers come from CSV, from OSM, or from an agent
- * standing in front of the door.
- *
- * Google rejects a mask containing spaces, so this string has none.
+ * Keep it Pro-tier: docs/domains/ingestion.md, "The field mask is the bill"
+ * (under "Request"; ADR-0020 §5). Google rejects a mask containing spaces.
  */
 export const PLACES_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types";
 
 /**
- * The same scope as the Overpass query in `overpass.ts`, in Google's vocabulary
- * (Place Types, Table A). `restaurant` also matches the cuisine-specific types
- * like `italian_restaurant`, which carry the broader type as well.
- *
- * There is no `food_truck` in Table A. Google cannot find them either
- * (ADR-0020) — that gap belongs to CSV and to the field.
+ * The Overpass query's scope in Google's vocabulary (Place Types, Table A, which
+ * has no `food_truck`). `restaurant` also matches `italian_restaurant` and the
+ * like, which carry the broader type as well.
  */
 export const PLACES_INCLUDED_TYPES = [
   "restaurant",
@@ -72,22 +55,12 @@ function roundRadius(radius: number): number {
 }
 
 /**
- * The Nearby Search request body.
+ * The Nearby Search request body: docs/domains/ingestion.md, "Request" and
+ * "Limits"; why `BE`: docs/vision.md.
  *
- * `rankPreference: DISTANCE` is what makes the 20-result cap survivable: when a
- * circle holds more than twenty places, the twenty returned are the twenty
- * nearest its centre rather than an arbitrary popular subset. A truncated
- * answer is then a ring around the pin, which is something an admin can reason
- * about and shrink.
- *
- * `regionCode` is **BE**, because the canvassing is in Brussels
- * (docs/vision.md). It is not cosmetic: Google uses it to bias results and to
- * format addresses, so a wrong country here skews every search and nothing in
- * the response says so. Pinned in places.test.ts for that reason.
- *
- * `languageCode` stays French even though Brussels is bilingual: the UI, the
- * copy and the agents are French, so display names should arrive the way they
- * will be read. Neither field changes the SKU.
+ * `regionCode` biases results and formats addresses, silently, so places.test.ts
+ * pins it. `languageCode` is French although Brussels is bilingual, because the
+ * agents read French. Neither changes the SKU.
  */
 export function buildPlacesBody(center: Vertex, radius: number): string {
   const [lat, lng] = center;
@@ -107,11 +80,8 @@ export function buildPlacesBody(center: Vertex, radius: number): string {
 }
 
 /**
- * SHA-256 of the query version, the normalised centre and the rounded radius.
- *
- * Here the cache is not only etiquette: a hit is the difference between a
- * billable call and a free one, so nudging the pin between two searches must
- * land on the same entry.
+ * SHA-256 of the query version, the normalised centre and the rounded radius:
+ * a nudged pin must land on the same, already-paid-for entry.
  */
 export async function circleHash(center: Vertex, radius: number): Promise<string> {
   const [lat, lng] = center;
@@ -158,11 +128,8 @@ function num(value: unknown): number | null {
 }
 
 /**
- * `primaryType` first, then the broader `types` array.
- *
- * A pizzeria comes back as `primaryType: "pizza_restaurant"`, which is in no
- * table here, but its `types` also contain `restaurant`. Falling through to the
- * array is what stops every specialised kitchen becoming "other".
+ * `primaryType` first, then the broader `types` array
+ * (docs/domains/ingestion.md, "Field mapping").
  */
 function prospectType(place: Place): ProspectType {
   const primary = text(place.primaryType);
@@ -180,10 +147,8 @@ function prospectType(place: Place): ProspectType {
 }
 
 /**
- * Google encodes the kitchen in the type name — `italian_restaurant`,
- * `sushi_restaurant` — where OSM has a `cuisine` tag. Reading the prefix fills a
- * field that would otherwise always be null, in the same English vocabulary OSM
- * uses, so the two providers' prospects stay comparable.
+ * The kitchen from the `<kitchen>_restaurant` type name
+ * (docs/domains/ingestion.md, "Field mapping").
  */
 function cuisine(place: Place): string | null {
   const candidates = [text(place.primaryType), ...(Array.isArray(place.types) ? place.types : [])];
@@ -197,10 +162,8 @@ function cuisine(place: Place): string | null {
 }
 
 /**
- * `google/<placeId>`, e.g. `google/ChIJN1t_tDeuEmsRUsoyG83frY4` — **never change
- * this format.** It is tier 1 of the dedupe key (docs/domains/prospecting.md),
- * so a change here silently duplicates every previously imported place on the
- * next import.
+ * `google/<placeId>` — **never change this format**: it is tier 1 of the dedupe
+ * key (ADR-0020 §6), so a change duplicates every place already imported.
  */
 function sourceRef(place: Place): string | null {
   const id = text(place.id);
@@ -232,15 +195,9 @@ function toCandidate(place: Place): FoundPlace | null {
 }
 
 /**
- * Map a raw Nearby Search body to candidates.
- *
- * Returns `null` when the body is not a Places answer at all — an `error`
- * object, a proxy page — which the route turns into a 502.
- *
- * **An empty result is `{}`, not `{"places": []}`.** Google omits the key
- * entirely when a circle holds nothing, so a missing `places` is zero results
- * and not a malformed answer. Reading it the other way would report every quiet
- * street as a provider failure.
+ * Map a raw Nearby Search body to candidates, or `null` when it is not a Places
+ * answer at all (an `error` object, a proxy page), which the route turns into a
+ * 502. A missing `places` is zero results, not a malformed answer (docs/domains/ingestion.md).
  */
 export function toCandidates(
   body: string,

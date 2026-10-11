@@ -19,20 +19,11 @@ export type Bindings = Omit<
   AGENT_EMAILS?: string;
   /** Local development only; honoured only on localhost. See ADR-0006. */
   DEV_USER_EMAIL?: string;
-  /**
-   * Google Places API key — a **secret**, set with `wrangler secret put`, never
-   * in wrangler.jsonc and never sent to the browser (ADR-0020).
-   *
-   * Optional on purpose: absent means the Google map provider is simply not
-   * configured, the route answers 503, and the app works exactly as it did
-   * before. A deployment with no billing account loses nothing.
-   */
+  /** A secret (ADR-0020 §7); absent means the Google provider answers 503. */
   GOOGLE_PLACES_KEY?: string;
   /**
-   * Own login (ADR-0029), all set by the owner or CI and never in the repo.
-   * AUTH_PEPPER and BREAK_GLASS are secrets; OWNER_EMAIL is a var kept out of
-   * wrangler.jsonc. Optional so a Worker without them fails closed rather
-   * than failing to type: no pepper → 500, no owner or break-glass → 401.
+   * Own login (ADR-0029); how they are set is in docs/deployment.md. Optional so
+   * a Worker without them fails closed rather than failing to type.
    */
   AUTH_PEPPER?: string;
   BREAK_GLASS?: string;

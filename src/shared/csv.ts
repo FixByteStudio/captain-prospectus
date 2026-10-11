@@ -1,26 +1,13 @@
 /**
- * CSV serialisation — RFC 4180, with the two concessions a spreadsheet needs.
- *
- * Pure module: no DOM, no Worker APIs (CLAUDE.md). The exports go out of an
- * admin route, but the rules are worth unit-testing away from a database.
- *
- * Timestamps are ISO-8601 here rather than the epoch milliseconds the rest of
- * the app uses, because a spreadsheet cannot read epoch ms — it shows a
- * 13-digit number and the admin has to write a formula. This is the one place
- * the timestamp convention is deliberately broken, and only on the way out.
+ * CSV serialisation, RFC 4180. The export rules (ISO-8601 timestamps, quoting,
+ * null as empty, the `#` trailer) live in docs/api.md, "CSV exports"; this module
+ * is pure so they can be unit-tested away from a database.
  */
 
 /** A cell before it is written. `null` means empty, never the text "null". */
 export type Cell = string | number | boolean | null | undefined;
 
-/**
- * Quote a field if it could otherwise break the row, and double any quote
- * inside it.
- *
- * A comma, a quote and a newline are the three characters that can do that.
- * Notes are free text typed outdoors, so all three turn up in practice: a note
- * containing a newline must still parse as one row.
- */
+/** Quote a field holding `,`, `"` or a newline, doubling any quote inside it. */
 export function csvField(value: Cell): string {
   if (value === null || value === undefined) return "";
   const text = typeof value === "string" ? value : String(value);
@@ -34,16 +21,9 @@ export function csvRow(cells: readonly Cell[]): string {
 }
 
 /**
- * A whole file: header, rows, then a trailing comment line.
- *
- * CRLF line endings, per RFC 4180 — Excel on Windows is the reader that cares,
- * and every other tool accepts them.
- *
- * `trailer` carries the OSM attribution that architecture.md invariant 9
- * requires on every export. It is a `#` comment rather than a data row so a
- * parser does not read it as a prospect; most spreadsheet software shows it as
- * a last line of text, which is exactly the point — the attribution has to be
- * visible in the file, not just in our code.
+ * A whole file: header, rows, then `trailer`, the OSM attribution (INVARIANT 11).
+ * CRLF line endings: Excel on Windows is the reader that cares, and every other
+ * tool accepts them.
  */
 export function csvFile(
   header: readonly string[],
@@ -56,11 +36,8 @@ export function csvFile(
 }
 
 /**
- * Epoch milliseconds as an ISO-8601 string, or empty.
- *
- * UTC, not a local zone: the Worker has no notion of the admin's timezone, and
- * a column that silently shifts by an hour twice a year is worse than one that
- * is explicitly UTC.
+ * Epoch milliseconds as an ISO-8601 string, or empty. UTC because a column that
+ * silently shifts an hour twice a year is worse than one that is explicitly UTC.
  */
 export function csvTimestamp(ms: number | null | undefined): string {
   if (typeof ms !== "number") return "";
@@ -78,5 +55,5 @@ export function csvDisposition(filename: string): string {
   return `attachment; filename="${filename}"`;
 }
 
-/** OSM attribution, required on every export (architecture.md invariant 9). */
+/** OSM attribution, required on every export (INVARIANT 11). */
 export const CSV_ATTRIBUTION = "# © OpenStreetMap contributors";
