@@ -14,6 +14,10 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# Least privilege (#290): checkout is the only step that uses GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     if: >
