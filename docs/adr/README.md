@@ -10,9 +10,9 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0002](0002-zero-cost-constraint.md) | Zero cost is a hard constraint | accepted — amended by 0020 |
 | [0003](0003-single-cloudflare-worker.md) | Host everything on one Cloudflare Worker | accepted |
 | [0004](0004-vite-react-pwa-not-nextjs.md) | Vite + React PWA, not Next.js | accepted |
-| [0005](0005-d1-with-drizzle.md) | D1 with Drizzle ORM | accepted |
+| [0005](0005-d1-with-drizzle.md) | D1 with Drizzle ORM | accepted — expand/contract amended by 0033 |
 | [0006](0006-cloudflare-access-auth.md) | Cloudflare Access for authentication | superseded by 0029 |
-| [0007](0007-offline-first-insert-only-sync.md) | Offline-first, insert-only sync | accepted |
+| [0007](0007-offline-first-insert-only-sync.md) | Offline-first, insert-only sync | accepted — contract window amended by 0033 |
 | [0008](0008-map-import-via-overpass.md) | Map import via OpenStreetMap Overpass | accepted — amended by 0020 |
 | [0009](0009-no-pdf-import.md) | No PDF import in v1 | accepted |
 | [0010](0010-live-feed-by-polling.md) | Live admin feed by polling | accepted |
@@ -38,5 +38,6 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | accepted |
 | [0031](0031-the-precache-ceiling-counts-every-precached-entry.md) | The precache ceiling counts every precached entry | proposed |
 | [0032](0032-a-stored-folded-name-for-search.md) | A stored folded name for search | accepted |
+| [0033](0033-rollout-rules-wait-for-protected-data.md) | Rollout rules wait until the data stage is protected | proposed |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.

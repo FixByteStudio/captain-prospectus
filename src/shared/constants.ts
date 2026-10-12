@@ -132,8 +132,9 @@ export function isOpen(status: Status): boolean {
 /**
  * Sync contract version: docs/domains/field-operations.md "Versioning", and the
  * sync-contract-change skill for how to bump it. Bump CLIENT_VERSION on any
- * breaking change to the /api/agent/sync payload; raise MIN_CLIENT_VERSION only
- * once every phone reports the new version.
+ * breaking change to the /api/agent/sync payload. Once the data stage is protected,
+ * raise MIN_CLIENT_VERSION only once every phone reports the new version; while
+ * disposable, raise both together (ADR-0033).
  */
 export const CLIENT_VERSION = 1;
 export const MIN_CLIENT_VERSION = 1;

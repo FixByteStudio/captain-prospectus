@@ -25,6 +25,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Map import** | Import carte | Import from an OpenStreetMap area via Overpass | scrape |
 | **Field prospect** | Prospect terrain | Prospect created by an agent on the ground (`source = field`) | |
 | **Sync** | Synchronisation | One request that pushes pending local writes and pulls the agent's list | |
+| **Data stage** | — (internal) | Whether stored data and installed phones must survive a change: `disposable` (no, the default before real field work) or `protected` (yes). Set by the owner in `CLAUDE.md` ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)) | prod mode, environment, live |
 | **Dedupe key** | — (internal) | Stable key that makes re-imports update instead of duplicate | |
 | **Today list** | Tournée du jour | The agent's open prospects, ordered by distance | route |
 | **Admin round view** | Tournée du jour | The admin's read-only view of one agent's Today list at `/admin/tournee`, ordered from that agent's stored agent position, or by name when there is none ([design](design.md#the-admin-round-view)) | tracking screen |
