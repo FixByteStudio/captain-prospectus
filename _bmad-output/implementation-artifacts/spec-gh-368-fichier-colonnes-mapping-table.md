@@ -2,7 +2,7 @@
 title: 'Fichier & colonnes shows the file and the mapping table (GH #368)'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'full'
 route_source: 'auto'
 review: ''

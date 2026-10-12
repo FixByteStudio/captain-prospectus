@@ -1,7 +1,7 @@
 ---
 tracker_id: "365"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/365"
-tracker_status: backlog
+tracker_status: done
 id: 2
 type: story
 title: "The import rail is shared by both paths"

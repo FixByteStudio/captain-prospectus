@@ -1,7 +1,7 @@
 ---
 tracker_id: "366"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/366"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "ADR: the server keeps an import log"

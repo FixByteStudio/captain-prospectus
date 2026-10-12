@@ -1,7 +1,7 @@
 ---
 tracker_id: "371"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/371"
-tracker_status: backlog
+tracker_status: done
 id: 7
 type: story
 title: "The server logs each import"

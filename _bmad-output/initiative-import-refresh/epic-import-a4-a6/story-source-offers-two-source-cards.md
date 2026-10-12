@@ -1,7 +1,7 @@
 ---
 tracker_id: "367"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/367"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Source offers two source cards"
