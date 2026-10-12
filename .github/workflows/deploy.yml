@@ -1,13 +1,13 @@
 name: Deploy
 
-# Manual only until M6 (see docs/roadmap.md). There is no Cloudflare account,
-# D1 database or API token yet, so an automatic run on every merge to main would
-# fail on every merge. At M6, uncomment the workflow_run trigger below.
+# Merging to main deploys. It follows CI rather than `push`, so a commit pushed
+# straight to main is deployed only once its own CI run has passed.
+# `workflow_dispatch` stays as the manual fallback (docs/deployment.md).
 on:
-  # workflow_run:
-  #   workflows: [CI]
-  #   types: [completed]
-  #   branches: [main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -20,9 +20,18 @@ permissions:
 
 jobs:
   deploy:
+    # `branches: [main]` above also matches a pull request from a fork whose
+    # branch is called main, and this repository is public. So the CI run must
+    # come from a push, which a fork cannot make to our main.
+    # On workflow_run, `github.sha` is the tip of main: the last line skips a
+    # re-run of an old CI run instead of deploying it, and makes the default
+    # checkout below the commit CI passed. All four are asserted in config.test.ts.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha)
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -46,3 +55,9 @@ jobs:
           command: |
             d1 migrations apply captain-prospectus --remote
             deploy
+      # Nobody watches an automatic deploy: a Worker that deployed but does not
+      # answer has to turn this run red. /api/me with no cookie is 401 by design.
+      - name: Smoke test
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://prospectus.fixbyte.cloud/login)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://prospectus.fixbyte.cloud/api/me)" = 401

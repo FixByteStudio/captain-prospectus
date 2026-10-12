@@ -125,7 +125,7 @@ claude.ai/code/routines → New routine.
 - [ ] Merge, or send it back
 - [ ] A `needs-decision` PR is answered with a **new ADR**, then the task goes
       back to `ready`
-- [ ] Deploy by hand, when you want to. Never the run
+- [ ] Merging the PR deploys it (`docs/deployment.md`). The run itself never merges and never deploys
 
 ## Known sharp edges
 

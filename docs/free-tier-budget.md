@@ -15,7 +15,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Overpass API | Public, fair-use | a few queries per week, cached 7 days | fine if cached |
 | Google Places — Nearby Search **Pro** | Per-SKU monthly free call count; Google retired the universal $200 credit in March 2025 | one call per map search, cached 7 days; a few dozen a month | **verify in the Cloud console** |
 | OSM tiles | Public, fair-use, attribution required | light admin use | fine |
-| GitHub Actions | Free minutes for private repos | a few minutes per PR | fine |
+| GitHub Actions | Free on standard runners while the repository is public; 2,000 minutes a month if it turns private | a few minutes per push and PR, a deploy per merge, a backup a day | fine |
 
 Checked: 2026-10-09 (the Workers requests, CPU and D1 rows read, written and storage figures against Cloudflare's D1 pricing and Workers limits pages; the other rows are as of 2026-09-22 and unconfirmed).
 
@@ -186,6 +186,7 @@ no index for it: in normal use the tables hold a few rows per user, so a scan co
 flood, `login_attempts` is read in full each night until it drains.
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
-operations a month; a weekly export of a database measured in megabytes uses one operation
-and a rounding error of the storage. The bucket's lifecycle rule expires objects after 90
-days, so the total never grows.
+operations a month; the daily export uses one operation. The bucket's lifecycle rule expires
+objects after 90 days, so it holds 90 exports: under 4.5 GB while the database stays under
+the 50 MB of the table above. **Watch-out**: past about 110 MB an export, 90 of them cross
+the 10 GB and R2 bills the rest. Shorten the lifecycle rule, or compress the export, before then.
