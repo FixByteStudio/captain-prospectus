@@ -1,7 +1,7 @@
 ---
 tracker_id: "372"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/372"
-tracker_status: backlog
+tracker_status: done
 id: 8
 type: story
 title: "Both import paths send the import log"
