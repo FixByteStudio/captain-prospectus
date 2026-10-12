@@ -138,4 +138,57 @@ describe("CI", () => {
     const script = readFileSync("scripts/check-precache.mjs", "utf8");
     expect(script).toMatch(/if \(override === undefined\) return 1000;/);
   });
+
+  /** A workflow without its comment lines, so a commented-out trigger cannot satisfy a guard. */
+  function readWorkflow(name: string): string {
+    return readFileSync(`.github/workflows/${name}`, "utf8").replace(/^[ \t]*#.*$/gm, "");
+  }
+
+  /** The event names directly under a workflow's `on:`. */
+  function triggersOf(workflow: string): string[] {
+    const on = /^on:\n((?: {2,}.*\n|\n)+)/m.exec(workflow);
+    if (!on) throw new Error("no on: block");
+    return [...on[1].matchAll(/^ {2}(\w+):/gm)].map(([, event]) => event);
+  }
+
+  it("deploys only the tip of main, after CI passed on a push to it", () => {
+    const deploy = readWorkflow("deploy.yml");
+
+    // No `push`: a commit pushed straight to main would deploy before its CI.
+    // No `pull_request`: a fork's code would run with the Cloudflare token.
+    expect(triggersOf(deploy)).toEqual(["workflow_run", "workflow_dispatch"]);
+
+    // `branches: [main]` also matches a fork's branch called main, so the
+    // condition is the control, and every clause of it carries weight: see
+    // the comment above it in deploy.yml.
+    const condition = /^ {4}if: >\n((?: {6}.*\n)+)/m.exec(deploy);
+    expect(condition?.[1].replace(/\s+/g, " ").trim()).toBe(
+      "github.event_name == 'workflow_dispatch' || " +
+        "(github.event.workflow_run.conclusion == 'success' && " +
+        "github.event.workflow_run.event == 'push' && " +
+        "github.event.workflow_run.head_branch == 'main' && " +
+        "github.event.workflow_run.head_sha == github.sha)",
+    );
+  });
+
+  it("applies the migrations before it deploys the Worker", () => {
+    // docs/deployment.md, "Release process". The other order runs new code
+    // against the old schema.
+    const lines = readWorkflow("deploy.yml")
+      .split("\n")
+      .map((line) => line.trim());
+    const migrateAt = lines.indexOf("d1 migrations apply captain-prospectus --remote");
+    const deployAt = lines.indexOf("deploy");
+    expect(migrateAt, "deploy.yml never applies the migrations").toBeGreaterThan(-1);
+    expect(deployAt, "the deploy must come after the migrations").toBeGreaterThan(migrateAt);
+  });
+
+  it("backs up on a schedule, into R2 and never into a GitHub artifact", () => {
+    const backup = readWorkflow("backup.yml");
+
+    expect(triggersOf(backup)).toContain("schedule");
+    // ADR-0023, #34: an artifact is a copy of every visit note on a third party.
+    expect(backup).not.toContain("upload-artifact");
+    expect(backup).toContain("r2 object put");
+  });
 });

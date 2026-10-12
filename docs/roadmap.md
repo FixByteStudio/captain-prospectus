@@ -187,7 +187,8 @@ Everything here is account setup, done once, by hand. Runbook:
 - [x] The custom domain, with the `workers.dev` route off, and the rate-limiting rule in front of `/api/auth/*`
       ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md))
 - [x] The backup bucket; the `Backup` workflow ran once
-- [ ] Re-enable the `workflow_run` trigger in `.github/workflows/deploy.yml` and the schedule in `backup.yml`
+- [x] Merging deploys and the database is backed up daily: the `workflow_run` trigger in
+      `.github/workflows/deploy.yml` and the schedule in `backup.yml` are on ([deployment.md](deployment.md#release-process))
 - [ ] Agents install the PWA from the phone browser
 - [ ] The owner flips the data stage in `CLAUDE.md` to `protected` on the first field day whose visits are kept.
       Deploying alone does not flip it: until then production may be [redeployed fresh](deployment.md#fresh-redeploy)

@@ -23,9 +23,12 @@ terminal, after `npx wrangler login`. An agent runs neither.
 3. **GitHub secrets**, in the `production` environment: `CLOUDFLARE_API_TOKEN` (an account API token for
    this account only: Workers Scripts Edit, D1 Edit, Workers R2 Storage Edit) and `CLOUDFLARE_ACCOUNT_ID`.
    A token or an account ID from another account fails the first migration with error 7403.
+   Restrict the environment to `main` (**Settings** → **Environments** → **production** → **Deployment branches
+   and tags** → **Selected branches and tags**, `main`): without it a workflow on any branch can read the token.
 4. **First deploy**: run the `Deploy` workflow on `main` (**Actions** → **Deploy** → **Run workflow**). It
-   applies every migration, then creates the Worker. There is deliberately no `deploy` npm script and no
-   local `wrangler deploy`: every deploy goes through CI (see the release process below).
+   applies every migration, then creates the Worker. Every later merge deploys by itself. There is deliberately
+   no `deploy` npm script and no local `wrangler deploy`: every deploy goes through CI (see the release process
+   below).
 5. **The sign-in secrets** ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Set all three as
    secrets, never as a var in `wrangler.jsonc` and never in the repo: in the Worker's **Settings** →
    **Variables and Secrets** → **Add**, type **Secret**, or with `wrangler secret put`. A secret survives every
@@ -103,16 +106,25 @@ Then check, on production:
 
 Trunk-based. `main` is always deployable.
 
-1. PR → CI green (typecheck, tests, build) → review → squash-merge.
-2. The `Deploy` workflow on `main`:
+1. PR → CI green (typecheck, tests, build) → review → squash-merge. **Merging deploys**, whatever the change: a
+   dependency bump, and a docs-only merge too. That one ships the same files, the build being reproducible, so
+   phones see no update.
+2. Once CI passes on that push to `main`, the `Deploy` workflow starts by itself:
    1. `wrangler d1 migrations apply captain-prospectus --remote`
    2. `wrangler deploy`
-3. Smoke test: load the app, run a sync from a phone.
+   3. a smoke test: `/login` answers 200, and `/api/me` with no cookie answers 401
+3. By hand: load the app, run a sync from a phone.
+
+Nothing in the workflow sends an alert: a failed run reaches whoever merged, or started it by hand, through GitHub's
+own notifications, if theirs are on for failed workflows. A CI run that is not a push to `main`, or whose commit is no
+longer its tip, is skipped rather than deployed; the reasons are in `deploy.yml`. To deploy again without a merge:
+**Actions** → **Deploy** → **Run workflow**. Re-running an old `Deploy` run deploys the commit of that run, not `main`.
 
 Migrations run **before** the new code. Once the data stage is `protected`, each migration must work with the deployed Worker (expand → deploy → contract across two releases). While it is `disposable`, a change ships in one migration ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)).
 
 ## Rollback
-- **Code**: `npx wrangler rollback` to the previous version (Workers keep version history).
+- **Code**: `npx wrangler rollback` to the previous version (Workers keep version history). Then revert the commit
+  on `main`: the next merge deploys `main` as it stands, the bad commit included.
 - **Data**: D1 Time Travel: `npx wrangler d1 time-travel restore captain-prospectus --timestamp=<unix>`. Retention window depends on the plan; check the D1 docs. Restore overwrites the database; export first.
 - A destructive migration (drop/rename column) is never rolled back by code rollback alone. That is why, once the data stage is `protected`, contract steps ship separately. While it is `disposable`, the fix is a [fresh redeploy](#fresh-redeploy).
 
@@ -122,14 +134,39 @@ Only while the data stage is `disposable`, and only by the owner: an agent never
 1. Ask the testers to sync until nothing is pending, and to record no visit until step 6.
 2. Export, in case: `npx wrangler d1 export captain-prospectus --remote --output=before-wipe.sql`.
 3. `npx wrangler d1 delete captain-prospectus`, then `npx wrangler d1 create captain-prospectus`.
-4. Put the new `database_id` in `wrangler.jsonc` through a pull request; run the `Deploy` workflow once it is merged.
-   It applies every migration from zero. The Worker's secrets survive, since they belong to the Worker, not the database.
+4. Put the new `database_id` in `wrangler.jsonc` through a pull request; merging it deploys, and the run applies
+   every migration from zero. The Worker's secrets survive, since they belong to the Worker, not the database.
 5. Bootstrap the owner and users again, as in the [first sign-in](#first-sign-in) steps 1 to 4: the `users` table went with the database.
 6. Each tester checks the pending count still reads zero, then clears the site data (or reinstalls the PWA) and signs in
    with their new code. Clearing site data with a visit pending loses it (INVARIANT 5).
 
 ## Backups
-Weekly `npx wrangler d1 export captain-prospectus --remote --output=backup.sql`, stored outside Cloudflare. Automate later as a scheduled GitHub Action (roadmap).
+The `Backup` workflow exports the database every day at 04:17 UTC, after the retention sweep, into the R2 bucket of
+[setup step 9](#one-time-setup-production), as `d1/<run id>-backup.sql`
+([ADR-0023](adr/0023-retention-by-redaction.md)). The bucket's lifecycle rule drops an object after 90 days. It is
+daily because Time Travel only reaches back over its retention window, and goes with the database when that is deleted.
+
+- **Is it running?** **Actions** → **Backup** shows a run each morning, and the bucket a new object. A run fails when
+  the export is empty or holds no schema. GitHub notifies whoever last changed its `cron` line of a failed run, if
+  their notifications are on for failed workflows; nothing else alerts.
+- **GitHub switches a schedule off** after 60 days without activity in a public repository. It emails first; switch it
+  back on from **Actions** → **Backup**.
+- **One more**, before anything risky: **Actions** → **Backup** → **Run workflow**.
+
+### Restore from a backup
+By the owner only, and **not yet rehearsed**: do it once before the data stage is `protected`. It is the last resort,
+since every visit synced after that export is lost. For a mistake inside the Time Travel window, [rollback](#rollback)
+loses less.
+
+1. Ask the agents to record no visit until step 5.
+2. `npx wrangler r2 object get captain-prospectus-backups/d1/<run id>-backup.sql --file=backup.sql --remote`
+3. `npx wrangler d1 delete captain-prospectus`, then `npx wrangler d1 create captain-prospectus`. Put the new
+   `database_id` in `wrangler.jsonc` on a branch, and run step 4 from it: `wrangler` reads the id there.
+4. `npx wrangler d1 execute captain-prospectus --remote --file=backup.sql`, into the empty database: the export carries
+   the schema, so no migration runs first. Then `npx wrangler d1 migrations list captain-prospectus --remote` must show
+   nothing left to apply, unless `main` has gained a migration since the export.
+5. Open the pull request for that branch; merging it deploys. Users, passphrases and sessions come back with the
+   data, since `AUTH_PEPPER` belongs to the Worker.
 
 ## Mobile install
 Agents open the URL in the phone browser, type the code an admin gave them at `/login`, then "Add to Home Screen". On iOS, install from Safari.

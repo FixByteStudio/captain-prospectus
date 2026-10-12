@@ -2,15 +2,17 @@ name: Backup
 
 # D1 holds the only copy of the data, and the project's loudest invariant is
 # "never lose a visit". Time Travel covers accidents inside its retention
-# window; this covers everything outside it.
-# Manual only until M6: there is no database to export yet, and a weekly
-# scheduled failure is noise nobody reads. Uncomment the schedule at M6.
+# window, and goes with the database if it is deleted; this covers the rest.
 #
 # The artifact this used to upload was a full copy of the database on GitHub,
 # for 90 days, which contradicted docs/security.md. It goes to R2 now (ADR-0023).
 on:
-  # schedule:
-  #   - cron: "17 3 * * 1" # Mondays, 03:17 UTC
+  schedule:
+    # Daily. 04:17 UTC is after the 03:40 retention sweep (wrangler.jsonc), so an
+    # export follows the day's redaction instead of preceding it. An ordering,
+    # not a guarantee: the sweep is bounded and may fail (ADR-0023). It is also
+    # outside any canvassing round: an export blocks the database while it runs.
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 # Least privilege (#290): checkout is the only step that uses GITHUB_TOKEN.
@@ -38,6 +40,14 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 export captain-prospectus --remote --output=backup.sql
+      # An empty export, or an error saved in its place, would otherwise land in
+      # R2 looking like a backup. This does not prove the export is whole: only
+      # a restore does (docs/deployment.md). The size is logged to watch the R2
+      # budget (docs/free-tier-budget.md).
+      - name: Check the export holds a schema
+        run: |
+          wc -c backup.sql
+          test -s backup.sql && grep -q "CREATE TABLE" backup.sql
       # Into R2, not a GitHub artifact (ADR-0023, #34). docs/security.md says
       # the data stays in the Cloudflare account, and this is what makes that
       # true: a GitHub artifact is a third-party copy of every visit note and
