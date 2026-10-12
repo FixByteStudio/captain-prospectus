@@ -187,6 +187,8 @@ flood, `login_attempts` is read in full each night until it drains.
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
 operations a month; the daily export uses one operation. The bucket's lifecycle rule expires
-objects after 90 days, so it holds 90 exports: under 4.5 GB while the database stays under
-the 50 MB of the table above. **Watch-out**: past about 110 MB an export, 90 of them cross
-the 10 GB and R2 bills the rest. Shorten the lifecycle rule, or compress the export, before then.
+objects after 90 days, so it holds 90 exports: under 4.5 GB if an export stays under 50 MB.
+That is an assumption, not a measurement: an export is SQL text, not the database file, so
+its size is not the 50 MB of the table above. The `Backup` run logs it. **Watch-out**: past
+about 110 MB an export, 90 of them cross the 10 GB and R2 bills the rest. Shorten the
+lifecycle rule, or compress the export, before then.

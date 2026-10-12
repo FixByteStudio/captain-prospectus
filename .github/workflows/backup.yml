@@ -9,8 +9,9 @@ name: Backup
 on:
   schedule:
     # Daily. 04:17 UTC is after the 03:40 retention sweep (wrangler.jsonc), so an
-    # export never carries what the sweep was about to redact, and outside any
-    # canvassing round: an export blocks the database while it runs.
+    # export follows the day's redaction instead of preceding it. An ordering,
+    # not a guarantee: the sweep is bounded and may fail (ADR-0023). It is also
+    # outside any canvassing round: an export blocks the database while it runs.
     - cron: "17 4 * * *"
   workflow_dispatch:
 
@@ -39,10 +40,14 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 export captain-prospectus --remote --output=backup.sql
-      # An empty or cut-short export would otherwise land in R2 looking like a
-      # backup, and be found out on the day it is needed.
+      # An empty export, or an error saved in its place, would otherwise land in
+      # R2 looking like a backup. This does not prove the export is whole: only
+      # a restore does (docs/deployment.md). The size is logged to watch the R2
+      # budget (docs/free-tier-budget.md).
       - name: Check the export holds a schema
-        run: test -s backup.sql && grep -q "CREATE TABLE" backup.sql
+        run: |
+          wc -c backup.sql
+          test -s backup.sql && grep -q "CREATE TABLE" backup.sql
       # Into R2, not a GitHub artifact (ADR-0023, #34). docs/security.md says
       # the data stays in the Cloudflare account, and this is what makes that
       # true: a GitHub artifact is a third-party copy of every visit note and

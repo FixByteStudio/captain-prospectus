@@ -115,9 +115,10 @@ Trunk-based. `main` is always deployable.
    3. a smoke test: `/login` answers 200, and `/api/me` with no cookie answers 401
 3. By hand: load the app, run a sync from a phone.
 
-A failed run emails whoever merged. A CI run that is not a push to `main`, or whose commit is no longer its tip, is
-skipped rather than deployed; the reasons are in `deploy.yml`. To deploy again without a merge: **Actions** →
-**Deploy** → **Run workflow**.
+Nothing in the workflow sends an alert: a failed run reaches whoever merged, or started it by hand, through GitHub's
+own notifications, if theirs are on for failed workflows. A CI run that is not a push to `main`, or whose commit is no
+longer its tip, is skipped rather than deployed; the reasons are in `deploy.yml`. To deploy again without a merge:
+**Actions** → **Deploy** → **Run workflow**. Re-running an old `Deploy` run deploys the commit of that run, not `main`.
 
 Migrations run **before** the new code. Once the data stage is `protected`, each migration must work with the deployed Worker (expand → deploy → contract across two releases). While it is `disposable`, a change ships in one migration ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)).
 
@@ -146,7 +147,8 @@ The `Backup` workflow exports the database every day at 04:17 UTC, after the ret
 daily because Time Travel only reaches back over its retention window, and goes with the database when that is deleted.
 
 - **Is it running?** **Actions** → **Backup** shows a run each morning, and the bucket a new object. A run fails when
-  the export is empty or holds no schema, and a failed run emails whoever last changed its `cron` line.
+  the export is empty or holds no schema. GitHub notifies whoever last changed its `cron` line of a failed run, if
+  their notifications are on for failed workflows; nothing else alerts.
 - **GitHub switches a schedule off** after 60 days without activity in a public repository. It emails first; switch it
   back on from **Actions** → **Backup**.
 - **One more**, before anything risky: **Actions** → **Backup** → **Run workflow**.
