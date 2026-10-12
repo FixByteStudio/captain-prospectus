@@ -1,7 +1,7 @@
 ---
 tracker_id: "303"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/303"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Every roster reader reads users"

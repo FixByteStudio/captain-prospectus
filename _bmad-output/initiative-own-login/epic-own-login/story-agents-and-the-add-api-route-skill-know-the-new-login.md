@@ -1,7 +1,7 @@
 ---
 tracker_id: "312"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/312"
-tracker_status: backlog
+tracker_status: done
 id: 15
 type: story
 title: "Agents and the add-api-route skill know the new login"

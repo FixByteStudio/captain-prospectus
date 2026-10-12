@@ -1,7 +1,7 @@
 ---
 tracker_id: "300"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/300"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "Local dev signs in as any seeded user, and Worker tests stub a D1 session"

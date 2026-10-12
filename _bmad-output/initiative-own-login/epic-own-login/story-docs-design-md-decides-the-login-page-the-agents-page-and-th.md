@@ -1,7 +1,7 @@
 ---
 tracker_id: "298"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/298"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "docs/design.md decides the login page, the Agents page and the fourth À traiter row"

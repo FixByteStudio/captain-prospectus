@@ -1,7 +1,7 @@
 ---
 tracker_id: "339"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/339"
-tracker_status: backlog
+tracker_status: done
 id: 19
 type: story
 title: "/login shows the waiting visits and the update prompt"

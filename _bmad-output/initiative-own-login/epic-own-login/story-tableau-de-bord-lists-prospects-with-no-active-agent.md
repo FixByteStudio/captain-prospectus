@@ -1,7 +1,7 @@
 ---
 tracker_id: "308"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/308"
-tracker_status: backlog
+tracker_status: done
 id: 11
 type: story
 title: "Tableau de bord lists prospects with no active agent"

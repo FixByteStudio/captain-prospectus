@@ -1,7 +1,7 @@
 ---
 tracker_id: "313"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/313"
-tracker_status: backlog
+tracker_status: done
 id: 16
 type: story
 title: "deployment and free-tier-budget docs describe phase 1"
