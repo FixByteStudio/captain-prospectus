@@ -156,6 +156,21 @@ describe("ImportScreen", () => {
     );
   });
 
+  it("keeps a file read that ends after « Dessiner une zone » on the CSV path (epic #363 retro, F3)", async () => {
+    renderScreen();
+    let finish: (text: string) => void = () => undefined;
+    const file = new File([""], "late.csv", { type: "text/csv" });
+    // The read is held open so the fork can change before it lands.
+    vi.spyOn(file, "text").mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await userEvent.upload(fileInput(), file);
+    await userEvent.click(screen.getByRole("button", { name: copy.import.source.map.action }));
+    finish("nom,latitude,longitude\nLe lieu,50.85,4.35");
+
+    await screen.findByText(copy.import.columns.lede);
+    const nav = screen.getByRole("navigation", { name: copy.import.steps.label });
+    expect(within(nav).getAllByRole("listitem")).toHaveLength(3);
+  });
+
   it.each([
     ["an empty file", "nom,latitude\n", copy.import.file.emptyFile],
     ["a file with no header", "", copy.import.file.noHeaders],

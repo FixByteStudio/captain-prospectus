@@ -529,6 +529,9 @@ export const adminCopy = {
       updated: (n: number) =>
         n === 1 ? "1 prospect mis à jour" : `${formatCount(n)} prospects mis à jour`,
       skipped: (n: number) => (n === 1 ? "1 ligne rejetée" : `${formatCount(n)} lignes rejetées`),
+      // The map path's only rejection (docs/domains/ingestion.md › Unnamed elements).
+      unnamed: (n: number) =>
+        n === 1 ? "1 lieu sans nom rejeté" : `${formatCount(n)} lieux sans nom rejetés`,
       seeProspects: "Voir les prospects",
     },
     failed:

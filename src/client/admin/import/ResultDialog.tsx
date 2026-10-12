@@ -1,4 +1,3 @@
-import type { ImportResult } from "../../../shared/schemas";
 import { copy } from "../../copy";
 import { Button } from "../../ui/button";
 import {
@@ -8,16 +7,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../ui/dialog";
+import type { ImportRunResult } from "../queries";
 
-/** What actually happened, in the app's own words: created, updated, rejected. */
+/**
+ * What actually happened, in the app's own words: created, updated, rejected.
+ *
+ * The rejected count is the one the run sent with its log, never the CSV state:
+ * a file read before the admin turned to the map would otherwise be reported
+ * for a map import (epic #363 retro, F3). On a map run it is the unnamed
+ * places, so it says so.
+ */
 export function ResultDialog({
   result,
-  rejectedCount,
   onClose,
   onSeeProspects,
 }: {
-  result: ImportResult | null;
-  rejectedCount: number;
+  result: ImportRunResult | null;
   onClose: () => void;
   onSeeProspects: () => void;
 }) {
@@ -32,10 +37,12 @@ export function ResultDialog({
                 {copy.import.result.created(result.created)}
                 {" · "}
                 {copy.import.result.updated(result.updated)}
-                {rejectedCount > 0 && (
+                {result.rejected > 0 && (
                   <>
                     {" · "}
-                    {copy.import.result.skipped(rejectedCount)}
+                    {result.source === "csv"
+                      ? copy.import.result.skipped(result.rejected)
+                      : copy.import.result.unnamed(result.rejected)}
                   </>
                 )}
               </>

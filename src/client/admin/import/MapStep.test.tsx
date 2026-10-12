@@ -5,7 +5,7 @@
  * evaluates neither layout nor computed colour.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
@@ -350,5 +350,53 @@ describe("MapStep", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(copy.map.failed);
     expect(screen.getByRole("button", { name: copy.map.search })).toBeTruthy();
+  });
+
+  /**
+   * Epic #363 retro, F3: Retour on Fichier & colonnes keeps the parsed file, so
+   * the dialog used to report its rejected lines for a map import. It reports
+   * what the run sent with its log: on this path, the unnamed places.
+   */
+  it.each([
+    ["no unnamed place, so no rejected count", [candidate()], 0],
+    [
+      "one unnamed place, named as such",
+      [candidate(), candidate({ sourceRef: "node/2", name: "", named: false })],
+      1,
+    ],
+  ])("after a file and Retour, a map import's result shows %s", async (_name, found, unnamed) => {
+    stubFetch(
+      vi.fn(async (url: RequestInfo | URL) =>
+        String(url) === "/api/admin/prospects/batch"
+          ? json({ created: 1, updated: 0 })
+          : json(answer({ candidates: found })),
+      ),
+    );
+    renderScreen();
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error("no file input");
+    // Two lines without a name: the CSV preview would reject both.
+    const file = new File(
+      ["nom,latitude,longitude\nLe lieu,50.85,4.35\n,50.85,4.35\n,50.86,4.36"],
+      "f.csv",
+    );
+    await userEvent.upload(input, file);
+    await screen.findByText(copy.import.columns.lede);
+    await userEvent.click(screen.getByRole("button", { name: copy.import.actions.back }));
+    await userEvent.click(screen.getByRole("button", { name: copy.import.source.map.action }));
+    await drawPolygon();
+    await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
+    await userEvent.click(await screen.findByRole("button", { name: copy.map.results.start(1) }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(copy.import.result.created(1), { exact: false })).toBeTruthy();
+    // No CSV line, whatever the count.
+    expect(dialog.textContent).not.toMatch(/lignes? rejetées?/);
+    if (unnamed > 0) {
+      expect(dialog.textContent).toContain(copy.import.result.unnamed(unnamed));
+    } else {
+      expect(dialog.textContent).not.toContain(copy.import.result.unnamed(1));
+      expect(dialog.textContent?.split(" · ")).toHaveLength(2);
+    }
   });
 });

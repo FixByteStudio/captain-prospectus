@@ -759,7 +759,8 @@ unchanged apart from its rail.
   sidebar click is a router navigation, which `useBlocker` would catch but
   needs a data router, so it stays out of scope.
 - **Done and failed mid-way** are unchanged: the « Import terminé » dialog
-  (created · updated · rejected), and on a failed batch a destructive Alert
+  (created · updated · rejected, the rejected count the run sent with its
+  log; on the map path, « {n} lieux sans nom rejetés »), and on a failed batch a destructive Alert
   that names how many rows went in (`copy.import.failedAfter`) with
   « Réessayer ». Retour clears that failure, and a retry re-sends every row
   from the start, which is safe because the batch write is idempotent
