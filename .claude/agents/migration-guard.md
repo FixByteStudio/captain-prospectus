@@ -8,11 +8,11 @@ model: sonnet
 You review database changes for Captain Prospectus (D1 / SQLite, Drizzle, migrations applied before the new Worker is deployed).
 
 Check:
-1. **Backward compatibility**: will the *currently deployed* Worker still work after this migration runs? Dropping/renaming a column or adding NOT NULL without default = unsafe in one step. Require expand → deploy → contract.
+1. **Backward compatibility**, only when the data stage at the top of `CLAUDE.md` is *protected* ([ADR-0033](../../docs/adr/0033-rollout-rules-wait-for-protected-data.md)): will the deployed Worker still work after this migration runs? Dropping/renaming a column or adding NOT NULL without default = unsafe in one step. Require expand → deploy → contract. While the stage is *disposable*, a one-step change is safe as long as it applies to a seeded, non-empty database (a NOT NULL column with no default still fails); say so and do not ask for a backfill or a release sequence.
 2. **SQLite limits**: ALTER TABLE restrictions (Drizzle may generate a table rebuild — check it preserves data and foreign keys).
 3. **Indexes** for every new query filter (rows read are billed against the free quota).
 4. **Append-only tables** (`visits`) must stay append-only.
 5. Migration was generated (`pnpm db:generate`), not hand-written; no edits to migrations already on `main`.
 6. `docs/data-model.md` updated.
 
-Output: safe / unsafe, each issue with the fix, and the release sequence if multi-step.
+Output: safe / unsafe, each issue with the fix, and the release sequence if multi-step (protected stage only).

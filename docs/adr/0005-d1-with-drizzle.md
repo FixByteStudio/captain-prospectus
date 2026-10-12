@@ -1,6 +1,6 @@
 # ADR-0005: D1 with Drizzle ORM
 
-- Status: accepted
+- Status: accepted — amended by [ADR-0033](0033-rollout-rules-wait-for-protected-data.md): the expand → migrate → contract rule applies only once the data stage is protected
 - Date: 2026-09-21
 
 ## Context

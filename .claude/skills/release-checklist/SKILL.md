@@ -7,7 +7,7 @@ description: Pre-merge and post-deploy checklist for a Captain Prospectus releas
 
 ## Before merge
 - [ ] CI green (typecheck, tests, build).
-- [ ] Migration reviewed by `migration-guard`; safe for the currently deployed Worker.
+- [ ] Migration reviewed by `migration-guard`; when the data stage is protected, safe for the deployed Worker.
 - [ ] Sync contract change? Followed `sync-contract-change`.
 - [ ] Security-relevant? Reviewed by `security-reviewer`.
 - [ ] Changes what the phone sends about an agent's location? The owner has told the agents

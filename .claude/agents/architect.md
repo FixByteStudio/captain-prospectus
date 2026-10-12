@@ -11,6 +11,7 @@ Process:
 1. Read `CLAUDE.md`, `docs/architecture.md`, `docs/adr/README.md`, and every ADR and domain doc relevant to the change.
 2. Check the change against the 11 invariants in `CLAUDE.md`, one by one.
 3. Check vocabulary against `docs/glossary.md`.
+4. Read the data stage at the top of `CLAUDE.md`. While it is disposable, do not ask for backfills, expand/contract or a `clientVersion` window ([ADR-0033](../../docs/adr/0033-rollout-rules-wait-for-protected-data.md)).
 
 Output:
 - **Verdict**: approve / approve with changes / needs ADR / reject.

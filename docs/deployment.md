@@ -4,7 +4,9 @@
 | Env | Where | Database | Auth |
 |---|---|---|---|
 | Local | `pnpm dev` (Vite + workerd via `@cloudflare/vite-plugin`) | Local D1 (in `.wrangler/`) | `DEV_USER_EMAIL` in `.dev.vars` |
-| Production | `captain-prospectus.<account>.workers.dev` | D1 `captain-prospectus` | Our own login, behind Cloudflare Access until the [cutover](#cutover-to-our-own-login) ends |
+| Production (not created until M6) | `captain-prospectus.<account>.workers.dev` | D1 `captain-prospectus` | Our own login, behind Cloudflare Access until the [cutover](#cutover-to-our-own-login) ends |
+
+While the [data stage](adr/0033-rollout-rules-wait-for-protected-data.md) in `CLAUDE.md` is `disposable`, production is as throwaway as local: it may be [redeployed fresh](#fresh-redeploy) at any time.
 
 A staging environment is not planned for v1 (two agents, low risk). If added: a wrangler `env.staging` with its own Worker name and D1 database, and its own Access application.
 
@@ -106,12 +108,24 @@ Trunk-based. `main` is always deployable.
    2. `wrangler deploy`
 3. Smoke test: load the app, run a sync from a phone.
 
-Migrations run **before** the new code, so each migration must work with the currently deployed Worker (expand → deploy → contract across two releases).
+Migrations run **before** the new code. Once the data stage is `protected`, each migration must work with the deployed Worker (expand → deploy → contract across two releases). While it is `disposable`, a change ships in one migration ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)).
 
 ## Rollback
 - **Code**: `npx wrangler rollback` to the previous version (Workers keep version history).
 - **Data**: D1 Time Travel: `npx wrangler d1 time-travel restore captain-prospectus --timestamp=<unix>`. Retention window depends on the plan; check the D1 docs. Restore overwrites the database; export first.
-- A destructive migration (drop/rename column) is never rolled back by code rollback alone. That is why contract steps ship separately.
+- A destructive migration (drop/rename column) is never rolled back by code rollback alone. That is why, once the data stage is `protected`, contract steps ship separately. While it is `disposable`, the fix is a [fresh redeploy](#fresh-redeploy).
+
+## Fresh redeploy
+Only while the data stage is `disposable`, and only by the owner: an agent never runs any of this.
+
+1. Ask the testers to sync until nothing is pending, and to record no visit until step 6.
+2. Export, in case: `npx wrangler d1 export captain-prospectus --remote --output=before-wipe.sql`.
+3. `npx wrangler d1 delete captain-prospectus`, then `npx wrangler d1 create captain-prospectus`.
+4. Put the new `database_id` in `wrangler.jsonc` through a pull request; run the `Deploy` workflow once it is merged.
+   It applies every migration from zero. The Worker's secrets survive, since they belong to the Worker, not the database.
+5. Bootstrap the owner and users again, as in [phase 1](#cutover-to-our-own-login) steps 3 to 6: the `users` table went with the database.
+6. Each tester checks the pending count still reads zero, then clears the site data (or reinstalls the PWA) and signs in
+   with their new code. Clearing site data with a visit pending loses it (INVARIANT 5).
 
 ## Backups
 Weekly `npx wrangler d1 export captain-prospectus --remote --output=backup.sql`, stored outside Cloudflare. Automate later as a scheduled GitHub Action (roadmap).

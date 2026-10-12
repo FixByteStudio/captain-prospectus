@@ -1,6 +1,6 @@
 # ADR-0007: Offline-first, insert-only sync
 
-- Status: accepted
+- Status: accepted — amended by [ADR-0033](0033-rollout-rules-wait-for-protected-data.md): the additive-contract and `clientVersion` window rule applies only once the data stage is protected
 - Date: 2026-09-21
 
 ## Context

@@ -7,8 +7,8 @@ Closes #
 - [ ] Typecheck, tests and build pass
 - [ ] Docs updated (`docs/api.md`, `docs/data-model.md`, domain docs) — or not needed
 - [ ] New/changed architectural decision → ADR added — or not needed
-- [ ] Schema change reviewed for expand/contract safety — or none
-- [ ] Sync contract unchanged, or change is backward compatible (`sync-contract-change` skill)
+- [ ] Schema change: one migration while the data stage is disposable, expand/contract reviewed once it is protected — or none
+- [ ] Sync contract unchanged, or changed per the `sync-contract-change` skill (backward compatible once the data stage is protected)
 - [ ] No paid service or new dependency — or justified in the description (ADR-0002)
 - [ ] Glossary terms used in code and UI
 - [ ] One concern only — unrelated findings filed as issues, not fixed here (listed below)

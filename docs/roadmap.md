@@ -185,3 +185,6 @@ Everything here is account setup, done once, by hand. Runbook:
 - [ ] Re-enable the `workflow_run` trigger in `.github/workflows/deploy.yml` and the schedule in `backup.yml`
 - [ ] First deploy; verify Access login, `/api/me`, and that `curl` with no cookie gets 401
 - [ ] Agents install the PWA from the phone browser
+- [ ] The owner flips the data stage in `CLAUDE.md` to `protected` on the first field day whose visits are kept.
+      Deploying alone does not flip it: until then production may be [redeployed fresh](deployment.md#fresh-redeploy)
+      ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md))

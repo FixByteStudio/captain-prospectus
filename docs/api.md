@@ -383,4 +383,4 @@ and not listed by `GET /api/admin/users` until an admin `POST`s them.
 - Timestamps: epoch ms integers.
 - IDs created on phones: UUIDv4 (`crypto.randomUUID()`).
 - Field names: camelCase in JSON, snake_case in SQL (Drizzle maps them).
-- Adding a field is non-breaking. Removing or renaming one in the sync contract requires bumping the minimum `clientVersion` in a later release, after all phones have updated.
+- Adding a field is non-breaking. Once the data stage is `protected`, removing or renaming one in the sync contract requires bumping the minimum `clientVersion` in a later release, after all phones have updated. While it is `disposable`, both sides change at once and both versions rise together ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)).
