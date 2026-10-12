@@ -36,7 +36,7 @@
       "database_name": "captain-prospectus",
       // Replace after `npx wrangler d1 create captain-prospectus`.
       // See docs/deployment.md, "One-time setup".
-      "database_id": "REPLACE_ME_SEE_docs_deployment_md",
+      "database_id": "4a174661-a684-45da-a23d-5f088c386542",
       "migrations_dir": "drizzle",
     },
   ],
