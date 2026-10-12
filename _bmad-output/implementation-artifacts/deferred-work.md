@@ -374,3 +374,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-offline-after-reload-page.md`
   summary: An `/admin/*` route on a cached identity says « Hors ligne. Cette page a besoin du réseau… » even when the browser is online and `/api/me` failed (a Worker 5xx, a captive portal), while the strip above it says « Vérification de votre session… ».
   evidence: `App.tsx` keys the page on `identityFromCache`, which `resolveIdentity` sets for every non-401 failure. EXPERIENCE.md § State Patterns gives one sentence for the state; a second one for "reached nothing, but not offline" is the owner's wording to choose. Before GH #209 story 3 the same case read « Vous n'avez pas accès à cette page. », which was worse.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-404-sync-batch-size.md`
+  summary: Sync CPU with field prospects in the payload is unmeasured; the dedupe lookup is one statement per field prospect (GH #449).
+  evidence: Blind and edge-case lenses; `routes/agent.ts:112` `chunk(keys, 1)`; pre-existing, `measure-sync-cpu.mjs` sends `prospects: []`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-404-sync-batch-size.md`
+  summary: Sync CPU for a batch of visits with full notes and answers is unmeasured (GH #450).
+  evidence: Blind lens; the measured payload is bare visits; the byte cap that bounds a heavy batch is unchanged by #404.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-404-sync-batch-size.md`
+  summary: No signal for when the server can lower its 200-visit accept limit, since `clientVersion` was not bumped (GH #451).
+  evidence: Blind lens; the intent keeps 200 for old builds and forbids the bump, so retiring it needs a later decision.

@@ -4,15 +4,19 @@
  * Split out of the hook that uses it so the rules can be tested without a
  * browser, a timer or a network. Every function here is pure.
  */
+import { SYNC_VISITS_PER_BATCH } from "../../shared/constants";
 import { backoffDelayMs, SYNC_INTERVAL_MS, type SyncResult, type SyncStatus } from "./sync";
+
+/** Visits one trigger may drain: past a week of two agents' output. */
+export const DRAIN_VISITS = 1_200;
 
 /**
  * The pass cap, backstop under `shouldDrain`'s progress rule
  * (docs/domains/field-operations.md, "Repeats" means while it is making
- * progress). Six passes of 200 clear 1200 visits, past a week of two agents'
- * output; the rest waits for the next trigger, seconds later.
+ * progress). Derived from the batch, so a smaller batch (GH #404) still clears
+ * DRAIN_VISITS in one trigger; the rest waits for the next, seconds later.
  */
-export const MAX_DRAIN_PASSES = 6;
+export const MAX_DRAIN_PASSES = Math.ceil(DRAIN_VISITS / SYNC_VISITS_PER_BATCH);
 
 /**
  * Whether to run another pass at once: only after a success that left rows

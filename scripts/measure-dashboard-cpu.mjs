@@ -10,7 +10,8 @@
  *
  * So this runs the real Worker, bundled by Vite into one minified ESM file
  * (close to, not byte for byte, the Cloudflare plugin's build), in Node's V8
- * — the engine workerd embeds — against a copy of the local seeded D1. D1 is
+ * — the engine workerd embeds — against a copy of the local seeded D1, with
+ * any drizzle/ migration the dev database lacks applied to the copy. D1 is
  * a synchronous `node:sqlite` shim whose own CPU is measured and taken out,
  * which leaves what production bills: routing, auth, zod, `Intl`, row mapping
  * and JSON. It first times a cold request, the fresh module's first, then
@@ -24,101 +25,37 @@
  *        EXPLAIN=1 to print each statement's query plan instead, with its
  *        bound-parameter count (INVARIANT 7).
  */
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { pathToFileURL } from "node:url";
-import { build } from "vite";
+import { join } from "node:path";
+import { at, buildWorker, copyLocalD1, d1Shim, timeRequest } from "./worker-cpu-shim.mjs";
 
-const ROOT = resolve(import.meta.dirname, "..");
 const RUNS = Number(process.env.RUNS ?? 200);
 const WARMUP = Number(process.env.WARMUP ?? 50);
 const PERIODS = [7, 30, 90];
 const ADMIN = "admin@example.com";
 
-function localD1() {
-  if (process.env.D1_SQLITE) return process.env.D1_SQLITE;
-  const dir = join(ROOT, ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
-  const file = readdirSync(dir).find((f) => f.endsWith(".sqlite") && f !== "metadata.sqlite");
-  if (!file) throw new Error(`no local D1 in ${dir}: run pnpm db:migrate:local and the seed`);
-  return join(dir, file);
-}
-
 const work = mkdtempSync(join(tmpdir(), "dashboard-cpu-"));
 try {
   // A copy, so the live dev database is only ever read.
-  const copy = join(work, "d1.sqlite");
-  new DatabaseSync(localD1(), { readOnly: true }).exec(`vacuum into '${copy}'`);
-  const sqlite = new DatabaseSync(copy);
-
-  await build({
-    root: ROOT,
-    configFile: false,
-    logLevel: "warn",
-    build: {
-      ssr: join(ROOT, "src/worker/index.ts"),
-      outDir: join(work, "worker"),
-      emptyOutDir: true,
-      minify: true,
-      rollupOptions: { output: { format: "es", entryFileNames: "worker.mjs" } },
-    },
-    ssr: { noExternal: true, target: "webworker" },
-  });
-  const worker = (await import(pathToFileURL(join(work, "worker/worker.mjs")).href)).default;
-
-  /** CPU µs spent inside SQLite during the current request. */
-  let sqlUs = 0;
-  const timed = (run) => {
-    const start = process.cpuUsage();
-    try {
-      return run();
-    } finally {
-      const used = process.cpuUsage(start);
-      sqlUs += used.user + used.system;
-    }
-  };
-  // What drizzle-orm/d1 calls on a D1Database, and nothing else.
-  const statement = (query, params = []) => ({
-    bind: (...next) => statement(query, next),
-    all: async () => ({
-      results: timed(() => sqlite.prepare(query).all(...params)),
-      success: true,
-      meta: {},
-    }),
-    raw: async () =>
-      timed(() => {
-        const stmt = sqlite.prepare(query);
-        stmt.setReturnArrays(true);
-        return stmt.all(...params);
-      }),
-    first: async () => timed(() => sqlite.prepare(query).get(...params) ?? null),
-    run: async () => ({ ...timed(() => sqlite.prepare(query).run(...params)), success: true }),
-  });
+  const sqlite = copyLocalD1(work);
+  const worker = await buildWorker(work);
+  const shim = d1Shim(sqlite);
   const env = {
-    DB: {
-      prepare: (query) => statement(query),
-      batch: async (s) => Promise.all(s.map((x) => x.all())),
-    },
+    DB: shim.DB,
     DEV_USER_EMAIL: ADMIN,
     ADMIN_EMAILS: ADMIN,
     AGENT_EMAILS: "agent@example.com",
   };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
 
-  async function once(period) {
-    sqlUs = 0;
-    const start = process.cpuUsage();
-    const response = await worker.fetch(
+  const once = (period) =>
+    timeRequest(
+      worker,
       new Request(`http://localhost/api/admin/dashboard?period=${period}`),
       env,
-      ctx,
+      shim,
     );
-    const body = await response.text();
-    const used = process.cpuUsage(start);
-    if (response.status !== 200) throw new Error(`period ${period}: ${response.status} ${body}`);
-    return { total: (used.user + used.system) / 1000, sql: sqlUs / 1000 };
-  }
 
   const explainOnly = Boolean(process.env.EXPLAIN);
   if (explainOnly) {
@@ -160,7 +97,6 @@ try {
       }
       workerMs.sort((a, b) => a - b);
       sqlMs.sort((a, b) => a - b);
-      const at = (xs, q) => xs[Math.min(xs.length - 1, Math.floor(q * xs.length))];
       worst = Math.max(worst, workerMs[workerMs.length - 1]);
       rows.push({
         period,
