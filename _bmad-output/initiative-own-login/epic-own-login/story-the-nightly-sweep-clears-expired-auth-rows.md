@@ -1,7 +1,7 @@
 ---
 tracker_id: "310"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/310"
-tracker_status: backlog
+tracker_status: done
 id: 13
 type: story
 title: "The nightly sweep clears expired auth rows"

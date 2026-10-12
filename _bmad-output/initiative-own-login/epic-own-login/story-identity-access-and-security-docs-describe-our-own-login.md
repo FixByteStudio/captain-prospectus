@@ -1,7 +1,7 @@
 ---
 tracker_id: "311"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/311"
-tracker_status: backlog
+tracker_status: done
 id: 14
 type: story
 title: "identity-access and security docs describe our own login"

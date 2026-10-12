@@ -1,7 +1,7 @@
 ---
 tracker_id: "299"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/299"
-tracker_status: backlog
+tracker_status: done
 id: 2
 type: story
 title: "Break-glass gives the owner a session on /login"

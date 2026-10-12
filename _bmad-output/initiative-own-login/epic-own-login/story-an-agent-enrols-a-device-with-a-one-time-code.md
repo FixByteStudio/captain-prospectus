@@ -1,7 +1,7 @@
 ---
 tracker_id: "305"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/305"
-tracker_status: backlog
+tracker_status: done
 id: 8
 type: story
 title: "An agent enrols a device with a one-time code"

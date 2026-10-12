@@ -1,7 +1,7 @@
 ---
 tracker_id: "304"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/304"
-tracker_status: backlog
+tracker_status: done
 id: 7
 type: story
 title: "The Agents page lists, creates and deactivates users"

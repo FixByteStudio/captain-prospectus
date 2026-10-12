@@ -1,7 +1,7 @@
 ---
 tracker_id: "302"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/302"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Admins manage users through the API"

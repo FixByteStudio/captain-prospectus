@@ -1,7 +1,7 @@
 ---
 tracker_id: "307"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/307"
-tracker_status: backlog
+tracker_status: done
 id: 10
 type: story
 title: "Each device's session can be seen and revoked"
