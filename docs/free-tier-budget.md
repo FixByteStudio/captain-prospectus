@@ -10,7 +10,8 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | low tens of thousands | large |
 | D1 rows written | 100 k / day (**enforced**) | imports up to a few thousand; visits ~100 | large |
-| Cloudflare Access | Free Zero Trust plan, seat-capped | 3–4 users | large |
+| Zone rate-limiting rules | 1 per zone on the Free plan, counted per IP | 1, in front of `/api/auth/*` ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md)) | **none** |
+| Custom domain | `fixbyte.cloud`, already owned for other work | one subdomain | no added cost |
 | Overpass API | Public, fair-use | a few queries per week, cached 7 days | fine if cached |
 | Google Places — Nearby Search **Pro** | Per-SKU monthly free call count; Google retired the universal $200 credit in March 2025 | one call per map search, cached 7 days; a few dozen a month | **verify in the Cloud console** |
 | OSM tiles | Public, fair-use, attribution required | light admin use | fine |
@@ -36,12 +37,14 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (`hmacKey`, `session.ts`), so there is no key import. A sign-in does 3 to 5 HMACs (the IP, the credential,
   the new token; break-glass adds a second to compare). D1 time is not billed. **Not measured**: unlike the
   dashboard's below, no script times a sign-in, so the 10 ms watch-out is argued, not shown.
-- **The exposed request quota.** While Access fronts the hostname (phases 1 and 2) it refuses anonymous
-  requests before the Worker runs. Once it is gone, anonymous `/api/auth/*` requests run the Worker and count
-  against the 100,000 a day **even when they get 429**; the D1 throttle cannot prevent that, because the
-  request is already counted. **Residual risk, recorded**: until the question of a free WAF rate-limiting rule
-  in front of `/api/auth/*` is answered, before phase 3 (epic-access-removed), a flood can exhaust the day's
-  quota and take the app down until midnight UTC. Nothing bills.
+- **The exposed request quota.** Nothing stands in front of the hostname
+  ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)), so anonymous `/api/auth/*` requests run the Worker
+  and count against the 100,000 a day **even when they get 429**; the D1 throttle cannot prevent that, because
+  the request is already counted. The zone's rate-limiting rule blocks an IP before the Worker runs
+  ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md),
+  [deployment](deployment.md#one-time-setup-production)). **Residual risk, recorded**: the rule counts per IP,
+  so a flood from many IPs can still exhaust the day's quota and take the app down until midnight UTC. Nothing
+  bills.
 
 ## Watch-outs
 

@@ -7,7 +7,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | accepted — amended by 0024 |
-| [0002](0002-zero-cost-constraint.md) | Zero cost is a hard constraint | accepted — amended by 0020 |
+| [0002](0002-zero-cost-constraint.md) | Zero cost is a hard constraint | accepted — amended by 0020 and 0035 |
 | [0003](0003-single-cloudflare-worker.md) | Host everything on one Cloudflare Worker | accepted |
 | [0004](0004-vite-react-pwa-not-nextjs.md) | Vite + React PWA, not Next.js | accepted |
 | [0005](0005-d1-with-drizzle.md) | D1 with Drizzle ORM | accepted — expand/contract amended by 0033 |
@@ -17,7 +17,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0009](0009-no-pdf-import.md) | No PDF import in v1 | accepted |
 | [0010](0010-live-feed-by-polling.md) | Live admin feed by polling | accepted |
 | [0011](0011-server-derived-prospect-status.md) | Prospect status derived by the server | accepted |
-| [0012](0012-workers-dev-hostname.md) | Use the workers.dev hostname | accepted — amended by 0029 |
+| [0012](0012-workers-dev-hostname.md) | Use the workers.dev hostname | superseded by 0035 |
 | [0013](0013-frontend-conventions.md) | Frontend conventions — plain CSS, French UI, client state | partially superseded by 0014 |
 | [0014](0014-tailwind-and-shadcn-ui.md) | Tailwind CSS and shadcn/ui for the interface | accepted — decision 2 amended by 0015 and 0026 |
 | [0015](0015-native-controls-on-the-field-route.md) | Native form controls on the field route where shadcn's cost breaches the bundle budget | accepted — validation decision superseded by 0018, budget superseded by 0026 |
@@ -34,10 +34,12 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0026](0026-budget-the-field-precache-not-the-entry-chunk.md) | Budget the field route by its precache, not its entry chunk | accepted — ceiling basis amended by 0031 |
 | [0027](0027-interested-is-its-own-closed-status.md) | An "Intéressé" visit gives the prospect its own closed status | accepted |
 | [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | accepted |
-| [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted |
+| [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted — decision 12 amended by 0034 |
 | [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | accepted |
 | [0031](0031-the-precache-ceiling-counts-every-precached-entry.md) | The precache ceiling counts every precached entry | proposed |
 | [0032](0032-a-stored-folded-name-for-search.md) | A stored folded name for search | accepted |
 | [0033](0033-rollout-rules-wait-for-protected-data.md) | Rollout rules wait until the data stage is protected | proposed |
+| [0034](0034-launch-on-our-own-login-alone.md) | Launch on our own login alone, with no Cloudflare Access phase | accepted |
+| [0035](0035-serve-the-app-on-a-domain-we-already-own.md) | Serve the app on a domain we already own | accepted |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.

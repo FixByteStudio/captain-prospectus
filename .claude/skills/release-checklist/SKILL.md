@@ -19,7 +19,7 @@ description: Pre-merge and post-deploy checklist for a Captain Prospectus releas
 - [ ] Service worker still excludes `/api/*` from caching.
 
 ## After deploy (CI does migrate → deploy)
-- [ ] App loads on the workers.dev URL through Access.
+- [ ] App loads on the production URL (`docs/deployment.md`) and `/login` signs in.
 - [ ] `/api/me` returns the right role.
 - [ ] A phone completes a sync; admin feed shows the visit.
 - [ ] Workers logs show no new errors for 15 minutes.
