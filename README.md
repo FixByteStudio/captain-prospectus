@@ -18,11 +18,10 @@ B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a
 
 ## Status
 
-M0 done: the app is scaffolded, CI runs lint, typecheck, tests and build, and the
-sync endpoint works end to end against a local D1. Not yet deployed — the
-Cloudflare account and Access application are set up by hand, see
-[deployment](docs/deployment.md). Next: M1, prospects and CSV import.
-See the [roadmap](docs/roadmap.md).
+Deployed since 2026-10-12 on Cloudflare, behind our own login; the account setup is
+done once, by hand, see [deployment](docs/deployment.md). Production is still a trial:
+its data may be wiped and redeployed until the first field day whose visits are kept.
+See the [roadmap](docs/roadmap.md) for what is left of M6.
 
 ## Develop
 
@@ -50,7 +49,7 @@ The default seed holds 10 blank prospects, unassigned and never visited, plus th
 
 ## Stack
 
-Vite + React PWA · Hono on a single Cloudflare Worker · D1 (SQLite) + Drizzle · Dexie (IndexedDB) · Leaflet + OpenStreetMap/Overpass · Cloudflare Access.
+Vite + React PWA · Hono on a single Cloudflare Worker · D1 (SQLite) + Drizzle · Dexie (IndexedDB) · Leaflet + OpenStreetMap/Overpass · our own login, with sessions in D1.
 
 ## License
 
