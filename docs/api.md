@@ -76,7 +76,8 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 Every array is bounded, because one request must stay inside the Workers Free
 10 ms CPU budget (`docs/free-tier-budget.md`). The limits live in
 `src/shared/constants.ts`: 250 import rows, 200 visits and 100 field prospects
-per sync, 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
+per sync (the server's accept limit; a current phone sends at most 50 visits a
+pass, and an older build up to 200 — GH #404), 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
 per list page, 1000 candidates per Overpass import. A Google import is capped at 20 by
 Google itself.
 

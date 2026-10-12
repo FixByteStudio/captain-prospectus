@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SyncResult, SyncStatus } from "./sync";
 import { SYNC_INTERVAL_MS } from "./sync";
+import { SYNC_VISITS_PER_BATCH } from "../../shared/constants";
 import {
+  DRAIN_VISITS,
   MAX_DRAIN_PASSES,
   isWorthReporting,
   nextDelayMs,
@@ -62,6 +64,11 @@ describe("shouldDrain", () => {
     const progressing = result({ acceptedVisits: 200, remaining: 200 });
     expect(shouldDrain(progressing, MAX_DRAIN_PASSES - 1)).toBe(true);
     expect(shouldDrain(progressing, MAX_DRAIN_PASSES)).toBe(false);
+  });
+
+  it("still clears 1,200 visits in one trigger at the phone's batch size (GH #404)", () => {
+    expect(DRAIN_VISITS).toBe(1_200);
+    expect(MAX_DRAIN_PASSES * SYNC_VISITS_PER_BATCH).toBeGreaterThanOrEqual(1_200);
   });
 });
 

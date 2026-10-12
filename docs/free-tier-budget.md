@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~2,000 ≈ 3,000 / day | ~30× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a sync of a few visits is a few ms; a full 200-visit batch is over (see watch-outs) | **over at a full sync batch** (GH #404) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | low tens of thousands | large |
@@ -83,8 +83,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   module scope rather than refetched per request.
 - **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
   `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
-  `measure-dashboard-cpu.mjs` (not committed), on the local seed, alternating the two builds three
-  times. Before #102 the status of each prospect was derived with two statements: **439 D1
+  `measure-dashboard-cpu.mjs` (now `scripts/worker-cpu-shim.mjs`), on the local seed, alternating
+  the two builds three times. Before #102 the status of each prospect was derived with two statements: **439 D1
   statements**, 28.5 ms CPU warm median, 66 ms cold. Now there is one statement per 88 prospects
   (`deriveProspectStatus`, `routes/status.ts`): **42 statements**, of which 40 are the 5-row visit
   inserts, plus 3 for the derivation; 8.6 ms warm median, 14.5 ms worst warm, 37 ms cold. That is
@@ -92,6 +92,27 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   over 10 ms of CPU** (GH #404). A sync of a few visits, the common case, is far below that. The
   derivation reads each named prospect's visits through `visits_prospect_visited_idx` and writes
   one row per prospect, as before.
+- **So the phone sends 50 visits a pass** (GH #404, 2026-10-12). `node scripts/measure-sync-cpu.mjs`
+  times a sync by batch size, one bare visit (no notes, no answers) to each of that many distinct
+  prospects and no field prospects, three alternating rounds of 50 warm runs on a Ryzen 9 7900 (two
+  runs; the second in brackets). A pass that also carries field prospects (up to
+  `SYNC_PROSPECTS_PER_REQUEST`) or visits with notes and answers costs more, and was not measured:
+
+  | visits | warm median ms | warm max ms | cold ms (3 rounds × 2 runs) |
+  |---|---|---|---|
+  | 1 | 1.18 (1.16) | 4.21 (3.61) | 7.6–14.3 |
+  | 25 | 1.91 (1.88) | 4.18 (4.73) | 9.5–12.1 |
+  | 50 | 2.50 (2.53) | 4.48 (5.14) | 11.7–16.2 |
+  | 100 | 3.97 (4.02) | 7.63 (8.22) | 14.9–25.9 |
+  | 200 | 6.70 (6.68) | 10.77 (11.68) | 19.8–25.4 |
+
+  50 keeps the warm worst near 5 ms, where 100's reached 8.2 ms; 25 buys little and doubles the
+  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50) and the server still accepts
+  `SYNC_VISITS_PER_REQUEST` (200), which an old build still sends and which still costs what the
+  table says. If Cloudflare enforces the limit on such a request, it fails: the old build keeps its
+  outbox (INVARIANT 5) and retries with backoff until the PWA update lands, then sends 50 a pass. **A cold isolate's first request can run past 10 ms at any size, one visit included**
+  (14.3 ms above): that is compile cost, the dashboard's thin case below, and no batch size fixes
+  it, so #404's cold case stays open.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.

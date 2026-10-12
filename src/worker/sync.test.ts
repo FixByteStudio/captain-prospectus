@@ -437,26 +437,50 @@ describe("POST /api/agent/sync", () => {
    * The other direction, and the one that matters more: a cap set below what a
    * phone can legitimately build answers 413 to a payload the outbox rebuilds
    * identically for ever (INVARIANT 5).
+   *
+   * It is also the old-build guarantee (GH #404): a new phone sends
+   * SYNC_VISITS_PER_BATCH visits a pass, but an installed old build still sends
+   * SYNC_VISITS_PER_REQUEST, and with no clientVersion bump (INVARIANT 9) the
+   * server must keep taking all of them.
    */
   it("accepts a full batch of visits carrying maximum-length notes", async () => {
     const db = getDb(env.DB);
     const ids = Array.from({ length: SYNC_VISITS_PER_REQUEST }, () => crypto.randomUUID());
     await seedProspects(ids);
+    const sent = ids.map((prospectId) => ({
+      id: crypto.randomUUID(),
+      prospectId,
+      visitedAt: Date.now(),
+      flyerGiven: true,
+      outcome: "interested" as const,
+      notes: "é".repeat(2000),
+      answers: {},
+    }));
 
+    const response = await sync({ visits: sent });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as SyncResponse;
+    expect(body.accepted.visits).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    expect(new Set(body.accepted.visits)).toEqual(new Set(sent.map((v) => v.id)));
+    expect(await db.select().from(visits)).toHaveLength(SYNC_VISITS_PER_REQUEST);
+  });
+
+  it("refuses one visit over the server's accept limit with 400, storing none", async () => {
     const response = await sync({
-      visits: ids.map((prospectId) => ({
+      visits: Array.from({ length: SYNC_VISITS_PER_REQUEST + 1 }, () => ({
         id: crypto.randomUUID(),
-        prospectId,
+        prospectId: crypto.randomUUID(),
         visitedAt: Date.now(),
         flyerGiven: true,
         outcome: "interested" as const,
-        notes: "é".repeat(2000),
         answers: {},
       })),
     });
 
-    expect(response.status).toBe(200);
-    expect(await db.select().from(visits)).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe("validation");
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(0);
   });
 
   /**
