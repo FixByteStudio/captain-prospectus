@@ -59,9 +59,11 @@ export default defineConfig({
         description: "Tournées de prospection terrain",
         lang: "fr",
         start_url: "/",
-        display: "standalone",
-        // The logo's own field, so the splash and the mark share a white.
-        background_color: "#f6f7f0",
+        // Not "standalone", which keeps Android's three navigation buttons.
+        display: "fullscreen",
+        // The icons' own field: any other white shows the icon's square on
+        // Android's splash.
+        background_color: "#ffffff",
         // The band colour: it tints Android's status bar around the icon.
         theme_color: "#1b2a4a",
         icons: [

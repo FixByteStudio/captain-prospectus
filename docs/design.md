@@ -1368,8 +1368,9 @@ Two things to get right in the artwork:
   centre — and the rest must be filled background, not transparency. A normal
   icon reused here gets its edges cut off.
 - **The others should not be transparent either.** A transparent PNG on the iOS
-  home screen renders on black. Use the brand off-white `#F6F7F0` or navy
-  `#1B2A4A`, matching the manifest's `background_color` and `theme_color`.
+  home screen renders on black. Use white `#FFFFFF`, the manifest's
+  `background_color`: Android paints its splash in that colour behind
+  `icon-512.png`, and any other white shows the icon's square.
 
 An installable PWA needs at least the 192 and the 512; a manifest with no icons
 gets no install prompt, and "agents install the PWA from the phone browser"
