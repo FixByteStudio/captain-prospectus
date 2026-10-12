@@ -20,7 +20,7 @@ Everything runs in **one Cloudflare Worker**, one deploy ([ADR-0003](adr/0003-si
 | Database | D1 (SQLite) via Drizzle | System of record |
 | Client store | Dexie (IndexedDB) on the phone | Offline copy of the today list, outbox of pending writes |
 | Service worker | vite-plugin-pwa (Workbox) | Caches the app shell. **Never caches `/api`** |
-| Identity | Our own login, sessions in D1 | A session cookie looked up on every `/api` request ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)); no Cloudflare Access in front ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
+| Identity | Our own login, sessions in D1 | A session cookie looked up on every `/api` request outside `/api/auth/*` and the local-only `/api/dev/*` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)); no Cloudflare Access in front ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
 
 ```mermaid
 flowchart TB
@@ -110,5 +110,5 @@ They are listed once, in [`CLAUDE.md`](../CLAUDE.md#non-negotiable-invariants). 
 | Offline | Full visit workflow with no network | Dexie outbox, app shell cached |
 | Latency | Sync < 1 s at p95 on 4G | One round trip, small payloads |
 | Cost | 0 | Free tiers only, see [free-tier-budget.md](free-tier-budget.md) |
-| Security | No data without a valid session | The session is looked up in D1 on every `/api` request, never taken from a header or a client claim |
+| Security | No data without a valid session | The session is looked up in D1 on every `/api` request outside `/api/auth/*` and the local-only `/api/dev/*`, never taken from a header or a client claim |
 | Recoverability | Restore DB to any point in the retention window | D1 Time Travel |

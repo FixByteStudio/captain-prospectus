@@ -37,10 +37,11 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (`hmacKey`, `session.ts`), so there is no key import. A sign-in does 3 to 5 HMACs (the IP, the credential,
   the new token; break-glass adds a second to compare). D1 time is not billed. **Not measured**: unlike the
   dashboard's below, no script times a sign-in, so the 10 ms watch-out is argued, not shown.
-- **The exposed request quota.** Nothing stands in front of the hostname
+- **The exposed request quota.** No Access application stands in front of the hostname
   ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)), so anonymous `/api/auth/*` requests run the Worker
-  and count against the 100,000 a day **even when they get 429**; the D1 throttle cannot prevent that, because
-  the request is already counted. The zone's rate-limiting rule blocks an IP before the Worker runs
+  and count against the 100,000 a day **even when its throttle answers 429**; the D1 throttle cannot prevent
+  that, because the request is already counted. The zone's rate-limiting rule blocks an IP before the Worker
+  runs, so a request it blocks is not counted
   ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md),
   [deployment](deployment.md#one-time-setup-production)). **Residual risk, recorded**: the rule counts per IP,
   so a flood from many IPs can still exhaust the day's quota and take the app down until midnight UTC. Nothing

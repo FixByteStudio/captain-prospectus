@@ -92,7 +92,9 @@ in order:
 
 Then check, on production:
 - The owner's session survives a reload.
-- The 11th wrong login from one network gets 429 with a `Retry-After` header.
+- Of wrong logins sent from one network at least two seconds apart, the 11th gets 429 with a `Retry-After`
+  header and the JSON error `too_many_attempts`. Sent faster, the rule of setup step 7 blocks first, and its
+  429 is not the Worker's.
 - A `POST` to `/api/auth/login` with a foreign `Origin` gets 403.
 - After the first night, the retention log line (setup step 10) ends with the login codes, sessions and login
   attempts it deleted.
