@@ -62,7 +62,7 @@ describe("service worker", () => {
 
     // INVARIANT 8. A cached sync response would show a stale today list, or
     // make a failed sync look like it succeeded.
-    expect(config).toContain("navigateFallbackDenylist");
+    expect(config).toMatch(/navigateFallbackDenylist:\s*\[[^\]]*\/\^\\\/api\\\/\//);
     expect(config).toMatch(/runtimeCaching:\s*\[\s*\]/);
   });
 
