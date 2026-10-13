@@ -1,7 +1,7 @@
 ---
 tracker_id: "467"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/467"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "The Worker accepts a session and nothing else"

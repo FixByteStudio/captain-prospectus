@@ -1,7 +1,7 @@
 ---
 tracker_id: "474"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/474"
-tracker_status: backlog
+tracker_status: done
 id: 8
 type: story
 title: "The owner runs the success signal on production"

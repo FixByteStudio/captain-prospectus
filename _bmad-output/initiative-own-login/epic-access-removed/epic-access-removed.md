@@ -1,7 +1,8 @@
 ---
 tracker_id: "297"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/297"
-tracker_status: backlog
+tracker_status: done
+status: done
 type: epic
 title: "Cloudflare Access is gone"
 parent: initiative-own-login

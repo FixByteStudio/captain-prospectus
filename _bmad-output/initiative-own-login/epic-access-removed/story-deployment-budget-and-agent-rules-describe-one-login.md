@@ -1,7 +1,7 @@
 ---
 tracker_id: "472"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/472"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Deployment, budget and agent rules describe one login"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "315"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/315"
-tracker_status: backlog
+tracker_status: done
 id: 18
 type: story
 title: "Phase 1 ships to production"
