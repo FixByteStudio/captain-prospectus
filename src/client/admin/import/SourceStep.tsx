@@ -128,7 +128,7 @@ function SourceCard({
       </h2>
       <p className="text-muted-foreground mt-1.5 max-w-prose">{card.hint}</p>
 
-      <ul className="text-meta mt-4 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+      <ul className="text-meta mt-4 grid gap-x-4 gap-y-2 sm:grid-cols-2 pb-2">
         {card.bullets.map((bullet) => (
           <li key={bullet} className="flex items-start gap-1.5">
             <CircleCheck aria-hidden="true" className="text-success mt-px size-4 shrink-0" />

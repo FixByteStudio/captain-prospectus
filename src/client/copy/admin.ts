@@ -351,7 +351,7 @@ export const adminCopy = {
     source: {
       lede: "D'où viennent les prospects ?",
       csv: {
-        tag: "Lu dans le navigateur",
+        tag: "Navigateur",
         format: ".csv",
         title: "Un fichier CSV",
         hint: "Un export de tableur, lu dans votre navigateur. Idéal pour vos listes existantes.",
@@ -365,11 +365,11 @@ export const adminCopy = {
         action: "Importer un fichier",
       },
       map: {
-        tag: "Gratuit avec OpenStreetMap",
+        tag: "StreetMap",
         title: "Une zone sur la carte",
         // Two providers since ADR-0020, so the card names the gesture and not
         // one of them; the choice between them lives on the map step.
-        hint: "Les commerces répertoriés sur OpenStreetMap ou Google Places, dans la zone que vous tracez.",
+        hint: "Les commerces répertoriés sur OpenStreetMap ou Google Places.",
         bullets: [
           "Zone tracée à main levée",
           "Adresse et type de commerce",
