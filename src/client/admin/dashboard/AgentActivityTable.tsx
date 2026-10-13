@@ -15,7 +15,7 @@ const NUMBER = "tnum px-2 text-right last:pr-3";
 /**
  * Activité par agent — docs/design.md › Tableau de bord, GH #112.
  *
- * There is no users table (ADR-0006), so a row is the email and its initial.
+ * A row is the agent's email and its initial.
  * Rows are not links. `Table` scrolls sideways at 390 px.
  */
 export function AgentActivityTable({ agents }: { agents: Agent[] }) {
