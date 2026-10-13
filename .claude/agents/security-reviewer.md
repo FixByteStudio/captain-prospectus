@@ -8,7 +8,7 @@ model: opus
 You review Captain Prospectus changes against `docs/security.md` and ADR-0029.
 
 Check:
-- Identity only from the D1 session; never from `Cf-Access-Authenticated-User-Email` or a client claim. `DEV_USER_EMAIL` honoured only on localhost, and it needs an active `users` row.
+- Identity only from the D1 session; never from a request header or a client claim. `DEV_USER_EMAIL` honoured only on localhost, and it needs an active `users` row.
 - No route exempted from the Origin check (`src/worker/origin.ts`) on non-GET `/api` requests.
 - Nothing mounted before the identity gate except `/api/auth/*` and `/api/dev/*`.
 - Codes, passphrases, session tokens and IPs stored only as HMACs under `AUTH_PEPPER`.

@@ -10,7 +10,7 @@ No stored row or installed build has to survive a change; a visit still in an ou
 - The invariants below still hold. Only the ones marked *when protected* wait for the stage to flip.
 
 ## Stack (decided — see docs/adr)
-Vite + React SPA/PWA · React Router · Hono on one Cloudflare Worker · D1 + Drizzle · Dexie · Leaflet + Overpass (+ optional Google Places, ADR-0020) · our own login in D1 (ADR-0029; no Cloudflare Access, ADR-0034) · served on a domain we already own (ADR-0035) · TypeScript strict · zod · Vitest.
+Vite + React SPA/PWA · React Router · Hono on one Cloudflare Worker · D1 + Drizzle · Dexie · Leaflet + Overpass (+ optional Google Places, ADR-0020) · our own login in D1 (ADR-0029, ADR-0034) · served on a domain we already own (ADR-0035) · TypeScript strict · zod · Vitest.
 Styling is Tailwind CSS v4 with shadcn/ui elements vendored into `src/client/ui/` (ADR-0014); the UI is in French while code, DB values and docs stay English; TanStack Query is admin-side only (ADR-0013).
 Do not introduce Next.js, another database, another host, an auth library, a second CSS or component framework beside Tailwind + shadcn, or an i18n library. A paid API needs the owner's explicit consent in an ADR (ADR-0020); Google Places is the only one that has it.
 
@@ -40,10 +40,10 @@ Each is one line; its reasons live behind the link.
 7. **D1: ≤100 bound parameters per statement.** Use the `chunk()` helper for multi-row inserts.
 8. **Service worker never caches `/api/*`.**
 9. **Sync contract changes are additive** *when protected*. A breaking one opens a `clientVersion` window; while disposable, both versions rise in the same change ([api.md](docs/api.md#conventions), `sync-contract-change` skill).
-10. **Identity comes from the server only**: a D1 session ([ADR-0029](docs/adr/0029-own-login-instead-of-cloudflare-access.md)); the verified-Access-JWT fallback still in the code is never configured ([ADR-0034](docs/adr/0034-launch-on-our-own-login-alone.md)). Never `Cf-Access-Authenticated-User-Email`, never a client claim ([identity-access](docs/domains/identity-access.md)).
+10. **Identity comes from the server only**: a D1 session ([ADR-0029](docs/adr/0029-own-login-instead-of-cloudflare-access.md), [ADR-0034](docs/adr/0034-launch-on-our-own-login-alone.md)). Never a request header, never a client claim ([identity-access](docs/domains/identity-access.md)).
 11. **OSM attribution** on every map and export. Overpass is called only from the Worker, through the cache ([ADR-0008](docs/adr/0008-map-import-via-overpass.md)).
 12. **`visited_at` is clamped server-side** to `min(visited_at, received_at)` ([prospecting](docs/domains/prospecting.md#prospect-lifecycle)).
-13. **10 ms CPU per request** on Workers Free: batch imports are 250 rows, and the Access JWKS is cached in module scope ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
+13. **10 ms CPU per request** on Workers Free: batch imports are 250 rows, and the session HMAC key is cached in module scope ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
 14. **`assets.run_worker_first` stays `["/api/*"]`, never `true`** ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
 15. **French UI, English everything else.** Every French string lives in `src/client/copy.ts` and the `copy/` modules it re-exports; field-reachable modules import `copy/field`, and components never inline one. Enum values stay English in the database ([ADR-0013](docs/adr/0013-frontend-conventions.md)).
 

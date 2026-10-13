@@ -1,10 +1,8 @@
 # Identity & access
 
 See [ADR-0029](../adr/0029-own-login-instead-of-cloudflare-access.md), which supersedes
-[ADR-0006](../adr/0006-cloudflare-access-auth.md). Production runs on our own login alone, with no
-Cloudflare Access in front ([ADR-0034](../adr/0034-launch-on-our-own-login-alone.md)): the Access
-fallback of step 3 below is never configured there, and `epic-access-removed` deletes it. Wherever
-this page describes an Access redirect or phase 1, it describes that fallback.
+[ADR-0006](../adr/0006-cloudflare-access-auth.md). Our own login is the only way in
+([ADR-0034](../adr/0034-launch-on-our-own-login-alone.md)).
 
 The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.ts`):
 
@@ -17,8 +15,7 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
    the Agents page, and its next request is a 401.
 2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
    through `/login` is who the session says.
-3. Otherwise **401**. A request that carries a Cloudflare Access token and no session gets the same
-   401: the Worker reads no such token ([ADR-0034](../adr/0034-launch-on-our-own-login-alone.md)).
+3. Otherwise **401**.
 
 Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
