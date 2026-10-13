@@ -33,7 +33,8 @@ The admin always sees a preview before anything is written.
   run with batches missing and none received for 5 minutes (`IMPORT_STALE_MS`) reads « Interrompu ».
   A batch without the field logs nothing.
 - The result says what happened in the app's own words: created, updated, and how many lines were
-  rejected. It never reports "skipped" for a row that matched an existing prospect — that is an
+  rejected — the count the run sent in its `importLog`, so it matches Derniers imports; on the map
+  path that is the unnamed places. It never reports "skipped" for a row that matched an existing prospect — that is an
   update, and it is the point of re-importing.
 
 ## Map import

@@ -344,6 +344,13 @@ export function useAssign() {
 export type ImportLogFacts = Omit<ImportLog, "importId" | "batchIndex" | "batchCount">;
 
 /**
+ * The server's totals plus the source and rejected count this run sent with
+ * its log, so the result dialog and Derniers imports report the same run
+ * (ADR-0030).
+ */
+export type ImportRunResult = ImportResult & { source: Source; rejected: number };
+
+/**
  * Send an import one request at a time.
  *
  * Not a plain mutation: a file is many requests (250 rows each, the Worker's
@@ -356,7 +363,7 @@ export function useImportBatches(source: Source = "csv") {
   const navigate = useNavigate();
   const invalidate = useInvalidateProspects();
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<ImportRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -389,7 +396,7 @@ export function useImportBatches(source: Source = "csv") {
         done += batch.length;
         setProgress({ done, total: rows.length });
       }
-      setResult(totals);
+      setResult({ ...totals, source, rejected: log.rejected });
     } catch (cause) {
       // Outside the MutationCache, so the Worker's 401 is handled here (GH #309).
       if (isWorkerUnauthorized(cause)) {
