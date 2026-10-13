@@ -1,7 +1,7 @@
 ---
 tracker_id: "469"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/469"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "Neither client knows an Access redirect"

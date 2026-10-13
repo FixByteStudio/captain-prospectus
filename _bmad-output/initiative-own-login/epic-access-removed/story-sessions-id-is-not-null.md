@@ -1,7 +1,7 @@
 ---
 tracker_id: "471"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/471"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "sessions.id is NOT NULL"

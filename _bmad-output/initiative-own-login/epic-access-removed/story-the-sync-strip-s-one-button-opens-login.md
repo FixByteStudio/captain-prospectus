@@ -1,7 +1,7 @@
 ---
 tracker_id: "470"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/470"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "The sync strip's one button opens /login"

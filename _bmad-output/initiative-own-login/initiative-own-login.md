@@ -1,7 +1,8 @@
 ---
 tracker_id: "2"
 remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/2"
-tracker_status: backlog
+tracker_status: done
+status: done
 type: initiative
 title: "Agents and admins sign in through our own login"
 parent: none
