@@ -90,27 +90,19 @@ describe("syncView", () => {
     expect(syncView({ status: "error", running: false, pending: 0 }).strip).not.toBeNull();
   });
 
-  it("session expired: destructive dot + count, destructive strip, reconnect, assertive", () => {
-    const view = syncView({ status: "auth", running: false, pending: 3 });
+  it("session expired: destructive dot + count, destructive strip, one login button, assertive", () => {
+    const view = syncView({ status: "unauthorized", running: false, pending: 3 });
     expect(view.dot).toEqual({ tone: "destructive", pulse: false, label: copy.sync.authExpired });
     expect(view.count).toBe(3);
     expect(view.strip).toEqual({
       tone: "destructive",
       message: copy.sync.authExpired,
       icon: "x",
-      action: "reconnect",
+      action: "login",
       politeness: "assertive",
     });
-  });
-
-  it("session expired by the Worker's 401: the same strip, but its button signs in (GH #309)", () => {
-    const access = syncView({ status: "auth", running: false, pending: 3 });
-    const worker = syncView({ status: "unauthorized", running: false, pending: 3 });
-    expect(worker.dot).toEqual(access.dot);
-    expect(worker.count).toBe(3);
-    expect(worker.strip).toEqual({ ...access.strip, action: "login" });
     expect(syncView({ status: "unauthorized", running: true, pending: 3 }).strip).toEqual(
-      worker.strip,
+      view.strip,
     );
   });
 
@@ -128,13 +120,13 @@ describe("syncView", () => {
   });
 
   it("session expired and update needed still carry a strip with nothing pending", () => {
-    expect(syncView({ status: "auth", running: false, pending: 0 }).strip).not.toBeNull();
+    expect(syncView({ status: "unauthorized", running: false, pending: 0 }).strip).not.toBeNull();
     expect(syncView({ status: "upgrade", running: false, pending: 0 }).strip).not.toBeNull();
   });
 
   it("session expired stays on its own strip and button while a retry runs, only the dot pulses", () => {
-    const idle = syncView({ status: "auth", running: false, pending: 3 });
-    const running = syncView({ status: "auth", running: true, pending: 3 });
+    const idle = syncView({ status: "unauthorized", running: false, pending: 3 });
+    const running = syncView({ status: "unauthorized", running: true, pending: 3 });
     expect(running.dot).toEqual({ ...idle.dot, pulse: true });
     expect(running.strip).toEqual(idle.strip);
   });
@@ -168,42 +160,24 @@ describe("syncView", () => {
     expect(hidesUpdateBanner(syncView({ status: "upgrade", running: false, pending: 0 }))).toBe(
       true,
     );
-    for (const status of [
-      "ok",
-      "offline",
-      "error",
-      "auth",
-      "unauthorized",
-      "unconfirmed",
-    ] as const) {
+    for (const status of ["ok", "offline", "error", "unauthorized", "unconfirmed"] as const) {
       expect(hidesUpdateBanner(syncView({ status, running: false, pending: 3 }))).toBe(false);
     }
   });
 });
 
 describe("stripEffect", () => {
-  it("reconnect always navigates to the marker URL, whatever the build's state", () => {
-    expect(stripEffect("reconnect", false, "/tournee")).toEqual({
-      kind: "navigate",
-      to: "/tournee?reconnect=1",
-    });
-    expect(stripEffect("reconnect", true, "/tournee")).toEqual({
-      kind: "navigate",
-      to: "/tournee?reconnect=1",
-    });
-  });
-
-  it("login opens /login, whatever the build's state or the current URL", () => {
-    expect(stripEffect("login", false, "/tournee")).toEqual({ kind: "login" });
-    expect(stripEffect("login", true, "/tournee")).toEqual({ kind: "login" });
+  it("login opens /login, whatever the build's state", () => {
+    expect(stripEffect("login", false)).toEqual({ kind: "login" });
+    expect(stripEffect("login", true)).toEqual({ kind: "login" });
   });
 
   it("update takes a build already waiting", () => {
-    expect(stripEffect("update", true, "/tournee")).toEqual({ kind: "apply-update" });
+    expect(stripEffect("update", true)).toEqual({ kind: "apply-update" });
   });
 
   it("update reloads when the browser has not noticed a build yet", () => {
-    expect(stripEffect("update", false, "/tournee")).toEqual({ kind: "reload" });
+    expect(stripEffect("update", false)).toEqual({ kind: "reload" });
   });
 });
 

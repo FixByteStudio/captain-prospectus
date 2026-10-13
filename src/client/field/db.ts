@@ -258,8 +258,8 @@ export async function cacheVisitHistory(
  * Drop everything this device caches *about an agent*, keeping the outbox.
  *
  * Used when the identity that owns the cache stops being valid: another agent
- * signed in, or the Worker answered `/api/me` with a 401 because the email was
- * removed from the Access policy (docs/security.md, "stolen phone"). Without
+ * signed in, or the Worker answered `/api/me` with a 401 because the session was
+ * revoked or the user deactivated (docs/security.md, "stolen phone"). Without
  * this, the round and the visit history survive the revocation and the next
  * launch with no network shows them again — offline there is no 401 to refuse.
  *

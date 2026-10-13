@@ -25,7 +25,6 @@ import userEvent from "@testing-library/user-event";
 import { copy } from "../copy";
 import type { PwaState } from "../pwa";
 import { LeaveGuardProvider, useRegisterDirty } from "./leave-guard";
-import { reconnectUrl } from "./reconnect-marker";
 import { SyncStrip } from "./SyncIndicator";
 import type { SyncState } from "./useSync";
 
@@ -58,7 +57,7 @@ const PWA: PwaState = {
   dismiss: () => {},
 };
 
-/** Captures where the button sends the browser instead of navigating away. */
+/** Stubs `location` so the update button's reload and a stray page navigation are observable. */
 const realLocation = Object.getOwnPropertyDescriptor(window, "location");
 
 function stubLocation(href: string, reload: () => void = () => {}) {
@@ -96,8 +95,12 @@ function renderStrip(
 }
 
 describe("SyncStrip", () => {
-  it("announces an expired session assertively, with the reconnect button", () => {
-    const { polite, assertive } = renderStrip({ status: "auth", running: false, pending: 3 });
+  it("announces an expired session assertively, with the login button", () => {
+    const { polite, assertive } = renderStrip({
+      status: "unauthorized",
+      running: false,
+      pending: 3,
+    });
 
     expect(assertive.textContent).toContain(copy.sync.authExpired);
     expect(polite.textContent).toBe("");
@@ -108,20 +111,7 @@ describe("SyncStrip", () => {
     );
   });
 
-  it("sends the reconnect button through Access, marker and all", async () => {
-    const user = userEvent.setup();
-    const location = stubLocation("https://app.example/tournee");
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    renderStrip({ status: "auth", running: false, pending: 3 });
-
-    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
-
-    // The marker is what keeps the service worker's navigateFallback out of
-    // the way, so the request actually reaches Access (reconnect-marker.ts).
-    expect(location.href).toBe(reconnectUrl("https://app.example/tournee"));
-  });
-
-  it("opens /login from the strip when the Worker said 401, online or not", async () => {
+  it("opens /login from the strip, online or not", async () => {
     const user = userEvent.setup();
     const location = stubLocation("https://app.example/tournee");
     const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
@@ -187,33 +177,6 @@ describe("SyncStrip", () => {
     expect(assertive.textContent).toBe("");
   });
 
-  it("asks before reconnecting away from a dirty form, then navigates on Quitter (#74)", async () => {
-    const user = userEvent.setup();
-    const location = stubLocation("https://app.example/tournee");
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    renderStrip({ status: "auth", running: false, pending: 3 }, PWA, { dirty: true });
-
-    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
-
-    expect(screen.getByRole("alertdialog")).toBeTruthy();
-    expect(location.href).toBe("https://app.example/tournee");
-
-    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
-    expect(location.href).toBe(reconnectUrl("https://app.example/tournee"));
-  });
-
-  it("neither asks nor navigates reconnecting offline, dirty form or not", async () => {
-    const user = userEvent.setup();
-    const location = stubLocation("https://app.example/tournee");
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-    renderStrip({ status: "auth", running: false, pending: 3 }, PWA, { dirty: true });
-
-    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
-
-    expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(location.href).toBe("https://app.example/tournee");
-  });
-
   it("asks before applying a waiting build over a dirty form, then updates on Quitter (#74)", async () => {
     const user = userEvent.setup();
     const update = vi.fn();
@@ -244,20 +207,5 @@ describe("SyncStrip", () => {
 
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
     expect(reload).toHaveBeenCalledOnce();
-  });
-
-  it("does not navigate on Quitter if the network drops while the dialog is open", async () => {
-    const user = userEvent.setup();
-    const location = stubLocation("https://app.example/tournee");
-    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    renderStrip({ status: "auth", running: false, pending: 3 }, PWA, { dirty: true });
-
-    await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
-    expect(screen.getByRole("alertdialog")).toBeTruthy();
-
-    onLine.mockReturnValue(false);
-    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
-
-    expect(location.href).toBe("https://app.example/tournee");
   });
 });

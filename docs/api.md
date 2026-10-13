@@ -61,7 +61,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | Code | Meaning |
 |---|---|
 | 400 | Invalid body |
-| 401 | No valid session, whatever else the request carries (a Cloudflare Access token counts for nothing). Also a refused sign-in |
+| 401 | No valid session. Also a refused sign-in |
 | 403 | Authenticated but wrong role, or a request other than `GET` or `HEAD` whose `Origin` is missing or foreign (`forbidden_origin`) |
 | 404 | Unknown resource |
 | 409 | A conflict with current data: `email_taken` (the email already has a `users` row) or `last_admin` (the change would leave no active admin) |

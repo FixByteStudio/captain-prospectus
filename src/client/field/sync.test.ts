@@ -45,6 +45,15 @@ const respondWith = (body: SyncResponse, status = 200) =>
 const failWith = (status: number) =>
   (async () => new Response("{}", { status })) as unknown as typeof fetch;
 
+// A real opaqueredirect response reports status 0, which the Response
+// constructor rejects, so `type` and `ok` are faked instead.
+const redirected = (async () => {
+  const r = new Response(null, { status: 200 });
+  Object.defineProperty(r, "type", { value: "opaqueredirect" });
+  Object.defineProperty(r, "ok", { value: false });
+  return r;
+}) as unknown as typeof fetch;
+
 beforeEach(async () => {
   db = new FieldDb(`test-${dbCounter++}`);
   await db.open();
@@ -111,8 +120,8 @@ describe("runSync — the cached script", () => {
 
 describe("runSync — failures must never clear the outbox", () => {
   it.each([
-    ["an expired Access session (401)", 401],
-    ["a wrong role (403)", 403],
+    ["an expired session (401)", 401],
+    ["a cross-origin refusal (403)", 403],
     ["a build too old (426)", 426],
     ["a server error (500)", 500],
     ["a D1 quota error (503)", 503],
@@ -145,18 +154,11 @@ describe("runSync — failures must never clear the outbox", () => {
     expect(await db.outboxVisits.count()).toBe(1);
   });
 
-  it("treats an Access login redirect as an auth failure, not as success", async () => {
+  it("treats an opaque redirect as a failed sync, not as success or a lost session", async () => {
     await db.outboxVisits.add(visit());
-    const redirected = (async () => {
-      // A real opaqueredirect response reports status 0, but the Response
-      // constructor rejects that value, so only `type` can be faked here.
-      const r = new Response(null, { status: 200 });
-      Object.defineProperty(r, "type", { value: "opaqueredirect" });
-      return r;
-    }) as unknown as typeof fetch;
 
     const result = await runSync({ db, identity: AGENT, fetchFn: redirected });
-    expect(result.status).toBe("auth");
+    expect(result.status).toBe("error");
     expect(await db.outboxVisits.count()).toBe(1);
   });
 
@@ -200,19 +202,12 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
     });
   };
 
-  const redirected = (async () => {
-    const r = new Response(null, { status: 200 });
-    Object.defineProperty(r, "type", { value: "opaqueredirect" });
-    return r;
-  }) as unknown as typeof fetch;
-
   it.each([
-    ["a 401", failWith(401), "unauthorized"],
-    ["a 403", failWith(403), "auth"],
-    ["an Access login redirect", redirected, "auth"],
+    ["a 401", failWith(401)],
+    ["a 403", failWith(403)],
   ])(
     "clears the round and the cached identity on %s, and keeps the outbox",
-    async (_l, fetchFn, status) => {
+    async (_l, fetchFn) => {
       // A PWA resumed from the app switcher never remounts, so this refusal is
       // the only place a revoked phone learns to forget the round.
       await seedCache();
@@ -220,8 +215,7 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
 
       const result = await runSync({ db, identity: AGENT, fetchFn });
 
-      // The Worker's own 401 gets its own status (GH #309); the rest keep "auth".
-      expect(result.status).toBe(status);
+      expect(result.status).toBe("unauthorized");
       expect(await db.prospects.count()).toBe(0);
       expect(await db.sentVisits.count()).toBe(0);
       expect(await getMeta(db, "identity")).toBeUndefined();
@@ -239,6 +233,7 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
     ],
     ["a server error (500)", failWith(500)],
     ["a build too old (426)", failWith(426)],
+    ["an opaque redirect", redirected],
   ])("keeps the round when %s — not a statement about this identity", async (_l, fetchFn) => {
     await seedCache();
 
@@ -585,7 +580,7 @@ describe("runSync — rows written by another identity", () => {
 /**
  * docs/backlog/013: a row written while the identity was cache-sourced is
  * never sendable, whatever identity `runSync` is later called with — the
- * cache that wrote it may not be who the Access cookie really names.
+ * cache that wrote it may not be who the session cookie really names.
  */
 describe("runSync — unconfirmed rows", () => {
   const A = "a@example.com";

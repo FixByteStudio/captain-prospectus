@@ -1232,9 +1232,8 @@ the rows.
 - **One row per active user**, by name. Utilisateur is the name, the email
   under it in meta. Rôle is plain text, "Agent" or "Admin".
   Inscription is a badge: "Inscrit" (`tint-success`) when the user has at
-  least one live session, "Pas encore inscrit" (`secondary`) otherwise — the
-  word phase 2 of the cutover waits on for every row. Appareils is the count
-  of live sessions in tabular figures. The signed-in admin's own row carries
+  least one live session, "Pas encore inscrit" (`secondary`) otherwise.
+  Appareils is the count of live sessions in tabular figures. The signed-in admin's own row carries
   "Vous" in meta after the email.
 - **The row expands to its devices.** A chevron before the name opens one
   line per session under the row: the device label ("iPhone · Safari"),
@@ -2114,25 +2113,18 @@ one place rather than letting the band and the strip each branch on their own:
 | Syncing | pulsing `band-muted`, with a halo | none, unless also waiting | as waiting | — |
 | Offline | `warn` + count | `secondary` | `copy.sync.offline` | — |
 | Failed | `warn` + count | `secondary` | `copy.sync.failed` | — |
-| Session expired | `destructive` + count | `destructive`, `on-destructive` text | `copy.sync.authExpired` | Se reconnecter (opens `/login`; through Access for an Access redirect) |
+| Session expired | `destructive` + count | `destructive`, `on-destructive` text | `copy.sync.authExpired` | Se reconnecter (opens `/login`) |
 | Update needed | `warn` + count | `warn`, `on-destructive` text | `copy.sync.upgrade` | Mettre à jour |
 
 Only two states carry a button, because only two ask the agent for something
 the app cannot do by itself:
 
-- **Se reconnecter** depends on who refused the session. When the Worker itself
-  answered 401, it opens `/login` by router navigation, through the leave guard
-  like the other strip buttons (a dirty form asks first); `/login` is part of
-  the shell, so it needs no network. When Access answered with a redirect (or a
-  403), it navigates to the current URL plus `?reconnect=1`, and with no network
-  it stays put. The marker is needed because the service worker serves every
-  other navigation from precache (`navigateFallback: "index.html"`), which never
-  reaches Cloudflare Access, so a plain reload cannot re-authenticate an
-  expired session. `navigateFallbackDenylist` (`vite.config.ts`) excludes the
-  marker from that fallback, so this one navigation goes to the network and
-  through Access. The app removes the marker from the URL once it has landed
-  (`withoutReconnectMarker`, `App.tsx`). The outbox is never touched by either
-  path: a session expiring is not a reason to lose a visit (INVARIANT 5).
+- **Se reconnecter** opens `/login` by router navigation, through the leave
+  guard like the other strip buttons (a dirty form asks first); `/login` is part
+  of the shell, so it needs no network. A 401 and a 403 at sync both show it
+  (a 403 only comes from the cross-origin check); a redirect comes back opaque
+  and shows the failed strip, never this one. The outbox is never touched: a
+  session expiring is not a reason to lose a visit (INVARIANT 5).
 - **Mettre à jour** takes a build already waiting, or reloads if the browser
   has not noticed one yet — either way the *next* sync's 426 can call
   `applyUpdateNow` again from a fresh page load. The shared `UpdatePrompt`

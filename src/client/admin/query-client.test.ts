@@ -36,7 +36,6 @@ describe("createAdminQueryClient", () => {
 
 describe("createAdminQueryClient › the Worker's 401 (GH #309)", () => {
   const unauthorized = () => new ApiError(401, "unauthorized", "x");
-  const accessRedirect = () => new ApiError(401, "access_redirect", "x");
 
   it("calls onUnauthorized once when a query gets a Worker 401, however many fail", async () => {
     const onUnauthorized = vi.fn();
@@ -69,11 +68,15 @@ describe("createAdminQueryClient › the Worker's 401 (GH #309)", () => {
     expect(onUnauthorized).toHaveBeenCalledOnce();
   });
 
-  it("leaves an Access redirect and other failures to the screens", async () => {
+  it("leaves other failures to the screens", async () => {
     const onUnauthorized = vi.fn();
     const client = createAdminQueryClient(onUnauthorized);
 
-    for (const error of [accessRedirect(), new ApiError(500, "error", "x"), new Error("net")]) {
+    for (const error of [
+      new ApiError(0, "error", "x"),
+      new ApiError(500, "error", "x"),
+      new Error("net"),
+    ]) {
       await expect(
         client.fetchQuery({
           queryKey: [String(error)],

@@ -1026,7 +1026,7 @@ describe("VisitScreen — step 2 (Questions)", () => {
   });
 
   /**
-   * docs/backlog/013: while the identity is cache-sourced, the Access cookie
+   * docs/backlog/013: while the identity is cache-sourced, the session cookie
    * the next request carries may not match it, so the outbox row and its
    * daily-progress log entry are stamped `unconfirmed` — held back by
    * `sendableBy` until a live `/api/me` re-stamps them (`confirmOutbox`).

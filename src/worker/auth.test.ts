@@ -64,7 +64,7 @@ async function signIn(): Promise<string> {
   return tokenFrom(response);
 }
 
-/** The Worker no longer reads an Access JWT, so its content is irrelevant (ADR-0034). */
+/** The Worker no longer reads an Access token, so its content is irrelevant (ADR-0034). */
 const ACCESS_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFnZW50QGV4YW1wbGUuY29tIn0.c2ln";
 
 const cookie = (token: string) => ({ Cookie: `${SESSION_COOKIE}=${token}` });
@@ -241,11 +241,8 @@ describe("requireIdentity", () => {
     expect(response.status).toBe(401);
   });
 
-  it("answers 401 to a request carrying an Access JWT and no session", async () => {
-    const viaHeader = await me({
-      "Cf-Access-Jwt-Assertion": ACCESS_JWT,
-      "Cf-Access-Authenticated-User-Email": TEST_ADMIN,
-    });
+  it("answers 401 to a request carrying an Access token and no session", async () => {
+    const viaHeader = await me({ "Cf-Access-Authenticated-User-Email": TEST_ADMIN });
     expect(viaHeader.status).toBe(401);
     expect(await viaHeader.json()).toMatchObject({ error: "unauthorized" });
 
@@ -1010,15 +1007,22 @@ describe("device sessions (GH #307)", () => {
     expect(row && row.expiresAt - row.lastSeenAt).toBe(90 * DAY_MS);
   });
 
-  it("gives a row the previous Worker wrote its id on the first request, and slides it", async () => {
-    const session = await testSession(TEST_AGENT, { id: null });
+  it("refuses a sessions row without an id", async () => {
+    const insert = db()
+      .insert(sessions)
+      .values({
+        tokenHash: "no-id",
+        userEmail: TEST_AGENT.toLowerCase(),
+        createdAt: 1,
+        lastSeenAt: 1,
+        expiresAt: 2,
+        // The schema type forbids a missing id; D1 must refuse it too.
+      } as typeof sessions.$inferInsert);
 
-    const response = await me({ Cookie: session.cookie });
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=7776000");
-    const row = await sessionByHash(session.tokenHash);
-    expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
+    // Drizzle wraps D1's error; the constraint message is on its cause.
+    await expect(insert).rejects.toMatchObject({
+      cause: { message: expect.stringMatching(/NOT NULL constraint failed: sessions\.id/) },
+    });
   });
 
   it("keeps the refreshed cookie on an error response", async () => {

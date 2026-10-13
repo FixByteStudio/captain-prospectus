@@ -6,7 +6,7 @@ import { adminAccess, resolveIdentity } from "./identity";
 /**
  * The security review that named this file's reason for existing: the first
  * version of this logic treated a 401 the same as a network failure, which
- * would let a phone whose Access session was revoked keep opening the round
+ * would let a phone whose session was revoked keep opening the round
  * from its cache — the exact "stolen phone" mitigation in docs/security.md.
  * Every case here is a way that could go wrong again.
  */
@@ -61,18 +61,6 @@ describe("a 401 — the session is invalid, not merely unreachable", () => {
       kind: "error",
       message: error.message,
       revoked: true,
-      toLogin: true,
-    });
-  });
-
-  it("keeps an Access redirect on the error frame instead of /login", () => {
-    const error = new ApiError(401, "access_redirect", "Votre session a expiré. Reconnectez-vous.");
-    const outcome = resolveIdentity({ ok: false, error }, AGENT_A);
-    expect(outcome).toEqual({
-      kind: "error",
-      message: error.message,
-      revoked: true,
-      toLogin: false,
     });
   });
 
@@ -80,7 +68,7 @@ describe("a 401 — the session is invalid, not merely unreachable", () => {
     // Refusing the fallback is not enough on its own: the cache survives, and
     // the same phone in airplane mode takes the offline branch below, where
     // there is no 401 to refuse. `revoked` is what closes that door.
-    const error = new ApiError(401, "access_redirect", "Votre session a expiré. Reconnectez-vous.");
+    const error = new ApiError(401, "unauthorized", "Votre session a expiré. Reconnectez-vous.");
     const revoked = resolveIdentity({ ok: false, error }, AGENT_A);
     expect(revoked.kind === "error" && revoked.revoked).toBe(true);
 
@@ -94,7 +82,7 @@ describe("a 401 — the session is invalid, not merely unreachable", () => {
 
 describe("any other ApiError (the Worker answered, but not about identity)", () => {
   it("falls back to a valid cache, same as a network failure would", () => {
-    const error = new ApiError(500, "misconfigured", "Access is not configured on this Worker.");
+    const error = new ApiError(500, "misconfigured", "Sign-in is not configured on this Worker.");
     const outcome = resolveIdentity({ ok: false, error }, AGENT_A);
     expect(outcome).toEqual({
       kind: "ready",
@@ -105,7 +93,7 @@ describe("any other ApiError (the Worker answered, but not about identity)", () 
   });
 
   it("does not revoke the cache, because it says nothing about this identity", () => {
-    const error = new ApiError(500, "misconfigured", "Access is not configured on this Worker.");
+    const error = new ApiError(500, "misconfigured", "Sign-in is not configured on this Worker.");
     const outcome = resolveIdentity({ ok: false, error }, null);
     expect(outcome).toEqual({
       kind: "error",

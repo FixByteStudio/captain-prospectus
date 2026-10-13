@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiFetch, authError, isWorkerUnauthorized } from "../api";
+import { ApiError, apiFetch, authError, isWorkerUnauthorized, redirectError } from "../api";
 import { copy } from "../copy";
 import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
@@ -619,9 +619,8 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
  * inclusive) and, by the same helper, Prospects' (#179).
  *
  * Not `apiFetch`: that parses JSON, and this response is a file. The auth
- * failures it recognises are the same two (the Worker's 401 and ADR-0006's
- * opaque redirect), thrown as the same `ApiError`s for a caller to handle
- * identically.
+ * failures it recognises are the same as `apiFetch`'s: the Worker's 401, and
+ * an opaque redirect, which is an ordinary failure carrying `failed`.
  *
  * Resolves to whether the server flagged `x-truncated`, so the caller can warn
  * about the row cap without re-parsing headers itself.
@@ -639,6 +638,8 @@ export async function downloadCsv(
 
   const authFailure = authError(response, copy.errors.sessionExpired);
   if (authFailure) throw authFailure;
+  const redirected = redirectError(response, failed);
+  if (redirected) throw redirected;
   if (!response.ok) {
     throw new ApiError(response.status, "error", failed);
   }

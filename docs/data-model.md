@@ -152,8 +152,7 @@ counts while `expires_at` is in the future and its user is `active`; the role is
 `users` on every request. The expiry slides: a request at least an hour after `last_seen_at`
 sets it to now and `expires_at` to now + the role's lifetime (30 d admin, 90 d agent) in one
 conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Agents page revokes a
-device by, so the hash never leaves the Worker; rows from before it were backfilled, and a row the
-previous Worker writes during a deploy gets its id from its first slide. `device_label` is parsed from
+device by, so the hash never leaves the Worker; it is NOT NULL. `device_label` is parsed from
 the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep
 deletes rows with `expires_at` in the past, however long since the session was last seen.
 
