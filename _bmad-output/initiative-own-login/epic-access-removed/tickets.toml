@@ -1,0 +1,93 @@
+# The stories of epic-access-removed (epic id 2), in build order.
+# Refer to an entry as 2.<id> from another epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "The Worker accepts a session and nothing else"
+description = "Tracer bullet: deletes identityFromAccess, the JWKS cache, roleFor, jose and the four Access and roster vars (types.ts, wrangler.jsonc, worker-configuration.d.ts through pnpm cf-typegen, .dev.vars.example, vitest.config.ts, scripts/measure-*.mjs), test/access-jwt.ts with every test that stubs Access, and the two branches kept for a caller with no users row (the position gate in routes/agent.ts, the own-passphrase route in routes/identity.ts), and in the same PR rewrites the caller list of identity-access.md and the fallback lines of api.md, data-model.md, field-operations.md and security.md (closes GH #457); entry 6 takes identity-access.md's opening paragraph."
+verify = "pnpm test is green with no test sending Cf-Access-Jwt-Assertion, a Worker test shows a request carrying that header and no session gets 401, and a grep of src/worker, test, scripts, package.json, wrangler.jsonc, worker-configuration.d.ts, vitest.config.ts and .dev.vars.example finds no jose, ACCESS_TEAM_DOMAIN, ACCESS_AUD, ADMIN_EMAILS or AGENT_EMAILS."
+covers = ["CAP-13", "CAP-14"]
+after = ["1.2"]
+hitl = false
+risk = "medium"
+unknown = "Whether pnpm cf-typegen regenerates worker-configuration.d.ts cleanly: the file is already stale (it lacks AGENT_EMAILS), so its diff may carry changes this entry did not cause."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Se déconnecter ends the session and opens /login"
+description = "Deletes access-logout.ts and its test, AccountMenu's /api/me probe and its navigation to Access, and the /cdn-cgi/ entry of navigateFallbackDenylist with its config.test.ts assertion, so Se déconnecter posts the logout and opens /login, and updates the logout paragraphs of design.md and identity-access.md."
+verify = "TopBar.test.tsx shows Se déconnecter posts /api/auth/logout and opens /login without asking /api/me, a post that never reached the server still stays put, and a grep of src/client, vite.config.ts and config.test.ts finds no access-logout or cdn-cgi."
+covers = ["CAP-12", "CAP-14"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Neither client knows an Access redirect"
+description = "Removes the access_redirect error code and every branch on it (api.ts, field/identity.ts, admin/query-client.ts, admin/queries.ts, auth/LoginScreen.tsx and their tests), keeps redirect: \"manual\" as a guard so an opaque redirect is an ordinary failure and never a lost session, makes the identity-error screen's Se reconnecter open /login as a Worker 401 does, which leaves the marker module unused for entry 4 to delete, and updates the 401 section of identity-access.md."
+verify = "api.test.ts shows an opaque redirect raises an ordinary error, App.test.tsx shows the identity-error screen's button opens /login, pnpm test is green, and a grep of src/client finds no access_redirect."
+covers = ["CAP-12", "CAP-14"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "The sync strip's one button opens /login"
+description = "Removes the reconnect sync action and the navigate strip effect so a lost session offers the login action alone, handles a 403 at sync as a 401, keeps redirect: \"manual\" in field/sync.ts with an opaque redirect counted as a failed sync, deletes reconnect-marker.ts with its test, App.tsx's marker-strip effect and the marker's entry in navigateFallbackDenylist, and updates the session-expired rows of design.md; the outbox and the 401 cache clearing do not change, and the PR quotes the precache total."
+verify = "sync-view.test.ts shows the session-expired strip offers only the login action, sync.test.ts shows a 401 and a 403 both leave the outbox untouched, and on pnpm dev with DEV_USER_EMAIL unset and two visits queued offline, revoking the session and reconnecting reaches /login from the strip's button with both visits still queued; a grep of src/client, vite.config.ts and config.test.ts finds no reconnect=1 or reconnect-marker."
+covers = ["CAP-12", "CAP-14"]
+after = [3]
+hitl = false
+risk = "high"
+unknown = "Which lines of SyncIndicator and theme.ts exist only for the reconnect action; the builder lists them in the plan."
+
+[[entry]]
+id = 5
+type = "story"
+title = "sessions.id is NOT NULL"
+description = "Makes sessions.id NOT NULL in one migration (disposable data stage, d1-migration skill), drops the null-id handling in auth.ts, routes/identity.ts and the test helpers, and updates data-model.md; this is the contract step deferred from GH #307 (epic Notes, 2026-10-09)."
+verify = "pnpm db:migrate:local applies every migration from zero, a Worker test shows a sessions insert without an id is refused, pnpm test is green, and a grep of src/worker and test finds no isNull or isNotNull on sessions.id and no null check on a session id."
+covers = []
+after = [1]
+hitl = false
+risk = "medium"
+unknown = "Whether drizzle-kit rebuilds the table for the NOT NULL change and keeps sessions_id_idx; migration-guard reviews the generated SQL."
+
+[[entry]]
+id = 6
+type = "story"
+title = "Deployment, budget and agent rules describe one login"
+description = "Rewrites what still describes a fallback once entries 1 to 4 have removed it: the First sign-in paragraph of deployment.md, the JWKS watch-out of free-tier-budget.md, the opening paragraph of identity-access.md, design.md's mention of phase 2 of the cutover, the stack line and invariants 10 and 13 of CLAUDE.md, and the identity rules of the security-reviewer and api-engineer agents."
+verify = "A grep for Access, JWT, jose, phase 1 to 3, ADMIN_EMAILS, AGENT_EMAILS, reconnect=1 and cdn-cgi across docs (outside docs/adr, the roadmap's checked history and done docs/backlog files), CLAUDE.md, .claude/agents and .claude/skills returns no line that describes a fallback or a cutover phase."
+covers = ["CAP-14"]
+after = [1, 4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only, scoped at pull from this epic's build records and deferred review findings, starting with the comments that still name Access in files no other entry rewrites (field/db.ts, useSync.tsx, App.tsx)."
+verify = "pnpm lint, typecheck, test and build are green and the precache stays at or under 1,000 KiB."
+covers = []
+after = [1, 2, 3, 4, 5, 6]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "The owner runs the success signal on production"
+description = "The owner (hitl), once entries 1 to 7 are merged and the Deploy workflow has shipped them, runs the spec's success signal on production and checks the zone's rate-limiting rule on /api/auth/* (deployment.md, step 7)."
+verify = "On production, an admin creates an agent and a code, the agent enrols the installed PWA, appears in the assign menu and has a position stored at the next sync with no deploy in between; deactivating them gets the phone a 401, /login and every unsent visit still in the outbox; and a burst over the rule's limit on /api/auth/* is blocked by Cloudflare before the Worker."
+covers = ["CAP-13"]
+after = [7]
+hitl = true
+risk = "medium"
