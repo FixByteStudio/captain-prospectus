@@ -78,7 +78,7 @@ export function FieldTabs({ adminOnline }: { adminOnline: boolean }) {
                   // From 768px the pill moves to the whole row — gold fill, navy
                   // text, reading like the sidebar's own current item
                   // (design.md, Layout) — rather than staying on the icon alone.
-                  "md:h-band-height md:flex-none md:flex-row md:gap-2 md:rounded-md md:px-3 md:pt-0",
+                  "md:h-9 md:min-h-0 md:flex-none md:flex-row md:gap-2 md:rounded-md md:px-3 md:pt-0",
                   current
                     ? "md:bg-primary md:text-primary-foreground md:ring-1 md:ring-inset md:ring-primary-edge"
                     : "md:hover:bg-band-accent",

@@ -1,7 +1,7 @@
 ---
 tracker_id: "368"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/368"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Fichier & colonnes shows the file and the mapping table"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "355"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/355"
-tracker_status: backlog
+tracker_status: done
 id: 20
 type: story
 title: "Tests reach the guarded-insert re-check"

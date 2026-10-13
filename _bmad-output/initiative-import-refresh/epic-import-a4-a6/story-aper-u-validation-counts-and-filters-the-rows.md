@@ -1,7 +1,7 @@
 ---
 tracker_id: "369"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/369"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Aperçu & validation counts and filters the rows"

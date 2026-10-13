@@ -1,14 +1,22 @@
 ---
 name: sync-contract-change
-description: Change the offline sync protocol (POST /api/agent/sync payload, response, or Dexie outbox) without losing data or breaking phones running an old build. Use for any change to sync, outbox, or field-operation payloads.
+description: Change the offline sync protocol (POST /api/agent/sync payload, response, or Dexie outbox) without losing data or, once the data stage is protected, breaking phones running an old build. Use for any change to sync, outbox, or field-operation payloads.
 ---
 
 # Sync contract change
 
-Phones can run an old build for days and hold unsynced visits. Assume both old and new clients hit the new server.
+Read the data stage at the top of `CLAUDE.md` first ([ADR-0033](../../../docs/adr/0033-rollout-rules-wait-for-protected-data.md)).
+While it is **disposable**, no installed build has to keep working: change the server and the
+client together and skip step 2. A breaking change raises `CLIENT_VERSION` and
+`MIN_CLIENT_VERSION` together in the same PR, so an old build gets 426 and updates itself with its
+outbox intact. Steps 3 and 5 still apply, and step 4 without the old-shape test: an outbox is
+never cleared (INVARIANT 5), and no tester is ever asked to clear site data to get past a change.
+
+Once it is **protected**, phones can run an old build for days and hold unsynced visits. Assume
+both old and new clients hit the new server.
 
 1. Read `docs/domains/field-operations.md` and ADR-0007.
-2. Classify the change:
+2. *When protected*, classify the change:
    - **Additive** (new optional field in request, new field in response): ship directly. Server must accept requests without the field.
    - **Breaking** (remove/rename/retype a field, change semantics): 
      1. Release N: server accepts old *and* new shape; client sends new shape; bump `CLIENT_VERSION` in `src/shared/constants.ts`.

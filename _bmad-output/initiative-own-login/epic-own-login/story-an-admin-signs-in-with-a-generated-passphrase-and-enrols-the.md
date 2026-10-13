@@ -1,7 +1,7 @@
 ---
 tracker_id: "306"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/306"
-tracker_status: backlog
+tracker_status: done
 id: 9
 type: story
 title: "An admin signs in with a generated passphrase and enrols their own devices"

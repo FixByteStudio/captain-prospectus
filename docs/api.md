@@ -76,7 +76,8 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 Every array is bounded, because one request must stay inside the Workers Free
 10 ms CPU budget (`docs/free-tier-budget.md`). The limits live in
 `src/shared/constants.ts`: 250 import rows, 200 visits and 100 field prospects
-per sync, 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
+per sync (the server's accept limit; a current phone sends at most 50 visits a
+pass, and an older build up to 200 — GH #404), 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
 per list page, 1000 candidates per Overpass import. A Google import is capped at 20 by
 Google itself.
 
@@ -383,4 +384,4 @@ and not listed by `GET /api/admin/users` until an admin `POST`s them.
 - Timestamps: epoch ms integers.
 - IDs created on phones: UUIDv4 (`crypto.randomUUID()`).
 - Field names: camelCase in JSON, snake_case in SQL (Drizzle maps them).
-- Adding a field is non-breaking. Removing or renaming one in the sync contract requires bumping the minimum `clientVersion` in a later release, after all phones have updated.
+- Adding a field is non-breaking. Once the data stage is `protected`, removing or renaming one in the sync contract requires bumping the minimum `clientVersion` in a later release, after all phones have updated. While it is `disposable`, both sides change at once and both versions rise together ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)).

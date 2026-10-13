@@ -2,8 +2,15 @@
 
 Captain Prospectus: B2B field-canvassing app. Admin imports restaurants/food trucks (CSV, or an area on the map) and assigns them; 2 field agents visit them from an offline-first PWA. Read `docs/vision.md` once, `docs/glossary.md` always.
 
+## Data stage: disposable
+No stored row or installed build has to survive a change; a visit still in an outbox does (invariant 5). Every environment, production included, may be wiped and [redeployed fresh](docs/deployment.md#fresh-redeploy) ([ADR-0033](docs/adr/0033-rollout-rules-wait-for-protected-data.md)).
+- Change the schema or the sync contract in one step: no backfill, no expand/contract, no compatibility with old rows or old builds. A breaking contract change raises `CLIENT_VERSION` and `MIN_CLIENT_VERSION` together, with no window.
+- Prefer a fresh redeploy, run by the owner, to a repair script. Never squash `drizzle/` unless the owner asks.
+- Being deployed, CI, or `wrangler.jsonc` does not change the stage. Only the owner editing this heading does.
+- The invariants below still hold. Only the ones marked *when protected* wait for the stage to flip.
+
 ## Stack (decided — see docs/adr)
-Vite + React SPA/PWA · React Router · Hono on one Cloudflare Worker · D1 + Drizzle · Dexie · Leaflet + Overpass (+ optional Google Places, ADR-0020) · our own login in D1 (ADR-0029; Cloudflare Access until its cutover ends) · TypeScript strict · zod · Vitest.
+Vite + React SPA/PWA · React Router · Hono on one Cloudflare Worker · D1 + Drizzle · Dexie · Leaflet + Overpass (+ optional Google Places, ADR-0020) · our own login in D1 (ADR-0029; no Cloudflare Access, ADR-0034) · served on a domain we already own (ADR-0035) · TypeScript strict · zod · Vitest.
 Styling is Tailwind CSS v4 with shadcn/ui elements vendored into `src/client/ui/` (ADR-0014); the UI is in French while code, DB values and docs stay English; TanStack Query is admin-side only (ADR-0013).
 Do not introduce Next.js, another database, another host, an auth library, a second CSS or component framework beside Tailwind + shadcn, or an i18n library. A paid API needs the owner's explicit consent in an ADR (ADR-0020); Google Places is the only one that has it.
 
@@ -32,8 +39,8 @@ Each is one line; its reasons live behind the link.
 6. **Validate every request body** with a zod schema from `src/shared/schemas.ts`, written in **`zod/mini`** (`.check(...)`, `z.optional(x)`, `z._default(x, v)`), never the classic chained API ([ADR-0017](docs/adr/0017-zod-mini-for-the-shared-wire-contract.md)).
 7. **D1: ≤100 bound parameters per statement.** Use the `chunk()` helper for multi-row inserts.
 8. **Service worker never caches `/api/*`.**
-9. **Sync contract changes are additive.** A breaking one bumps `clientVersion` ([api.md](docs/api.md#conventions), `sync-contract-change` skill).
-10. **Identity comes from the server only**: a D1 session ([ADR-0029](docs/adr/0029-own-login-instead-of-cloudflare-access.md)) or, until its cutover ends, the verified Access JWT. Never `Cf-Access-Authenticated-User-Email`, never a client claim ([identity-access](docs/domains/identity-access.md)).
+9. **Sync contract changes are additive** *when protected*. A breaking one opens a `clientVersion` window; while disposable, both versions rise in the same change ([api.md](docs/api.md#conventions), `sync-contract-change` skill).
+10. **Identity comes from the server only**: a D1 session ([ADR-0029](docs/adr/0029-own-login-instead-of-cloudflare-access.md)); the verified-Access-JWT fallback still in the code is never configured ([ADR-0034](docs/adr/0034-launch-on-our-own-login-alone.md)). Never `Cf-Access-Authenticated-User-Email`, never a client claim ([identity-access](docs/domains/identity-access.md)).
 11. **OSM attribution** on every map and export. Overpass is called only from the Worker, through the cache ([ADR-0008](docs/adr/0008-map-import-via-overpass.md)).
 12. **`visited_at` is clamped server-side** to `min(visited_at, received_at)` ([prospecting](docs/domains/prospecting.md#prospect-lifecycle)).
 13. **10 ms CPU per request** on Workers Free: batch imports are 250 rows, and the Access JWKS is cached in module scope ([free-tier-budget](docs/free-tier-budget.md#watch-outs)).
@@ -57,7 +64,7 @@ Each is one line; its reasons live behind the link.
 
 ## Database
 - Change `src/worker/db/schema.ts`, then `pnpm db:generate`. Never hand-edit a migration that is already on `main`.
-- Migrations must work with the currently deployed Worker (expand/contract). Use the `d1-migration` skill.
+- *When protected*, migrations must work with the deployed Worker (expand/contract); while disposable, one migration per change. Use the `d1-migration` skill.
 
 ## Commands
 | Task | Command |

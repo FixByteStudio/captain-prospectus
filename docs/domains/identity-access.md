@@ -1,8 +1,10 @@
 # Identity & access
 
 See [ADR-0029](../adr/0029-own-login-instead-of-cloudflare-access.md), which supersedes
-[ADR-0006](../adr/0006-cloudflare-access-auth.md) in three phases. We are in phase 1: our own
-login ships while Cloudflare Access still fronts the hostname.
+[ADR-0006](../adr/0006-cloudflare-access-auth.md). Production runs on our own login alone, with no
+Cloudflare Access in front ([ADR-0034](../adr/0034-launch-on-our-own-login-alone.md)): the Access
+fallback of step 3 below is never configured there, and `epic-access-removed` deletes it. Wherever
+this page describes an Access redirect or phase 1, it describes that fallback.
 
 The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.ts`):
 

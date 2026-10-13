@@ -1,7 +1,7 @@
 ---
 tracker_id: "309"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/309"
-tracker_status: backlog
+tracker_status: done
 id: 12
 type: story
 title: "A 401 sends both clients to /login without losing work"

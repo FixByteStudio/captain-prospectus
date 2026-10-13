@@ -132,8 +132,9 @@ export function isOpen(status: Status): boolean {
 /**
  * Sync contract version: docs/domains/field-operations.md "Versioning", and the
  * sync-contract-change skill for how to bump it. Bump CLIENT_VERSION on any
- * breaking change to the /api/agent/sync payload; raise MIN_CLIENT_VERSION only
- * once every phone reports the new version.
+ * breaking change to the /api/agent/sync payload. Once the data stage is protected,
+ * raise MIN_CLIENT_VERSION only once every phone reports the new version; while
+ * disposable, raise both together (ADR-0033).
  */
 export const CLIENT_VERSION = 1;
 export const MIN_CLIENT_VERSION = 1;
@@ -146,7 +147,17 @@ export const MIN_CLIENT_VERSION = 1;
  * not. See docs/free-tier-budget.md.
  */
 export const IMPORT_ROWS_PER_REQUEST = 250;
+
+/**
+ * Sync visits have two limits. SYNC_VISITS_PER_REQUEST is what the server
+ * accepts; SYNC_VISITS_PER_BATCH is what this build's phone sends per pass.
+ * The batch is set by CPU: 200 visits to 200 prospects runs past 10 ms of
+ * Worker CPU, 50 stays near 5 ms (GH #404, docs/free-tier-budget.md). The
+ * accept limit stays at 200 because an installed old build still sends 200,
+ * and lowering it would refuse that phone's outbox (INVARIANT 9).
+ */
 export const SYNC_VISITS_PER_REQUEST = 200;
+export const SYNC_VISITS_PER_BATCH = 50;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 export const ADMIN_VISITS_PAGE_SIZE = 500;
 

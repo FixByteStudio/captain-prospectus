@@ -1369,8 +1369,9 @@ Two things to get right in the artwork:
   centre — and the rest must be filled background, not transparency. A normal
   icon reused here gets its edges cut off.
 - **The others should not be transparent either.** A transparent PNG on the iOS
-  home screen renders on black. Use the brand off-white `#F6F7F0` or navy
-  `#1B2A4A`, matching the manifest's `background_color` and `theme_color`.
+  home screen renders on black. Use white `#FFFFFF`, the manifest's
+  `background_color`: Android paints its splash in that colour behind
+  `icon-512.png`, and any other white shows the icon's square.
 
 An installable PWA needs at least the 192 and the 512; a manifest with no icons
 gets no install prompt, and "agents install the PWA from the phone browser"
@@ -2189,9 +2190,11 @@ Each tab is a 24px Lucide icon over a `text-meta` label, at least 48px in
 every dimension the thumb can miss. Below 768px the current tab carries a gold
 pill behind its icon alone (`primary` fill, `primary-edge` inset ring) and its
 label goes bold `foreground`; an inactive tab is plain `muted-foreground`.
-From 768px the pill grows to the whole row instead — gold fill, `primary-edge`
-inset ring, `primary-foreground` (navy) icon and label — reading like the
-current item in the admin sidebar; an inactive tab there stays
+From 768px the pill spans the whole row's width instead, as a 36px (`h-9`)
+inset pill centred in the band rather than its full 56px height (the 48px
+touch minimum, `--spacing-touch`, applies below 768px only) — gold fill,
+`primary-edge` inset ring, `primary-foreground` (navy) icon and label — reading
+like the current item in the admin sidebar; an inactive tab there stays
 `band-foreground` in every state, with a `band-accent` hover, and is never
 `band-muted` — same rule as the sidebar's own item text (Layout, above):
 `band-muted` is for group labels only.

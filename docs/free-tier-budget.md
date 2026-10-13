@@ -5,16 +5,17 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~2,000 ≈ 3,000 / day | ~30× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a sync of a few visits is a few ms; a full 200-visit batch is over (see watch-outs) | **over at a full sync batch** (GH #404) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | low tens of thousands | large |
 | D1 rows written | 100 k / day (**enforced**) | imports up to a few thousand; visits ~100 | large |
-| Cloudflare Access | Free Zero Trust plan, seat-capped | 3–4 users | large |
+| Zone rate-limiting rules | 1 per zone on the Free plan, counted per IP | 1, in front of `/api/auth/*` ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md)) | **none** |
+| Custom domain | `fixbyte.cloud`, already owned for other work | one subdomain | no added cost |
 | Overpass API | Public, fair-use | a few queries per week, cached 7 days | fine if cached |
 | Google Places — Nearby Search **Pro** | Per-SKU monthly free call count; Google retired the universal $200 credit in March 2025 | one call per map search, cached 7 days; a few dozen a month | **verify in the Cloud console** |
 | OSM tiles | Public, fair-use, attribution required | light admin use | fine |
-| GitHub Actions | Free minutes for private repos | a few minutes per PR | fine |
+| GitHub Actions | Free on standard runners while the repository is public; 2,000 minutes a month if it turns private | a few minutes per push and PR, a deploy per merge, a backup a day | fine |
 
 Checked: 2026-10-09 (the Workers requests, CPU and D1 rows read, written and storage figures against Cloudflare's D1 pricing and Workers limits pages; the other rows are as of 2026-09-22 and unconfirmed).
 
@@ -36,12 +37,15 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (`hmacKey`, `session.ts`), so there is no key import. A sign-in does 3 to 5 HMACs (the IP, the credential,
   the new token; break-glass adds a second to compare). D1 time is not billed. **Not measured**: unlike the
   dashboard's below, no script times a sign-in, so the 10 ms watch-out is argued, not shown.
-- **The exposed request quota.** While Access fronts the hostname (phases 1 and 2) it refuses anonymous
-  requests before the Worker runs. Once it is gone, anonymous `/api/auth/*` requests run the Worker and count
-  against the 100,000 a day **even when they get 429**; the D1 throttle cannot prevent that, because the
-  request is already counted. **Residual risk, recorded**: until the question of a free WAF rate-limiting rule
-  in front of `/api/auth/*` is answered, before phase 3 (epic-access-removed), a flood can exhaust the day's
-  quota and take the app down until midnight UTC. Nothing bills.
+- **The exposed request quota.** No Access application stands in front of the hostname
+  ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)), so anonymous `/api/auth/*` requests run the Worker
+  and count against the 100,000 a day **even when its throttle answers 429**; the D1 throttle cannot prevent
+  that, because the request is already counted. The zone's rate-limiting rule blocks an IP before the Worker
+  runs, so a request it blocks is not counted
+  ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md),
+  [deployment](deployment.md#one-time-setup-production)). **Residual risk, recorded**: the rule counts per IP,
+  so a flood from many IPs can still exhaust the day's quota and take the app down until midnight UTC. Nothing
+  bills.
 
 ## Watch-outs
 
@@ -83,8 +87,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   module scope rather than refetched per request.
 - **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
   `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
-  `measure-dashboard-cpu.mjs` (not committed), on the local seed, alternating the two builds three
-  times. Before #102 the status of each prospect was derived with two statements: **439 D1
+  `measure-dashboard-cpu.mjs` (now `scripts/worker-cpu-shim.mjs`), on the local seed, alternating
+  the two builds three times. Before #102 the status of each prospect was derived with two statements: **439 D1
   statements**, 28.5 ms CPU warm median, 66 ms cold. Now there is one statement per 88 prospects
   (`deriveProspectStatus`, `routes/status.ts`): **42 statements**, of which 40 are the 5-row visit
   inserts, plus 3 for the derivation; 8.6 ms warm median, 14.5 ms worst warm, 37 ms cold. That is
@@ -92,6 +96,27 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   over 10 ms of CPU** (GH #404). A sync of a few visits, the common case, is far below that. The
   derivation reads each named prospect's visits through `visits_prospect_visited_idx` and writes
   one row per prospect, as before.
+- **So the phone sends 50 visits a pass** (GH #404, 2026-10-12). `node scripts/measure-sync-cpu.mjs`
+  times a sync by batch size, one bare visit (no notes, no answers) to each of that many distinct
+  prospects and no field prospects, three alternating rounds of 50 warm runs on a Ryzen 9 7900 (two
+  runs; the second in brackets). A pass that also carries field prospects (up to
+  `SYNC_PROSPECTS_PER_REQUEST`) or visits with notes and answers costs more, and was not measured:
+
+  | visits | warm median ms | warm max ms | cold ms (3 rounds × 2 runs) |
+  |---|---|---|---|
+  | 1 | 1.18 (1.16) | 4.21 (3.61) | 7.6–14.3 |
+  | 25 | 1.91 (1.88) | 4.18 (4.73) | 9.5–12.1 |
+  | 50 | 2.50 (2.53) | 4.48 (5.14) | 11.7–16.2 |
+  | 100 | 3.97 (4.02) | 7.63 (8.22) | 14.9–25.9 |
+  | 200 | 6.70 (6.68) | 10.77 (11.68) | 19.8–25.4 |
+
+  50 keeps the warm worst near 5 ms, where 100's reached 8.2 ms; 25 buys little and doubles the
+  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50) and the server still accepts
+  `SYNC_VISITS_PER_REQUEST` (200), which an old build still sends and which still costs what the
+  table says. If Cloudflare enforces the limit on such a request, it fails: the old build keeps its
+  outbox (INVARIANT 5) and retries with backoff until the PWA update lands, then sends 50 a pass. **A cold isolate's first request can run past 10 ms at any size, one visit included**
+  (14.3 ms above): that is compile cost, the dashboard's thin case below, and no batch size fixes
+  it, so #404's cold case stays open.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
@@ -161,6 +186,9 @@ no index for it: in normal use the tables hold a few rows per user, so a scan co
 flood, `login_attempts` is read in full each night until it drains.
 
 Backups go to an R2 bucket. The free tier is 10 GB of storage and 1 million Class A
-operations a month; a weekly export of a database measured in megabytes uses one operation
-and a rounding error of the storage. The bucket's lifecycle rule expires objects after 90
-days, so the total never grows.
+operations a month; the daily export uses one operation. The bucket's lifecycle rule expires
+objects after 90 days, so it holds 90 exports: under 4.5 GB if an export stays under 50 MB.
+That is an assumption, not a measurement: an export is SQL text, not the database file, so
+its size is not the 50 MB of the table above. The `Backup` run logs it. **Watch-out**: past
+about 110 MB an export, 90 of them cross the 10 GB and R2 bills the rest. Shorten the
+lifecycle rule, or compress the export, before then.

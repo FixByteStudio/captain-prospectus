@@ -18,8 +18,9 @@
     "run_worker_first": ["/api/*"],
   },
 
-  // MUST stay false: a preview URL is a second host for this Worker that the
-  // Access policy may not cover. Applied on every deploy; asserted in config.test.ts.
+  // MUST stay false: a preview URL is a second host for this Worker, outside the
+  // rate-limiting rule of the custom domain (ADR-0035). Applied on every deploy;
+  // asserted in config.test.ts.
   "preview_urls": false,
 
   // Free; the release checklist ("Workers logs show no new errors") depends on it.
@@ -36,13 +37,14 @@
       "database_name": "captain-prospectus",
       // Replace after `npx wrangler d1 create captain-prospectus`.
       // See docs/deployment.md, "One-time setup".
-      "database_id": "REPLACE_ME_SEE_docs_deployment_md",
+      "database_id": "4a174661-a684-45da-a23d-5f088c386542",
       "migrations_dir": "drizzle",
     },
   ],
 
   "vars": {
-    // Filled in during one-time setup; see docs/deployment.md.
+    // Left empty on purpose: production runs without Cloudflare Access (ADR-0034),
+    // so the Access-JWT fallback never runs. All four go with epic-access-removed.
     // ACCESS_TEAM_DOMAIN is the full origin, e.g. https://acme.cloudflareaccess.com
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",

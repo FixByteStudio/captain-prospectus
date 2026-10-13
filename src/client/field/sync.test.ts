@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLIENT_VERSION, MAX_REQUEST_BYTES, SYNC_VISITS_PER_REQUEST } from "../../shared/constants";
+import { CLIENT_VERSION, MAX_REQUEST_BYTES, SYNC_VISITS_PER_BATCH } from "../../shared/constants";
 import type { FieldProspect, Script, SyncRequest, SyncResponse, Visit } from "../../shared/schemas";
 import { clearAgentCache, FieldDb, getMeta, setMeta } from "./db";
 import { dropReading, rememberReading, setReadingIdentity } from "./last-reading";
@@ -345,6 +345,36 @@ describe("backoffDelayMs", () => {
 });
 
 /**
+ * GH #404: the phone sends at most SYNC_VISITS_PER_BATCH visits a pass, well
+ * under the server's SYNC_VISITS_PER_REQUEST, so one request stays inside the
+ * Worker's 10 ms of CPU. The drain loop sends the rest in further passes.
+ */
+describe("runSync — visits per pass", () => {
+  it("sends exactly one batch from a larger outbox, then the rest in later passes", async () => {
+    const batch = SYNC_VISITS_PER_BATCH;
+    const tail = 20;
+    await db.outboxVisits.bulkAdd(Array.from({ length: 2 * batch + tail }, () => visit()));
+
+    const sent: number[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as SyncRequest;
+      sent.push(body.visits.length);
+      const accepted = { prospects: [], visits: body.visits.map((v) => v.id) };
+      return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const first = await runSync({ db, identity: AGENT, fetchFn });
+    expect(sent).toEqual([batch]);
+    expect(first).toMatchObject({ status: "ok", acceptedVisits: batch, remaining: batch + tail });
+
+    await runSync({ db, identity: AGENT, fetchFn });
+    await runSync({ db, identity: AGENT, fetchFn });
+    expect(sent).toEqual([batch, batch, tail]);
+    expect(await db.outboxVisits.count()).toBe(0);
+  });
+});
+
+/**
  * The byte cap (MAX_REQUEST_BYTES) is enforced by the Worker, which answers 413
  * — and a 413 keeps the outbox, so a payload that is always too large is an
  * outbox that never drains. The client's job is never to build one.
@@ -387,7 +417,7 @@ describe("runSync — staying under MAX_REQUEST_BYTES", () => {
       createdAt: 1_700_000_000_000,
     };
     await db.outboxProspects.add(prospect);
-    for (let i = 0; i < SYNC_VISITS_PER_REQUEST; i++) await db.outboxVisits.add(hugeVisit());
+    for (let i = 0; i < SYNC_VISITS_PER_BATCH; i++) await db.outboxVisits.add(hugeVisit());
 
     const { only, fetchFn } = captureBody();
     await runSync({ db, identity: AGENT, fetchFn });
@@ -396,7 +426,7 @@ describe("runSync — staying under MAX_REQUEST_BYTES", () => {
     expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
 
     const parsed = JSON.parse(body) as SyncRequest;
-    expect(parsed.visits.length).toBeLessThan(SYNC_VISITS_PER_REQUEST);
+    expect(parsed.visits.length).toBeLessThan(SYNC_VISITS_PER_BATCH);
     expect(parsed.visits.length).toBeGreaterThan(0);
     // A visit may reference a prospect created in the same payload, so prospects
     // are never what gets dropped.
@@ -493,7 +523,7 @@ describe("runSync — rows written by another identity", () => {
   });
 
   it("does not let held-back rows fill the slice and starve the current identity", async () => {
-    for (let i = 0; i < SYNC_VISITS_PER_REQUEST; i++) {
+    for (let i = 0; i < SYNC_VISITS_PER_BATCH; i++) {
       await db.outboxVisits.add({ ...visit(), writtenBy: A });
     }
     const own = visit();

@@ -1,7 +1,7 @@
 ---
 tracker_id: "356"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/356"
-tracker_status: backlog
+tracker_status: done
 id: 21
 type: story
 title: "The identity re-check asks the leave guard before /login"

@@ -72,7 +72,7 @@ function landingFor(role: "admin" | "agent"): string {
   return role === "admin" ? "/admin" : "/tournee";
 }
 
-const labelClass = "text-base font-medium";
+const labelClass = "font-semibold";
 
 export function LoginScreen({ pwa }: { pwa: PwaState }) {
   const navigate = useNavigate();
@@ -258,11 +258,11 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
         />
         <p className="text-brand mt-2.5 text-center">{copy.appName}</p>
         <Card className="border-t-primary mt-6 w-full max-w-sm border-t-4 shadow-lg md:py-8">
-          <CardHeader className="text-center md:px-8">
+          <CardHeader className="md:px-8">
             <CardTitle>
               <h1 className="text-title">{copy.login.title}</h1>
             </CardTitle>
-            <CardDescription className="text-base">
+            <CardDescription className="text-sm">
               {mode === "code" ? copy.login.codeLede : copy.login.adminLede}
             </CardDescription>
             {waiting !== null && waiting > 0 && (

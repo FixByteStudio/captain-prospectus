@@ -1,6 +1,6 @@
 # ADR-0029: Sign in through our own login, not Cloudflare Access
 
-- Status: accepted
+- Status: accepted — decision 12 amended by [ADR-0034](0034-launch-on-our-own-login-alone.md)
 - Date: 2026-10-07
 - Deciders: mohss, Claude
 - Supersedes: [ADR-0006](0006-cloudflare-access-auth.md). Amends: [ADR-0012](0012-workers-dev-hostname.md)

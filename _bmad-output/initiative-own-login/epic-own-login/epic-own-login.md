@@ -2,6 +2,7 @@
 tracker_id: "296"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/296"
 tracker_status: backlog
+status: in-progress
 type: epic
 title: "Everyone can sign in through our own login"
 parent: initiative-own-login

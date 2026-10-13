@@ -1,7 +1,7 @@
 ---
 tracker_id: "301"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/301"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Logins are throttled per IP and cross-site writes are refused"

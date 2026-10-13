@@ -1,7 +1,7 @@
 ---
 tracker_id: "363"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/363"
-tracker_status: in-progress
+tracker_status: done
 type: epic
 title: "The Import screens follow Stitch A4–A6"
 parent: initiative-import-refresh
@@ -9,7 +9,7 @@ covers: [R1, R2, R3, R4, R5, R6, R7, R8]
 after: []
 assignee: ""
 risk: medium
-status: in-progress
+status: done
 ---
 
 # The Import screens follow Stitch A4–A6
@@ -68,3 +68,4 @@ The admin Import screen (`src/client/admin/import/`), the batch import route and
 - Source conflict: R4 — `docs/design.md` says Retour on the Fichier & colonnes bottom bar is outline; DESIGN.md › Components › Admin and the mockup show it secondary. Decision (2026-10-10): follow DESIGN.md and the mockup; entry 5 corrects design.md.
 - Unknown: whether the server can tell an import is « Interrompu » without a closing call from the client; entries 7 and 8 wait on the ADR (entry 3).
 - Decision (2026-10-10): entry 8 (#372) is split in two: 8 sends the import log from both paths, and new entry 11 shows Derniers imports on Source and owns the imports query and its invalidation. Entry 9 waits on 11 too.
+- Decision (2026-10-12): the retro accepts the epic with open items. The browser check of Done when 1 to 3 was made in the retro, not by a story; it found a hint over the column select and a cut zone label at phone width, a CSV file's rejected count on a map import's result, and the map over the result dialog (GH #446) (retro epic-363-retro-2026-10-12.md).

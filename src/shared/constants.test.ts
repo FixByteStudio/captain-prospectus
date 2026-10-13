@@ -7,6 +7,7 @@ import {
   OUTCOME_TO_STATUS,
   STATUSES,
   SYNC_PROSPECTS_PER_REQUEST,
+  SYNC_VISITS_PER_BATCH,
   SYNC_VISITS_PER_REQUEST,
   isOpen,
 } from "./constants";
@@ -112,6 +113,8 @@ describe("MAX_REQUEST_BYTES", () => {
     expect(bytes(script)).toBeLessThan(MAX_REQUEST_BYTES);
   });
 
+  // At the server's accept limit, not the phone's batch: an old build still
+  // sends SYNC_VISITS_PER_REQUEST visits (GH #404).
   it("fits a full sync of maxed prospects, maxed notes and a 50-question script answered", () => {
     const now = Date.now();
     const payload = {
@@ -146,5 +149,16 @@ describe("MAX_REQUEST_BYTES", () => {
     };
     expect(syncRequestSchema.safeParse(payload).success).toBe(true);
     expect(bytes(payload)).toBeLessThan(MAX_REQUEST_BYTES);
+  });
+});
+
+/**
+ * GH #404: the phone's batch and the server's accept limit are two constants.
+ * A batch above the accept limit would be a request the server always refuses,
+ * which keeps the outbox for ever (INVARIANT 5).
+ */
+describe("sync visit limits", () => {
+  it("never sends more visits per pass than the server accepts", () => {
+    expect(SYNC_VISITS_PER_BATCH).toBeLessThanOrEqual(SYNC_VISITS_PER_REQUEST);
   });
 });

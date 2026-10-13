@@ -1,6 +1,6 @@
 # ADR-0002: Zero cost is a hard constraint
 
-- Status: accepted — amended by [ADR-0020](0020-google-places-as-a-second-map-provider.md)
+- Status: accepted — amended by [ADR-0020](0020-google-places-as-a-second-map-provider.md) and [ADR-0035](0035-serve-the-app-on-a-domain-we-already-own.md)
 - Date: 2026-09-21
 
 ## Context

@@ -177,11 +177,19 @@ route's precache stays under the 1,000 KiB ceiling.
 Everything here is account setup, done once, by hand. Runbook:
 [deployment.md](deployment.md).
 
-- [ ] Branch protection on `main` (require CI, one review, squash-merge) — needed earlier than M6
+- [x] Branch protection on `main` (require CI, one review, squash-merge) — needed earlier than M6
       if the night shift runs, see [ADR-0016](adr/0016-autonomous-overnight-agent-runs.md)
-- [ ] `wrangler d1 create captain-prospectus`, paste `database_id` into `wrangler.jsonc`
-- [ ] Enable Cloudflare Access on the Worker; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `ADMIN_EMAILS`
-- [ ] GitHub secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
-- [ ] Re-enable the `workflow_run` trigger in `.github/workflows/deploy.yml` and the schedule in `backup.yml`
-- [ ] First deploy; verify Access login, `/api/me`, and that `curl` with no cookie gets 401
+- [x] Create the D1 database `captain-prospectus`, put its `database_id` in `wrangler.jsonc`
+- [x] GitHub secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
+- [x] First deploy (2026-10-12), through the `Deploy` workflow; `/login` loads and `curl` with no cookie gets 401
+      on `/api/me`
+- [x] The three sign-in secrets; no Cloudflare Access ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md))
+- [x] The custom domain, with the `workers.dev` route off, and the rate-limiting rule in front of `/api/auth/*`
+      ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md))
+- [x] The backup bucket; the `Backup` workflow ran once
+- [x] Merging deploys and the database is backed up daily: the `workflow_run` trigger in
+      `.github/workflows/deploy.yml` and the schedule in `backup.yml` are on ([deployment.md](deployment.md#release-process))
 - [ ] Agents install the PWA from the phone browser
+- [ ] The owner flips the data stage in `CLAUDE.md` to `protected` on the first field day whose visits are kept.
+      Deploying alone does not flip it: until then production may be [redeployed fresh](deployment.md#fresh-redeploy)
+      ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md))

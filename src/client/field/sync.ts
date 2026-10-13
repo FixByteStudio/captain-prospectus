@@ -19,7 +19,7 @@ import {
   CLIENT_VERSION,
   MAX_REQUEST_BYTES,
   SYNC_PROSPECTS_PER_REQUEST,
-  SYNC_VISITS_PER_REQUEST,
+  SYNC_VISITS_PER_BATCH,
 } from "../../shared/constants";
 import { syncResponseSchema } from "../../shared/schemas";
 import type { FieldProspect, SyncRequest, Visit } from "../../shared/schemas";
@@ -75,8 +75,8 @@ const EMPTY = { acceptedProspects: 0, acceptedVisits: 0 };
  *
  * The count caps above bound how many rows go out; they cannot bound how many
  * bytes, because a visit may carry SCRIPT_QUESTIONS_MAX answers of LONG_TEXT_MAX
- * characters each. A full batch of ordinary visits is about 1 MB and fits; a
- * batch of 200 visits each holding 50 such answers is 19.7 MB and does not,
+ * characters each. A full batch of ordinary visits is about 250 kB and fits; a
+ * batch of 50 visits each holding 50 such answers is about 5 MB and does not,
  * and it is schema-valid all the same.
  *
  * The server refuses what it cannot read (INVARIANT 13), and a payload the
@@ -100,8 +100,8 @@ function serializeWithinCap(payload: SyncRequest): string {
   // note written outdoors is full of accented characters worth two of them.
   const bytes = (value: string) => new TextEncoder().encode(value).length;
 
-  // Halve rather than drop one at a time: the loop ends in at most log2(200)
-  // passes instead of 200 stringifies of a near-megabyte payload.
+  // Halve rather than drop one at a time: the loop ends in at most log2(50)
+  // passes instead of 50 stringifies of a multi-megabyte payload.
   while (visits.length > 1 && bytes(serialized) > MAX_REQUEST_BYTES) {
     visits = visits.slice(0, Math.max(1, Math.floor(visits.length / 2)));
     serialized = JSON.stringify({ ...payload, visits });
@@ -132,7 +132,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     .filter(mine)
     .limit(SYNC_PROSPECTS_PER_REQUEST)
     .toArray();
-  const outboxVisits = await db.outboxVisits.filter(mine).limit(SYNC_VISITS_PER_REQUEST).toArray();
+  const outboxVisits = await db.outboxVisits.filter(mine).limit(SYNC_VISITS_PER_BATCH).toArray();
 
   const requestBody = serializeWithinCap({
     clientVersion: CLIENT_VERSION,

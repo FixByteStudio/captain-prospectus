@@ -1,7 +1,7 @@
 ---
 tracker_id: "370"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/370"
-tracker_status: backlog
+tracker_status: done
 id: 10
 type: story
 title: "A running import shows a named progress card"
