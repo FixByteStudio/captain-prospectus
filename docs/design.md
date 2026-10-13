@@ -265,9 +265,8 @@ content is its input and an explanatory empty state — there is no back end
 yet, and no request is made. The bell is a disabled icon button with no
 content. The avatar is initials on `primary` with a `primary-edge` ring,
 opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a menu
-item that ends the session with `POST /api/auth/logout` and then opens `/login`,
-or Access's logout endpoint while Access still signs the device in — see
-[identity-access.md](domains/identity-access.md). The field avatar has no menu.
+item that ends the session with `POST /api/auth/logout` and then opens `/login` —
+see [identity-access.md](domains/identity-access.md). The field avatar has no menu.
 
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build
