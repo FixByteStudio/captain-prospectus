@@ -1232,9 +1232,8 @@ the rows.
 - **One row per active user**, by name. Utilisateur is the name, the email
   under it in meta. Rôle is plain text, "Agent" or "Admin".
   Inscription is a badge: "Inscrit" (`tint-success`) when the user has at
-  least one live session, "Pas encore inscrit" (`secondary`) otherwise — the
-  word phase 2 of the cutover waits on for every row. Appareils is the count
-  of live sessions in tabular figures. The signed-in admin's own row carries
+  least one live session, "Pas encore inscrit" (`secondary`) otherwise.
+  Appareils is the count of live sessions in tabular figures. The signed-in admin's own row carries
   "Vous" in meta after the email.
 - **The row expands to its devices.** A chevron before the name opens one
   line per session under the row: the device label ("iPhone · Safari"),

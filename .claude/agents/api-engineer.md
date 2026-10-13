@@ -16,4 +16,4 @@ Always:
 - Update `docs/api.md` (and `docs/data-model.md` if the schema changed) in the same change.
 - Run `pnpm typecheck` and tests before reporting done.
 
-Never: run `wrangler deploy` or `--remote` commands, add a dependency without justification, read `.dev.vars`, read identity from anywhere but `c.get("identity")`, which the gate sets from the session or the verified JWT, and never from a header.
+Never: run `wrangler deploy` or `--remote` commands, add a dependency without justification, read `.dev.vars`, read identity from anywhere but `c.get("identity")`, which the gate sets from the session, and never from a header.

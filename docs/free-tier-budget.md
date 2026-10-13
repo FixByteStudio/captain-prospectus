@@ -83,8 +83,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   rattached reads meaningfully more than the healthy empty-queue case, which costs only a `count(*)`.
 - **CPU, not wall time, is the binding limit.** Waiting on D1 or Overpass is free; `JSON.parse`,
   zod validation, dedupe-key normalisation and crypto are not. This is why the CSV batch is capped
-  at 250 rows per request ([ingestion](domains/ingestion.md)) and why the Access JWKS is cached in
-  module scope rather than refetched per request.
+  at 250 rows per request ([ingestion](domains/ingestion.md)) and why the session HMAC key is
+  cached in module scope rather than imported per request (`hmacKey`, `session.ts`).
 - **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
   `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
   `measure-dashboard-cpu.mjs` (now `scripts/worker-cpu-shim.mjs`), on the local seed, alternating
