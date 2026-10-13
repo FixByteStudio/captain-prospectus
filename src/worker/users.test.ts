@@ -579,12 +579,11 @@ describe("devices (GH #307)", () => {
     });
     const newer = await testSession(TEST_AGENT, { createdAt: now, lastSeenAt: now - 60 * 1000 });
     await testSession(TEST_AGENT, { expiresAt: now - 1000, deviceLabel: "Mac · Safari" });
-    await testSession(TEST_AGENT, { id: null });
 
     const rows = await list(caller.cookie);
 
     const agent = rows.find((u) => u.email === TEST_AGENT);
-    expect(agent?.sessions).toBe(3);
+    expect(agent?.sessions).toBe(2);
     expect(agent?.devices).toEqual([
       { id: newer.id, label: null, createdAt: now, lastSeenAt: now - 60 * 1000, current: false },
       {

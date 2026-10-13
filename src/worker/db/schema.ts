@@ -301,10 +301,9 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at").notNull(),
     /**
      * Public id an admin revokes a device by (GH #307): 32 random lowercase
-     * hex, never derived from the token. Nullable until the contract step:
-     * the Worker deployed before it inserts null, and the slide fills it.
+     * hex, never derived from the token.
      */
-    id: text("id"),
+    id: text("id").notNull(),
     /** "iPhone · Safari", parsed from the User-Agent at login; never the raw header. */
     deviceLabel: text("device_label"),
   },
