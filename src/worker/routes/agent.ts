@@ -18,7 +18,6 @@ import type { OrphanReason } from "../../shared/constants";
 import { validate, validationFailed } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
 import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
-import { activeRosterMember } from "../auth";
 import { writeAgentPosition } from "../agent-position";
 import { openAssignedProspects } from "../round";
 import { deriveProspectStatus } from "./status";
@@ -263,15 +262,10 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
   // have no settled prospect yet, and derive nothing until repaired.
   await deriveProspectStatus(db, touchedProspectIds, now);
 
-  // ---- 3b. The agent's latest reading (ADR-0028). Active agents only: an
-  // admin walking a round from the field route stores nothing. Re-checks
-  // `users` because a session or dev identity always has an active row, but
-  // the Access-JWT fallback may have none.
-  if (
-    body.position &&
-    role === "agent" &&
-    (await activeRosterMember(db, email))?.role === "agent"
-  ) {
+  // ---- 3b. The agent's latest reading (ADR-0028). Agents only: an admin
+  // walking a round from the field route stores nothing. A session or dev
+  // identity always has an active `users` row, so the role is enough.
+  if (body.position && role === "agent") {
     // Its own try: a bad position never fails a sync (ADR-0028). Name only, since
     // a Drizzle message carries the bound lat/lng/email.
     try {

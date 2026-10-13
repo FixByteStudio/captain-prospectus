@@ -7,14 +7,6 @@
 # with no active row there gets a 401.
 DEV_USER_EMAIL="admin@example.com"
 
-# Comma-separated admin emails. No longer decides a local role (users does):
-# it only feeds the Access JWT fallback.
-ADMIN_EMAILS="admin@example.com"
-
-# Comma-separated. Read by nothing since GH #303 (the roster is the active
-# users rows); goes with epic-access-removed.
-AGENT_EMAILS="agent@example.com"
-
 # Google Places API key (ADR-0020). Optional: without it the map import's
 # Google provider answers 503 and says so, and everything else works.
 # In production this is a SECRET — `wrangler secret put GOOGLE_PLACES_KEY` —

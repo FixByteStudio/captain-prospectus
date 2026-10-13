@@ -79,7 +79,7 @@ erDiagram
     int created_at
   }
   AGENT_POSITIONS {
-    text agent_email PK "verified Access email, no FK"
+    text agent_email PK "the agent's session email, no FK"
     real lat
     real lng
     real accuracy "metres"
@@ -232,7 +232,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 - **`client_version` records the sync contract version of the build that sent the visit.** It makes
   "have all phones upgraded?" a SQL query instead of a log search, which is the gate for raising
   `MIN_CLIENT_VERSION` once the data stage is protected (`sync-contract-change` skill).
-- **Identity is a session first, Access second.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Until the cutover ends, a verified Access JWT still does, with the role from `ADMIN_EMAILS` ([identity-access](domains/identity-access.md)). Stored rows identify a user by email either way. With a `users` row, the Access fallback follows it too: inactive is refused, an active row's role wins over `ADMIN_EMAILS`.
+- **Identity is a session.** A `sessions` row of an active `users` row names the caller and its role ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md), [identity-access](domains/identity-access.md)). Stored rows identify a user by email.
 - **Users are deactivated, never deleted, and one active admin always remains.** Deactivating deletes the user's `sessions` and unused `login_codes` in the same D1 batch; reactivating leaves none. A change that would leave no active admin is refused inside the `UPDATE` itself (`PATCH /api/admin/users/:email`, 409 `last_admin`), so two concurrent changes cannot both pass.
 - **A merge is soft.** `merged_into` points at the survivor; nothing is deleted and no visit is
   repointed, because visits are append-only. The absorbed prospect keeps its own visits, its own

@@ -419,7 +419,7 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       setMe(outcome.identity);
       setIdentityFromCache(outcome.offline);
       // The cached copy is never treated as proof, online or offline: the
-      // Worker re-derives identity from the verified Access JWT on every
+      // Worker re-derives identity from the session on every
       // request (INVARIANT 10). Only overwrite the cache with a live answer,
       // never with the cache's own value.
       if (!outcome.offline) void setMeta(fieldDb, "identity", outcome.identity);

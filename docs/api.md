@@ -1,6 +1,6 @@
 # API
 
-Base path `/api`. JSON in, JSON out. Any request other than `GET` or `HEAD` whose `Origin` header is missing or is not the request URL's own origin gets **403** `forbidden_origin`, on every route including `/api/auth/*` and `/api/dev/*`. It runs right after the body cap, so an oversized cross-site body still gets 413 (CAP-8, `src/worker/origin.ts`). Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie first, then (until the Access cutover ends) a verified Access JWT ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
+Base path `/api`. JSON in, JSON out. Any request other than `GET` or `HEAD` whose `Origin` header is missing or is not the request URL's own origin gets **403** `forbidden_origin`, on every route including `/api/auth/*` and `/api/dev/*`. It runs right after the body cap, so an oversized cross-site body still gets 413 (CAP-8, `src/worker/origin.ts`). Every route except `/api/auth/*` and `/api/dev/*` requires an identity: a session cookie, or `DEV_USER_EMAIL` on a local host ([identity-access](domains/identity-access.md)). Bodies are validated with zod schemas from `src/shared/schemas.ts`; a validation failure returns `400 {error: "validation", issues}`, where `issues` is the first 20 of `[{path, code}]`.
 
 ## Common
 | Route | Role | Purpose |
@@ -34,10 +34,10 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
 | `GET /api/admin/users` | `usersResponseSchema` `{users: [{email, name, role, active, sessions, openProspects, devices}]}` — every user, active or not, ordered by name then email; names compare ignoring case and accents (French collation), unnamed rows last. `sessions` counts unexpired sessions; `openProspects` counts prospects assigned to them with status `new`, `assigned` or `follow_up` and not merged. `devices` `[{id, label, createdAt, lastSeenAt, current}]` lists the unexpired sessions that have an `id`, newest `lastSeenAt` first; `label` is null when the User-Agent gave no summary, `current` marks the caller's own session. The token hash is never sent ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)) |
 | `POST /api/admin/users` | `userCreateSchema` `{email, name, role}` → **201** with the list row (`devices` is empty). The email is trimmed and lowercased, the name required. Created active, with no passphrase. **409** `email_taken` for an existing email, active or not |
-| `PATCH /api/admin/users/:email` | `userUpdateSchema` `{role?, active?}`, at least one → **204**. What is absent stays. Deactivating deletes the user's sessions and unused codes in the same batch; reactivating leaves none. `role: "agent"` or `active: false` also clears `passphrase_hash` in the same `UPDATE`. **404** for an unknown email. **409** `last_admin` when the change would leave no active admin, decided inside the write and counting active admin `users` rows only, not `ADMIN_EMAILS`-only Access admins; nothing is written. No user is ever deleted |
+| `PATCH /api/admin/users/:email` | `userUpdateSchema` `{role?, active?}`, at least one → **204**. What is absent stays. Deactivating deletes the user's sessions and unused codes in the same batch; reactivating leaves none. `role: "agent"` or `active: false` also clears `passphrase_hash` in the same `UPDATE`. **404** for an unknown email. **409** `last_admin` when the change would leave no active admin, decided inside the write and counting active admin `users` rows; nothing is written. No user is ever deleted |
 | `DELETE /api/admin/sessions/:id` | Signs one device out: deletes the session whose public `id` this is → **204**; its next request is a **401**. **404** `not_found` for an unknown id, **400** for a malformed id (not 32 lowercase hex). The admin's own current session may be revoked too; only the Agents page hides that button |
 | `POST /api/admin/users/:email/code` | No body → **201** `loginCodeResponseSchema` `{code, expiresAt}`: a one-time code of 8 Crockford base32 characters for the user's next device, valid 15 minutes (`expiresAt` = now + 15 min) and once. The only time the code is ever returned; only its HMAC is stored and nothing logs it. The user's older unused codes are deleted in the same batch. Works on the signed-in admin's own row. **404** `not_found` for an unknown email, **409** `user_inactive` for a deactivated user; nothing is written |
-| `POST /api/admin/me/passphrase` | No body → **200** `passphraseResponseSchema` `{passphrase}`: 20 Crockford base32 characters (100 bits) for the signed-in admin's own row, and no one else's. The only time it is ever returned; only the HMAC of the passphrase is stored in `users.passphrase_hash`, replacing the previous one at once, and nothing logs either. Sessions are left as they are. **404** `not_found` when the caller has no active admin `users` row (an Access-only admin), **500** `misconfigured` without `AUTH_PEPPER`; nothing is written |
+| `POST /api/admin/me/passphrase` | No body → **200** `passphraseResponseSchema` `{passphrase}`: 20 Crockford base32 characters (100 bits) for the signed-in admin's own row, and no one else's. The only time it is ever returned; only the HMAC of the passphrase is stored in `users.passphrase_hash`, replacing the previous one at once, and nothing logs either. Sessions are left as they are. **404** `not_found` when the caller's row stopped being an active admin's during the request, **500** `misconfigured` without `AUTH_PEPPER`; nothing is written |
 | `GET /api/admin/prospects?status=&dueBefore=&assignedTo=&source=&q=&outOfTarget=&inactiveAgent=&limit=&offset=` | `{prospects[], total}`, newest edit first. `status` takes one value or several comma-separated (`status=new,assigned,follow_up`), duplicates collapsed; an unknown or empty item is **400**. `dueBefore` (epoch ms) keeps `next_visit_at < dueBefore`, a null date never due — with `status=follow_up` and the dashboard's `to`, exactly `followUpsDue`; with the dashboard's `followUpsDueSoon.dueBefore`, exactly `followUpsDueSoon.value`. `q` is a substring of `name`, accents and case ignored. `outOfTarget=true` (the only accepted value, anything else is **400**) keeps the prospects flagged Hors cible: the latest visit carries `out_of_target` and `out_of_target_reviewed_at` is null or not after that visit's `visited_at` ([prospecting](domains/prospecting.md#refusal-reasons)). `inactiveAgent=true` (likewise the only accepted value) keeps the prospects whose `assigned_to` has no active `users` row — a deactivated user, or an email with no row at all; it leaves status to `status`, so with `status=new,assigned,follow_up` it is exactly the dashboard's `inactiveAgentProspects`. `total` counts that combined set |
 | `POST /api/admin/prospects/batch` | Upsert `{source: "csv" \| "osm" \| "google", rows[], importLog?}` by dedupe key → `{created, updated}`. The optional `importLog` `{importId (uuid), batchIndex, batchCount, rejected, fileName?, zoneVertices?, zoneRadiusM?}` logs the batch ([ADR-0030](adr/0030-the-server-keeps-an-import-log.md)): `batchIndex < batchCount ≤ 10 000`, counts non-negative and capped, else **400** and nothing written. Without it nothing is logged. The log is written after the prospects, so a failed log write fails the request and a re-send is safe; a re-sent `(importId, batchIndex)` is counted once with its first counts, though the response still carries the live `{created, updated}` |
 | `GET /api/admin/imports` | `{imports[]}`: the five newest settled imports, newest `startedAt` first, each `{id, source, fileName, zoneVertices, zoneRadiusM, created, updated, rejected, createdBy, startedAt, status: "done" \| "interrupted"}` ([ADR-0030](adr/0030-the-server-keeps-an-import-log.md)). `created`/`updated` are summed over the import's batches. Read from the 20 newest imports; one still running (batches missing, newest received within `IMPORT_STALE_MS`, 5 min) is not listed. `fileName` and `createdBy` are null after `RETENTION_DAYS` |
@@ -61,7 +61,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | Code | Meaning |
 |---|---|
 | 400 | Invalid body |
-| 401 | No valid session and no valid Access token — including a Worker with Access not configured, which used to be a 500. Also a refused sign-in |
+| 401 | No valid session, whatever else the request carries (a Cloudflare Access token counts for nothing). Also a refused sign-in |
 | 403 | Authenticated but wrong role, or a request other than `GET` or `HEAD` whose `Origin` is missing or foreign (`forbidden_origin`) |
 | 404 | Unknown resource |
 | 409 | A conflict with current data: `email_taken` (the email already has a `users` row) or `last_admin` (the change would leave no active admin) |
@@ -229,7 +229,7 @@ the same response, additively.
   row, though their visits stay in the totals; sorted
   by `visits` descending, then `email`. `visits` is that agent's rows among
   Visites, so the column sums to `visits.value` less the visits of anyone off
-  the roster (no active `users` row: deactivated, or an Access user with none). `converted` is the distinct prospects
+  the roster (no active `users` row: deactivated). `converted` is the distinct prospects
   (`coalesce(merged_into, id)`) they visited with outcome `converted` in the
   period. Its column can differ from Convertis either way: a manual
   conversion has no visitor and is credited to nobody, an off-the-roster visitor
@@ -264,8 +264,7 @@ the same response, additively.
   folded into `followUpsDue`'s statement as a second `sum` on the same rows.
 - **Prospects sans agent actif** (`inactiveAgentProspects`, GH #308): live
   prospects whose status is in `OPEN_STATUSES` and whose `assigned_to` is not
-  null and has no `users` row with `active = 1` — a deactivated user, or an
-  email left from `ADMIN_EMAILS`/`AGENT_EMAILS` with no row. A snapshot like
+  null and has no `users` row with `active = 1` — a deactivated user. A snapshot like
   `openProspects`; it ignores `period`. The condition is one SQL fragment
   (`NO_ACTIVE_AGENT`) shared with the prospects list's `inactiveAgent=true`,
   so `GET /api/admin/prospects?status=new,assigned,follow_up&inactiveAgent=true`
@@ -376,9 +375,6 @@ accept (**400** `unknown_assignee` for a deactivated or unknown email;
 `assignedTo: null` is always allowed), whose round `GET /agents/:email/round`
 serves (**404** otherwise), the dashboard's agent rows, and whose position a
 sync stores. Deactivating a user leaves their prospects assigned to them.
-An Access-fallback user with no `users` row can sign in but is off the roster
-and not listed by `GET /api/admin/users` until an admin `POST`s them.
-`ADMIN_EMAILS` is read only by the Access-JWT fallback; `AGENT_EMAILS` by nothing.
 
 ## Conventions
 - Timestamps: epoch ms integers.

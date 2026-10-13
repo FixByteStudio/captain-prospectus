@@ -8,21 +8,14 @@
  * Then, on a local host only (localhost,
  * 127.0.0.1, [::1]), DEV_USER_EMAIL, whose role is its active `users` row's;
  * without one the caller gets a 401.
- * Then, until the cutover's phase 3, the Cloudflare Access JWT (ADR-0006) —
- * isolated in `identityFromAccess` so removing it is deleting one function.
+ * Nothing else: a request carrying a Cloudflare Access JWT and no session is a
+ * 401 (ADR-0034).
  *
- * INVARIANT 10: identity comes from the server only. The
- * Cf-Access-Authenticated-User-Email header is never trusted as proof: it is
- * spoofable if the Worker is ever reachable without Access in front of it.
- *
- * `ctx.access` is deliberately NOT used. A Worker serving Static Assets runs
- * behind an internal router Worker that does not forward it, so it would always
- * be undefined here. See ADR-0006.
+ * INVARIANT 10: identity comes from the server only, never a client header.
  */
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Role } from "../shared/constants";
 import { getDb, type Db } from "./db/client";
 import { sessions, users } from "./db/schema";
@@ -39,27 +32,6 @@ import type { AppEnv, Bindings, Identity } from "./types";
 
 export type { Identity, AppEnv } from "./types";
 
-const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
-const ACCESS_COOKIE = "CF_Authorization";
-
-/**
- * JWKS is cached in module scope and so lives for the isolate's lifetime.
- * INVARIANT 13: Workers Free allows 10 ms CPU per request; refetching and
- * reparsing the key set on every request would spend a chunk of that budget
- * (and a subrequest) for nothing. jose refreshes the keys itself when it sees
- * an unknown `kid`.
- */
-const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
-
-function getJwks(teamDomain: string) {
-  let jwks = jwksCache.get(teamDomain);
-  if (!jwks) {
-    jwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
-    jwksCache.set(teamDomain, jwks);
-  }
-  return jwks;
-}
-
 /**
  * Exported so the dev routes gate on the same list. Two copies of it, in a repo
  * whose threat model has a row named "Dev impersonation leaking to prod", is
@@ -67,18 +39,6 @@ function getJwks(teamDomain: string) {
  */
 export function isLocalHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
-export function roleFor(email: string, adminEmails: string | undefined): Role {
-  return parseEmails(adminEmails).includes(email.toLowerCase()) ? "admin" : "agent";
-}
-
-/** Comma-separated env list to lowercased emails. Empty entries are dropped. */
-export function parseEmails(value: string | undefined): string[] {
-  return (value ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
 }
 
 /**
@@ -194,49 +154,6 @@ async function identityFromDevUser(env: Bindings, devUserEmail: string): Promise
   return (await activeRosterMember(getDb(env.DB), devUserEmail.trim())) ?? null;
 }
 
-function readAccessToken(req: Request): string | null {
-  // Browsers navigating the SPA send the Access session as a cookie.
-  return req.headers.get(ACCESS_JWT_HEADER) || readCookie(req.headers.get("Cookie"), ACCESS_COOKIE);
-}
-
-/**
- * The Cloudflare Access fallback, ADR-0029 phase 1 and 2 only: null when Access
- * is not configured, a 401 when it is and the JWT is missing, invalid or its
- * email's `users` row is inactive; an active row's role wins over ADMIN_EMAILS.
- * Phase 3 deletes this function, `jose` and the Access vars.
- */
-async function identityFromAccess(env: Bindings, req: Request): Promise<Identity | null> {
-  const teamDomain = env.ACCESS_TEAM_DOMAIN;
-  const aud = env.ACCESS_AUD;
-  if (!teamDomain || !aud) return null;
-
-  const token = readAccessToken(req);
-  if (!token) throw unauthorized("Sign in again to continue.");
-
-  let email: string;
-  try {
-    const { payload } = await jwtVerify(token, getJwks(teamDomain), {
-      issuer: teamDomain,
-      audience: aud,
-    });
-    const claim = payload.email;
-    if (typeof claim !== "string" || !claim) throw new Error("no email claim");
-    email = claim.toLowerCase();
-  } catch {
-    throw unauthorized("Your session has expired. Sign in again to sync.");
-  }
-  // A `users` row outranks the vars: inactive is refused, active decides the
-  // role. ADMIN_EMAILS decides only for an email with no row.
-  const [row] = await getDb(env.DB)
-    .select({ role: users.role, active: users.active })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  if (!row) return { email, role: roleFor(email, env.ADMIN_EMAILS) };
-  if (!row.active) throw unauthorized("This account is deactivated. Ask an admin.");
-  return { email, role: row.role };
-}
-
 /**
  * Puts the caller's identity (and, for a session, its id) on the context, or
  * answers 401. A slid session's cookie is appended after `next()`, so it rides
@@ -259,19 +176,13 @@ export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
   const url = new URL(c.req.url);
   if (isLocalHost(url.hostname) && c.env.DEV_USER_EMAIL) {
     const dev = await identityFromDevUser(c.env, c.env.DEV_USER_EMAIL);
-    // No row, or a deactivated one, is a deactivated user: 401, not Access.
+    // No row, or a deactivated one, is a deactivated user: 401.
     if (!dev) {
       throw unauthorized(
         "DEV_USER_EMAIL has no active users row. Set it to admin@example.com or agent@example.com after pnpm db:seed:local.",
       );
     }
     c.set("identity", dev);
-    return next();
-  }
-
-  const access = await identityFromAccess(c.env, c.req.raw);
-  if (access) {
-    c.set("identity", access);
     return next();
   }
 

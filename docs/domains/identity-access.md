@@ -17,13 +17,8 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
    the Agents page, and its next request is a 401.
 2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
    through `/login` is who the session says.
-3. **The Access JWT**, only when `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are both set: the Worker
-   **verifies** `Cf-Access-Jwt-Assertion` (or the `CF_Authorization` cookie) against the team's
-   JWKS, issuer and audience. Identity = the verified email, lowercased. If that email has a `users` row, an inactive
-   one is a **401** and an active one's `role` is the role; with no row, `admin` if it is in
-   `ADMIN_EMAILS`, otherwise `agent`. The email header alone is never trusted. Phase 3 deletes this
-   step.
-4. Otherwise **401**. A Worker with neither a session nor Access configured answers 401, not 500.
+3. Otherwise **401**. A request that carries a Cloudflare Access token and no session gets the same
+   401: the Worker reads no such token ([ADR-0034](../adr/0034-launch-on-our-own-login-alone.md)).
 
 Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
@@ -76,7 +71,7 @@ ended ([data-model](../data-model.md)).
 | Regenerate one's own passphrase | | ✓ |
 
 ## Local development
-`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401 with no fallback to Access. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
+`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
 Sessions expire or are revoked. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401, a 403 or an Access redirect, the band's session-expired strip shows and offers "Se reconnecter"; the cached round is dropped (below) and the outbox stays intact either way.
@@ -140,8 +135,7 @@ online (a Worker error, a captive portal), where "Hors ligne" is loose; the
 band's strip names that case ("Vérification de votre session…").
 
 The cached identity is a rendering convenience, never proof: the Worker
-re-derives identity on every request from the session (or, in phase 1, the
-verified Access JWT) regardless of what the client claims to be. Its only other effect is that if the identity that
+re-derives identity on every request from the session regardless of what the client claims to be. Its only other effect is that if the identity that
 comes back from a successful `/api/me` names a **different** email than the
 cached one — a different agent has signed in on this device — the locally
 cached round (`prospects`) and cached visit history are cleared before

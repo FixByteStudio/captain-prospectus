@@ -16,7 +16,6 @@ import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
 import { workerFetch } from "../../test/worker-fetch";
 import { resetTestUsers, seedUser } from "../../test/users";
-import { fakeAccess } from "../../test/access-jwt";
 
 /**
  * Routes against a real D1, built by the real migrations.
@@ -1307,38 +1306,6 @@ describe("agent position at sync (ADR-0028)", () => {
     env.DEV_USER_EMAIL = "fresh@example.com";
     expect((await sync({ position: reading(Date.now() - 5_000) })).status).toBe(200);
     expect(await stored()).toHaveLength(1);
-  });
-
-  it("stores nothing for an Access-JWT agent with no users row (GH #303)", async () => {
-    const access = await fakeAccess();
-    const saved = { ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
-    // types.ts reads these as string; the generated Env types them as "".
-    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
-    env.DEV_USER_EMAIL = "";
-    const syncAs = async (email: string) =>
-      call("/api/agent/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cf-Access-Jwt-Assertion": await access.sign(email),
-        },
-        body: JSON.stringify({
-          clientVersion: 1,
-          prospects: [],
-          visits: [],
-          position: reading(Date.now() - 5_000),
-        }),
-      });
-    try {
-      // Same path with a row stores one, so the refusal below is the gate's.
-      expect((await syncAs(AGENT_ONLY)).status).toBe(200);
-      expect(await stored()).toHaveLength(1);
-      expect((await syncAs("rowless@example.com")).status).toBe(200);
-      expect((await stored()).map((r) => r.agentEmail)).toEqual([AGENT_ONLY]);
-    } finally {
-      Object.assign(env, saved);
-      vi.unstubAllGlobals();
-    }
   });
 
   it("still answers 200 with the visit accepted when the position write fails", async () => {

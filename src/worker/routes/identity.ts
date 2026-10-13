@@ -224,8 +224,8 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
 /**
  * The signed-in admin's own passphrase, and nobody else's: no body, the email
  * is the caller's identity. Only its HMAC is stored, replacing the old one at
- * once; sessions stay as they are. An admin with no active `users` row (signed
- * in through Access only) has nothing to attach it to: 404, nothing written.
+ * once; sessions stay as they are. If the admin was deactivated or demoted since
+ * the request began there is no row to write: 404, nothing written.
  */
 identityRoutes.post("/me/passphrase", async (c) => {
   const pepper = c.env.AUTH_PEPPER;
