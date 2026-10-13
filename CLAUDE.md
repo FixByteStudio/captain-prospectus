@@ -91,3 +91,5 @@ Each is one line; its reasons live behind the link.
 - Skills in `.claude/skills/`: `new-adr`, `add-api-route`, `d1-migration`, `sync-contract-change`, `overpass-import`, `release-checklist`, `night-shift`.
 - The queue for unattended work is `docs/backlog/` — one file per task. A scheduled run implements exactly
   one of them and stops at a pull request: never a merge, never a deploy (ADR-0016, `night-shift`).
+- Several sessions share this checkout. Never switch its branch while another session is live: start the work in a
+  Paseo worktree (`create_workspace` with `isolation: "worktree"`, branch-off `origin/main`), not a plain `git worktree add`.
