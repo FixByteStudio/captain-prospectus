@@ -38,8 +38,6 @@ try {
   const env = {
     DB: shim.DB,
     DEV_USER_EMAIL: AGENT,
-    ADMIN_EMAILS: "admin@example.com",
-    AGENT_EMAILS: AGENT,
   };
 
   // Always SYNC_VISITS_PER_REQUEST (200) assigned prospects, whatever SIZES is:

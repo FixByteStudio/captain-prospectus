@@ -3,21 +3,12 @@ import type { Role } from "../shared/constants";
 /**
  * Worker bindings.
  *
- * `wrangler types` infers the *literal* value of each var in wrangler.jsonc
- * (the placeholders there are empty strings), so the generated Env types them
- * as `""`. We widen them to `string` here, and add DEV_USER_EMAIL, which lives
- * in .dev.vars and so never appears in the generated file.
+ * `wrangler types` generates the bindings declared in wrangler.jsonc. The
+ * secrets and local-only values below live in .dev.vars or the dashboard, so
+ * they never appear in the generated file and are added here.
  */
-export type Bindings = Omit<
-  Env,
-  "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "ADMIN_EMAILS" | "AGENT_EMAILS"
-> & {
-  ACCESS_TEAM_DOMAIN?: string;
-  ACCESS_AUD?: string;
-  ADMIN_EMAILS?: string;
-  /** Read by nothing since GH #303: the roster is the active `users` rows (ADR-0029). */
-  AGENT_EMAILS?: string;
-  /** Local development only; honoured only on localhost. See ADR-0006. */
+export type Bindings = Env & {
+  /** Local development only; honoured only on localhost. See ADR-0029. */
   DEV_USER_EMAIL?: string;
   /** A secret (ADR-0020 §7); absent means the Google provider answers 503. */
   GOOGLE_PLACES_KEY?: string;
@@ -36,7 +27,7 @@ export type AppEnv = {
   Bindings: Bindings;
   Variables: {
     identity: Identity;
-    /** The caller's session's public id; unset for DEV_USER_EMAIL and Access callers. */
+    /** The caller's session's public id; unset for DEV_USER_EMAIL callers. */
     sessionId?: string;
   };
 };

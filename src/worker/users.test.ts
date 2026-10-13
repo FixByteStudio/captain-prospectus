@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { loginCodes, prospects, sessions, users } from "./db/schema";
-import { fakeAccess } from "../../test/access-jwt";
 import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
@@ -14,11 +13,10 @@ import { CROCKFORD } from "../shared/credential";
 import type { LoginCodeResponse, PassphraseResponse, User } from "../shared/schemas";
 import { LOGIN_CODE_TTL_MS, hmacHex } from "./session";
 
-/** Admin user management (GH #302, ADR-0029) and the Access fallback's row check. */
+/** Admin user management (GH #302, ADR-0029). */
 
 const HOST = "https://captain.example";
 const db = () => getDb(env.DB);
-const ORIGINAL = { ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
 
 async function call(
   path: string,
@@ -91,7 +89,6 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  Object.assign(env, ORIGINAL);
 });
 
 describe("GET /api/admin/users", () => {
@@ -324,24 +321,6 @@ describe("PATCH /api/admin/users/:email", () => {
     expect((await call("/api/me", other)).status).toBe(200);
   });
 
-  it("lets an Access-JWT admin from ADMIN_EMAILS deactivate an agent with no active admin row", async () => {
-    await db().delete(users).where(eq(users.email, TEST_ADMIN));
-    const access = await fakeAccess();
-    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
-    const response = await workerFetch(
-      `${HOST}/api/admin/users/${encodeURIComponent(TEST_AGENT)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Cf-Access-Jwt-Assertion": await access.sign(TEST_ADMIN),
-        },
-        body: JSON.stringify({ active: false }),
-      },
-    );
-    expect(response.status).toBe(204);
-  });
-
   it("lands two PATCHes on one user", async () => {
     const cookie = await adminCookie();
     expect((await patch(TEST_AGENT, { role: "admin" }, cookie)).status).toBe(204);
@@ -527,14 +506,16 @@ describe("POST /api/admin/me/passphrase", () => {
     expect(await storedHash(TEST_AGENT)).toBeNull();
   });
 
-  it("answers 404 to an Access-only admin with no users row, writing nothing", async () => {
-    await db().delete(users).where(eq(users.email, TEST_ADMIN));
-    const access = await fakeAccess();
-    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
-    const response = await workerFetch(`${HOST}/api/admin/me/passphrase`, {
-      method: "POST",
-      headers: { "Cf-Access-Jwt-Assertion": await access.sign(TEST_ADMIN) },
+  it("answers 404 when the admin is deactivated before the write, storing nothing", async () => {
+    const cookie = await adminCookie();
+    const hooked = beforeStatement(env.DB, /^update "users" set "passphrase_hash"/i, async () => {
+      await db().update(users).set({ active: false }).where(eq(users.email, TEST_ADMIN));
     });
+    const response = await workerFetch(
+      `${HOST}/api/admin/me/passphrase`,
+      { method: "POST", headers: { Cookie: cookie } },
+      { DB: hooked },
+    );
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ error: "not_found" });
     const hashes = await db().select({ hash: users.passphraseHash }).from(users);
@@ -701,41 +682,5 @@ describe("access control", () => {
     await waitOnExecutionContext(ctx);
     expect(bare.status).toBe(403);
     expect(await bare.json()).toMatchObject({ error: "forbidden_origin" });
-  });
-});
-
-describe("Access JWT fallback and the users row", () => {
-  async function viaAccess(email: string): Promise<Response> {
-    const access = await fakeAccess();
-    Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
-    return workerFetch(`${HOST}/api/me`, {
-      headers: { "Cf-Access-Jwt-Assertion": await access.sign(email) },
-    });
-  }
-
-  it("refuses an email whose row is inactive", async () => {
-    await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
-    expect((await viaAccess(TEST_AGENT)).status).toBe(401);
-  });
-
-  it("takes an active row's role over ADMIN_EMAILS", async () => {
-    await db().update(users).set({ role: "admin" }).where(eq(users.email, TEST_AGENT));
-    expect(await (await viaAccess(TEST_AGENT)).json()).toEqual({
-      email: TEST_AGENT,
-      role: "admin",
-    });
-    await db().update(users).set({ role: "agent" }).where(eq(users.email, TEST_ADMIN));
-    expect(await (await viaAccess(TEST_ADMIN)).json()).toEqual({
-      email: TEST_ADMIN,
-      role: "agent",
-    });
-  });
-
-  it("falls back to ADMIN_EMAILS for an email with no row", async () => {
-    await db().delete(users).where(eq(users.email, TEST_ADMIN));
-    expect(await (await viaAccess(TEST_ADMIN)).json()).toEqual({
-      email: TEST_ADMIN,
-      role: "admin",
-    });
   });
 });

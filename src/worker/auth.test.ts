@@ -5,8 +5,6 @@ import { getDb } from "./db/client";
 import { loginAttempts, loginCodes, sessions, users } from "./db/schema";
 import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
 import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
-import { SignJWT, generateKeyPair } from "jose";
-import { fakeAccess, type FakeAccess } from "../../test/access-jwt";
 import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import { DAY_MS } from "../shared/constants";
@@ -17,8 +15,7 @@ import { workerFetch } from "../../test/worker-fetch";
 
 /**
  * Own login (ADR-0029, GH #299): break-glass, the session cookie, and the
- * identity gate's order — session, then DEV_USER_EMAIL on localhost, then the
- * Access JWT, then 401.
+ * identity gate's order — session, then DEV_USER_EMAIL on localhost, then 401.
  *
  * Requests go to a non-local host, so DEV_USER_EMAIL (bound in
  * vitest.config.ts) is ignored unless a test says otherwise. Each test wipes
@@ -34,8 +31,6 @@ const ORIGINAL = {
   AUTH_PEPPER: env.AUTH_PEPPER,
   BREAK_GLASS: env.BREAK_GLASS,
   OWNER_EMAIL: env.OWNER_EMAIL,
-  ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN,
-  ACCESS_AUD: env.ACCESS_AUD,
   DEV_USER_EMAIL: env.DEV_USER_EMAIL,
 };
 
@@ -69,13 +64,8 @@ async function signIn(): Promise<string> {
   return tokenFrom(response);
 }
 
-/**
- * wrangler.jsonc's placeholders make the generated Env type these vars as the
- * literal `""`; the Worker itself reads them as `string` (types.ts).
- */
-function configureAccess(access: FakeAccess) {
-  Object.assign(env, { ACCESS_TEAM_DOMAIN: access.teamDomain, ACCESS_AUD: access.aud });
-}
+/** The Worker no longer reads an Access JWT, so its content is irrelevant (ADR-0034). */
+const ACCESS_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFnZW50QGV4YW1wbGUuY29tIn0.c2ln";
 
 const cookie = (token: string) => ({ Cookie: `${SESSION_COOKIE}=${token}` });
 
@@ -226,16 +216,6 @@ describe("requireIdentity", () => {
     expect(await (await me(cookie(token))).json()).toEqual({ email: OWNER, role: "agent" });
   });
 
-  it("prefers the session over a valid Access JWT for another email", async () => {
-    const access = await fakeAccess();
-    configureAccess(access);
-    const token = await signIn();
-    const jwt = await access.sign("someone-else@example.com");
-
-    const response = await me({ ...cookie(token), "Cf-Access-Jwt-Assertion": jwt });
-    expect(await response.json()).toEqual({ email: OWNER, role: "admin" });
-  });
-
   it("prefers the session over DEV_USER_EMAIL on localhost", async () => {
     const token = await signIn();
     const response = await me(cookie(token), "http://localhost");
@@ -261,50 +241,18 @@ describe("requireIdentity", () => {
     expect(response.status).toBe(401);
   });
 
-  it("accepts a signed Access JWT alone, as a header or as the CF_Authorization cookie", async () => {
-    const access = await fakeAccess();
-    configureAccess(access);
-    const jwt = await access.sign("Agent@Example.com");
+  it("answers 401 to a request carrying an Access JWT and no session", async () => {
+    const viaHeader = await me({
+      "Cf-Access-Jwt-Assertion": ACCESS_JWT,
+      "Cf-Access-Authenticated-User-Email": TEST_ADMIN,
+    });
+    expect(viaHeader.status).toBe(401);
+    expect(await viaHeader.json()).toMatchObject({ error: "unauthorized" });
 
-    const viaHeader = await me({ "Cf-Access-Jwt-Assertion": jwt });
-    expect(viaHeader.status).toBe(200);
-    expect(await viaHeader.json()).toEqual({ email: "agent@example.com", role: "agent" });
-
-    const viaCookie = await me({ Cookie: `CF_Authorization=${jwt}` });
-    expect(viaCookie.status).toBe(200);
+    expect((await me({ Cookie: `CF_Authorization=${ACCESS_JWT}` })).status).toBe(401);
   });
 
-  it("refuses an Access JWT signed by another key", async () => {
-    const access = await fakeAccess();
-    configureAccess(access);
-    // Right issuer, audience and kid: only the signature is wrong.
-    const { privateKey } = await generateKeyPair("RS256");
-    const forged = await new SignJWT({ email: OWNER })
-      .setProtectedHeader({ alg: "RS256", kid: access.kid })
-      .setIssuer(access.teamDomain)
-      .setAudience(access.aud)
-      .setIssuedAt()
-      .setExpirationTime("1h")
-      .sign(privateKey);
-    const response = await me({ "Cf-Access-Jwt-Assertion": forged });
-    expect(response.status).toBe(401);
-  });
-
-  it("falls back to the Access JWT when the session cookie has expired", async () => {
-    const access = await fakeAccess();
-    configureAccess(access);
-    const token = await signIn();
-    await db()
-      .update(sessions)
-      .set({ expiresAt: Date.now() - 1 });
-    const jwt = await access.sign("agent@example.com");
-
-    const response = await me({ ...cookie(token), "Cf-Access-Jwt-Assertion": jwt });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ email: "agent@example.com", role: "agent" });
-  });
-
-  it("answers 401, not 500, with neither a session nor Access configured", async () => {
+  it("answers 401, not 500, with no session", async () => {
     const response = await me();
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ error: "unauthorized" });
@@ -339,17 +287,6 @@ describe("requireIdentity", () => {
     const token = await signIn();
     env.AUTH_PEPPER = "rotated-pepper";
     expect((await me(cookie(token))).status).toBe(401);
-  });
-});
-
-describe("with Access configured (cutover phase 1)", () => {
-  it("still lets login and logout through with no JWT", async () => {
-    configureAccess(await fakeAccess());
-    const response = await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS });
-    expect(response.status).toBe(200);
-    const token = tokenFrom(response);
-    const out = await call("/api/auth/logout", { method: "POST", headers: cookie(token) });
-    expect(out.status).toBe(204);
   });
 });
 
@@ -896,8 +833,7 @@ describe("requireIdentity — DEV_USER_EMAIL on a local host (GH #300)", () => {
     expect(await (await me(undefined, LOCAL)).json()).toEqual({ email: TEST_AGENT, role: "agent" });
   });
 
-  it("takes the role from the row, not from ADMIN_EMAILS", async () => {
-    // vitest.config.ts lists admin@example.com in ADMIN_EMAILS.
+  it("takes the role from the row", async () => {
     await db().update(users).set({ role: "agent" }).where(eq(users.email, TEST_ADMIN));
     env.DEV_USER_EMAIL = TEST_ADMIN;
     expect(await (await me(undefined, LOCAL)).json()).toEqual({ email: TEST_ADMIN, role: "agent" });
@@ -924,14 +860,6 @@ describe("requireIdentity — DEV_USER_EMAIL on a local host (GH #300)", () => {
     await db().update(users).set({ active: false }).where(eq(users.email, TEST_AGENT));
     env.DEV_USER_EMAIL = TEST_AGENT;
     expect((await me(undefined, LOCAL)).status).toBe(401);
-  });
-
-  it("does not fall through to a valid Access JWT when the row is missing", async () => {
-    const access = await fakeAccess();
-    configureAccess(access);
-    env.DEV_USER_EMAIL = "nobody@example.com";
-    const jwt = await access.sign(TEST_AGENT);
-    expect((await me({ "Cf-Access-Jwt-Assertion": jwt }, LOCAL)).status).toBe(401);
   });
 
   it("is ignored off a local host", async () => {

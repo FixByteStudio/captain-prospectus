@@ -82,8 +82,7 @@ terminal, after `npx wrangler login`. An agent runs neither.
 ## First sign-in
 
 Production runs on our own login alone ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)): no Cloudflare
-Access application exists, and the Access-JWT fallback still in the Worker is never configured
-(`epic-access-removed` deletes it). After the first deploy, and after every [fresh redeploy](#fresh-redeploy),
+Access application exists, and the Worker reads no Access token. After the first deploy, and after every [fresh redeploy](#fresh-redeploy),
 in order:
 
 1. Open `/login`, choose "Accès administrateur" and sign in with `OWNER_EMAIL` and `BREAK_GLASS`. That

@@ -73,7 +73,7 @@ See [ADR-0007](../adr/0007-offline-first-insert-only-sync.md).
 load; if that fails, it falls back to the last identity `meta.identity` cached,
 so an agent standing where `/api/me` cannot be reached still gets their round
 instead of a blocked shell. The cached copy proves nothing by itself — the
-Worker re-derives identity from the verified Access JWT on every request
+Worker re-derives identity from the session on every request
 (INVARIANT 10) — so a stale or tampered copy unlocks no admin route; a cached
 identity opens the field screens only, never `/admin/*`.
 
@@ -176,7 +176,7 @@ Response
   may also discard it, which is the one place a visit is deliberately lost.
 - **Versioning:** `clientVersion` is an integer bumped on any breaking contract change. Once the data stage is `protected`, `MIN_CLIENT_VERSION` follows only after every phone reports the new version; while it is `disposable`, both rise in the same change, with no window ([ADR-0033](../adr/0033-rollout-rules-wait-for-protected-data.md)). The server answers `426 Upgrade Required` below the minimum supported version; the client then forces a service worker update *without* dropping the outbox (`applyUpdateNow` in `src/client/pwa.ts`, called from `useSync` — it re-checks for a build and activates a waiting one, at most once per page load, and is a no-op when there is nothing to take). The version is checked **before** the body is validated, so a build old enough to send a now-invalid shape is told to update rather than that its data is bad.
 - **Never lose a visit.** The outbox survives app updates, reloads and failed syncs. Clearing it requires a successful sync.
-- **Attribution:** a visit is always attributed to the agent whose verified JWT sent it, never to a field in the payload.
+- **Attribution:** a visit is always attributed to the agent whose session sent it, never to a field in the payload.
 
 ### Triggers
 App start · `online` event · immediately after saving a visit · every 60 s while the app is open.

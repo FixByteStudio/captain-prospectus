@@ -42,19 +42,6 @@
     },
   ],
 
-  "vars": {
-    // Left empty on purpose: production runs without Cloudflare Access (ADR-0034),
-    // so the Access-JWT fallback never runs. All four go with epic-access-removed.
-    // ACCESS_TEAM_DOMAIN is the full origin, e.g. https://acme.cloudflareaccess.com
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": "",
-    // Comma-separated. Feeds only the Access-JWT fallback; everyone else there is an agent.
-    "ADMIN_EMAILS": "",
-    // Comma-separated. Read by nothing since GH #303 (the roster is the active
-    // users rows); goes with epic-access-removed.
-    "AGENT_EMAILS": "",
-  },
-
-  // Deliberately NO `access.dev` block: a Worker serving Static Assets never
-  // receives `ctx.access`, so we verify the JWT ourselves. See ADR-0006.
+  // No `vars`: identity is a D1 session (ADR-0029) and the Worker has no
+  // Cloudflare Access in front of it (ADR-0034).
 }

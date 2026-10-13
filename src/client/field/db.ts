@@ -31,7 +31,7 @@ export type MetaValues = {
    * Cached because the shell cannot reach the network on a pavement with no
    * signal, and an agent opening the app there must still get their round.
    * It is a convenience for rendering, never proof of anything: the Worker
-   * re-derives identity from the verified Access JWT on every request
+   * re-derives identity from the session on every request
    * (INVARIANT 10), so a tampered copy of this unlocks nothing.
    */
   identity: MeResponse;

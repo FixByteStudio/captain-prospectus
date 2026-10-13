@@ -44,8 +44,6 @@ try {
   const env = {
     DB: shim.DB,
     DEV_USER_EMAIL: ADMIN,
-    ADMIN_EMAILS: ADMIN,
-    AGENT_EMAILS: "agent@example.com",
   };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
 
