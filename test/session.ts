@@ -23,10 +23,9 @@ export async function testSession(
     lastSeenAt?: number;
     createdAt?: number;
     deviceLabel?: string | null;
-    /** null writes a row as the Worker before GH #307 did. */
-    id?: string | null;
+    id?: string;
   } = {},
-): Promise<{ cookie: string; id: string | null; tokenHash: string }> {
+): Promise<{ cookie: string; id: string; tokenHash: string }> {
   const pepper = env.AUTH_PEPPER;
   if (!pepper) throw new Error("testSession needs AUTH_PEPPER (vitest.config.ts)");
   // users.email is stored lowercased.
@@ -42,7 +41,7 @@ export async function testSession(
   const token = newSessionToken();
   const tokenHash = await hmacHex(pepper, token);
   const now = Date.now();
-  const id = opts.id === undefined ? newSessionId() : opts.id;
+  const id = opts.id ?? newSessionId();
   await db.insert(sessions).values({
     tokenHash,
     userEmail,

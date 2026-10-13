@@ -15,7 +15,7 @@
  */
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, lte } from "drizzle-orm";
 import type { Role } from "../shared/constants";
 import { getDb, type Db } from "./db/client";
 import { sessions, users } from "./db/schema";
@@ -24,7 +24,6 @@ import {
   SESSION_SLIDE_MS,
   SESSION_TTL_MS,
   hmacHex,
-  newSessionId,
   readCookie,
   sessionCookie,
 } from "./session";
@@ -83,11 +82,10 @@ export function misconfigured(): HTTPException {
 }
 
 /**
- * A session's caller: who, the session's public id (null only in the rare race
- * where a row written by the previous Worker is still waiting for one), and the
- * refreshed cookie when this request slid the session.
+ * A session's caller: who, the session's public id, and the refreshed cookie
+ * when this request slid the session.
  */
-export type SessionCaller = { identity: Identity; sessionId: string | null; cookie: string | null };
+export type SessionCaller = { identity: Identity; sessionId: string; cookie: string | null };
 
 /**
  * The session cookie's caller, or null: no cookie, no pepper, an unknown or
@@ -96,9 +94,8 @@ export type SessionCaller = { identity: Identity; sessionId: string | null; cook
  * skipped rather than guessed.
  *
  * Within SESSION_SLIDE_MS of the last slide nothing is written. Past it, one
- * conditional UPDATE slides the session and gives a pre-#307 row its id; of
- * two requests racing on it only the one that gets a row back re-sends the
- * cookie. The TTL is the role's now, so a demoted admin slides to an agent's.
+ * conditional UPDATE slides the session; of two requests racing on it only
+ * the one that gets a row back re-sends the cookie. The TTL is the role's now, so a demoted admin slides to an agent's.
  */
 export async function identityFromSession(
   env: Bindings,
@@ -126,24 +123,15 @@ export async function identityFromSession(
   if (!row) return null;
 
   const identity: Identity = { email: row.email, role: row.role };
-  if (row.id !== null && now - row.lastSeenAt < SESSION_SLIDE_MS) {
+  if (now - row.lastSeenAt < SESSION_SLIDE_MS) {
     return { identity, sessionId: row.id, cookie: null };
   }
 
   const ttl = SESSION_TTL_MS[row.role];
   const [slid] = await db
     .update(sessions)
-    .set({
-      lastSeenAt: now,
-      expiresAt: now + ttl,
-      id: sql`coalesce(${sessions.id}, ${newSessionId()})`,
-    })
-    .where(
-      and(
-        eq(sessions.tokenHash, tokenHash),
-        or(lte(sessions.lastSeenAt, now - SESSION_SLIDE_MS), isNull(sessions.id)),
-      ),
-    )
+    .set({ lastSeenAt: now, expiresAt: now + ttl })
+    .where(and(eq(sessions.tokenHash, tokenHash), lte(sessions.lastSeenAt, now - SESSION_SLIDE_MS)))
     .returning({ id: sessions.id });
   if (!slid) return { identity, sessionId: row.id, cookie: null };
   return { identity, sessionId: slid.id, cookie: sessionCookie(token, ttl) };
@@ -163,7 +151,7 @@ export const requireIdentity = createMiddleware<AppEnv>(async (c, next) => {
   const session = await identityFromSession(c.env, c.req.raw);
   if (session) {
     c.set("identity", session.identity);
-    if (session.sessionId) c.set("sessionId", session.sessionId);
+    c.set("sessionId", session.sessionId);
     await next();
     if (session.cookie) c.header("Set-Cookie", session.cookie, { append: true });
     return;

@@ -560,6 +560,7 @@ describe("the auth rows sweep (CAP-10)", () => {
   });
   const session = (hash: string, expiresAt: number, lastSeenAt = NOW) => ({
     tokenHash: hash,
+    id: hash,
     userEmail: TEST_AGENT,
     createdAt: NOW - 100 * DAY,
     lastSeenAt,

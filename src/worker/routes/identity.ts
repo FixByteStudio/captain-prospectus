@@ -11,7 +11,7 @@
  * admin revokes one by that id. The token's hash never leaves the Worker.
  */
 import { Hono } from "hono";
-import { and, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { OPEN_STATUSES } from "../../shared/constants";
 import { normaliseCredential } from "../../shared/credential";
 import {
@@ -63,8 +63,6 @@ async function userRows(db: Db, sessionId: string | undefined, email?: string): 
     .leftJoin(openProspects, eq(openProspects.assignedTo, users.email))
     .where(email === undefined ? undefined : eq(users.email, email));
 
-  // A row the previous Worker wrote has no id until its next request slides
-  // it (auth.ts); until then it counts in `sessions` but cannot be revoked.
   const deviceRows = await db
     .select({
       id: sessions.id,
@@ -77,14 +75,12 @@ async function userRows(db: Db, sessionId: string | undefined, email?: string): 
     .where(
       and(
         gt(sessions.expiresAt, now),
-        isNotNull(sessions.id),
         email === undefined ? undefined : eq(sessions.userEmail, email),
       ),
     )
     .orderBy(desc(sessions.lastSeenAt));
   const devicesByUser = new Map<string, Device[]>();
   for (const { id, userEmail, label, createdAt, lastSeenAt } of deviceRows) {
-    if (id === null) continue;
     const list = devicesByUser.get(userEmail) ?? [];
     list.push({ id, label, createdAt, lastSeenAt, current: id === sessionId });
     devicesByUser.set(userEmail, list);
