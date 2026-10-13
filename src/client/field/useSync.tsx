@@ -38,7 +38,7 @@ export type SyncState = {
   identity: string;
   /**
    * False while `identity` came from the cache rather than a live `/api/me`
-   * (docs/backlog/013): the Access cookie the next request carries may not
+   * (docs/backlog/013): the session cookie the next request carries may not
    * match it. `queueVisit` and the add-prospect write read this to stamp a
    * row `unconfirmed`.
    */
@@ -117,7 +117,7 @@ export function SyncProvider({
 
     try {
       // docs/backlog/013: a cache-sourced identity is unconfirmed, so nothing
-      // is sent under a name the Access cookie may not match. Every trigger
+      // is sent under a name the session cookie may not match. Every trigger
       // that would otherwise call `runSync` re-asks `/api/me` instead — the
       // heartbeat included, so a `/api/me` failure keeps retrying rather than
       // giving up after the one re-check the online/offline transition makes.

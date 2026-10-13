@@ -9,7 +9,7 @@
  *
  * A reading is stamped with the confirmed identity active when it was taken.
  * `SyncProvider` supplies that identity (`null` while it is cache-sourced), so
- * a reading taken under a name the Access cookie may not match is never kept.
+ * a reading taken under a name the session cookie may not match is never kept.
  */
 import type { AgentPosition } from "../../shared/schemas";
 import { agentPositionSchema } from "../../shared/schemas";

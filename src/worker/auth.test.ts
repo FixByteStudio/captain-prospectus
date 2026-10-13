@@ -64,7 +64,7 @@ async function signIn(): Promise<string> {
   return tokenFrom(response);
 }
 
-/** The Worker no longer reads an Access JWT, so its content is irrelevant (ADR-0034). */
+/** The Worker no longer reads an Access token, so its content is irrelevant (ADR-0034). */
 const ACCESS_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6ImFnZW50QGV4YW1wbGUuY29tIn0.c2ln";
 
 const cookie = (token: string) => ({ Cookie: `${SESSION_COOKIE}=${token}` });
@@ -241,11 +241,8 @@ describe("requireIdentity", () => {
     expect(response.status).toBe(401);
   });
 
-  it("answers 401 to a request carrying an Access JWT and no session", async () => {
-    const viaHeader = await me({
-      "Cf-Access-Jwt-Assertion": ACCESS_JWT,
-      "Cf-Access-Authenticated-User-Email": TEST_ADMIN,
-    });
+  it("answers 401 to a request carrying an Access token and no session", async () => {
+    const viaHeader = await me({ "Cf-Access-Authenticated-User-Email": TEST_ADMIN });
     expect(viaHeader.status).toBe(401);
     expect(await viaHeader.json()).toMatchObject({ error: "unauthorized" });
 

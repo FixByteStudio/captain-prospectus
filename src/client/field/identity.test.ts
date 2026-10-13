@@ -82,7 +82,7 @@ describe("a 401 — the session is invalid, not merely unreachable", () => {
 
 describe("any other ApiError (the Worker answered, but not about identity)", () => {
   it("falls back to a valid cache, same as a network failure would", () => {
-    const error = new ApiError(500, "misconfigured", "Access is not configured on this Worker.");
+    const error = new ApiError(500, "misconfigured", "Sign-in is not configured on this Worker.");
     const outcome = resolveIdentity({ ok: false, error }, AGENT_A);
     expect(outcome).toEqual({
       kind: "ready",
@@ -93,7 +93,7 @@ describe("any other ApiError (the Worker answered, but not about identity)", () 
   });
 
   it("does not revoke the cache, because it says nothing about this identity", () => {
-    const error = new ApiError(500, "misconfigured", "Access is not configured on this Worker.");
+    const error = new ApiError(500, "misconfigured", "Sign-in is not configured on this Worker.");
     const outcome = resolveIdentity({ ok: false, error }, null);
     expect(outcome).toEqual({
       kind: "error",
