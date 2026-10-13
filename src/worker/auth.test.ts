@@ -247,6 +247,11 @@ describe("requireIdentity", () => {
     expect(await viaHeader.json()).toMatchObject({ error: "unauthorized" });
 
     expect((await me({ Cookie: `CF_Authorization=${ACCESS_JWT}` })).status).toBe(401);
+
+    // The header the removed fallback read (ADR-0034).
+    const viaJwt = await me({ "Cf-Access-Jwt-Assertion": ACCESS_JWT });
+    expect(viaJwt.status).toBe(401);
+    expect(await viaJwt.json()).toMatchObject({ error: "unauthorized" });
   });
 
   it("answers 401, not 500, with no session", async () => {
