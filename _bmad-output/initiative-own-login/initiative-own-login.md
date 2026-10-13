@@ -40,10 +40,7 @@ Follows the cutover's expand/contract line: epic-own-login ships phase 1 (our lo
 
 ## References
 
-- spec — _bmad-output/specs/spec-own-login/SPEC.md, section Capabilities
-- constraint — the same spec, sections Constraints and Non-goals
 - data — _bmad-output/specs/spec-own-login/auth-data.md
-- cutover — _bmad-output/specs/spec-own-login/cutover.md
 - adr — docs/adr/0029-own-login-instead-of-cloudflare-access.md
 
 ## Notes
@@ -56,3 +53,4 @@ Follows the cutover's expand/contract line: epic-own-login ships phase 1 (our lo
 - Source conflict: Description, Done when 1 and 3, and Boundaries — a three-phase cutover with Access in front vs ADR-0034 (no Access application was ever created; phases 1 and 2 are dropped).
 - Decision (2026-10-13): ADR-0034 settles it. Done when 1 reads "with no Access in front", and Done when 3 has no phase left to check. epic-access-removed is the removal only: it owns the Access-path removals of CAP-12 as well, and waits on 1.2 alone, not on #315.
 - Waits on nothing external except ADR-0029 acceptance (still "proposed"), which epic-own-login's tracer records.
+- Decision (2026-10-13): the spec's `SPEC.md` and `cutover.md` are archived, not corrected: both still describe three phases with Access in front, which ADR-0034 dropped. Git history keeps them (the commit before this one); ADR-0029 and ADR-0034 carry the decisions, `auth-data.md` stays as the data reference. Stories written earlier still cite them by path.

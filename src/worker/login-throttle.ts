@@ -1,6 +1,6 @@
 /**
  * CAP-7: guessing codes or passphrases is throttled per IP, in a D1 table
- * rather than the rate-limiting binding (_bmad-output/specs/spec-own-login).
+ * rather than the rate-limiting binding (ADR-0029).
  *
  * Windows are fixed, not sliding: one row per IP per window, and "until the
  * window ends" is a single Retry-After. Each login reserves its failure in one
