@@ -214,6 +214,8 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
     if (!(await userExists(db, email))) return c.json({ error: "not_found" }, 404);
     return c.json({ error: "user_inactive", message: "This user is deactivated." }, 409);
   }
+  // The code in clear, as with the passphrase below: nothing may keep a copy.
+  c.header("Cache-Control", "no-store");
   return c.json<LoginCodeResponse>({ code, expiresAt }, 201);
 });
 

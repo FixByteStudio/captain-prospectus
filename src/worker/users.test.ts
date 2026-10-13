@@ -382,6 +382,7 @@ describe("POST /api/admin/users/:email/code", () => {
     const before = Date.now();
     const response = await generate(TEST_AGENT, await adminCookie());
     expect(response.status).toBe(201);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = (await response.json()) as LoginCodeResponse;
     expect(body.code).toMatch(new RegExp(`^[${CROCKFORD}]{8}$`));
     expect(body.expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
