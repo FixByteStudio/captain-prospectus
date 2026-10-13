@@ -975,8 +975,8 @@ describe("GET /api/agent/prospects/:id/visits", () => {
 /**
  * ADR-0022 and #33.
  *
- * Sync used to check only that a visit's prospect *existed*, so any agent past
- * Access could post a visit against any prospect id and — because the server
+ * Sync used to check only that a visit's prospect *existed*, so any signed-in
+ * agent could post a visit against any prospect id and — because the server
  * derives status from the newest visit — change it. Such a visit is now
  * quarantined: kept, attributed, accepted, and inert until an admin decides
  * where it belongs.

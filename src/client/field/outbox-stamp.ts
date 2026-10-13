@@ -16,7 +16,7 @@
  * that row as the current identity's.
  *
  * `unconfirmed` (docs/backlog/013) marks a row written while the identity came
- * from the cache rather than from a live `/api/me` — the Access cookie the
+ * from the cache rather than from a live `/api/me` — the session cookie the
  * next request carries may not match it. `confirmOutbox` (`db.ts`) clears the
  * flag once a live answer names who really holds the session.
  */

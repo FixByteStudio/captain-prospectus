@@ -580,7 +580,7 @@ describe("runSync — rows written by another identity", () => {
 /**
  * docs/backlog/013: a row written while the identity was cache-sourced is
  * never sendable, whatever identity `runSync` is later called with — the
- * cache that wrote it may not be who the Access cookie really names.
+ * cache that wrote it may not be who the session cookie really names.
  */
 describe("runSync — unconfirmed rows", () => {
   const A = "a@example.com";
