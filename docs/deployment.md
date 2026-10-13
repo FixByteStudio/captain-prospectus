@@ -4,7 +4,7 @@
 | Env | Where | Database | Auth |
 |---|---|---|---|
 | Local | `pnpm dev` (Vite + workerd via `@cloudflare/vite-plugin`) | Local D1 (in `.wrangler/`) | `DEV_USER_EMAIL` in `.dev.vars` |
-| Production | `https://prospectus.fixbyte.cloud` ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md)) | D1 `captain-prospectus` | Our own login, with no Cloudflare Access in front ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
+| Production | `https://prospectus.fixbyte.cloud` ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md)) | D1 `captain-prospectus` | Our own login ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
 
 While the [data stage](adr/0033-rollout-rules-wait-for-protected-data.md) in `CLAUDE.md` is `disposable`, production is as throwaway as local: it may be [redeployed fresh](#fresh-redeploy) at any time.
 
@@ -81,9 +81,8 @@ terminal, after `npx wrangler login`. An agent runs neither.
 
 ## First sign-in
 
-Production runs on our own login alone ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)): no Cloudflare
-Access application exists, and the Worker reads no Access token. After the first deploy, and after every [fresh redeploy](#fresh-redeploy),
-in order:
+Sign-in is our own login ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). After the first deploy,
+and after every [fresh redeploy](#fresh-redeploy), in order:
 
 1. Open `/login`, choose "Accès administrateur" and sign in with `OWNER_EMAIL` and `BREAK_GLASS`. That
    creates the owner as an admin.

@@ -20,7 +20,7 @@ Everything runs in **one Cloudflare Worker**, one deploy ([ADR-0003](adr/0003-si
 | Database | D1 (SQLite) via Drizzle | System of record |
 | Client store | Dexie (IndexedDB) on the phone | Offline copy of the today list, outbox of pending writes |
 | Service worker | vite-plugin-pwa (Workbox) | Caches the app shell. **Never caches `/api`** |
-| Identity | Our own login, sessions in D1 | A session cookie looked up on every `/api` request outside `/api/auth/*` and the local-only `/api/dev/*` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)); no Cloudflare Access in front ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
+| Identity | Our own login, sessions in D1 | A session cookie looked up on every `/api` request outside `/api/auth/*` and the local-only `/api/dev/*` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md); [ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
 
 ```mermaid
 flowchart TB
