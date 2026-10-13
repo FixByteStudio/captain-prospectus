@@ -11,7 +11,7 @@
  * tells the caller to delete it. Every branch below exists because of a
  * specific failure mode; see the comment on each.
  */
-import { ApiError, isWorkerUnauthorized } from "../api";
+import { ApiError } from "../api";
 import { meResponseSchema, type MeResponse } from "../../shared/schemas";
 import { copy } from "../copy/field";
 
@@ -30,18 +30,12 @@ export type IdentityOutcome =
       kind: "error";
       message: string;
       /**
-       * True when the *server* refused this identity, as opposed to the shell
-       * simply having nothing to show. The caller must then drop the offline
-       * caches, or the next launch with no network falls back to them and the
-       * revocation is undone by turning on airplane mode.
+       * True when the Worker answered 401, as opposed to the shell simply
+       * having nothing to show: `/login` is the way back. The caller must drop
+       * the offline caches, or the next launch with no network falls back to
+       * them and the revocation is undone by turning on airplane mode.
        */
       revoked: boolean;
-      /**
-       * Set only with `revoked`: true when the Worker itself answered 401, so `/login`
-       * is the way back; false for an Access redirect, whose "Se reconnecter"
-       * marker navigation stays (GH #309).
-       */
-      toLogin?: boolean;
     };
 
 export type AdminAccess = {
@@ -95,20 +89,14 @@ export function resolveIdentity(result: IdentityFetchResult, cached: unknown): I
 
   // A 401 is the Worker having been reached and having answered "this
   // session is no longer valid" — `requireIdentity` in src/worker/auth.ts
-  // returns it when there is no valid session and no valid Access token —
-  // including a Worker with Access not configured at all (spec-gh-299). That
-  // is exactly the "stolen phone" mitigation in docs/security.md; falling
-  // back to the cache here would erase that mitigation. Any other ApiError (a
+  // returns it when there is no valid session. That is exactly the "stolen
+  // phone" mitigation in docs/security.md; falling back to the cache here
+  // would erase that mitigation. Any other ApiError (a
   // 5xx, such as sign-in on a Worker without AUTH_PEPPER) is not a statement
   // about *this* identity, so it falls through to the cache like a genuine
   // network failure would.
   if (result.error instanceof ApiError && result.error.status === 401) {
-    return {
-      kind: "error",
-      message: result.error.message,
-      revoked: true,
-      toLogin: isWorkerUnauthorized(result.error),
-    };
+    return { kind: "error", message: result.error.message, revoked: true };
   }
 
   const cachedParsed = cached ? meResponseSchema.safeParse(cached) : null;

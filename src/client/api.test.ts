@@ -1,14 +1,14 @@
 /**
- * What `apiFetch` and `downloadCsv` make of the two 401s (GH #309): the
- * Worker's own is a plain status, Access's is an opaque redirect. Both keep
- * `status` 401 but carry their own `code`, and only the Worker's satisfies
- * `isWorkerUnauthorized`.
+ * What `apiFetch` and `downloadCsv` make of a 401 and of an opaque redirect
+ * (GH #309, #469): the Worker's 401 is the one signal of a lost session; a
+ * redirect is an ordinary failure (status 0, code `error`).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch, isWorkerUnauthorized } from "./api";
+import { copy } from "./copy/field";
 import { downloadCsv } from "./admin/queries";
 
-function accessRedirect(): Response {
+function opaqueRedirect(): Response {
   const response = new Response(null, { status: 200 });
   Object.defineProperty(response, "type", { value: "opaqueredirect" });
   return response;
@@ -44,13 +44,24 @@ describe("apiFetch", () => {
     expect(isWorkerUnauthorized(error)).toBe(true);
   });
 
-  it("turns an Access redirect into status 401, code access_redirect", async () => {
-    stubFetch(accessRedirect());
+  it("turns an opaque redirect into an ordinary failure, status 0, code error", async () => {
+    stubFetch(opaqueRedirect());
 
     const error = await caught(() => apiFetch("/api/me"));
 
-    expect(error).toMatchObject({ status: 401, code: "access_redirect" });
+    expect(error).toMatchObject({ status: 0, code: "error", message: copy.errors.generic });
     expect(isWorkerUnauthorized(error)).toBe(false);
+  });
+
+  it("asks fetch not to follow redirects, so a proxy's login page is never parsed", async () => {
+    const fetchFn = stubFetch(new Response("{}", { status: 200 }));
+
+    await apiFetch("/api/me");
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/api/me",
+      expect.objectContaining({ redirect: "manual" }),
+    );
   });
 
   it("keeps other failures as they were, and they are not the Worker's 401", async () => {
@@ -78,12 +89,23 @@ describe("downloadCsv", () => {
     expect(isWorkerUnauthorized(error)).toBe(true);
   });
 
-  it("classifies an Access redirect the same way", async () => {
-    stubFetch(accessRedirect());
+  it("turns an opaque redirect into an ordinary failure carrying the caller's message", async () => {
+    stubFetch(opaqueRedirect());
 
     const error = await caught(() => downloadCsv("/api/x.csv", "x.csv", "failed"));
 
-    expect(error).toMatchObject({ status: 401, code: "access_redirect" });
+    expect(error).toMatchObject({ status: 0, code: "error", message: "failed" });
     expect(isWorkerUnauthorized(error)).toBe(false);
+  });
+
+  it("asks fetch not to follow redirects, so a proxy's login page is never saved as the file", async () => {
+    const fetchFn = stubFetch(new Response("", { status: 401 }));
+
+    await caught(() => downloadCsv("/api/x.csv", "x.csv", "failed"));
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/api/x.csv",
+      expect.objectContaining({ redirect: "manual" }),
+    );
   });
 });

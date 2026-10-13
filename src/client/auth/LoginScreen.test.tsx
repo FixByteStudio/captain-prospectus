@@ -385,7 +385,7 @@ describe("LoginScreen — a device that already has an identity (GH #309)", () =
 
   it.each([
     ["a 401", json(401, { error: "unauthorized", message: "x" })],
-    ["an Access redirect", redirected],
+    ["an opaque redirect", redirected],
     ["a network error", () => Promise.reject(new TypeError("Failed to fetch"))],
     ["an answer that is not an identity", json(200, { nope: true })],
   ])("keeps the form on %s, asking only once", async (_what, me) => {

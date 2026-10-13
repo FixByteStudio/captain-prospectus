@@ -4,6 +4,7 @@
  * empty-feed copy — the I/O matrix in
  * _bmad-output/implementation-artifacts/spec-gh-178-visites-rebuilt.md.
  */
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -28,8 +29,8 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   });
 }
 
-/** What `redirect: "manual"` makes of Access's redirect to its login page. */
-function accessRedirect(): Response {
+/** What `redirect: "manual"` makes of any redirect. */
+function opaqueRedirect(): Response {
   const response = new Response(null, { status: 200 });
   Object.defineProperty(response, "type", { value: "opaqueredirect" });
   return response;
@@ -155,6 +156,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Sonner keeps its toasts across tests; a leftover one doubles the next match.
+  toast.dismiss();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -456,14 +459,15 @@ describe("VisitsScreen", () => {
     expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
   });
 
-  it("warns that the session expired when Access redirects the export", async () => {
-    stubFetch({ exportCsv: accessRedirect });
+  it("warns that the export failed when a redirect answers it", async () => {
+    stubFetch({ exportCsv: opaqueRedirect });
     renderScreen();
     await screen.findByText(copy.visits.strip.flyersGiven);
 
     await userEvent.click(screen.getByRole("button", { name: copy.visits.export.button }));
 
-    expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+    expect(await screen.findByText(copy.visits.export.failed)).toBeTruthy();
+    expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
     expect(screen.getByTestId("location").textContent).not.toBe("/login");
   });
 
