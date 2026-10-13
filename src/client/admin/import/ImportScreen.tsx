@@ -70,6 +70,8 @@ export function ImportScreen() {
   // Source's first file and Fichier & colonnes' « Changer de fichier » both
   // land here: a readable file replaces the current one and re-guesses.
   function onParsed(file: File, csv: ParsedCsv) {
+    // A read that finishes after « Dessiner une zone » is still a CSV import.
+    setFork("csv");
     setFileName(file.name);
     setFileSize(file.size);
     setParsed(csv);
@@ -170,7 +172,6 @@ export function ImportScreen() {
 
       <ResultDialog
         result={importer.result}
-        rejectedCount={rejected.length}
         onClose={startOver}
         onSeeProspects={() => navigate("/admin/prospects")}
       />
