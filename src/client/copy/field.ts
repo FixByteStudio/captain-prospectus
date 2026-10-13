@@ -181,8 +181,7 @@ export const copy = {
       count === 1
         ? "1 élément appartient à un autre agent et n'a pas été envoyé"
         : `${count} éléments appartiennent à un autre agent et n'ont pas été envoyés`,
-    /** Reconnects through Access (docs/domains/identity-access.md); the
-     * outbox is untouched. */
+    /** Opens /login (docs/domains/identity-access.md); the outbox is untouched. */
     reconnect: "Se reconnecter",
   },
 

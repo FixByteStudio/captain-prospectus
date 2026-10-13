@@ -2239,9 +2239,9 @@ sync strip's "Se reconnecter" and "Mettre à jour", and the field update
 banner's "Mettre à jour" (spec-gh-74). All three run their action through
 `LeaveGuardProvider`'s `leave(proceed)` instead of navigating or reloading
 directly, so the tab bar, the strip and the banner cannot drift into asking
-differently or not asking at all. Reconnecting while offline is already a
-no-op today, so it stays silent rather than opening a dialog for an action
-that would not do anything. The 426 forced update (`applyUpdateNow`, the sync
+differently or not asking at all. "Se reconnecter" opens `/login` by router
+navigation, which needs no network, so it asks on a dirty form whether the
+phone is online or not. The 426 forced update (`applyUpdateNow`, the sync
 engine's own reaction to a server that refuses the build) is not one of the
 three — it is not a tap the agent chooses, so there is nothing to ask about.
 Outside the field route (the admin update banner, and the update prompt on

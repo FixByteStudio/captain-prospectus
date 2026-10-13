@@ -162,6 +162,15 @@ describe("runSync — failures must never clear the outbox", () => {
     expect(await db.outboxVisits.count()).toBe(1);
   });
 
+  it("asks fetch not to follow redirects, so a proxy's login page is never parsed as a sync", async () => {
+    const fetchFn = vi.fn(respondWith(okResponse()));
+    await runSync({ db, identity: AGENT, fetchFn });
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
   it("keeps the outbox when the response does not match the contract", async () => {
     await db.outboxVisits.add(visit());
     const garbage = (async () =>
