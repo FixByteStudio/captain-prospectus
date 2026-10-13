@@ -33,7 +33,7 @@ The owner adds, enrols and removes an agent without a deploy, and nobody leaves 
 
 Follows the cutover's expand/contract line: epic-own-login ships phase 1 (our login beside an Access fallback), epic-access-removed covers phases 2 and 3 (agents enrol, Access goes). Not passkeys, TOTP, chosen passwords, emailed codes, user deletion or the rate-limiting binding; see the spec's Non-goals. Tracer path: break-glass gives the owner a D1 session on `/login`, and the Worker accepts it ahead of the Access JWT.
 
-- Touch point: Cloudflare dashboard — the Access application and its tokens (deleted), and a free WAF rate-limiting rule on `/api/auth/*` if one exists; owner: epic-access-removed (hitl)
+- Touch point: Cloudflare dashboard — the zone's rate-limiting rule on `/api/auth/*` (ADR-0035), in place since the first deploy. No Access application exists (ADR-0034); owner: epic-access-removed (hitl, checked in its last entry)
 - Touch point: CI secrets and vars — `AUTH_PEPPER`, `BREAK_GLASS`, `OWNER_EMAIL` set by the owner; owner: epic-own-login (hitl)
 - Touch point: UX run `EXPERIENCE.md` (ux-captain-prospectus-2026-09-24) — its three-row À traiter rule; its owner updates it, epic-own-login raises the request
 - Touch point: GH #209 (admin session-expired dialog) — stays its own issue; epic-own-login only sends a 401 to `/login`
@@ -53,4 +53,6 @@ Follows the cutover's expand/contract line: epic-own-login ships phase 1 (our lo
 - Decision (2026-10-07): GH #209 stays separate; CAP-12 covers the 401 → `/login` path only.
 - Decision (2026-10-07): no platform-baseline epic; scaffold, CI and environments exist since M0.
 - Decision (2026-10-07): the JWT fallback lives in one place in `src/worker/auth.ts`, owned by epic-own-login, so phase 3 deletes it without touching anything else. epic-access-removed waits on it.
+- Source conflict: Description, Done when 1 and 3, and Boundaries — a three-phase cutover with Access in front vs ADR-0034 (no Access application was ever created; phases 1 and 2 are dropped).
+- Decision (2026-10-13): ADR-0034 settles it. Done when 1 reads "with no Access in front", and Done when 3 has no phase left to check. epic-access-removed is the removal only: it owns the Access-path removals of CAP-12 as well, and waits on 1.2 alone, not on #315.
 - Waits on nothing external except ADR-0029 acceptance (still "proposed"), which epic-own-login's tracer records.
