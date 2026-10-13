@@ -129,7 +129,7 @@ describe("useImportBatches", () => {
     expect(result.current.import.error).toBeNull();
   });
 
-  it("keeps the in-screen error for an Access redirect", async () => {
+  it("keeps the in-screen error for an opaque redirect", async () => {
     const redirect = new Response(null, { status: 200 });
     Object.defineProperty(redirect, "type", { value: "opaqueredirect" });
     vi.stubGlobal(

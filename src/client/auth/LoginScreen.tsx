@@ -11,7 +11,7 @@
  *
  * It renders outside the identity gate (App.tsx). It asks `/api/me` once on
  * mount, only to skip the form for a device that already has an identity
- * (GH #309); a 401, an Access redirect or a network error leaves the form up,
+ * (GH #309); a 401, an opaque redirect or a network error leaves the form up,
  * with no retry — a phone sent here by a 401 must reach it with no session.
  * It ships in the field shell, so the field rules hold — `copy/field`, native
  * inputs and labels, 48px targets.

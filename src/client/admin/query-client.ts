@@ -13,9 +13,8 @@ import { adminKeys } from "./queries";
  *
  * The same goes for the Worker's 401: any query or mutation that gets one
  * calls `onUnauthorized` (the router's `/login`, GH #309), once, however many
- * requests were in flight. An Access redirect is not this — it keeps the
- * screens' session-expired error. A 401 is not retried either: asking again
- * with the same dead cookie cannot succeed.
+ * requests were in flight. A 401 is not retried either: asking again with the
+ * same dead cookie cannot succeed.
  */
 export function createAdminQueryClient(onUnauthorized: () => void = () => {}): QueryClient {
   let signedOut = false;

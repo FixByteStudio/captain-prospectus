@@ -22,7 +22,6 @@ import type { MeResponse, Visit } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
 import { fieldDb, getMeta, setMeta } from "./field/db";
-import { reconnectUrl } from "./field/reconnect-marker";
 import type { SyncState } from "./field/useSync";
 
 type SyncStub = Pick<SyncState, "status" | "running" | "pending">;
@@ -58,9 +57,6 @@ const stub = vi.hoisted(() => ({
   identityPending: false,
   /** True while `/api/me` should fail unreachably, for the error-state case. */
   identityUnreachable: false,
-  /** True while `/api/me` should answer with an Access redirect — an expired
-   * Access session, which is not the same as being unreachable (identity.ts). */
-  identityRevoked: false,
   /** True while `/api/me` should answer the Worker's own 401 (GH #309). */
   identityUnauthorized: false,
   /** Counts every `/api/me` fetch, so a test can pin that a live-confirmed
@@ -80,8 +76,6 @@ vi.mock("./api", async (importOriginal) => {
     apiFetch: () => {
       stub.identityCalls += 1;
       if (stub.identityPending) return new Promise(() => {});
-      if (stub.identityRevoked)
-        return Promise.reject(new actual.ApiError(401, "access_redirect", REVOKED_MESSAGE));
       if (stub.identityUnauthorized)
         return Promise.reject(new actual.ApiError(401, "unauthorized", REVOKED_MESSAGE));
       // Not an ApiError: a bare failure is "unreachable", which with no cached
@@ -181,7 +175,6 @@ beforeEach(async () => {
   stub.needRefresh = false;
   stub.identityPending = false;
   stub.identityUnreachable = false;
-  stub.identityRevoked = false;
   stub.identityUnauthorized = false;
   stub.identityCalls = 0;
 });
@@ -425,7 +418,7 @@ describe("The admin tab and routes follow the network", () => {
     }
   });
 
-  it("takes a cache-started admin to the identity-error frame, and clears the cache, when the re-check is revoked", async () => {
+  it("takes a cache-started admin to /login, and clears the cache, when the re-check gets a 401", async () => {
     const onlineSpy = mockOffline();
     try {
       await setMeta(fieldDb, "identity", ADMIN);
@@ -440,12 +433,13 @@ describe("The admin tab and routes follow the network", () => {
       // goes with it (identity-access.md). The outbox is never touched —
       // INVARIANT 5 — and `clearAgentCache` leaves it alone.
       stub.identityUnreachable = false;
-      stub.identityRevoked = true;
+      stub.identityUnauthorized = true;
       act(() => {
         window.dispatchEvent(new Event("online"));
       });
 
-      expect(await screen.findByText(REVOKED_MESSAGE)).toBeTruthy();
+      expect(await screen.findByText(copy.login.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/login");
       expect(fieldBand()).toBeNull();
       expect(await getMeta(fieldDb, "identity")).toBeUndefined();
     } finally {
@@ -610,11 +604,11 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       // identity the agent was shown rather than being left to confirm to
       // nobody (identity-access.md).
       stub.identityUnreachable = false;
-      stub.identityRevoked = true;
+      stub.identityUnauthorized = true;
       await act(async () => {
         window.dispatchEvent(new Event("online"));
       });
-      await screen.findByText(REVOKED_MESSAGE);
+      await screen.findByText(copy.login.title);
 
       const row = await fieldDb.outboxVisits.get(queued.id);
       expect(row?.writtenBy).toBe(AGENT.email);
@@ -667,10 +661,10 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       { ...fromB, writtenBy: OTHER_AGENT.email, unconfirmed: true },
     ]);
 
-    stub.identityRevoked = true;
+    stub.identityUnauthorized = true;
     renderApp("/tournee");
 
-    await screen.findByText(REVOKED_MESSAGE);
+    await screen.findByText(copy.login.title);
     await waitFor(async () => {
       expect((await fieldDb.outboxVisits.get(fromA.id))?.unconfirmed).toBeUndefined();
       expect((await fieldDb.outboxVisits.get(fromB.id))?.unconfirmed).toBeUndefined();
@@ -848,50 +842,7 @@ describe("App, the Worker's 401 on the re-check of a cache-started session (GH #
 });
 
 describe("App identity-error frame", () => {
-  /** `MemoryRouter` never reads `window.location`, so only the button does. */
-  const realLocation = Object.getOwnPropertyDescriptor(window, "location");
-
-  function stubLocation(href: string) {
-    const location = { href };
-    Object.defineProperty(window, "location", { configurable: true, value: location });
-    return location;
-  }
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    if (realLocation) Object.defineProperty(window, "location", realLocation);
-  });
-
-  // A reload is served from precache and asks `/api/me` straight back into
-  // the same 401, so the frame must offer the marker navigation (GH #75).
-  it("sends a session revoked at startup through Access, marker and all", async () => {
-    const user = userEvent.setup();
-    stub.identityRevoked = true;
-    renderApp("/tournee");
-
-    const button = await screen.findByRole("button", { name: copy.sync.reconnect });
-    expect(screen.getByText(REVOKED_MESSAGE)).toBeTruthy();
-    const location = stubLocation("https://app.example/tournee");
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    await user.click(button);
-
-    expect(location.href).toBe(reconnectUrl("https://app.example/tournee"));
-  });
-
-  it("stays put when reconnecting with no network", async () => {
-    const user = userEvent.setup();
-    stub.identityRevoked = true;
-    renderApp("/tournee");
-
-    const button = await screen.findByRole("button", { name: copy.sync.reconnect });
-    const location = stubLocation("https://app.example/tournee");
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-    await user.click(button);
-
-    expect(location.href).toBe("https://app.example/tournee");
-  });
-
-  it("offers no reconnect when the phone simply has never reached the server", async () => {
+  it("offers no button when the phone simply has never reached the server", async () => {
     stub.identityUnreachable = true;
     renderApp("/tournee");
 

@@ -1,11 +1,10 @@
 /**
  * Fetch wrapper for /api.
  *
- * Access answers an expired session with a redirect to the login page;
- * `redirect: "manual"` turns that into an opaque response we can recognise
- * instead of parsing a login page as JSON (ADR-0006). The Worker's own 401 is
- * a plain status, so the two stay apart: both carry `status` 401, but the
- * Worker's has `code` "unauthorized" and Access's "access_redirect".
+ * `redirect: "manual"` stays as a guard (ADR-0034): the Worker never
+ * redirects `/api`, so a redirect is a proxy or a captive portal, never a lost
+ * session. It comes back opaque and becomes an ordinary failure, instead of a
+ * login page parsed as JSON. Only the Worker's 401 means the session is gone.
  */
 import { copy } from "./copy/field";
 
@@ -22,19 +21,22 @@ export class ApiError extends Error {
   }
 }
 
-/** The Worker said this session is no longer valid; `/login` is the way back. */
+/** Any 401: the Worker said this session is no longer valid; `/login` is the way back. */
 export function isWorkerUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401 && error.code === "unauthorized";
+  return error instanceof ApiError && error.status === 401;
+}
+
+/** The 401 `ApiError` for a response, or null. Shared with `downloadCsv`. */
+export function authError(response: Response, message: string): ApiError | null {
+  return response.status === 401 ? new ApiError(401, "unauthorized", message) : null;
 }
 
 /**
- * The 401 `ApiError` for a response, or null when it is neither. Shared with
- * `downloadCsv`, which reads the same two signals.
+ * An opaque redirect as an ordinary failure (status 0, code `error`), or null.
+ * Not a 401, so it never opens `/login` or drops a cache. Shared with `downloadCsv`.
  */
-export function authError(response: Response, message: string): ApiError | null {
-  if (response.type === "opaqueredirect") return new ApiError(401, "access_redirect", message);
-  if (response.status === 401) return new ApiError(401, "unauthorized", message);
-  return null;
+export function redirectError(response: Response, message: string): ApiError | null {
+  return response.type === "opaqueredirect" ? new ApiError(0, "error", message) : null;
 }
 
 /** Retry-After as delta-seconds; an HTTP-date or junk is not usable. */
@@ -53,6 +55,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   const authFailure = authError(response, copy.errors.sessionExpired);
   if (authFailure) throw authFailure;
+  const redirected = redirectError(response, copy.errors.generic);
+  if (redirected) throw redirected;
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
     throw new ApiError(

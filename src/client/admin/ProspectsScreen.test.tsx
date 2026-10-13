@@ -3,6 +3,7 @@
  * the request, a chip shows what the selects cannot, and a change rewrites the
  * URL in place.
  */
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -36,8 +37,8 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** What `redirect: "manual"` makes of Access's redirect to its login page. */
-function accessRedirect(): Response {
+/** What `redirect: "manual"` makes of any redirect. */
+function opaqueRedirect(): Response {
   const response = new Response(null, { status: 200 });
   Object.defineProperty(response, "type", { value: "opaqueredirect" });
   return response;
@@ -131,6 +132,8 @@ const location = () => screen.getByTestId("location").textContent;
 const statusSelect = () => screen.getByRole("combobox", { name: copy.prospects.filters.status });
 
 afterEach(() => {
+  // Sonner keeps its toasts across tests; a leftover one doubles the next match.
+  toast.dismiss();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   askedRaw = [];
@@ -872,14 +875,15 @@ describe("ProspectsScreen › export (#179)", () => {
     expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
   });
 
-  it("warns that the session expired when Access redirects the export", async () => {
-    stubFetch([], 13, { exportCsv: accessRedirect });
+  it("warns that the export failed when a redirect answers it", async () => {
+    stubFetch([], 13, { exportCsv: opaqueRedirect });
     renderAt("/admin/prospects");
     await screen.findByText(copy.prospects.count(13));
 
     await userEvent.click(screen.getByRole("button", { name: copy.prospects.export.button }));
 
-    expect(await screen.findByText(copy.errors.sessionExpired)).toBeTruthy();
+    expect(await screen.findByText(copy.prospects.export.failed)).toBeTruthy();
+    expect(screen.queryByText(copy.errors.sessionExpired)).toBeNull();
     expect(location()).not.toBe("/login");
   });
 
