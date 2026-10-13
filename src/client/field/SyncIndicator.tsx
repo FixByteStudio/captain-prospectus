@@ -49,7 +49,6 @@ function forcedView(): SyncView | null {
     offline: syncView({ status: "offline", running: false, pending: 3 }),
     unconfirmed: syncView({ status: "unconfirmed", running: false, pending: 3 }),
     failed: syncView({ status: "error", running: false, pending: 3 }),
-    auth: syncView({ status: "auth", running: false, pending: 3 }),
     unauthorized: syncView({ status: "unauthorized", running: false, pending: 3 }),
     upgrade: syncView({ status: "upgrade", running: false, pending: 3 }),
   };
@@ -129,24 +128,11 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
 
   const runAction = () => {
     if (!strip?.action) return;
-    const effect = stripEffect(strip.action, pwa.needRefresh, window.location.href);
+    const effect = stripEffect(strip.action, pwa.needRefresh);
     switch (effect.kind) {
-      case "navigate":
-        // Reconnecting needs the network; with none, leave the agent on the
-        // strip (which keeps retrying on its own) instead of sending them to
-        // the browser's offline error page. This is a no-op check, not a
-        // guarded action, so it runs before `leave` (I/O matrix, spec-gh-74)
-        // — and again inside `proceed`, since the dialog can sit open long
-        // enough for the network to drop before "Quitter" is tapped.
-        if (navigator.onLine) {
-          leave(() => {
-            if (navigator.onLine) window.location.href = effect.to;
-          });
-        }
-        return;
       case "login":
-        // The Worker's own 401: `/login` is a router route, no network
-        // needed to open it, and the draft goes through the same dialog.
+        // `/login` is a router route, no network needed to open it, and the
+        // draft goes through the same dialog.
         leave(() => void navigate("/login"));
         return;
       case "apply-update":

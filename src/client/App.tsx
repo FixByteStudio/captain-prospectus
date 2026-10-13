@@ -1,14 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import {
-  Link,
-  Navigate,
-  Outlet,
-  Route,
-  Routes,
-  useLocation,
-  useMatch,
-  useNavigate,
-} from "react-router";
+import { Link, Navigate, Outlet, Route, Routes, useMatch, useNavigate } from "react-router";
 import {
   LockIcon,
   MapPinOffIcon,
@@ -27,7 +18,6 @@ import { FieldTabs } from "./field/FieldTabs";
 import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
 import { TodayScreen } from "./field/TodayScreen";
 import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
-import { hasReconnectMarker, withoutReconnectMarker } from "./field/reconnect-marker";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
 import {
@@ -305,7 +295,6 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
     setRecheck((n) => n + 1);
   }, []);
 
-  const location = useLocation();
   const navigate = useNavigate();
   // The identity effect below must not re-run (and re-ask `/api/me`) each time
   // `navigate` changes identity with the location, so it reads the latest one here.
@@ -320,19 +309,6 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   useEffect(() => {
     leaveRef.current = leave;
   }, [leave]);
-
-  // "Se reconnecter" (SyncStrip, or the identity-error frame below) navigates
-  // here with the marker so the SW's navigateFallbackDenylist sends that one
-  // request to the network; once it has landed, the marker has done its job
-  // and the visible URL should not keep advertising it. A router navigation
-  // (not `history.replaceState` directly) so it does not wipe whatever state
-  // react-router already attached to this history entry.
-  useEffect(() => {
-    if (!hasReconnectMarker(location.search)) return;
-    navigate(withoutReconnectMarker(`${location.pathname}${location.search}${location.hash}`), {
-      replace: true,
-    });
-  }, [location, navigate]);
 
   /**
    * Identity, with an offline fallback — but only for genuine unreachability.

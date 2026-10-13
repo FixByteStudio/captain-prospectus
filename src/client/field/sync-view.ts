@@ -10,7 +10,6 @@
  * component).
  */
 import { copy } from "../copy/field";
-import { reconnectUrl } from "./reconnect-marker";
 import type { SyncStatus } from "./sync";
 
 export type SyncViewInput = {
@@ -23,8 +22,7 @@ export type SyncViewInput = {
 export type SyncDotTone = "success" | "warn" | "muted" | "destructive";
 export type SyncStripTone = "band-strip" | "secondary" | "destructive" | "warn";
 export type SyncIcon = "cloud-upload" | "clock" | "x";
-/** "login" is the session-expired strip's button when the Worker said 401 (GH #309). */
-export type SyncAction = "reconnect" | "login" | "update";
+export type SyncAction = "login" | "update";
 
 export type SyncStripView = {
   tone: SyncStripTone;
@@ -54,16 +52,13 @@ function waitingStrip(pending: number): SyncStripView {
   };
 }
 
-const AUTH_STRIP: SyncStripView = {
+const UNAUTHORIZED_STRIP: SyncStripView = {
   tone: "destructive",
   message: copy.sync.authExpired,
   icon: "x",
-  action: "reconnect",
+  action: "login",
   politeness: "assertive",
 };
-
-/** Same strip and message; only the button's destination differs. */
-const UNAUTHORIZED_STRIP: SyncStripView = { ...AUTH_STRIP, action: "login" };
 
 const UPGRADE_STRIP: SyncStripView = {
   tone: "warn",
@@ -119,14 +114,6 @@ export function syncView({ status, running, pending }: SyncViewInput): SyncView 
   // tick would flicker the offline/failed strip and, worse, re-announce and
   // drop the button on the assertive session-expired/update-needed ones
   // (spec-gh-65 loop-1 finding #3, widened on review to every status).
-  if (status === "auth") {
-    return {
-      dot: { tone: "destructive", pulse: running, label: copy.sync.authExpired },
-      count,
-      strip: AUTH_STRIP,
-    };
-  }
-
   if (status === "unauthorized") {
     return {
       dot: { tone: "destructive", pulse: running, label: copy.sync.authExpired },
@@ -209,24 +196,18 @@ export function heldBackMessage(heldBack: number): string | null {
 
 /* ------------------------------------------------------------- strip effect */
 
-export type StripEffect =
-  | { kind: "navigate"; to: string }
-  | { kind: "login" }
-  | { kind: "apply-update" }
-  | { kind: "reload" };
+export type StripEffect = { kind: "login" } | { kind: "apply-update" } | { kind: "reload" };
 
 /**
  * What tapping the strip's one button does, decided here rather than in the
- * component so flipping the choice needs a failing test (spec-gh-65 #5). The
- * destination is computed here too, not just the effect's name, so swapping
- * in a plain `reload()` for the reconnect navigation would fail a test.
+ * component so flipping the choice needs a failing test (spec-gh-65 #5).
+ * "Se reconnecter" opens `/login`, a router route that needs no network.
  *
  * "Mettre à jour" takes a build already waiting; otherwise the browser has not
  * noticed one yet, so a plain reload is what lets the *next* sync's 426 call
  * `applyUpdateNow` again from a fresh page load (`src/client/pwa.ts`).
  */
-export function stripEffect(action: SyncAction, needRefresh: boolean, href: string): StripEffect {
-  if (action === "reconnect") return { kind: "navigate", to: reconnectUrl(href) };
+export function stripEffect(action: SyncAction, needRefresh: boolean): StripEffect {
   if (action === "login") return { kind: "login" };
   return needRefresh ? { kind: "apply-update" } : { kind: "reload" };
 }
