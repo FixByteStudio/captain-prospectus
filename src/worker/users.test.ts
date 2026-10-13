@@ -613,7 +613,6 @@ describe("devices (GH #307)", () => {
     const admin = await adminCookie();
     const phone = await testSession(TEST_AGENT);
     const laptop = await testSession(TEST_AGENT);
-    if (!phone.id) throw new Error("testSession gave no id");
 
     expect((await revoke(phone.id, admin)).status).toBe(204);
 
@@ -626,7 +625,6 @@ describe("devices (GH #307)", () => {
 
   it("lets an admin revoke their own current session", async () => {
     const caller = await testSession(TEST_ADMIN);
-    if (!caller.id) throw new Error("testSession gave no id");
     expect((await revoke(caller.id, caller.cookie)).status).toBe(204);
     expect((await call("/api/me", caller.cookie)).status).toBe(401);
   });
@@ -641,7 +639,6 @@ describe("devices (GH #307)", () => {
 
   it("answers 403 to an agent and to a foreign Origin, deleting nothing", async () => {
     const target = await testSession(TEST_AGENT);
-    if (!target.id) throw new Error("testSession gave no id");
     expect((await revoke(target.id, await testSessionCookie(TEST_AGENT))).status).toBe(403);
     const foreign = await revoke(target.id, await adminCookie(), {
       Origin: "https://evil.example",

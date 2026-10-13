@@ -27,8 +27,8 @@ export function AccountMenu({ email }: { email: string }) {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
     } catch (error) {
-      // A 401 (either kind) means there was no session left to end, which is
-      // the goal; `/login` below is still where the user goes.
+      // A 401 means there was no session left to end, which is the goal;
+      // `/login` below is still where the user goes.
       if (!(error instanceof ApiError && error.status === 401)) {
         toast.error(copy.errors.generic);
         return;

@@ -68,7 +68,7 @@ ended ([data-model](../data-model.md)).
 | Regenerate one's own passphrase | | ✓ |
 
 ## Local development
-`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. The role comes from that email's `users` row; no row, or an inactive one, is a 401. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
+`DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. So on localhost with it set, « Se déconnecter » ends the session and `/login` signs you straight back in as that user; unset it to try the login. The role comes from that email's `users` row; no row, or an inactive one, is a 401. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.
 
 ## Offline and session expiry
 Sessions expire or are revoked. The app shell is cached by the service worker, so the agent can keep working offline. When a sync gets a 401 or a 403, the band's session-expired strip shows and offers "Se reconnecter", which opens `/login`; the cached round is dropped (below) and the outbox stays intact either way.
