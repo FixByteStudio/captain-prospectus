@@ -31,9 +31,7 @@ export type SyncStatus =
   | "ok"
   /** No network. Keep everything, try again later. */
   | "offline"
-  /** Access session expired or revoked (an Access redirect, or a 403). Keep the outbox, drop the cached round (GH #35); sign in again. */
-  | "auth"
-  /** The Worker answered 401: the own-login session is gone. Same keep/drop as "auth", but `/login` is the way back (GH #309). */
+  /** The Worker answered 401 or 403: the session is gone (403 is only the cross-origin check). Keep the outbox, drop the cached round (GH #35); `/login` is the way back. */
   | "unauthorized"
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"
@@ -149,28 +147,22 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: requestBody,
-      // An expired Access session answers with a redirect to the login page.
-      // "manual" turns that into an opaque response instead of following it and
-      // parsing an HTML page as JSON.
+      // "manual" turns a redirect into an opaque response instead of following
+      // it and parsing an HTML page as JSON; it counts as an ordinary failure.
       redirect: "manual",
     });
   } catch {
     return { status: "offline", ...EMPTY, ...(await countPending()) };
   }
 
-  const workerUnauthorized = response.status === 401;
-  if (response.type === "opaqueredirect" || workerUnauthorized || response.status === 403) {
+  if (response.status === 401 || response.status === 403) {
     // The server refused this identity. A PWA resumed from the app switcher
     // never remounts, so the shell's `/api/me` check cannot drop the cached
     // round for it (GH #35); this refusal must. Expired and revoked look the
     // same from here, and both are stolen-phone mitigations (docs/security.md).
     // The outbox stays — clearAgentCache leaves it alone (INVARIANT 5).
     await clearAgentCache(db);
-    return {
-      status: workerUnauthorized ? "unauthorized" : "auth",
-      ...EMPTY,
-      ...(await countPending()),
-    };
+    return { status: "unauthorized", ...EMPTY, ...(await countPending()) };
   }
   if (response.status === 426) {
     return { status: "upgrade", ...EMPTY, ...(await countPending()) };

@@ -3,8 +3,7 @@
  * pre-paint boot script duplicates the read below rather than importing it (a
  * module script is deferred past first paint, so a pinned-dark user would see
  * a white flash — see the spec's Design Notes), and `theme.test.ts` ties the
- * two `THEME_STORAGE_KEY` literals together the way `config.test.ts` ties the
- * reconnect marker to `vite.config.ts`.
+ * two `THEME_STORAGE_KEY` literals together.
  */
 
 export const THEME_STORAGE_KEY = "cap-theme";

@@ -86,10 +86,9 @@ function runBoot(storage: { getItem: (key: string) => string | null }) {
 
 describe("index.html", () => {
   it("boots the theme from the same storage key this module reads (spec-gh-64)", () => {
-    // Tied together the way config.test.ts ties RECONNECT_MARKER_PATTERN to
-    // vite.config.ts: the boot script cannot import THEME_STORAGE_KEY (a
-    // module script is deferred past first paint), so this only asserts the
-    // two literals match rather than re-deriving the key.
+    // The boot script cannot import THEME_STORAGE_KEY (a module script is
+    // deferred past first paint), so this only asserts the two literals match
+    // rather than re-deriving the key.
     expect(html).toContain(`"${THEME_STORAGE_KEY}"`);
   });
 });

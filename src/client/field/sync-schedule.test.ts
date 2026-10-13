@@ -28,7 +28,6 @@ const result = (over: Partial<SyncResult> = {}): SyncResult => ({
 
 const FAILURES: readonly SyncStatus[] = [
   "offline",
-  "auth",
   "unauthorized",
   "upgrade",
   "error",
