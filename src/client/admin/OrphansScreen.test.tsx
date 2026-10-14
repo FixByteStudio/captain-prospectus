@@ -51,7 +51,7 @@ const NOT_ASSIGNED = visit("v2", {
   reason: "not_assigned",
   prospectId: "comptoir",
   prospectName: "Le Comptoir",
-  agentEmail: "karim@example.com",
+  agentEmail: "francois@example.com",
   outcome: "not_interested",
   flyerGiven: false,
   notes: null,
@@ -122,7 +122,7 @@ describe("OrphansScreen", () => {
 
     for (const [agent, reason, outcome] of [
       ["lea@example.com", t.reason.unknown_prospect, OUTCOME_LABELS.converted],
-      ["karim@example.com", t.reason.not_assigned, OUTCOME_LABELS.not_interested],
+      ["francois@example.com", t.reason.not_assigned, OUTCOME_LABELS.not_interested],
     ] as const) {
       const r = within(await row(agent));
       expect(r.getByText(reason)).toBeTruthy();
@@ -225,7 +225,7 @@ describe("OrphansScreen", () => {
     const user = userEvent.setup();
     const { posts } = render_(queue({ visits: [NOT_ASSIGNED], remaining: 0 }));
 
-    const r = within(await row("karim@example.com"));
+    const r = within(await row("francois@example.com"));
     const attach = attachButtons(r);
     // Only the named prospect, with its distance from the candidates; the
     // nearer « Chez Marcel » is not offered.
@@ -247,7 +247,7 @@ describe("OrphansScreen", () => {
       queue({ visits: [{ ...NOT_ASSIGNED, hasPosition: false, candidates: [] }], remaining: 0 }),
     );
 
-    const r = within(await row("karim@example.com"));
+    const r = within(await row("francois@example.com"));
     expect(r.queryByText(t.noPosition)).toBeNull();
     const attach = attachButtons(r);
     expect(attach.map((b) => b.getAttribute("aria-label"))).toEqual([
@@ -266,7 +266,7 @@ describe("OrphansScreen", () => {
   it("offers the candidates for another agent's visit the server could not name", async () => {
     render_(queue({ visits: [{ ...NOT_ASSIGNED, prospectName: null }], remaining: 0 }));
 
-    const r = within(await row("karim@example.com"));
+    const r = within(await row("francois@example.com"));
     expect(attachButtons(r).map((b) => b.getAttribute("aria-label"))).toEqual([
       t.attachAria("Chez Marcel", "5 m"),
       t.attachAria("Le Comptoir", "30 m"),
@@ -282,7 +282,7 @@ describe("OrphansScreen", () => {
     );
 
     const busy = within(await row("lea@example.com"));
-    const idle = within(await row("karim@example.com"));
+    const idle = within(await row("francois@example.com"));
     await user.click(busy.getByRole("button", { name: t.attachAria("Pizza Roma", "12 m") }));
 
     await waitFor(() =>

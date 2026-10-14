@@ -129,7 +129,7 @@ Content, top to bottom:
 4. Two panels side by side:
    - "Activité par agent": a table with the columns "Agent", "Visites", "Convertis",
      "À relancer", "Prospects ouverts". Two agents: "lea@exemple.be" and
-     "karim@exemple.be", plus the admin.
+     "francois@exemple.be", plus the admin.
    - "À traiter": three action rows, each with a count and a button:
      "Relances dues" 6 ("Voir"), "Visites à rattacher" 2 ("Rattacher"),
      "Doublons" 3 paires ("Fusionner").

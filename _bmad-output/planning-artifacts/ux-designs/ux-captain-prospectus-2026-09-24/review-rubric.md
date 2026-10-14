@@ -10,7 +10,7 @@ The pair is a usable contract: every `{path.to.token}` reference in both files r
 
 ### Findings
 - **medium** Core job 1 (*Build the prospect base*, CSV and map import) has no Key Flow, although Import is the most stateful admin surface in the spine — a stepper, two paths, an in-browser file read, a 250-row batch loop, a leave-confirmation, three failure states (EXPERIENCE.md:138–139, 164–166). Core job 4 (*Revisit*) likewise has none; it exists only as the "Plus tard" row (EXPERIENCE.md:146). A story-dev consumer gets the parts but never the walk-through that orders them. *Fix:* add a fifth flow for a CSV import including the mid-way failure, and fold the revisit beat into Flow 1 or Flow 2.
-- **low** Flows 2 and 3 have no named protagonist — both run on "the admin" (EXPERIENCE.md:287, 297), where Flows 1 and 4 name Léa and Karim. *Fix:* name the admin once and reuse.
+- **low** Flows 2 and 3 have no named protagonist — both run on "the admin" (EXPERIENCE.md:287, 297), where Flows 1 and 4 name Léa and François. *Fix:* name the admin once and reuse.
 - **low** Flows 2 and 4 carry no failure path, though both have failure states defined elsewhere: assignment failure (EXPERIENCE.md:162) and position-denied on Ajouter. *Fix:* one failure line each, as Flows 1 and 3 already do.
 - **low** The closure check (EXPERIENCE.md:72–83) renames the source's jobs (*Build the prospect base* → "Import", *Monitor* → "Watch visits", *Discover* → "Add a place"). The mapping is correct but has to be re-derived by hand. *Fix:* quote the vision's job names in the left column.
 
