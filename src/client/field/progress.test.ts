@@ -160,21 +160,21 @@ describe("dailyProgress", () => {
     expect(result.total).toBe(2);
   });
 
-  it("does not grow the denominator for a second visit to the same stop on the same day", () => {
+  it("counts a stop once however many visits it got today, so n never exceeds total (GH #492)", () => {
     const prospectId = crypto.randomUUID();
     const first = logged({ prospectId });
     const second = logged({ prospectId });
+    const pending = visit({ prospectId });
     const result = dailyProgress({
       logged: [first, second],
-      outboxVisits: [],
+      outboxVisits: [pending],
       identity: IDENTITY,
       stops: [{ id: prospectId }],
       period: PERIOD,
     });
 
-    // Two distinct visits raise n, but there is still only one stop.
-    expect(result.n).toBe(2);
-    expect(result.total).toBe(1);
+    // Three distinct visits, one door.
+    expect(result).toEqual({ n: 1, total: 1, percent: 100 });
   });
 
   it("holds the denominator at the round's size when a counted visit's stop has since left `stops`", () => {
