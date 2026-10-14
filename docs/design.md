@@ -1536,7 +1536,7 @@ instruction. So it gets a card: a gold 4px inset edge, its own `StopNumber` in
 ├──────────────────────────────────┤
 │ Tournée du jour                  │
 │ 5 arrêts                         │
-│ 2 visites sur 5 aujourd'hui      │
+│ 2 portes sur 5 aujourd'hui       │
 │  ████████████░░░░░░░░░░░░░░░░░░  │
 │                                  │
 │▎ PROCHAIN ARRÊT                  │
@@ -1565,7 +1565,7 @@ instruction. So it gets a card: a gold 4px inset edge, its own `StopNumber` in
 ```
 
 **The day's progress sits between the header and the card** (GH #119,
-EXPERIENCE.md): a bold, tabular "{n} visites sur {total} aujourd'hui" and an
+EXPERIENCE.md): a bold, tabular "{n} portes sur {total} aujourd'hui" and an
 8px bar under it, `--secondary` track and gold fill, `progress.tsx`'s
 indicator carrying its usual `primary-edge` inset (rule 4, "Every gold fill
 carries `primary-edge`", above). Neither the count nor the bar names a
