@@ -269,7 +269,7 @@ export async function cacheVisitHistory(
  * writer and `runSync` holds back any stamped by someone else.
  *
  * `sentVisits` goes with the rest, not with the outbox: it is read-only
- * knowledge for rendering "{n} visites sur {total}" (GH #119), not a queued
+ * knowledge for rendering "{n} portes sur {total}" (GH #119), not a queued
  * write, so leaving the previous agent's visit ids, prospect ids and email on
  * the device would be the same leak this function exists to close.
  */

@@ -47,9 +47,10 @@ export const copy = {
     /** The stops are a walking order, so the round states its own length. */
     remaining: (n: number) => (n === 1 ? "1 arrêt" : `${n} arrêts`),
     /** GH #119: how much of today's round is done. `total` never repeats the
-     * unit — "n visites sur total aujourd'hui", singularising like `remaining`. */
+     * unit — "n portes sur total aujourd'hui", singularising like `remaining`.
+     * Doors, not visits: a stop revisited today counts once (GH #492). */
     progress: (n: number, total: number) =>
-      n <= 1 ? `${n} visite sur ${total} aujourd'hui` : `${n} visites sur ${total} aujourd'hui`,
+      n <= 1 ? `${n} porte sur ${total} aujourd'hui` : `${n} portes sur ${total} aujourd'hui`,
     /** The progress bar's own accessible name (Radix gives the root none). */
     progressLabel: "Progression de la tournée du jour",
     nextStop: "Prochain arrêt",
