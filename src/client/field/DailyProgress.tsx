@@ -19,11 +19,9 @@ export function DailyProgress({ progress }: { progress: DailyProgressValue }) {
           `bg-primary/20`, which is the gold fill's own colour and would
           leave the bar with no visible track. aria-label: Radix gives the
           root no accessible name of its own, and this bar is the only place
-          the fraction lives besides the text above it. Capped: a second
-          visit to one stop raises n past total (progress.ts), and Radix
-          turns a value above max into an indeterminate bar. */}
+          the fraction lives besides the text above it. */}
       <Progress
-        value={Math.min(progress.percent, 100)}
+        value={progress.percent}
         className="bg-secondary mt-1.5"
         aria-label={copy.today.progressLabel}
       />

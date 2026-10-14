@@ -87,16 +87,18 @@ identity opens the field screens only, never `/admin/*`.
 | `meta` | active script, last sync time, the last identity `/api/me` returned |
 | `sentVisits` | A log of the visit ids queued today (id, `prospectId`, `sentAt`, `writtenBy`, `unconfirmed`), written by `queueVisit` on the same write as the outbox row |
 
-**"{n} visites sur {total} aujourd'hui" (GH #119, server-gap G8).** `n` is
-`sentVisits` unioned with the pending `outboxVisits`, deduplicated by visit
-id — the union, not the log alone, is what still counts a visit an older
-build queued with no log entry. Both sides are bound to the same Brussels
-calendar day: the log is already bound by `todaysSentVisits`, and the outbox
-side is filtered by each visit's own `visitedAt`, so a visit queued
-yesterday and still unsent this morning does not read as today's — without
-that bound the agent's count would disagree with the admin's "Visites
-aujourd'hui", which the next sentence says can never happen. `total` is the
-union of every prospect id counted in `n` and the stops still on today's
+**"{n} portes sur {total} aujourd'hui" (GH #119, server-gap G8; doors since
+GH #492).** `n` counts doors: each prospect visited today once, however many
+visits it got, so a stop revisited after an À relancer "Aujourd'hui" never
+reads as a second one and `n <= total` always holds. The prospects come from
+`sentVisits` unioned with the pending `outboxVisits` — the union, not the log
+alone, is what still counts a visit an older build queued with no log entry.
+Both sides are bound to the same Brussels calendar day: the log is already
+bound by `todaysSentVisits`, and the outbox side is filtered by each visit's
+own `visitedAt`, so a visit queued yesterday and still unsent this morning
+does not read as today's. The line counts the agent's doors, not the admin's
+"Visites aujourd'hui" visits, so the two can differ by design. `total` is the
+union of every prospect counted in `n` and the stops still on today's
 list, not `n` plus the stops left: a visit's stop stays on today's list
 after it is logged (invariant 3 — status is the server's to derive), so
 adding the two would double-count it, and a stop that has since left the

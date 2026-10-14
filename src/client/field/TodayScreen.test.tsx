@@ -339,7 +339,7 @@ describe("TodayScreen", () => {
     expect(await screen.findByText(copy.today.distanceUnknown)).toBeTruthy();
   });
 
-  it("reads n visites sur total, denominator held to the round's own size, across a real re-render", async () => {
+  it("reads n portes sur total, denominator held to the round's own size, across a real re-render", async () => {
     const stops = Array.from({ length: 5 }, (_, i) =>
       prospect({ id: `00000000-0000-4000-8000-00000000000${i}`, name: `Stop ${i}` }),
     );
@@ -373,7 +373,7 @@ describe("TodayScreen", () => {
 
     // The sync accepted it and its outbox row is gone: the line must fall
     // back to n = 2, a real re-render rather than the DOM the line above
-    // already satisfies (both "2 visites sur 5" and "3 visites sur 5" are
+    // already satisfies (both "2 portes sur 5" and "3 portes sur 5" are
     // distinct strings, so this assertion can only pass if the count moved).
     await fieldDb.outboxVisits.delete(thirdVisit.id);
     expect(await screen.findByText(copy.today.progress(2, 5))).toBeTruthy();
@@ -401,7 +401,7 @@ describe("TodayScreen", () => {
     expect(screen.queryByLabelText(copy.today.progressLabel)).toBeNull();
   });
 
-  it("reads n visites sur n on a finished round", async () => {
+  it("reads n portes sur n on a finished round", async () => {
     const stops = [prospect({ name: "Curry House" }), prospect({ name: "Chez Léa" })];
     await fieldDb.prospects.bulkAdd(stops);
     await fieldDb.sentVisits.bulkAdd(

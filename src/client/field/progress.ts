@@ -1,6 +1,6 @@
 /**
- * Today's progress line — GH #119, docs/design.md's "2 visites sur 5
- * aujourd'hui" with a bar, and the dedupe-by-id union of the log and the
+ * Today's progress line — GH #119, docs/design.md's "2 portes sur 5
+ * aujourd'hui" with a bar, and the union of the log and the
  * pending outbox (docs/domains/field-operations.md).
  *
  * Pure: `writtenByOrUnstamped` comes from `outbox-stamp.ts`, the one
@@ -16,9 +16,12 @@ import { writtenByOrUnstamped } from "./outbox-stamp";
 export type DailyProgressValue = { n: number; total: number; percent: number };
 
 /**
- * `n` is the log unioned with the pending outbox, deduplicated by visit id —
- * a visit queued by an older build has no log entry, so the union (not the
- * log alone) is what still counts it. The outbox side is bound to `period`
+ * `n` counts doors: each prospect visited today once, however many visits it
+ * got (GH #492) — a stop revisited after an À relancer "Aujourd'hui" must not
+ * read as a second one, and `n` is a subset of `total`, so `n <= total`
+ * always holds. The prospects come from the log unioned with the pending
+ * outbox — a visit queued by an older build has no log entry, so the union
+ * (not the log alone) is what still counts it. The outbox side is bound to `period`
  * the same way `todaysSentVisits` already bounds the log: without it, a
  * visit queued yesterday and still unsent this morning would count as
  * today's, and the agent's line would disagree with the admin's "Visites
@@ -49,21 +52,16 @@ export function dailyProgress({
 }): DailyProgressValue {
   const mine = writtenByOrUnstamped(identity);
   const isToday = (visitedAt: number) => visitedAt >= period.from && visitedAt < period.to;
-  const visitIds = new Set<string>();
   const countedProspectIds = new Set<string>();
 
   for (const row of logged) {
-    if (!mine(row)) continue;
-    visitIds.add(row.id);
-    countedProspectIds.add(row.prospectId);
+    if (mine(row)) countedProspectIds.add(row.prospectId);
   }
   for (const row of outboxVisits) {
-    if (!mine(row) || !isToday(row.visitedAt)) continue;
-    visitIds.add(row.id);
-    countedProspectIds.add(row.prospectId);
+    if (mine(row) && isToday(row.visitedAt)) countedProspectIds.add(row.prospectId);
   }
 
-  const n = visitIds.size;
+  const n = countedProspectIds.size;
   const total = new Set([...countedProspectIds, ...stops.map((stop) => stop.id)]).size;
   const percent = total === 0 ? 0 : Math.round((n / total) * 100);
 
