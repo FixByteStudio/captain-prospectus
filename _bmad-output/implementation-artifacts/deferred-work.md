@@ -384,3 +384,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-404-sync-batch-size.md`
   summary: No signal for when the server can lower its 200-visit accept limit, since `clientVersion` was not bumped (GH #451).
   evidence: Blind lens; the intent keeps 200 for old builds and forbids the bump, so retiring it needs a later decision.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-497-design-tournee-screens.md`
+  summary: Carnet's « Rouvrir » on a door-day whose prospect has since been reassigned away from the agent would save a visit the server quarantines (ADR-0022); entries 2 and 8 should decide whether such a row stays a link.
+  evidence: Carnet lists every door-day of today from the server's visited stops (design.md › Carnet), and a visit on a prospect assigned to another agent goes to visits_orphaned. Needs a flag in entry 2's visited-stops contract to grey the row; not settled by ADR-0036.

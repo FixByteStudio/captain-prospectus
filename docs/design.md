@@ -983,23 +983,32 @@ The server compares every answer with the list; the panel shows what it found:
 The roadmap sketched this as shadcn `card` + `badge` + `scroll-area`. **It is a
 ledger instead**, for the reason at the top of this file: no cards around rows,
 no status as a coloured pill. The feed is the prospect list with time as its
-spine.
+spine, **one row per door-day**: one agent, one prospect, one Brussels day,
+showing that day's latest visit
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › Admin
+and stats count door-days). *The door-day rows and their history are built by
+entry 11 of the numbered-tournée epic (#496); what the figures count is entry
+10's.* Mockup:
+[`key-t4-visites-ledger.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t4-visites-ledger.png).
 
 ```
 │ Visites            312 visites  [7 j|30 j|90 j]  [Exporter en CSV] │
 │                    Raison du refus [Toutes les raisons ▾]          │
-│ Les visites arrivent ici dès qu'un agent synchronise.               │
+│ Une ligne par prospect et par jour, avec son dernier résultat.      │
+│ Ouvrez une ligne pour voir chaque visite.                           │
 │                                                                     │
 │ RELANCES DUES     TAUX DE          FLYERS REMIS    AGENTS EN        │
 │ SOUS 7 JOURS      CONVERSION                       TOURNÉE          │
 │ 12                10,6 %           84              2                │
 │ Avant le 4 oct.   38 convertis…    Sur la période  Aujourd'hui      │
 ├─────────────────────────────────────────────────────────────────────┤
-│ 16:42  Le Bouchon          Intéressé      flyer  agent@…            │
-│ 16:31  Chez Marcel         Pas intéressé  Pas besoin…  agent@…      │
-│ 15:58  Pizza Vera          À relancer     flyer  agent@…            │
-│        « rappeler après 18 h »                                      │
-│ 15:12  Le Comptoir         Converti       flyer  agent@…            │
+│ 14/10 16:42  Le Bouchon     Intéressé  Flyer  agent@…              ⌄  │
+│ 14/10 16:12  Pizza Roma     Converti   Flyer  agent@…   2 visites  ⌃  │  opened
+│          VISITES DE LA JOURNÉE                                      │
+│          14/10 10:02  Personne sur place  « Fermé, repasser… »      │  oldest first
+│          14/10 16:12  Converti  Flyer remis · 4 réponses · « … »    │
+│ 15:58  Chez Marcel    Pas intéressé  Pas besoin…  agent@…    ⌄      │
+│ 14:40  Pizza Vera     Personne sur place  agent@… 3 visites  ⌄      │
 ├─────────────────────────────────────────────────────────────────────┤
 │              ‹ Précédent   1  2  …  13   Suivant ›                  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -1046,10 +1055,45 @@ period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
   shared `prospects/Filter` select beside the period, held in the URL
   (`?reason=`, one of the 7 refusal reasons; any other value reads as Toutes
   les raisons). A change reseeds the feed exactly as a period
-  change does, and every poll and the export carry the same `reason=`. A
+  change does, and every poll and the export carry the same `reason=`. On the
+  ledger it keeps the door-days whose latest visit has that reason, the one a
+  refusal count reads (R12); the export, one row per visit, keeps the visits
+  that have it. A
   refused visit shows its reason's label, muted, right after Pas intéressé;
   a refusal without one shows nothing extra. The strip stays on the whole
   period, since its figures are not refusals.
+
+**A row is the door-day's latest visit**, the one with the greatest clamped
+`visited_at`, the same visit every door-day figure reads (ADR-0036); rows are
+ordered by the greatest `received_at` among the door-day's visits (the spine,
+below). Its time, outcome, refusal reason and note are the latest visit's; « flyer » shows when any visit of that door-day
+left one (R12); the agent is the door-day's own. A door-day with more than one
+visit adds a muted, tabular « {2} visites » before the chevron. The lede under
+the title says the unit once: « Une ligne par prospect et par jour, avec son
+dernier résultat. Ouvrez une ligne pour voir chaque visite. », replacing « Les
+visites arrivent ici dès qu'un agent synchronise. »; the header count
+(« {312} visites ») counts door-days, the same figure as Tableau de bord's
+Visites.
+
+**Opening a row shows every visit, in place.** The whole row is a disclosure
+button named « {name}, {outcome}, {2} visites. Voir les visites » (without
+« {n} visites » for one), with `aria-expanded`, `aria-controls` and a
+`ChevronDown` that turns up, never
+a dialog or a sheet: EXPERIENCE.md keeps dialogs for the three confirmations,
+and reading a history confirms nothing. It expands under the row, on a
+`secondary` wash, an overline « Visites de la journée », then one line per visit,
+oldest first: date and time (`visited_at`, as the agent saw it), the outcome
+badge, then what that visit carried: « Flyer remis », « {4} réponses », the
+refusal reason, the note in quotes. A one-visit door-day opens the same way, so
+its note and answers are always one click away. At most one row is open at a
+time, like a stop row; the open row stays open across polls, and an arrival on
+that door-day adds its line to the history. A change of period, reason or page
+closes it. Visits are never edited or deleted
+here (ADR-0007).
+
+**The CSV export stays one row per visit.** It is the raw history, so a
+door-day with two visits is two lines in the file and one row on screen;
+the button and its truncation rule are unchanged.
 
 Six rules the ledger itself still encodes:
 
@@ -1057,18 +1101,21 @@ Six rules the ledger itself still encodes:
   field side but the logic is the same here: a visit that landed is a fact that
   stays true, and the admin who was making coffee should find it on the list
   rather than have missed it. `sonner` stays for things the admin *did*.
-- **The edge is the outcome's consequence, not the outcome.** A row's leading
+- **The edge is the latest outcome's consequence, not the outcome.** A row's leading
   edge uses `STATUS_EDGE[OUTCOME_TO_STATUS[outcome]]`, so the column scans as
   "what does this leave me to do" — `À relancer` mustard, `Intéressé` faded
   green, `Converti` green, `Refusé` red. The outcome's own French label sits in its column, because
   colour never carries the information alone.
-- **Time is the spine.** The feed orders by `received_at`, not `visited_at` —
+- **Time is the spine.** The feed orders door-days by their latest visit's
+  `received_at`, not `visited_at` —
   the server's clock, not the phone's, because a phone's clock can be wrong
   (INVARIANT 12) and the feed's promise is "what has reached me". Times are
   `.tnum` and left, where the prospect list puts numbers right: this column is
   read down as a sequence, not compared as quantities.
 - **A new row is marked once and then settles.** Principle 5 allows motion where
-  something changed, so an arriving row holds a brief wash and releases it.
+  something changed, so an arriving row holds a brief wash and releases it. A
+  second visit to a door-day already listed is an arrival too: its row moves to
+  the top with the new outcome and washes once.
   Under `prefers-reduced-motion` it appears without the transition — it is never
   the only signal that the row is new.
 - **No scroll-area.** A pane with its own scrollbar inside a page that also
@@ -1171,6 +1218,11 @@ phoning them. An agent `Select` (kept in `?agent=`, which wins; without one, the
 agent last chosen on this browser is restored from `localStorage`, and the URL
 stays plain), then a read-only list of that agent's stops from the stored position
 ([ADR-0028](adr/0028-agent-position-at-sync.md)).
+
+*Pending:* [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)
+replaces this order with the phone's stop numbers, the stored position placing
+only the agent's marker. Entry 12 of the numbered-tournée epic (#496) rewrites
+this section when it builds that.
 
 ```
 Tournée du jour                                   12 arrêts
@@ -1520,75 +1572,258 @@ The palette and the typeface are not re-decided for this side. Tokens are shared
 (`app.css`), the mark is shared, the band is shared. What changes is **density,
 target size, and how much the screen commits to one thing at a time.**
 
-### Next-stop card
+### Before the swipe
 
-Nearest-next ordering means the first item in the list is not a row — it is an
-instruction. So it gets a card: a gold 4px inset edge, its own `StopNumber` in
-`variant="next"`, the name, "type · address", the distance, then "Y aller" and
-"Visiter" — the same pair a stop row reveals on tap. Every other stop is a
-`StopRow`, a quiet ledger beneath the card.
+*Built by entry 3 (the two no-tournée messages, the start screen, the swipe) and
+entry 4 (the location dialog) of the numbered-tournée epic, #496.*
+[ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › The gates
+decides their order; this section decides what each one looks like. Mockup:
+[`key-t1-start.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t1-start.png).
 
 ```
 ┌──────────────────────────────────┐
-│ ▮ Captain Prospectus        ● 3  │  band: mark, wordmark, sync state
+│ ▮ Captain Prospectus        ● 1  │  band and sync dot, as on every field screen
 ├──────────────────────────────────┤
-│ Hors ligne. Vos visites sont…    │  strip: only when there is something to say
+│ 1 élément en attente d'envoi     │  strip: the sync is never gated
+├──────────────────────────────────┤
+│ MERCREDI 14 OCTOBRE              │
+│ Tournée du jour                  │
+│ 20 arrêts                        │
+│ Les arrêts seront numérotés au   │
+│ départ, du plus proche au plus   │
+│ loin.                            │
+│ ┌──────────────────────────────┐ │
+│ │ • Bar des Marolles           │ │  a preview: no number, no distance,
+│ │   Bar · Place du Jeu de Balle│ │  nothing to tap
+│ │ • Chez Marcel                │ │
+│ │ …                            │ │
+│ │ et 13 autres arrêts          │ │
+│ └──────────────────────────────┘ │
+├──────────────────────────────────┤
+│ (≫) Glisser pour commencer la    │  64px track, fixed at the bottom;
+│     tournée                      │  no tab bar before the swipe
+└──────────────────────────────────┘
+```
+
+**One screen per gate, in the ADR's order.** Signed in, the field route shows the
+first of these that applies: a no-tournée message, the start screen (under the
+location dialog until a reading is precise enough), or the app itself, from
+Tournée. A tournée already swiped today, on this phone or pulled from the
+server, skips straight to the app. None of the gate screens has a tab bar: the
+tabs are the app, and the app opens at the swipe. The band, its sync dot and
+the strip stay on every one of them, « Se reconnecter » included, because the
+sync is never gated. The admin side (`/admin`) has no gates, so an admin on a
+gate screen, when the Tableau de bord tab would show (`adminAccess(...).entry`),
+gets a `secondary` « Tableau de bord » button under the message or above the
+track: the one way back without a tab bar. An agent with nothing assigned has
+no Ajouter either; ADR-0036 gates the whole app on a tournée.
+
+**Two no-tournée messages, never one.** Both are the shared empty-state shape:
+a 64px `secondary` disc with a 28px icon, a title, one muted paragraph, centred,
+no button (the sync runs on its own triggers, so a button would ask the agent to
+do what is already happening).
+
+- **Nothing assigned** (`Inbox`): the phone has pulled at least once, and today's
+  tournée would hold no stop. « Aucune tournée aujourd'hui » · « Aucun prospect
+  ne vous est assigné pour l'instant. Votre tournée s'affichera ici dès qu'un
+  admin vous en assigne. » The next sync that brings an assignment shows the
+  start screen in its place.
+- **Never loaded** (`WifiOff`): no pull has ever succeeded on this phone.
+  « Tournée pas encore chargée » · « Connectez-vous à internet une fois pour
+  récupérer votre tournée. Elle restera ensuite disponible hors ligne. » These
+  two replace the old empty round, « Aucun prospect à visiter. Synchronisez pour
+  récupérer votre liste. »
+
+Neither shows the location dialog: it appears only when there is a tournée to
+start.
+
+**The start screen previews the day, it does not start it.** An overline with
+the Brussels date in full (« Mercredi 14 octobre »), « Tournée du jour », the
+stop count (« {20} arrêts », `today.remaining`), then « Les arrêts seront
+numérotés au départ, du plus proche au plus loin. » The stops are what the swipe
+would freeze now (R1: assigned open prospects, follow-ups due today or earlier,
+field prospects still in the outbox), in one card of plain 52px rows: a small
+neutral dot, the name, "type · address". No number, because numbers do not
+exist before the swipe; no distance, no action, no swipe, nothing focusable.
+Sorted by name, the first seven, then « et {13} autres arrêts » (« et 1 autre
+arrêt »); seven or fewer show without that line.
+
+**The swipe « Commencer la tournée ».** A track fixed above the safe area, the
+screen's only action, where the tab bar will be: 64px tall, full radius,
+`secondary` fill with a 1px `border` ring, and the label « Glisser pour
+commencer la tournée » in bold `text-base`. A 56px gold thumb (`primary`,
+`primary-edge` ring) with Lucide `ChevronsRight` sits at its left end.
+
+- **The gesture starts like the stop row's** (`swipe.ts`): `lockAxis` decides
+  the axis after `SWIPE_SLOP`, so a vertical start scrolls the preview and
+  never moves the thumb. Its commit is the track's own, not `SWIPE_COMMIT`'s
+  96px, which on a 358px track would start the day by accident: right only,
+  the thumb follows the finger, clamped to the track, with a gold wash filling
+  behind it, and released past three quarters of the track it commits (a
+  track-relative pure function beside `swipe.ts`); short of that, it snaps
+  back and starts nothing. Under
+  `prefers-reduced-motion` the snap is instant.
+- **It is a real button.** The track is one `<button type="button">` named
+  « Commencer la tournée ». Enter, Space and a screen reader's activation (a
+  `click` whose `detail` is 0) start the tournée at once, as a full swipe does.
+  A pointer tap with no drag does not: it nudges the thumb 24px right and back,
+  the hint to slide, because a tap is the accident the swipe exists to prevent
+  (a started tournée cannot be undone that day). This leaves no single-tap way
+  in for someone who cannot drag (WCAG 2.5.1); the owner accepted that gap on
+  2026-10-14, and the keyboard path stays.
+- **Before a position, it is disabled.** The thumb turns `card` with a `border`
+  ring and a muted `MapPin`, the label reads « En attente de votre position »,
+  and the button is `aria-disabled` rather than `disabled`, so a screen reader
+  still finds it and hears why. In practice this state sits under the location
+  dialog: the dialog only closes on a reading.
+- **On commit** the phone numbers the stops nearest-next from the reading, writes
+  the tournée and its stops to the outbox and opens Tournée, with no toast: the
+  numbered list is the confirmation. While the write runs the thumb stays at
+  the far end, the label reads « Démarrage… », and the button is
+  `aria-disabled` and ignores any further drag, key or click, so one day cannot
+  start twice. A failed write snaps the
+  thumb back and shows, under the track, « Impossible de commencer la tournée
+  sur cet appareil. Libérez de l'espace de stockage, puis réessayez. » (the
+  visit form's storage error, same cause).
+
+**The location dialog is an alert, over a day you can already see.** A shadcn
+`AlertDialog` whose overlay also blurs (`backdrop-blur-sm`), so the date and the
+stops read through it as the reason to go on. It has no cancel: Escape and the
+overlay do nothing, and T1 has no way past it without a position. Its content,
+top to bottom: a 48px gold disc with `MapPin`, the title « Activez la
+localisation », the description « Votre position fixe l'ordre des arrêts pour
+la journée. », a status line, the full-width 48px « Activer », and the muted
+line « Refusée ? Ouvrez Réglages › Localisation, puis revenez ici. » The web app
+cannot open the phone's settings (ADR-0036 › Context), so that line names them
+rather than linking.
+
+« Activer » takes the same one-off reading as the old « Réessayer »
+(`refresh()`), which brings up the browser's prompt the first time. When the
+browser already reports the permission as granted, readings start as the dialog
+opens, with no tap. While the dialog is open and the page is visible, the phone
+repeats one-off readings (`getCurrentPosition`, never `watchPosition`) until one
+is precise enough; entry 4 sets the threshold and the cadence after the
+pavement test. The status line (`role="status"`, polite) says where that stands:
+
+| State | Status line |
+|---|---|
+| Before the first reading | absent |
+| A reading outstanding | spinner, « Recherche de votre position… » (`today.locating`) |
+| Too coarse, trying again | spinner, « Précision : {350} m. On affine… » |
+| Refused | « La localisation est refusée sur ce téléphone. » |
+| Unavailable or timed out | « Position introuvable. Sortez à découvert si possible, puis touchez Activer. » |
+
+A reading that passes closes the dialog and moves focus to the swipe. A phone
+that never gets one (no GPS indoors, a permission the browser will not ask for
+again) stays here: T1 has no way past, and the agent calls the admin
+(ADR-0036 › Consequences). After the swipe the location gate is over: a phone
+that loses its position later in the day locks nothing.
+
+### Next-stop card
+
+*Built by entry 5 (numbers on the card, the rows and every saved stop leaving),
+entry 6 (« Nouveau » and gaps) and entry 7 (the counter).* Mockup:
+[`key-t2-tournee.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t2-tournee.png).
+
+The stops are numbered once, at the swipe, and keep that number all day
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) ›
+Numbers). The first stop still to do is not a row, it is an instruction, so it
+gets a card: a gold 4px inset edge, its own `StopNumber` in `variant="next"`,
+the name, "type · address", the distance, then "Y aller" and "Visiter", the same
+pair a stop row reveals on tap. Every other stop is a `StopRow`, a quiet ledger
+beneath the card.
+
+```
+┌──────────────────────────────────┐
+│ ▮ Captain Prospectus        ● 0  │  band: mark, wordmark, sync state
 ├──────────────────────────────────┤
 │ Tournée du jour                  │
-│ 5 arrêts                         │
-│ 2 portes sur 5 aujourd'hui       │
-│  ████████████░░░░░░░░░░░░░░░░░░  │
+│ 15 sur 20                        │  the counter: arrêts, never visites
+│  ███████████████████████░░░░░░░  │
 │                                  │
 │▎ PROCHAIN ARRÊT                  │
-│▎ (1) Le Bouchon des Filles       │
-│▎     Restaurant · 12 rue Ste-C.  │  gold 4px edge, gold disc
+│▎ (16) Le Kebab du Coin           │  lowest number with no visit today
+│▎      Restauration rapide · …    │  gold 4px edge, gold disc
 │▎                         120 m   │
 │▎ ┌────────────┐ ┌────────────┐   │
 │▎ │  Y aller   │ │  Visiter   │   │  48 px; « Visiter » is the gold one
 │▎ └────────────┘ └────────────┘   │
 │                                  │
-│┃ (2) Café de la Poste     340 m  │  stop row, status edge, collapsed
-│┃ (3) Chez Marcel          410 m  │
-│┃ (4) Pizzeria Vesuvio     820 m  │
-│┃     [Pas encore envoyé]         │  a queued visit: badge, same place
-│┃     ┌─────────┐ ┌─────────┐     │  row 4 tapped open
-│┃     │ Y aller │ │ Visiter │     │
-│┃     └─────────┘ └─────────┘     │
-│                                  │
-│ Plus tard                        │
-│┃ Le Comptoir                     │  future follow-ups, not walkable
-│┃ À relancer le 18/09/2026        │
+│┃ (17) Friterie Saint-Gilles 210 m│  stop row, status edge, collapsed
+│┃ (18) Food truck Flagey   340 m  │
+│┃ (20) Pizza Vera          520 m  │  19 left unvisited: a gap, no row
+│┃ (21) Chez Nour           610 m  │
+│┃      [Nouveau]                  │  joined after the swipe: outline badge
 ├──────────────────────────────────┤
-│   ⬤       ⬤        ⬤             │  tab bar (GH #66, "Tab bar" below):
-│ Tournée  Carte  Ajouter          │  fixed at the bottom below 768px
+│  ⬤      ⬤       ⬤       ⬤        │  tab bar ("Tab bar" below)
+│ Tournée Carte  Carnet  Ajouter   │
 └──────────────────────────────────┘
 ```
 
-**The day's progress sits between the header and the card** (GH #119,
-EXPERIENCE.md): a bold, tabular "{n} portes sur {total} aujourd'hui" and an
-8px bar under it, `--secondary` track and gold fill, `progress.tsx`'s
-indicator carrying its usual `primary-edge` inset (rule 4, "Every gold fill
-carries `primary-edge`", above). Neither the count nor the bar names a
-percentage or an ETA — the round's own header already gives "5 arrêts", and
-this line answers "how much of it", not "how much longer". `total` is the
-union of today's counted stops and the stops still on the list, not `n` plus
-the stops left, so a visited stop staying on the list (invariants 2, 3, "Pas
-encore envoyé" below) never counts twice. The one residual: a stop that has
-since left the list — moved to "Plus tard", or dropped by a pull — still
-holds its place in `total` once its visit is counted, so `total` is the
-day's round *including* stops that have since left it, not always today's
-visible list. Absent when there is nothing to count — nothing logged and no
-stops, which before the first sync is the ordinary case.
+**The counter reads « {n} sur {total} », in arrêts.** Under the title, `{n}` in
+bold 28px and « sur {total} » in semibold 18px, both tabular, then the 8px bar:
+`--secondary` track and gold fill, `progress.tsx`'s indicator carrying its
+usual `primary-edge` inset (rule 4, "Every gold fill carries `primary-edge`",
+above). Its accessible name is « {n} arrêts faits sur {total} » (singular « {n} arrêt fait sur {total} » when n ≤ 1). No percentage,
+no ETA, and no other count on the screen: it replaces both « {n} arrêts » and
+« {n} portes sur {total} aujourd'hui ». `n` and `total` are ADR-0036 › The
+counter's, from the server's visits joined with the outbox, so the number
+never exceeds the total, never resets on a cache wipe, and a second visit to a
+stop leaves it where it was. Right after the swipe it reads « 0 sur {20} ».
 
-**The stops are numbered, and here that is earned.** Numbered markers are
-usually decoration pretending to be structure — but `orderByNearestNext`
-produces a walking order, so this list genuinely *is* a sequence, and "I am on
-my fourth of eleven" is something an agent wants to know. `StopNumber` is a
-32px tabular disc: gold on the card, `secondary` on a row.
+**The numbers are the swipe's, and the list keeps them.** One exception, and
+it happens only before a phone's first sync of the day: when two phones of one
+agent both swipe offline, the first swipe the server receives wins, and the
+other phone takes its numbers from the next pull, with no message (ADR-0036,
+epic decision of 2026-10-14). The card shows the
+lowest-numbered stop with no visit today; the rows follow in number order.
+Distances still show, from the latest reading, as information: they never
+reorder anything. `StopNumber` is a 32px tabular disc with the stop's own
+number, never a position in the list: gold on the card, `secondary` on a row.
+The card and every row are named « Arrêt {n} · {name} » for a screen reader,
+the same name a Carte pin carries. With no reading, the distances read
+« Position inconnue » and nothing else changes: no notice, no other order. Each
+screen still takes its one reading when it opens, which is the retry; there is
+no « Réessayer » any more.
+
+**A missing number is not a row to worry about.** Tournée lists only what is
+left to do, so a number is missing either because the stop is done (it is in
+Carnet, and counts in `n`) or because it left unvisited: reassigned, closed by
+an admin, or merged. A stop that left drops out of `total` too, and nothing
+renumbers: 18 is followed by 20. There is no placeholder row for either; Carnet
+says which numbers were done.
+
+**A stop that joins is « Nouveau ».** A prospect that joins the tournée after
+the swipe takes the next number after the highest the tournée has ever given,
+a stop that left included (21, 22…), so a number is never reused. A stop that
+left and comes back (reassigned back the same day) keeps its first number and
+is not « Nouveau »: it was in the tournée all along. A joiner carries
+« Nouveau » under its meta line, where « Pas encore envoyé » sits, on its row,
+on the card when it becomes the next stop, and in Carte's sheet, all day. The
+badge is `outline` (a 1px `foreground` ring, no fill), never the `secondary`
+fill of a status badge: `STATUS_LABELS.new` is also « Nouveau », and the shape
+is what keeps a joiner from reading as a status.
+
+**Every saved stop leaves Tournée, whatever its outcome.** The moment the visit
+is in the outbox the stop moves to Carnet, before any sync, and the counter
+rises if it was that stop's first visit today. This is placement read from the
+outbox, never a status (invariants 2, 3). There is no "Plus tard" section and
+no "end of today's round": a follow-up due on a later day comes back as a stop
+in that day's tournée, and one due today is reopened from Carnet. « Pas encore
+envoyé » (`warn`-tinted) therefore no longer marks a visited stop here; on
+Tournée it marks only a joiner that is a field prospect still in
+`outboxProspects`.
+
+**All done.** When no stop is left to visit, the card's place holds a centred
+card: a 56px `success`-tinted disc with a check, « Tous les arrêts sont
+faits. », the muted « Retrouvez-les dans Carnet. » and a `secondary` button
+« Ouvrir le carnet ». A tournée whose every stop left unvisited (`total` of 0)
+reads « Plus aucun arrêt dans votre tournée aujourd'hui. » instead, with the
+same button.
 
 **The card carries the only actions that do not need a tap.** A stop row is
-collapsed by default — number, name, "type · address", the outbox badge when
-there is one, and the distance, `min-h-16` with its own 4px status edge — and
+collapsed by default — number, name, "type · address", its badge when there is
+one, and the distance, `min-h-16` with its own 4px status edge — and
 tapping its header (`aria-expanded`, `aria-controls`) expands it in place to
 the same "Y aller"/"Visiter" pair as the card, no navigation and nothing
 written to Dexie. Opening one row closes whichever was already open: at most
@@ -1601,40 +1836,28 @@ fire is swallowed. Without coordinates, "Y aller" is absent, a right swipe
 does not move the row, and "Visiter" takes the row's full width — on the card
 too.
 
-**Pas encore envoyé.** A stop whose visit is sitting in `outboxVisits`, or a
-field prospect still in `outboxProspects`, carries a `warn`-tinted badge with
-that text on its row. It is read-only knowledge of the outbox: it never invents
-a status (invariants 2, 3) — but the outcome the agent picked does place the
-stop before the sync confirms it (`docs/domains/field-operations.md` › Today
-list): a closed result (Intéressé, Converti, Pas intéressé) leaves the round
-immediately, and À relancer or Personne sur place moves it to Plus tard or to
-the end of today's round depending on the when choice. The badge itself still
-looks exactly like any other until a sync replaces `prospects` and it is
-simply not there any more.
-
-**Plus tard** is follow-ups not yet due, each a plain `<li>` — no button, no
-link, name and "À relancer le {date}" only. They "can't be visited from here"
-(EXPERIENCE.md): the round is not the place to jump a follow-up's own date.
-
 **The round carries no "Ajouter un prospect" button of its own.** The Ajouter
 tab — bottom on a phone, inline in the band from 768px ("Tab bar" below) — is
 the one way to add a place, so the screen does not duplicate it under the list.
 
 **From 768px, the list sits left and the next stop right.** A `md:grid
-md:grid-cols-5` splits the screen roughly 40/60: the list and Plus tard take
-the first two columns, the card the remaining three, `md:sticky` so it stays
-in view while the list scrolls. The card is still first in the DOM — only its
-grid placement moves it to the right — so a screen reader or a keyboard tab
-order meets it before the list either way.
+md:grid-cols-5` splits the screen roughly 40/60: the list takes the first two
+columns, the card the remaining three, `md:sticky` so it stays in view while
+the list scrolls. When all stops are completed, the completion card spans the full width (`md:col-span-5`). The card is still first in the DOM — only its grid placement
+moves it to the right — so a screen reader or a keyboard tab order meets it
+before the list either way.
 
 ### Carte
+
+*Its numbering is built by entry 5 of the numbered-tournée epic (#496).* Mockup:
+[`key-t2-tournee.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t2-tournee.png), frame 2.
 
 `/tournee/carte`, the tab bar's second slot (spec-gh-121) — a lazy chunk, same
 as the visit form and Ajouter, so an agent who never opens the map never
 blocks the first paint on Leaflet loading; ADR-0026 still precaches the chunk
 regardless, so it is already on the phone and Carte works the first time it is
-opened offline. Built from the same `useRound()` the round itself reads: same
-rules and the same prospect data as Tournée, though each screen takes its own
+opened offline. Built from the same tournée Tournée reads: the same stops, the
+same numbers and the same next stop, though each screen takes its own
 one-shot position reading (no screen reads another's; the latest reading is also
 kept in module memory, for the next sync only, per ADR-0028), so the two are read
 moments apart, not literally the same call.
@@ -1647,35 +1870,38 @@ guard exists to rule out.
 
 ```
 ┌──────────────────────────────────┐
-│ ▮ Captain Prospectus        ● 2  │
+│ ▮ Captain Prospectus        ● 0  │
 ├──────────────────────────────────┤
 │                                  │
-│        (1)                       │  gold pin, the next stop, 34px
+│        (16)                      │  gold pin, the next stop, 34px
 │          ╲                       │
-│           (2)                    │  card pin, 28px
+│           (17)                   │  card pin, 28px, the stop's own number
 │             ╲                    │
-│              (3)                 │  dashed 3px gold line, stop to stop
-│     ◉ (you)                      │  navy dot with a halo
+│              (18)──(20)          │  dashed 3px gold line, in number order;
+│     ◉ (you)                      │  no 19: it left. Navy dot with a halo
 │                                  │
 │                        [ ⌖ ]     │  44px "Me recentrer", bottom right
 │ © les contributeurs OpenStreetMap│
 ├──────────────────────────────────┤
 │▔▔▔▔▔▔▔▔▔▔▔▔ (handle) ▔▔▔▔▔▔▔▔▔▔▔▔│  the sheet: rounded top, 12px over the map
-│ (1) Curry House          350 m   │
-│     Restaurant · Rue du Midi 42  │
+│ (16) Le Kebab du Coin    120 m   │
+│      Restauration rapide · …     │
 │ ┌────────────┐ ┌────────────┐   │
 │ │  Y aller   │ │  Visiter   │   │
 │ └────────────┘ └────────────┘   │
 ├──────────────────────────────────┤
-│  ⬤       ⬤        ⬤              │  tab bar: Tournée, Carte, Ajouter…
+│  ⬤      ⬤       ⬤       ⬤        │  tab bar: Tournée, Carte, Carnet, Ajouter
 └──────────────────────────────────┘
 ```
 
-**Pins carry the round's own walking order, never a second one.** Gold for the
-next stop, `card` for the rest, both `L.divIcon` so their size and colour are
-Tailwind classes rather than an image asset. A stop with no coordinates draws
-no pin, but keeps its number: the third pin can read "3" with no "2" on the
-map, because a row still shows "2". Every pin is keyboard-reachable and named
+**Pins carry the swipe's numbers, never a second order.** A pin is drawn for
+each stop still on Tournée, with that stop's own number: the next stop (the
+lowest number with no visit today) in gold, `card` for the rest, both
+`L.divIcon` so their size and colour are Tailwind classes rather than an image
+asset. A visited stop has moved to Carnet and draws no pin; a stop that left
+draws none either, so the map has the list's gaps. A stop with no coordinates
+draws no pin but keeps its number and its row on Tournée, so a pin can be
+missing that the list still shows. Every pin is keyboard-reachable and named
 "Arrêt {n} · {name}" (`copy.carte.pinLabel`); tapping or activating one selects
 that stop — the sheet or the list pane's own expanded row follows it — without
 ever repainting the pin itself: selected state changes nothing about colour,
@@ -1692,21 +1918,20 @@ box — are never measured against the sheet's height to stay clear of it. It
 shows the selected stop's number (gold only when it is the next stop), name,
 "type · address", the "Pas encore envoyé" badge, the distance, then "Y aller"
 and "Visiter" — the same row `StopRow` and `NextStopCard` already draw, so a
-stop never reads differently on the two screens. With no due stops it shows
-"Aucun prospect à visiter…" instead, no actions. Selection is resolved every
-render — the tapped stop's id, falling back to the next stop the moment it
-disappears from the round (visited and synced away, say) — never reset by an
-effect of its own.
+stop never reads differently on the two screens, « Nouveau » included. With
+no stop left it shows « Tous les arrêts sont faits. Retrouvez-les dans
+Carnet. » instead (or « Plus aucun arrêt dans votre tournée aujourd'hui. » when `total` is 0), no actions. Selection is resolved every render — the tapped
+stop's id, falling back to the next stop the moment it leaves Tournée (saved,
+so moved to Carnet, or left the tournée) — never reset by an effect of its own.
 
 **From 768px, a list pane replaces the sheet, the map's own left-hand twin.**
-`NextStopCard` for the next stop, then a `StopRow` per remaining stop —
-"Plus tard" is left out: a follow-up not yet due has no pin and is not
-walkable here either. Tapping a pin expands that stop's row (closing any
+`NextStopCard` for the next stop, then a `StopRow` per remaining stop, in
+number order, exactly as Tournée lists them. Tapping a pin expands that stop's row (closing any
 other) and scrolls it into view; a tap on the next stop's pin scrolls to the
 card instead, which is always open. Tapping a row's own header toggles it
 exactly as it does on Tournée.
 
-**The path joins the stops, not the agent.** A straight segment from wherever
+**The path joins the stops in number order, not the agent.** A straight segment from wherever
 the agent happens to be would look like a route, and ADR-0002 rules out a
 routing service that could draw a real one. It is the one place colour comes
 from `readToken` (`MapCanvas`'s own pattern) rather than a Tailwind class:
@@ -1720,9 +1945,10 @@ create the map in the first place. A `bg-secondary` canvas and a card stand in
 instead — "Carte indisponible hors ligne. La liste reste à jour.", and "Voir
 la liste" back to Tournée — while the sheet (phone) or the list (tablet) keeps
 showing the round exactly as it does online, since neither reads anything the
-map itself provides. Position denied gets the same notice and "Réessayer" as
-Tournée, laid over the map rather than replacing it: the pins are still useful
-with no position.
+map itself provides. After the swipe the order is fixed, so a refused or lost
+position changes no pin and no number, and there is no notice: the distances
+read « Position inconnue », the agent's dot is absent, and « Me recentrer » is
+the way to ask again.
 
 **Re-centre asks `useAgentPosition` for a reading — up to two minutes old**
 (its `maximumAge`), **never a continuous track** (no `watchPosition`, by
@@ -1736,6 +1962,117 @@ phone rotating, or the sheet's height changing, resizes the map's container
 with no prop of the map's own changing at all, so a `ResizeObserver` calls
 Leaflet's `invalidateSize()` directly rather than waiting on a redraw that may
 never come.
+
+### Carnet
+
+*Built by entry 8 of the numbered-tournée epic (#496).* Mockup:
+[`key-t3-carnet.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t3-carnet.png),
+frames 1, 2 and 4.
+
+`/tournee/carnet`, the tab bar's third slot: what the agent did today, the
+page of the *carnet de tournée* they used to keep in a pocket. Tournée is what
+is left; Carnet is what is done. It lists today's door-days (one prospect, one
+Brussels day, its latest visit), from the server's visited stops joined with
+the outbox, so a cache wipe or a second phone shows the same page after a sync
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) ›
+Placement and Carnet).
+
+```
+┌──────────────────────────────────┐
+│ ▮ Captain Prospectus        ● 1  │
+├──────────────────────────────────┤
+│ 1 élément en attente d'envoi     │
+├──────────────────────────────────┤
+│ MERCREDI 14 OCTOBRE              │
+│ Carnet                           │
+│ ┌──────────────────────────────┐ │
+│ │(15) Le Comptoir      15:42 › │ │  newest first
+│ │     Bar · Rue du Midi 8      │ │
+│ │     [Converti] [Pas encore   │ │  neutral outcome badge; outbox badge
+│ │     envoyé]                  │ │
+│ └──────────────────────────────┘ │
+│ ┌──────────────────────────────┐ │
+│ │(14) Pizza Roma       15:10 › │ │
+│ │     Restaurant · Rue Neuve 4 │ │
+│ │     [Converti]  2 visites    │ │  reopened today
+│ └──────────────────────────────┘ │
+├──────────────────────────────────┤
+│  ⬤      ⬤       ⬤       ⬤        │
+│ Tournée Carte  Carnet  Ajouter   │
+└──────────────────────────────────┘
+```
+
+**A row is one stop and its latest outcome.** Newest first, by the latest
+visit's time. Each row is a card like a stop row, `min-h-16`: the stop's
+`StopNumber` (`secondary`, never gold: nothing here is next), the name, "type ·
+address", then a line of badges, and the time of the latest visit (« 15:42 »,
+tabular) with a `ChevronRight` on the right. The latest outcome is a neutral
+badge (`secondary` fill, `foreground` text) with its French label, the save
+summary's badge, and the row has no status edge. On the phone an outcome never
+takes a status colour: that would preview the status the server derives
+(invariant 3, EXPERIENCE.md › Rejected on principle), the reason the visit
+form's history shows the outcome as plain text. « Pas encore envoyé » (`warn`)
+follows while the latest visit sits in the outbox, and the muted « {2} visites »
+when the stop was visited more than once today. A closed prospect (Converti,
+Intéressé, Pas intéressé) stays listed: the sync carries today's visited stops
+whatever their status. The header is the date and « Carnet »; there is no
+count here, because the counter lives on Tournée and a second one would
+disagree with it the moment a door-day falls outside the tournée (below).
+
+**Tapping a row reopens the stop.** The whole row is one link, named
+« Arrêt {n} · {name} · {outcome}, à {15:42}. Rouvrir » (or « {name} · {outcome}, à {15:42}. Rouvrir » without a stop number when unnumbered), to the visit form for
+that prospect. It is the only way to visit a stop again, and saving there adds
+a **new visit** (ADR-0007): the row moves to the top with the new outcome and
+« 2 visites », and the counter does not move. Step 1's back link reads
+« Retour au carnet » and a save returns to Carnet, since that is where the
+visit was opened from; « Visite enregistrée… » shows there as it does on
+Tournée. No swipe on these rows: there is one action, so a tap is enough.
+
+**A door-day outside the tournée has no number.** A visit saved after midnight
+belongs to the new day; if its prospect is not in that day's tournée (it closed
+with that very visit, say), its row shows an empty `StopNumber` ring with a dash
+instead of a number, and it never counts in « {n} sur {total} » (owner's
+decision, 2026-10-14). Everything else about the row is the same.
+
+**Empty**, Carnet is an invitation like every other empty screen: a card with a
+56px `secondary` disc and the `NotebookPen` icon, « Aucun arrêt fait
+aujourd'hui. » and the muted « Chaque arrêt enregistré arrive ici, avec son
+résultat. » No button: the next stop is one tab away.
+
+**Today only.** Yesterday's page is gone at midnight, from the phone and from
+the screen alike. History lives where it always has: in the visit form's
+« Visites précédentes », and on the admin side.
+
+### Midnight
+
+*Built by entry 9 of the numbered-tournée epic (#496).* Mockup:
+[`key-t3-carnet.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t3-carnet.png),
+frames 3 and 4.
+
+At Brussels midnight the day is over and the gates come back
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › The
+gates). What the agent sees depends on where they are:
+
+- **On Tournée, Carte or Carnet:** the screen gives way to the new day's first
+  gate, with no message of its own: the date on the start screen
+  (« Jeudi 15 octobre ») and the location dialog say it. The tab bar goes, as
+  before any swipe. Yesterday's numbers and Carnet page go with it.
+- **In an open visit form (or its save summary):** nothing moves under the
+  agent's thumb. The form stays, and « Enregistrer » saves to the outbox as
+  usual; only then does the start screen show, under the location dialog. The
+  dialog itself opens with « Visite enregistrée. Elle partira à la prochaine
+  synchronisation. » above its title, once, so the agent reads that the visit
+  is safe before anything else.
+  The visit's time is when « Enregistrer » was tapped, so a visit saved at 00:01
+  is a door-day of the new day (Carnet's numberless row, above). Leaving the
+  form without saving asks first, through the same leave guard as a tab tap
+  (#74), and then lands on the start screen.
+- **On Ajouter:** the same as the visit form, except that « Ajouter » writes
+  only the place and no stop, since the new day has no tournée yet; as a field
+  prospect still in the outbox, it is in the new day's snapshot at the swipe.
+
+The sync goes on through midnight: the dot, the strip and their buttons never
+wait for a swipe.
 
 ### One decision per screen
 
@@ -1996,9 +2333,11 @@ it. This is the same trap `withOutcome` exists to dodge, one screen along.
 « Enregistrer la visite » validates exactly as before, and a blocked save still
 moves the screen to the problem. A valid draft no longer queues at once: it
 opens a summary, and only that summary's « Enregistrer » writes the outbox row,
-through the same `queueVisit` the daily progress count reads. The agent is back
-on Tournée du jour with « Visite enregistrée… », and the count has risen by
-one. From 768px the same content is a centred Dialog, with « Modifier » and «
+through the same `queueVisit` the counter reads. The agent is back on Tournée
+du jour with « Visite enregistrée… »: the stop has moved to Carnet, the next
+stop is on the card, and the counter has risen by one on a stop's first visit
+today (a visit reopened from Carnet returns to Carnet instead, and moves no
+count). From 768px the same content is a centred Dialog, with « Modifier » and «
 Enregistrer » side by side, Enregistrer on the right.
 
 **Why a visit asks at all.** A visit is append-only (INVARIANT 2): once it syncs,
@@ -2047,12 +2386,12 @@ own column rather than spanning the viewport under the pane.
 768px, and it imports `RoundMap` with `React.lazy`, so a phone never fetches
 or parses Leaflet for a visit. The chunk is the one Carte uses, still
 precached (ADR-0026). The pin is the place's own pin, exactly as Carte draws
-it: its walking-order number, gold only when it is the next stop. Its pin selects
+it: its swipe number, gold only when it is the next stop. Its pin selects
 nothing and there is no path, since one place is not a route; the re-centre
 control and the agent's dot stay, as on Carte. The map is absent, with
 no notice, when there is no network (Leaflet requests a tile on every pan,
-Carte's own reason), when the place has no coordinates, or when it is not on
-today's round.
+Carte's own reason), when the place has no coordinates, or when it is not in
+today's tournée.
 
 ### Adding a place
 
@@ -2091,18 +2430,18 @@ reading shown is always the one « Ajouter » would save; while a new one is
 on its way, « Recherche de votre position… » shows under it.
 
 **The position is read on open.** field-operations.md says a field
-prospect's position defaults to where the agent stands, and Flow 4 needs it
-so the new place comes up as the nearest stop even when nobody taps anything.
+prospect's position defaults to where the agent stands, so the new place has a
+pin and a distance even when nobody taps anything.
 So the button reads « Utiliser ma position » only while there is no reading
 (refused, unavailable, or still locating, when it is disabled), and
-« Actualiser » once there is one. A place with no position is still added; it
-goes to the end of the round.
+« Actualiser » once there is one. A place with no position is still added.
 
-**« Ajouter » puts the place on the round at once.** It writes one
-`outboxProspects` row and nothing else (INVARIANT 2), then returns to
-Tournée du jour with « Prospect ajouté… ». The round reads the outbox, so
-the place is a stop before any sync. A failed write stays on the form with
-the storage error, like the visit form.
+**« Ajouter » puts the place on the tournée at once** (entry 6). It writes one
+`outboxProspects` row and the place's stop, then returns to Tournée du jour
+with « Prospect ajouté… ». Added after the swipe, the place is a joiner: it
+takes the next number at the end of the list and carries « Nouveau », with
+« Pas encore envoyé » until the sync takes it, whatever its distance. A failed
+write stays on the form with the storage error, like the visit form.
 
 ### Sync is ambient, never a toast
 
@@ -2183,14 +2522,14 @@ tab's rule drift apart.
 
 ```
 ┌──────────────────────────────────┐
-│ ⬤ Tournée ⬤ Carte ⬤ Ajouter ▤ Tab │  ← 768px: inline in the band
+│ ⬤ Tournée ⬤ Carte ⬤ Carnet ⬤ Ajouter ▤ │  ← 768px: inline in the band
 ├──────────────────────────────────┤
 │                                  │
-│           (the round)            │
+│          (the tournée)           │
 │                                  │
 ├──────────────────────────────────┤
-│   ⬤       ⬤        ⬤        ▤   │  < 768px: fixed at the bottom
-│ Tournée  Carte  Ajouter  Tableau │
+│  ⬤      ⬤      ⬤      ⬤      ▤  │  < 768px: fixed at the bottom
+│ Tournée Carte Carnet Ajouter Tab.│
 └──────────────────────────────────┘
 ```
 
@@ -2222,8 +2561,13 @@ inset again — on the visit, as a bar sticky in the form's own column (see
 one that has one — both `calc()`'d off `--spacing-tab-bar-height` and the
 safe-area inset rather than a guessed pixel figure.
 
-**Four possible slots, three or four ship now.** Tournée, Carte and Ajouter for
-every role, Tableau de bord last for an admin — and two gates, not one, decide
+**Five possible slots, four or five ship now** (Carnet's slot: entry 8, owner's
+decision 2026-10-14). Tournée, Carte, Carnet and Ajouter for every role, in
+the order of the day (what is left, where it is, what is done, and the odd one
+out), Tableau de bord last for an admin. Five tabs at 390px are about 78px
+each, well above the 48px minimum; the labels stay whole, and « Tableau de
+bord » may wrap onto two lines. The tab bar exists only after the swipe
+("Before the swipe", above). Two gates, not one, decide
 that last slot (spec-gh-115, `field/identity.ts`'s `adminAccess`). `screens` is
 the security decision (invariant 10): a server-confirmed admin in this
 session, unaffected by the network coming and going. `entry` — what the tab
