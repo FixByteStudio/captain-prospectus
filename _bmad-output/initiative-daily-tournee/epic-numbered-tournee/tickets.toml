@@ -1,0 +1,150 @@
+# The stories of epic-numbered-tournee, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "docs/design.md decides the tournée screens"
+description = "docs/design.md decides, and the owner approves: the start screen with its two no-tournée messages, the location alert dialog, the swipe « Commencer la tournée », numbered stops with « Nouveau », the « {n} sur {total} » counter in arrêts, the Carnet tab, and the admin Visites ledger's door-day row and history. It replaces the « position refused degrades » promise at line 1723. EXPERIENCE.md and docs/glossary.md (Tournée, Arrêt, Carnet, door-day) follow."
+verify = "The owner approves the design.md sections in review. Entries 3 to 9 and 11 each have a section to build against."
+covers = ["R2", "R3", "R4", "R6", "R7", "R9", "R13", "R16"]
+after = []
+hitl = true
+risk = "medium"
+unknown = "Where Carnet sits in the tab bar beside Tournée, Carte and Ajouter, since an admin's bar already holds a fourth tab, Tableau de bord."
+
+[[entry]]
+id = 2
+type = "story"
+title = "The sync carries today's tournée"
+description = "Adds the `tournees` and `tournee_stops` tables in one migration and extends the sync contract in src/shared/schemas.ts. The request takes a tournée insert and stop inserts. The server writes them with onConflictDoNothing, with the agent from the session and the Brussels day from the start time clamped to received_at, and lists their ids in `accepted`. When a second phone's tournée loses to the day's first one, its tournée and stop ids are listed in `accepted` but nothing is kept (first swipe wins). The response returns today's tournée, its stops each with a server-derived `left` flag (one function), and today's visited stops: door-days with their latest outcome, closed prospects included, from one door-day reader in the Worker that entry 10 builds the admin figures on. Entries 6, 7 and 12 read `left`. A stop insert whose prospect id the server rewrites through `idMap` is rewritten like a visit. CLIENT_VERSION and MIN_CLIENT_VERSION rise together, and docs/api.md and docs/data-model.md describe the change."
+verify = "Worker tests: a tournée with 20 stops comes back from a sync by another session of the same agent; a resent batch inserts nothing twice; a stop for a reassigned prospect is accepted and reads `left`; a closed prospect visited today is in the visited stops; a second tournée for the same agent and day is accepted but leaves the first one's stops unchanged; an old clientVersion gets 426."
+covers = ["R1", "R6", "R10", "R11", "R16"]
+after = []
+hitl = false
+risk = "high"
+references = [".claude/skills/sync-contract-change/SKILL.md", ".claude/skills/d1-migration/SKILL.md"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "A swipe freezes the day on the phone and the server"
+description = "Tracer bullet, built to entry 1's design. With no tournée, the field app shows the two messages. Otherwise it shows the start screen with the date and the stops. The swipe « Commencer la tournée » (swipe.ts maths, also a real button) is enabled once a position exists. It numbers the R1 snapshot nearest-next from that position through one shared pure function, which entry 6 reuses. It writes the tournée and its stops to the outbox and opens the app. The phone stores entry 2's pulled tournée, stops and visited stops in Dexie (this entry owns those tables), so a reinstall skips the gate, and a phone whose swipe lost to another phone's adopts the pulled tournée and its numbers. The swipe reading stays an ordinary ADR-0028 reading; the tournée rows hold no position. The sync is never gated: the outbox drains and the unsent-visits strip shows on the start screen. The outbox rewrites a stop's prospect id through `idMap` as it does a visit's. field-operations.md › the tournée, the no-tournée messages and the swipe follow."
+verify = "On a local build an agent swipes, and separately starts with the keyboard. The unsent-visits strip shows on the start screen while a visit is queued. The outbox drains and D1 holds the tournée and its numbered stops. A second browser profile signed in as the same agent lands on Tournée without the start screen. Tests cover the snapshot rule, and the PR quotes the precache total."
+covers = ["R1", "R2", "R4", "R6", "R10", "R16"]
+after = [1, 2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "A location dialog holds the start screen until a fix is precise"
+description = "While the start screen shows stops (entry 3) and no reading passes the accuracy threshold, an alert dialog sits over the start screen, built to entry 1's design. It has « Activer » (the same refresh() as « Réessayer ») and a Réglages › Localisation line, and it repeats one-off getCurrentPosition readings until the threshold is met. The owner's pavement test sets the threshold, target 100–200 m, as a named constant. The comment at useAgentPosition.ts:10 and field-operations.md follow."
+verify = "Tests drive refused, too coarse and accepted readings through the dialog. Outdoors on a phone, the owner sees the dialog close and records the chosen threshold in the PR."
+covers = ["R3", "R16"]
+after = [3]
+hitl = true
+risk = "high"
+unknown = "What accuracy a mid-range Android and an iPhone reach on a Brussels pavement with enableHighAccuracy off, and whether it must be turned on."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Tournée and Carte show the stops by their swipe numbers"
+description = "Built to entry 1's design, Tournée lists the tournée's stops with no visit today, in number order, and the next-stop card shows the lowest of them as « Arrêt {n} ». Every saved stop leaves Tournée whatever its outcome, and the « Plus tard » section leaves Tournée. The Carte pins and the round-map.ts helpers that the admin round list also imports read the same numbers. The phone stops calling buildTodayList's live order; the admin round view keeps calling it, with list positions as pin numbers, until entry 12 removes that last caller. The end-of-round rows of round-placement.md go; field-operations.md and the round-placement spec say so."
+verify = "Tests: after stops 1 to 3 are visited and stop 4 is skipped, the card shows 4 and stop 5 still reads 5 on its row and its pin. On a local build, Tournée and Carte show the same numbers after three saved visits with different outcomes."
+covers = ["R6", "R8", "R16"]
+after = [4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Joiners take the next numbers and leavers leave a gap"
+description = "A prospect pulled after the swipe that belongs in today's tournée (R1) takes the next number after the highest, through entry 3's numbering function. It is marked « Nouveau » and sent as a stop insert through the outbox. A stop that entry 2's response marks `left` drops from Tournée and Carte, leaving its number as a gap, and leaves the total. field-operations.md › joiners and leavers follow."
+verify = "Tests: two prospects assigned after the swipe get 21 and 22 with « Nouveau », and D1 holds both stop rows. When unvisited stop 7 is reassigned, it disappears and the next stop does not change."
+covers = ["R6", "R8", "R16"]
+after = [5]
+hitl = false
+risk = "medium"
+unknown = "What happens when two phones of one agent each append a different joiner with the same number."
+
+[[entry]]
+id = 7
+type = "story"
+title = "The counter counts arrêts from the server and the outbox"
+description = "Built to entry 1's design, DailyProgress reads « {n} sur {total} » in arrêts. n is the tournée's stops with a visit today, from entry 2's visited stops joined with the outbox by visit id. total is the snapshot plus joiners minus stops that left unvisited. Both come from one shared helper that Carnet (entry 8) reuses. The sentVisits table and its writers go, and field-operations.md follows."
+verify = "Tests: 15 visited stops of 20 read « 15 sur 20 », and a second visit to stop 3 leaves it unchanged. A reassigned unvisited stop lowers total. A cache wipe followed by a sync restores the counter, and n never exceeds total."
+covers = ["R7", "R16"]
+after = [2, 6]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Carnet lists today's visited stops and reopens them"
+description = "Built to entry 1's design, a Carnet tab lists today's visited stops with their number and latest outcome, closed prospects included, from entry 7's helper over the server's visited stops and the outbox. Tapping a row opens the visit form and saves a new visit. field-operations.md › Carnet follows, and the PR quotes the precache total."
+verify = "On a local build, a converted stop and a no-contact stop show in Carnet with their numbers. Reopening the no-contact stop saves a second visit, the counter does not move, and the admin sees both visits. A second browser profile signed in as the same agent shows the same Carnet after a sync."
+covers = ["R9", "R16"]
+after = [7]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Midnight brings the gates back"
+description = "At Brussels midnight the field app shows the gates again for the new day, built to entry 1's design. A visit form open across midnight saves its visit to the outbox before the start screen shows. field-operations.md follows."
+verify = "Tests with a fake clock: a tournée swiped on day D shows the start screen at D+1 00:00, and a visit form submitted at 00:01 reaches the outbox before the start screen renders."
+covers = ["R5", "R16"]
+after = [4, 8]
+hitl = false
+risk = "medium"
+unknown = "visited_at is set at Enregistrer, so a visit saved at 00:01 is a door-day of D+1. Open: whether D+1's Carnet lists it when its prospect is not in D+1's tournée."
+
+[[entry]]
+id = 10
+type = "story"
+title = "Admin figures count door-days"
+description = "Entry 2's door-day reader (the latest visit per agent, prospect and Brussels day) feeds « Visites », the visits-by-day chart, « Activité par agent », flyers, refusal reasons, conversions and the recap card's visit count. docs/api.md › The dashboard and The recap card follow."
+verify = "Worker tests: Personne sur place at 10:00 and Converti at 16:00 on one door count as 1 visit and 1 conversion, and the chart shows only the conversion. A flyer on the first visit counts the door-day once. A refusal reason counts only from the latest visit, and « Activité par agent » and the recap card count the door 1."
+covers = ["R12", "R16"]
+after = [2]
+hitl = false
+risk = "medium"
+unknown = "Whether the grouped reads stay inside the 10 ms CPU budget at a season's volume."
+
+[[entry]]
+id = 11
+type = "story"
+title = "The Visites ledger shows one row per door-day"
+description = "/api/admin/visits and VisitsLedger show one row per door-day with its latest outcome, built on entry 2's door-day reader and entry 1's design. Opening a row shows the details and every visit of that door-day. The CSV export stays one row per visit, and docs/api.md follows."
+verify = "On a seeded local build, the two-visit door is one ledger row whose history lists both visits, and the CSV export still has two rows."
+covers = ["R13", "R16"]
+after = [1, 10]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 12
+type = "story"
+title = "The admin sees who started and the phone's numbers"
+description = "« Agents en tournée » and the recap card's « actifs aujourd'hui » count agents who started today's tournée. /api/admin/agents/:email/round returns the tournée's stops with their numbers, hiding those entry 2 marks `left`, so the admin round view shows the phone's numbers, through entry 5's round-map.ts, and the ADR-0028 reading only places the marker. It removes buildTodayList's last caller (entry 5). docs/api.md follows."
+verify = "Worker tests: an agent who swiped but sent no visit counts in both figures. On a local build, the admin round view shows the same numbers as the phone's Tournée and Carte."
+covers = ["R14", "R15", "R16"]
+after = [5, 10, 11]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 13
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only, scoped when pulled from the build records and the review findings deferred during the epic."
+verify = "pnpm lint, typecheck, test, build and check:precache are green, every deferred finding is fixed or filed, CI has deployed the epic to production, and the docs in R16 match what shipped."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+hitl = false
+risk = "low"

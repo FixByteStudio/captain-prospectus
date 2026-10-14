@@ -29,7 +29,8 @@ A dated follow-up moves it to "Plus tard". A follow-up for today goes to the end
 agent" count every visit (`src/worker/routes/admin.ts:269`, `:491`). Conversions count each
 prospect once (`:573`). One door with Personne sur place at 10:00 and Converti at 16:00 shows
 as 2 visits and 1 conversion, and it also shows in the chart as a `no_contact`. "Agents en
-tournée" means "has a visit received today" (`:359`). The admin round view runs the same
+tournée" means "has a visit received today" (`:359`). The sidebar recap card counts every
+visit received today and calls an agent active when they sent one (`:205`). The admin round view runs the same
 `buildTodayList`, ordered from the reading stored at sync (`src/client/admin/round/round-list.ts:13`,
 ADR-0028).
 
@@ -98,7 +99,8 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
   merged) leaves a gap. It also leaves the total.
 - The next-stop card shows the lowest-numbered stop with no visit today. The card, the list,
   the Carte pins and the admin round view all show the same number.
-- The swipe position is used for this ordering on the phone only. It is never sent or stored.
+- The tournée and its stops hold no position. The swipe reading orders the stops on the phone.
+  Like any other reading, it may be sent at the next sync as the agent's marker (ADR-0028).
 
 ### The counter
 
@@ -147,7 +149,11 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
   count door-days.
 - The admin's Visites ledger shows one row per door-day. Opening a row shows the details and
   the full visit history. Visits are never updated or deleted.
+- The Visites CSV export (`/api/admin/visits/export.csv`) stays one row per visit. It is the
+  raw history, and a door-day can be rebuilt from it.
 - "Agents en tournée" counts agents who started today's tournée.
+- The sidebar recap card counts today's door-days. Its "actifs aujourd'hui" counts agents who
+  started today's tournée, the same figure as "Agents en tournée".
 - The admin round view shows the tournée's stops in their numbers. The reading stored at sync
   (ADR-0028) still places the agent's marker. It no longer orders the stops.
 
