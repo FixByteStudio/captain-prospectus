@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quinze sur vingt · Party session · 14 October 2026</title>
+<style>
+  :root {
+    --paper: #f6f1e4;
+    --ink: #22201b;
+    --muted: #6d675a;
+    --gold: #c99a2e;
+    --gold-soft: #f1dfae;
+    --line: #d9cfb6;
+    --john: #2f5d8a;
+    --sally: #b0487a;
+    --winston: #4f6b3a;
+    --amelia: #6a4fb0;
+    --karim: #b4602a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 31px, rgba(120, 100, 60, .08) 31px 32px),
+      var(--paper);
+    color: var(--ink);
+    font: 17px/1.55 Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 48px 22px 80px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .sans { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { text-align: center; margin-bottom: 40px; }
+  .kicker { letter-spacing: .18em; text-transform: uppercase; font-size: 12px; color: var(--muted); }
+  h1 { font-size: clamp(44px, 9vw, 84px); margin: 6px 0 2px; line-height: 1; }
+  h1 span { color: var(--gold); }
+  .sub { font-style: italic; color: var(--muted); font-size: 20px; }
+  h2 {
+    font-size: 15px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--line); padding-bottom: 6px; margin: 56px 0 20px;
+  }
+
+  /* the phone */
+  .hero { display: grid; grid-template-columns: 260px 1fr; gap: 36px; align-items: center; }
+  @media (max-width: 720px) { .hero { grid-template-columns: 1fr; justify-items: center; } }
+  .phone {
+    width: 240px; border-radius: 34px; background: #1d1c19; padding: 14px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .25);
+  }
+  .screen { background: #fffdf7; border-radius: 22px; padding: 18px 16px 22px; min-height: 380px; position: relative; overflow: hidden; }
+  .screen h3 { margin: 0 0 4px; font-size: 20px; }
+  .count { position: relative; height: 26px; font-weight: 700; }
+  .count span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+  .c-bad { color: #b3261e; animation: bad 9s infinite; }
+  .c-good { color: var(--ink); opacity: 0; animation: good 9s infinite; }
+  @keyframes bad { 0%, 38% { opacity: 1 } 45%, 100% { opacity: 0 } }
+  @keyframes good { 0%, 45% { opacity: 0 } 52%, 100% { opacity: 1 } }
+  .bar { height: 7px; background: #ece4cf; border-radius: 9px; margin: 8px 0 16px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--gold); width: 0; animation: fill 9s infinite; }
+  @keyframes fill { 0%, 45% { width: 0 } 60%, 100% { width: 75% } }
+  .card {
+    border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px;
+    padding: 10px 12px; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;
+  }
+  .disc {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--gold); color: #fff;
+    display: grid; place-items: center; font-weight: 700; flex: none; position: relative;
+  }
+  .disc b { position: absolute; }
+  .d1 { animation: bad 9s infinite; }
+  .d16 { opacity: 0; animation: good 9s infinite; }
+  .row { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 7px; font-size: 14px; display: flex; gap: 8px; }
+  .row em { color: var(--muted); font-style: normal; }
+  .tabs { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; padding: 9px 0; border-top: 1px solid var(--line); font-size: 12px; background: #fffdf7; }
+  .tabs .new { color: var(--gold); font-weight: 700; }
+  .hero p { margin: 0 0 14px; }
+
+  /* cast */
+  .cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .who {
+    background: #fffdf7; border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+    border-top: 5px solid var(--c);
+  }
+  .who .ic { font-size: 30px; }
+  .who strong { display: block; font-size: 19px; }
+  .who small { color: var(--muted); display: block; margin-bottom: 8px; }
+  .who q { font-style: italic; font-size: 15px; }
+
+  /* timeline */
+  .beats { list-style: none; padding: 0; margin: 0; position: relative; }
+  .beats::before { content: ""; position: absolute; left: 21px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .beat { display: grid; grid-template-columns: 44px 1fr; gap: 12px; margin-bottom: 20px; }
+  .beat .dot {
+    width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 20px;
+    background: #fffdf7; border: 2px solid var(--c); position: relative; z-index: 1;
+  }
+  .beat h4 { margin: 2px 0 2px; font-size: 18px; }
+  .say { margin: 6px 0 0; padding-left: 12px; border-left: 3px solid var(--c); }
+  .say b { color: var(--c); }
+
+  /* swipe */
+  .swipe-wrap { display: flex; justify-content: center; }
+  .note { text-align: center; color: var(--muted); font-style: italic; margin-top: 10px; }
+
+  /* board */
+  .board {
+    background: #fbfbf7; border: 10px solid #8a7a5c; border-radius: 6px; padding: 24px 28px;
+    box-shadow: inset 0 0 0 1px #e5e1d4, 0 10px 26px rgba(0, 0, 0, .12);
+  }
+  .board ul { margin: 0; padding: 0; list-style: none; columns: 2 300px; column-gap: 34px; }
+  .board li {
+    break-inside: avoid; margin: 0 0 12px; padding: 8px 10px; border: 2px solid #2b4f7c;
+    border-radius: 4px; color: #1f3a5c; font-family: "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive; font-size: 15.5px;
+  }
+  .board li.struck { border-color: #b3261e; color: #8b8b8b; text-decoration: line-through; }
+  .board .title { font-family: "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive; font-size: 30px; color: #b3261e; text-align: center; margin: 0 0 14px; letter-spacing: .06em; }
+
+  /* bits */
+  .bits { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .bit { background: #fffdf7; border: 1px dashed var(--c); border-radius: 12px; padding: 14px 16px; }
+  .bit h4 { margin: 0 0 6px; color: var(--c); font-size: 16px; }
+  .bit p { margin: 0; font-size: 15.5px; }
+
+  footer { margin-top: 56px; font-size: 15px; color: var(--muted); }
+  footer table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  footer td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  footer td:first-child { white-space: nowrap; color: var(--ink); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; }
+    .c-bad, .d1 { opacity: 0 !important; }
+    .c-good, .d16 { opacity: 1 !important; }
+    .bar i { width: 75% !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="kicker sans">Captain Prospectus · Party room · Session 4 · 13–14 October 2026</div>
+  <h1>Quinze <span>sur</span> vingt</h1>
+  <div class="sub">The day Tournée du jour learned to count</div>
+</header>
+
+<section class="hero">
+  <div class="phone" aria-label="Tournée du jour before and after">
+    <div class="screen sans">
+      <h3>Tournée du jour</h3>
+      <div class="count">
+        <span class="c-bad">0 visites sur 23 aujourd'hui</span>
+        <span class="c-good">15 sur 20</span>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="card">
+        <div class="disc"><b class="d1">1</b><b class="d16">16</b></div>
+        <div><strong>Le Kebab du Coin</strong><br><em style="color:var(--muted);font-style:normal;font-size:13px">Arrêt suivant · 120 m</em></div>
+      </div>
+      <div class="row"><b>17</b> Friterie Saint-Gilles <em>· 210 m</em></div>
+      <div class="row"><b>18</b> Food truck Flagey <em>· 340 m</em></div>
+      <div class="row"><b>21</b> Chez Nour <em>· Nouveau</em></div>
+      <div class="tabs"><span>Tournée</span><span>Carte</span><span class="new">Carnet</span><span>＋</span></div>
+    </div>
+  </div>
+  <div>
+    <p>It opened with an owner, furious: Karim had saved sixteen visits and the screen said <strong>"0 visites sur n aujourd'hui"</strong>. Then every save brought the count back to 1. Then, it turned out, a second knock on the same door could push it to <strong>17 sur 16</strong>.</p>
+    <p>By the end of the next day the room had found both bugs, the first one was fixed, and the tournée had a new shape. Numbers frozen at a morning swipe, one door counted once, and a new tab called <strong>Carnet</strong> for everything Karim has done today.</p>
+    <p class="sans" style="font-size:14px;color:var(--muted)">Watch the phone. That's the whole session in nine seconds.</p>
+  </div>
+</section>
+
+<h2 class="sans">Who was at the table</h2>
+<section class="cast">
+  <div class="who" style="--c:var(--john)"><div class="ic">📋</div><strong>John</strong><small class="sans">Product Manager</small><q>Nobody has asked what Karim actually needs.</q></div>
+  <div class="who" style="--c:var(--sally)"><div class="ic">🎨</div><strong>Sally</strong><small class="sans">UX Designer</small><q>It's not a bug in a counter, it's a screen with no memory of the day.</q></div>
+  <div class="who" style="--c:var(--winston)"><div class="ic">🏗️</div><strong>Winston</strong><small class="sans">System Architect</small><q>Two bugs wearing one coat.</q></div>
+  <div class="who" style="--c:var(--amelia)"><div class="ic">💻</div><strong>Amelia</strong><small class="sans">Senior Engineer</small><q>I checked, so no "I haven't measured that" this time.</q></div>
+  <div class="who" style="--c:var(--karim)"><div class="ic">📞</div><strong>Karim</strong><small class="sans">Field agent, on the pavement</small><q>Seize portes. L'écran me dit zéro. J'ai l'impression qu'on m'a volé ma journée.</q></div>
+</section>
+
+<h2 class="sans">How it unfolded</h2>
+<ol class="beats">
+  <li class="beat" style="--c:var(--amelia)">
+    <div class="dot">🔍</div>
+    <div><h4>The count lived on the phone</h4>
+      The counter was a phone-only log plus the outbox. A throwaway test proved the log worked when nothing touched it, but being logged out or another agent signing in on the phone wiped it. Prospects came back with the next pull and the log never did.
+      <p class="say"><b>Amelia:</b> That symptom fits one picture exactly: the log adds nothing and only the outbox counts.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--sally)">
+    <div class="dot">🫥</div>
+    <div><h4>A screen with no memory</h4>
+      Closed outcomes vanished from the round, dated follow-ups slid into Plus tard. The counter was the only trace of the morning, and it was the part that broke.
+      <p class="say"><b>Sally:</b> We decided it leaves the walking order. We never gave it anywhere else to go.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--john)">
+    <div class="dot">🧮</div>
+    <div><h4>"My bad": a second bug</h4>
+      The owner spotted it: À relancer and Personne sur place sent Karim back to the same door, and n climbed past m. Visit ids on top, prospect ids underneath, and a comment in the code hiding the overflow on the bar. Filed as #492, fixed in #494 before the session ended.
+      <p class="say"><b>Sally:</b> Count portes, not visites.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--winston)">
+    <div class="dot">📜</div>
+    <div><h4>Edit? Winston pulls ADR-0007</h4>
+      The owner pitched an epic: tournées by date, a morning swipe, a screen for the day, reopen, edit. Winston read line 26 aloud: agents cannot edit a visit; corrections are a new visit. Model B was born: keep every visit, group the reads.
+      <p class="say"><b>Winston:</b> The bug is in the counting, not in the storage.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--john)">
+    <div class="dot">🤨</div>
+    <div><h4>"How the heck can two agents be on the same round?"</h4>
+      The owner caught Winston out. A prospect has one <span class="mono">assigned_to</span>. Winston conceded on the spot.
+      <p class="say"><b>John:</b> So your "two agents could edit the same visit" argument against model A was thinner than you made it sound.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--sally)">
+    <div class="dot">📓</div>
+    <div><h4>Carnet</h4>
+      "Ma journée" sounded like a wellness app. Karim picked the name.
+      <p class="say"><b>Karim:</b> Carnet. C'est ce que j'avais dans la poche avant votre app.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--karim)">
+    <div class="dot">👉</div>
+    <div><h4>The swipe becomes the door</h4>
+      John tried to cut the morning swipe. The owner overruled him: no swipe, no tournée, for the whole app.
+      <p class="say"><b>Karim:</b> Un swipe le matin, comme pointer. Ça va. Tant que ça marche sans réseau.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--amelia)">
+    <div class="dot">🔢</div>
+    <div><h4>Arrêt, frozen at the swipe</h4>
+      Every saved stop counts once, whatever the outcome, and moves to Carnet. Sally's split counter was erased in favour of one plain number. Then the owner froze the numbers at the swipe, ordered from where Karim stood.
+      <p class="say"><b>Karim:</b> Quinze sur vingt. Voilà. Merci.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--winston)">
+    <div class="dot">📍</div>
+    <div><h4>GPS opens the day, it doesn't police it</h4>
+      No position, no swipe. A full screen became an alert dialog with one button, "Activer", and Amelia's fallback paragraph was struck through.
+      <p class="say"><b>Winston:</b> Boss, you're getting dangerously good at boring.</p>
+    </div>
+  </li>
+  <li class="beat" style="--c:var(--winston)">
+    <div class="dot">✅</div>
+    <div><h4>ADR-0036, accepted</h4>
+      "A morning swipe freezes each agent's numbered tournée". It amends ADR-0028 and leaves ADR-0007 untouched. Proposed and approved the same day.
+    </div>
+  </li>
+</ol>
+
+<h2 class="sans">The gesture that starts the day</h2>
+<div class="swipe-wrap">
+  <svg width="420" height="110" viewBox="0 0 420 110" role="img" aria-label="Glisser pour commencer la tournée">
+    <defs>
+      <linearGradient id="trail" x1="0" x2="1">
+        <stop offset="0" stop-color="#c99a2e" stop-opacity=".55"/>
+        <stop offset="1" stop-color="#c99a2e" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect x="10" y="25" width="400" height="60" rx="30" fill="#fffdf7" stroke="#d9cfb6" stroke-width="2"/>
+    <text x="232" y="61" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#6d675a">Glisser pour commencer la tournée</text>
+    <rect x="16" y="31" height="48" rx="24" fill="url(#trail)">
+      <animate attributeName="width" values="48;388;388;48" keyTimes="0;.55;.8;1" dur="3.6s" repeatCount="indefinite"/>
+    </rect>
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;340 0;340 0;0 0" keyTimes="0;.55;.8;1" dur="3.6s" repeatCount="indefinite"/>
+      <circle cx="40" cy="55" r="24" fill="#c99a2e"/>
+      <path d="M33 45 L45 55 L33 65" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </svg>
+</div>
+<p class="note">Sign in → tournée or "Aucune tournée" → 📍 Activer → swipe → Tournée · Carte · Carnet · ＋</p>
+
+<h2 class="sans">The board, as Winston left it</h2>
+<section class="board">
+  <p class="title">ARRÊT</p>
+  <ul>
+    <li>Model B: visits stay inserts; admin and stats count door-days</li>
+    <li>T1: a tournée is what's open that morning. T2 later, on top</li>
+    <li>Joiners join today's snapshot: 21, 22… "Nouveau"</li>
+    <li>Carnet: today only. Reopen = a new visit</li>
+    <li>Every saved stop leaves Tournée, whatever the outcome</li>
+    <li>Follow-ups come back on their due day</li>
+    <li>"15 sur 20": one door counted once</li>
+    <li>Numbers frozen at the swipe, nearest-next from where he stood</li>
+    <li>Removed unvisited stop → a gap, "sur 19"</li>
+    <li>Swipe gates the whole app. Sync is never gated</li>
+    <li>GPS alert dialog until the swipe only. No escape hatch in T1</li>
+    <li>No tournée id on visits. Swipe point never stored</li>
+    <li class="struck">14 conclues · 1 à relancer</li>
+    <li class="struck">Number at the first fix or the first save, whichever comes first</li>
+    <li class="struck">Cut the swipe</li>
+  </ul>
+</section>
+
+<h2 class="sans">Running bits</h2>
+<section class="bits">
+  <div class="bit" style="--c:var(--winston)"><h4>🏗️ Winston vs "easy peasy"</h4><p>Session 2's grudge became this session's compliment: "Boss, you're getting dangerously good at boring." He caps the marker four times. Nobody counts.</p></div>
+  <div class="bit" style="--c:var(--amelia)"><h4>💻 Amelia, measured</h4><p>She opened with a throwaway repro, guessed only once ("I haven't measured that", about the bundle), and closed with "I checked. Don't get used to it."</p></div>
+  <div class="bit" style="--c:var(--sally)"><h4>🎨 Sally's eraser</h4><p>She lost the split counter and the full-screen GPS page, and won Carnet, the blurred day behind the dialog, and "a screen with no memory of the day".</p></div>
+  <div class="bit" style="--c:var(--john)"><h4>📋 John, overruled</h4><p>He crossed out "cut the swipe" on his own notepad, then made the room answer every question that would cost more after the ADR.</p></div>
+  <div class="bit" style="--c:var(--karim)"><h4>📞 Karim on the line</h4><p>Wind noise, a scooter, and the shortest product spec of the year: "Le chiffre pour le moral. Et la liste." He's keeping his paper carnet until the epic ships.</p></div>
+</section>
+
+<footer class="sans">
+  <h2 class="sans" style="margin-top:0">What it left behind</h2>
+  <table>
+    <tr><td>#492 → #494</td><td>Merged. The counter counts doors, not visits. "17 sur 16" is gone.</td></tr>
+    <tr><td>ADR-0036</td><td>Accepted in PR #493. A morning swipe freezes each agent's numbered tournée. It amends ADR-0028.</td></tr>
+    <tr><td>Next</td><td>A new session cuts the T1 epic from ADR-0036 with <span class="mono">bmad-preview-ticketing</span>: counter and numbers, gates and swipe, Carnet, admin door-days.</td></tr>
+  </table>
+  <p style="margin-top:22px;text-align:center">Captain Prospectus · party room "installed" · written 14 October 2026</p>
+</footer>
+
+</main>
+</body>
+</html>
