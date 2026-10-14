@@ -161,6 +161,55 @@ export const visits = sqliteTable(
 );
 
 /**
+ * One agent's numbered stops for one Brussels day (ADR-0036). Insert-only: the
+ * first swipe of the day wins the unique (agent, day), and a second phone's
+ * tournée is accepted and dropped. Holds no position (ADR-0023 gains no table).
+ */
+export const tournees = sqliteTable(
+  "tournees",
+  {
+    /** Generated on the phone with crypto.randomUUID(), so retries are no-ops. */
+    id: text("id").primaryKey(),
+    /** From the session, never the payload (INVARIANT 10). */
+    agentEmail: text("agent_email").notNull(),
+    /** Brussels midnight of the day of the swipe's clamped start time (`started_at`). */
+    dayStart: integer("day_start").notNull(),
+    /** The swipe time, CLAMPED to min(clientStartedAt, receivedAt) (INVARIANT 12). */
+    startedAt: integer("started_at").notNull(),
+    clientStartedAt: integer("client_started_at").notNull(),
+    receivedAt: integer("received_at").notNull(),
+  },
+  (t) => [uniqueIndex("tournees_agent_day_idx").on(t.agentEmail, t.dayStart)],
+);
+
+/**
+ * A numbered stop of a tournée. Insert-only: a stop that left the agent's work
+ * is derived from the prospect, never written. No unique (tournée, number):
+ * joiner collisions are decided later.
+ */
+export const tourneeStops = sqliteTable(
+  "tournee_stops",
+  {
+    id: text("id").primaryKey(),
+    tourneeId: text("tournee_id")
+      .notNull()
+      .references(() => tournees.id),
+    prospectId: text("prospect_id")
+      .notNull()
+      .references(() => prospects.id),
+    number: integer("number").notNull(),
+    /** The time the stop joined, CLAMPED to min(clientAddedAt, receivedAt) (INVARIANT 12). */
+    addedAt: integer("added_at").notNull(),
+    clientAddedAt: integer("client_added_at").notNull(),
+    receivedAt: integer("received_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("tournee_stops_tournee_prospect_idx").on(t.tourneeId, t.prospectId),
+    index("tournee_stops_prospect_idx").on(t.prospectId),
+  ],
+);
+
+/**
  * Visits the server could not take as sent (ADR-0022).
  *
  * Two cases land here: the prospect does not exist, or it is not assigned to
@@ -393,6 +442,10 @@ export type ProspectRow = typeof prospects.$inferSelect;
 export type NewProspectRow = typeof prospects.$inferInsert;
 export type VisitRow = typeof visits.$inferSelect;
 export type NewVisitRow = typeof visits.$inferInsert;
+export type TourneeRow = typeof tournees.$inferSelect;
+export type NewTourneeRow = typeof tournees.$inferInsert;
+export type TourneeStopRow = typeof tourneeStops.$inferSelect;
+export type NewTourneeStopRow = typeof tourneeStops.$inferInsert;
 export type OrphanedVisitRow = typeof visitsOrphaned.$inferSelect;
 export type NewOrphanedVisitRow = typeof visitsOrphaned.$inferInsert;
 export type ScriptRow = typeof scripts.$inferSelect;

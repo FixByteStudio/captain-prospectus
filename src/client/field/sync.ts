@@ -136,6 +136,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     clientVersion: CLIENT_VERSION,
     prospects: outboxProspects.map((row): FieldProspect => unstamped(row)),
     visits: outboxVisits.map((row): Visit => unstamped(row)),
+    // The phone has no tournée outbox yet: the start screen that sends the swipe and its stops comes with ADR-0036.
+    tournees: [],
+    stops: [],
     // The latest reading the phone already took today, if it qualifies; never a
     // new one (ADR-0028). `undefined` leaves the key out of the JSON.
     position: readingToSend(identity, (deps.now ?? Date.now)()),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLIENT_VERSION,
   IMPORT_ROWS_PER_REQUEST,
   MAX_REQUEST_BYTES,
   OPEN_STATUSES,
@@ -7,8 +8,11 @@ import {
   OUTCOME_TO_STATUS,
   STATUSES,
   SYNC_PROSPECTS_PER_REQUEST,
+  SYNC_STOPS_PER_REQUEST,
+  SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_BATCH,
   SYNC_VISITS_PER_REQUEST,
+  TOURNEE_STOP_NUMBER_MAX,
   isOpen,
 } from "./constants";
 import { prospectBatchSchema, scriptCreateSchema, syncRequestSchema } from "./schemas";
@@ -118,7 +122,7 @@ describe("MAX_REQUEST_BYTES", () => {
   it("fits a full sync of maxed prospects, maxed notes and a 50-question script answered", () => {
     const now = Date.now();
     const payload = {
-      clientVersion: 1,
+      clientVersion: CLIENT_VERSION,
       prospects: Array.from({ length: SYNC_PROSPECTS_PER_REQUEST }, () => ({
         id: crypto.randomUUID(),
         name: maxShortText,
@@ -145,6 +149,18 @@ describe("MAX_REQUEST_BYTES", () => {
             q % 3 === 0 ? true : q % 3 === 1 ? 42 : "é".repeat(120),
           ]),
         ),
+      })),
+      // Maxed tournées and stops ride in the same request (ADR-0036).
+      tournees: Array.from({ length: SYNC_TOURNEES_PER_REQUEST }, () => ({
+        id: crypto.randomUUID(),
+        startedAt: now,
+      })),
+      stops: Array.from({ length: SYNC_STOPS_PER_REQUEST }, () => ({
+        id: crypto.randomUUID(),
+        tourneeId: crypto.randomUUID(),
+        prospectId: crypto.randomUUID(),
+        number: TOURNEE_STOP_NUMBER_MAX,
+        addedAt: now,
       })),
     };
     expect(syncRequestSchema.safeParse(payload).success).toBe(true);
