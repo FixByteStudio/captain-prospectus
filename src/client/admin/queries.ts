@@ -36,6 +36,7 @@ import type {
   Prospect,
   ProspectsResponse,
   Question,
+  RecapResponse,
   Script,
   ScriptsResponse,
   LoginCodeResponse,
@@ -81,6 +82,7 @@ export const adminKeys = {
   imports: () => ["admin", "imports"] as const,
   orphans: () => ["admin", "visits", "orphans"] as const,
   agentRound: (email: string) => ["admin", "agents", email, "round"] as const,
+  recap: () => ["admin", "recap"] as const,
 };
 
 /**
@@ -475,6 +477,20 @@ export function usePlacesImport() {
 
 /** How often the feed asks, while the tab is visible (ADR-0010). */
 const FEED_POLL_MS = 15_000;
+
+/**
+ * The sidebar's recap card (docs/api.md › The recap card), on the feed's
+ * cadence. Paused on a hidden tab like the feed, and refetched on focus,
+ * which AdminApp turns off globally.
+ */
+export function useRecap() {
+  return useQuery({
+    queryKey: adminKeys.recap(),
+    queryFn: () => apiFetch<RecapResponse>("/api/admin/recap"),
+    refetchInterval: FEED_POLL_MS,
+    refetchOnWindowFocus: true,
+  });
+}
 
 /**
  * Visits as they arrive — ADR-0010.

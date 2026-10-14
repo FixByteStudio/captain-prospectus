@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forge report: admin sidebar footer</title>
+<style>
+  :root { --navy:#1B2A4A; --gold:#C9A227; --ink:#1f2430; --muted:#5b6476; --paper:#faf7f0; --line:#e4dccb; --red:#9b2c2c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.55 Georgia, "Times New Roman", serif; }
+  header { background:var(--navy); color:#EEF0F4; padding:40px 48px 32px; position:relative; }
+  header h1 { margin:0 0 6px; font-size:30px; letter-spacing:.3px; }
+  header p { margin:0; color:#95A0B8; font-family:system-ui, sans-serif; font-size:14px; }
+  .seal { position:absolute; right:48px; top:22px; width:150px; height:150px; transform:rotate(-12deg); filter:drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+  main { max-width:900px; margin:0 auto; padding:36px 48px 64px; }
+  h2 { font-size:20px; border-bottom:2px solid var(--gold); padding-bottom:4px; margin-top:36px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px 20px; margin:14px 0; }
+  .mock { font-family:ui-monospace, Menlo, monospace; background:var(--navy); color:#EEF0F4; border-radius:10px; padding:16px 18px; width:300px; font-size:13px; line-height:1.6; }
+  .mock .dot { color:#3fb37f; } .mock .meta { color:#95A0B8; } .mock hr { border:0; border-top:1px solid rgba(255,255,255,.12); margin:8px 0; }
+  ul { padding-left:20px; } li { margin:6px 0; }
+  .kill { color:var(--red); font-weight:bold; }
+  .crew { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .crew .card { margin:0; font-family:system-ui, sans-serif; font-size:14px; }
+  .crew b { font-size:15px; } .crew i { color:var(--muted); display:block; margin-top:4px; }
+  footer { text-align:center; color:var(--muted); font:13px system-ui, sans-serif; padding-bottom:40px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>The admin sidebar footer: the recap card</h1>
+  <p>Forge session · captain-prospectus · 2026-10-13 → 2026-10-14 · outcome: hardened</p>
+  <svg class="seal" viewBox="0 0 200 200" aria-label="Seal: HARDENED">
+    <defs><path id="ring" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/></defs>
+    <path d="M100 8 l12 14 18-6 6 18 19 2-2 19 16 10-10 16 8 17-17 8 0 19-19 0-8 17-16-10-14 13-12-15-18 6-6-18-19-2 2-19-16-10 10-16-8-17 17-8 0-19 19 0 8-17 16 10z" fill="#8f1d1d"/>
+    <circle cx="100" cy="100" r="80" fill="#a52a2a" stroke="#6e1515" stroke-width="3"/>
+    <circle cx="100" cy="100" r="60" fill="none" stroke="#f3d9b1" stroke-width="2" stroke-dasharray="4 3"/>
+    <text font-family="Georgia" font-size="13" fill="#f3d9b1" letter-spacing="3"><textPath href="#ring">CAPTAIN PROSPECTUS · FORGED IDEA ·</textPath></text>
+    <text x="100" y="96" text-anchor="middle" font-family="Georgia" font-weight="bold" font-size="22" fill="#fff4e0">HARDENED</text>
+    <text x="100" y="118" text-anchor="middle" font-family="Georgia" font-size="12" fill="#f3d9b1">14 · X · 2026</text>
+  </svg>
+</header>
+<main>
+  <h2>What was forged</h2>
+  <p>A question about a footer that the mockups drew and the build silently dropped: what should <em>« Synchronisé à l'instant »</em> mean for an admin, who has no outbox? It ended as a small-font recap card that tells the admin the day's story before they dive in.</p>
+  <div class="mock">
+    <span class="dot">●</span> 1 / 2 agents actifs aujourd'hui<br>
+    &nbsp;&nbsp;12 visites aujourd'hui<br>
+    <span class="meta">&nbsp;&nbsp;Dernière visite reçue il y a 4 min</span>
+    <hr>
+    <span class="meta">admin@exemple.be</span>
+  </div>
+
+  <h2>Locked decisions</h2>
+  <ul>
+    <li>A recap card on every admin page, capped at three lines and the email. It is not a dashboard.</li>
+    <li>The headline is <b>« N / M agents actifs aujourd'hui »</b>. Actif means a visit received today (G6), and M is the active roster. It needs no clock, so « 1 / 2 » flags a problem at 11:00 and « 2 / 2 » reads as a good day at 19:00.</li>
+    <li>Below it, the visits today and the time since the last visit was received.</li>
+    <li>The email is informative only, with no menu. The top-bar avatar menu stays.</li>
+    <li>In the icon rail: initials, a pulse dot and a tooltip. In the phone drawer: the full card.</li>
+    <li>One small admin read and one 15 s poll. No agent-side or sync contract change, and nothing added to the phones' precache.</li>
+  </ul>
+
+  <h2>Rejected, and why</h2>
+  <ul>
+    <li><span class="kill">« Synchronisé à l'instant »</span>: an admin has no sync, so a green dot would describe a browser refresh while an agent sits offline.</li>
+    <li><span class="kill">« en tournée » (present tense)</span>: it needs working hours nobody defines.</li>
+    <li><span class="kill">Account menu in the footer</span>: the email is there to inform, not to act.</li>
+    <li><span class="kill">Build line</span>: there is no build id yet, and no menu to hold one.</li>
+  </ul>
+
+  <h2>Weak points that survived</h2>
+  <ul>
+    <li>« Actif aujourd'hui » counts an agent from their first <em>received</em> visit. A phone that works offline all morning shows up late.</li>
+    <li>The footer's poll is a new request stream for every open admin tab. Its cost has not been measured.</li>
+  </ul>
+
+  <h2>Spun out: its own epic</h2>
+  <div class="card">Dated rounds grouped by date, with X stops and the number left. A mandatory « Commencer la tournée » swipe that reveals the round, and « Terminer la tournée ». A screen listing every round, including done visits. Hours worked per round as a stat. It needs ADRs for a new agent insert type, a sync contract bump and a working-time record.</div>
+
+  <h2>Who pressure-tested it</h2>
+  <div class="crew">
+    <div class="card"><b>🏗️ Winston</b>, System Architect<i>“It isn't knowing when they started. It's the present tense.”</i></div>
+    <div class="card"><b>🎨 Sally</b>, UX Designer<i>Drew the card's hierarchy on a napkin, and kept the swipe alive as a ritual.</i></div>
+    <div class="card"><b>📋 John</b>, Product Manager<i>“A global max hides exactly the agent you should worry about.”</i></div>
+    <div class="card"><b>💻 Amelia</b>, Senior Engineer<i>Found that the Today list never empties, so the end-of-round trigger couldn't fire.</i></div>
+    <div class="card"><b>👩‍💼 Hélène</b>, Sales Director (walk-on)<i>“Your footer is only worth it when it can be wrong in a way I notice.”</i></div>
+    <div class="card"><b>🔒 Vex</b>, Security Engineer (walk-on)<i>“A start and an end per agent per day is a timesheet. Name it.”</i></div>
+    <div class="card"><b>🧑‍🔧 Karim</b>, Field Agent (walk-on)<i>“Wednesday I'll forget.” The owner answered: no swipe, no round.</i></div>
+    <div class="card"><b>🧑‍💼 Dana</b>, Canvassing Owner (generated)<i>“If the dot is green and Karim's visits aren't there, I'll stop trusting the dot.”</i></div>
+  </div>
+</main>
+<footer>_bmad-output/forge/admin-sync-status-meaning · forged-idea.md is the hand-off</footer>
+</body>
+</html>

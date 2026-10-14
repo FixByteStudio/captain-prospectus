@@ -11,7 +11,7 @@ import { onlineManager } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { copy } from "../copy";
 import { ORPHANS_PAGE_SIZE } from "../../shared/constants";
-import type { DashboardResponse } from "../../shared/schemas";
+import type { DashboardResponse, RecapResponse } from "../../shared/schemas";
 import { AdminApp } from "./AdminApp";
 
 const DASHBOARD: DashboardResponse = {
@@ -40,6 +40,15 @@ const DASHBOARD: DashboardResponse = {
   inactiveAgentProspects: 0,
 };
 
+const RECAP: RecapResponse = {
+  date: "2026-10-14",
+  activeAgents: 1,
+  rosterSize: 2,
+  visitsToday: 12,
+  lastReceivedAt: 0,
+  serverTime: 4 * 60_000,
+};
+
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -62,6 +71,7 @@ beforeEach(() => {
         return json({ pairs: [], truncated: false });
       if (url.startsWith("/api/admin/visits/orphaned")) return json(orphans);
       if (url.startsWith("/api/admin/visits?")) return json({ visits: [], serverTime: 0 });
+      if (url.startsWith("/api/admin/recap")) return json(RECAP);
       return new Response("{}", { status: 404 });
     }),
   );
@@ -130,6 +140,13 @@ describe("AdminApp", () => {
     expect(second.queryByText("278")).toBeNull();
     expect(await second.findByText("278")).toBeTruthy();
     expect(dashboardCalls().length).toBeGreaterThan(before);
+  });
+
+  it("ends the sidebar with the recap card on every admin path", async () => {
+    renderAdmin("/admin/inconnu");
+
+    const line = await screen.findByText("1 / 2 agents actifs");
+    expect(line.closest("[data-slot=sidebar-footer]")).toBeTruthy();
   });
 
   it("registers /admin/agents: the Agents screen opens", async () => {

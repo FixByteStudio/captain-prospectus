@@ -251,6 +251,23 @@ share the band's look and tokens, but each owns its frame: the admin frame
 (sidebar and top bar) ships in the admin chunk, and the field band carries the
 sync state.
 
+The sidebar ends with the **recap card** in its footer, on every admin page: the
+day's story in small type, before the admin opens a screen. An admin has no sync
+of their own, so it never says "synchronisé"; it reports what the agents sent
+(forge `admin-sync-status-meaning`). The Brussels day heads it in the overline
+style ("MARDI 14 OCTOBRE"), then three `text-xs` lines on `band-accent`: a dot
+and "1 / 2 agents actifs", "12 visites", and in `band-muted` "Dernière visite
+reçue il y a 4 min". Actif means an agent on the roster with a visit received
+that day, so the figure never passes the roster; the visits are every visit
+received that day; all three read `received_at`, the server's clock. The dot is
+`success` while anyone is active and `band-muted` otherwise. It is not a verdict:
+there are no working hours, so no amber. With nothing yet, the lines read
+"0 / 2 agents actifs" and "Aucune visite". The card is capped at the date and
+those three lines, carries no email, avatar, menu or link, and is absent while
+its query loads or has failed. In the rail it shrinks to an `Info` icon tile
+whose Tooltip and accessible name carry the same four lines; the drawer shows it
+in full. See [`api.md`](api.md) for `GET /api/admin/recap`.
+
 The top bar (GH #64) sits beside the sidebar toggle, left to right: the
 breadcrumb, a flexible gap, search, the notifications bell, the theme toggle
 and the avatar menu. The breadcrumb reads "Captain Prospectus › {group} ›

@@ -526,6 +526,23 @@ export const agentsResponseSchema = z.object({
 });
 export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
 
+/**
+ * The admin sidebar's recap card — docs/api.md › The recap card. Every figure
+ * reads `received_at` over one Brussels day, `date`.
+ */
+export const recapResponseSchema = z.object({
+  /** The Brussels calendar date, `YYYY-MM-DD`. */
+  date: z.iso.date(),
+  /** Roster members with a visit received that day, so never above `rosterSize`. */
+  activeAgents: countSchema,
+  rosterSize: countSchema,
+  visitsToday: countSchema,
+  lastReceivedAt: z.nullable(epochMsSchema),
+  /** The server's clock, so the card's "il y a …" never reads the device's. */
+  serverTime: epochMsSchema,
+});
+export type RecapResponse = z.infer<typeof recapResponseSchema>;
+
 export const agentEmailParamSchema = z.object({ email: emailSchema });
 
 /* ------------------------------------------------------------ /api/admin/users */

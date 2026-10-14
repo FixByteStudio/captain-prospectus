@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mockup — admin sidebar recap card</title>
+<style>
+  @font-face { font-family: "Archivo Variable"; src: url("file:///home/m0/PROJECTs/captain-prospectus/node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  /* Tokens copied from src/client/styles/app.css (light :root, then .dark). */
+  .light { --background:#f6f7f0; --foreground:#1b2a4a; --card:#fff; --muted-foreground:#5a6478; --border:#d7dae2;
+           --primary:#c9a227; --primary-foreground:#1b2a4a; --primary-edge:#a8801a; --success:#1f6f4a; --warn:#9a5b18;
+           --band:#1b2a4a; --band-foreground:#eef0f4; --band-muted:#95a0b8; --band-accent:#ffffff14; --band-border:#ffffff1f; }
+  .dark  { --background:#101726; --foreground:#e7eaf0; --card:#182031; --muted-foreground:#97a2b8; --border:#2b3547;
+           --primary:#d9b43c; --primary-foreground:#141c2e; --primary-edge:#e6c65c; --success:#4fa97d; --warn:#d98a3c;
+           --band:#0b1120; --band-foreground:#e7eaf0; --band-muted:#7d899f; --band-accent:#ffffff0f; --band-border:#ffffff14; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 32px 36px; background:#e4e6df; font-family:"Archivo Variable", system-ui, sans-serif; color:#1b2a4a; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { font-size:13px; color:#5a6478; margin:0 0 22px; }
+  .row { display:flex; gap:26px; align-items:flex-start; }
+  .label { font-size:12px; font-weight:600; color:#5a6478; margin:0 0 8px; letter-spacing:.2px; }
+  .frame { display:flex; height:640px; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(20,30,50,.18); background:var(--background); }
+  .sidebar { width:256px; background:var(--band); color:var(--band-foreground); display:flex; flex-direction:column; }
+  .rail .sidebar { width:48px; }
+  .head { height:56px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--band-border); flex-shrink:0; }
+  .rail .head { padding:0 10px; }
+  .mark { width:28px; height:28px; border-radius:7px; background:var(--primary); display:grid; place-items:center; color:var(--primary-foreground); font-weight:800; font-size:13px; flex-shrink:0; box-shadow:inset 0 0 0 1px var(--primary-edge); }
+  .word { font-weight:700; font-size:15px; }
+  .nav { flex:1; padding:6px 8px; overflow:hidden; }
+  .group { font-size:10.5px; font-weight:600; letter-spacing:.9px; text-transform:uppercase; color:var(--band-muted); height:32px; display:flex; align-items:center; padding:10px 8px 0; }
+  .item { height:36px; display:flex; align-items:center; gap:10px; padding:0 8px; border-radius:6px; font-size:14px; position:relative; }
+  .rail .item { justify-content:center; padding:0; }
+  .item.active { background:var(--primary); color:var(--primary-foreground); box-shadow:inset 0 0 0 1px var(--primary-edge); font-weight:600; }
+  .item svg { width:16px; height:16px; flex-shrink:0; }
+  .badge { margin-left:auto; background:var(--warn); color:#fff; font-size:11px; font-weight:700; border-radius:999px; padding:1px 7px; }
+  .rail .badgedot { position:absolute; top:4px; left:20px; width:8px; height:8px; border-radius:50%; background:var(--warn); }
+  /* The footer and its recap card. */
+  .foot { border-top:1px solid var(--band-border); padding:10px 8px 12px; flex-shrink:0; }
+  .card { background:var(--band-accent); border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.45; }
+  .over { font-size:10.5px; font-weight:600; letter-spacing:.9px; text-transform:uppercase; color:var(--band-muted); margin-bottom:3px; }
+  .headline { display:flex; align-items:center; gap:7px; font-weight:560; letter-spacing:.1px; color:var(--band-foreground); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--success); flex-shrink:0; }
+  .dot.off { background:var(--band-muted); }
+  .line { color:var(--band-foreground); padding-left:15px; }
+  .meta { color:var(--band-muted); padding-left:15px; }
+  .tnum { font-variant-numeric:tabular-nums; }
+  .who { display:flex; align-items:center; gap:8px; margin-top:9px; padding-top:9px; border-top:1px solid var(--band-border); color:var(--band-muted); font-size:12px; }
+  .ini { width:24px; height:24px; border-radius:50%; background:var(--primary); color:var(--primary-foreground); box-shadow:inset 0 0 0 1px var(--primary-edge); display:grid; place-items:center; font-size:10px; font-weight:700; flex-shrink:0; position:relative; }
+  .rail .ini { width:32px; height:32px; font-size:12px; }
+  .ini .pip { position:absolute; right:-1px; bottom:-1px; width:10px; height:10px; border-radius:50%; background:var(--success); box-shadow:0 0 0 2px var(--band); }
+  .rail .foot { display:flex; justify-content:center; padding:10px 0 14px; }
+  .pulse { width:32px; height:32px; border-radius:8px; background:var(--band-accent); display:grid; place-items:center; box-shadow:inset 0 0 0 1px var(--band-border); }
+  /* Content stub beside the sidebar. */
+  .main { width:170px; display:flex; flex-direction:column; }
+  .rail .main { width:240px; position:relative; }
+  .top { height:56px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; flex-shrink:0; }
+  .stub { height:10px; border-radius:4px; background:var(--border); }
+  .page { padding:20px 16px; display:flex; flex-direction:column; gap:12px; }
+  .kpi { height:74px; border-radius:8px; background:var(--card); border:1px solid var(--border); }
+  .avatar { margin-left:auto; width:32px; height:32px; border-radius:50%; background:var(--primary); box-shadow:inset 0 0 0 1px var(--primary-edge); color:var(--primary-foreground); font-size:12px; font-weight:700; display:grid; place-items:center; }
+  .tip { position:absolute; left:8px; bottom:14px; background:var(--foreground); color:var(--background); border-radius:6px; padding:8px 10px; font-size:12px; line-height:1.45; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .tip::before { content:""; position:absolute; left:-5px; bottom:15px; border:5px solid transparent; border-right-color:var(--foreground); border-left:0; }
+  .tip .m { opacity:.7; }
+  .states { display:flex; gap:18px; margin-top:26px; }
+  .state { width:256px; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(20,30,50,.18); background:var(--band); }
+  .state .sidebar { width:auto; }
+  .note { font-size:12px; color:#5a6478; margin-top:22px; max-width:1180px; line-height:1.5; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+</svg>
+
+<h1>Admin sidebar: recap card (mockup, variant B)</h1>
+<p class="sub">The date heads the card; no email and no avatar. Tokens from <code>app.css</code>. Full sidebar ≥ 1024px, icon rail 768–1023px.</p>
+
+<div class="row">
+  <div>
+    <p class="label">≥ 1024px · clair</p>
+    <div class="frame light">
+      <div class="sidebar">
+        <div class="head"><div class="mark">CP</div><div class="word">Captain Prospectus</div></div>
+        <div class="nav">
+          <div class="group">Pilotage</div>
+          <div class="item active"><svg><use href="#i-dash"/></svg>Tableau de bord</div>
+          <div class="item"><svg><use href="#i-users"/></svg>Agents</div>
+          <div class="group">Prospects</div>
+          <div class="item"><svg><use href="#i-store"/></svg>Prospects</div>
+          <div class="item"><svg><use href="#i-upload"/></svg>Import</div>
+          <div class="item"><svg><use href="#i-copy"/></svg>Doublons<span class="badge tnum">3</span></div>
+          <div class="group">Terrain</div>
+          <div class="item"><svg><use href="#i-pin"/></svg>Visites</div>
+          <div class="item"><svg><use href="#i-link"/></svg>À rattacher<span class="badge tnum">2</span></div>
+          <div class="item"><svg><use href="#i-doc"/></svg>Scripts</div>
+          <div class="item"><svg><use href="#i-route"/></svg>Tournée du jour</div>
+        </div>
+        <div class="foot"><div class="card">
+          <div class="over tnum">Mercredi 14 octobre</div>
+          <div class="headline"><span class="dot"></span><span class="tnum">1 / 2 agents actifs</span></div>
+          <div class="line tnum">12 visites</div>
+          <div class="meta">Dernière visite reçue il y a 4 min</div>
+        </div></div>
+      </div>
+      <div class="main"><div class="top"><div class="stub" style="width:70px"></div><div class="avatar">AD</div></div>
+        <div class="page"><div class="stub" style="width:120px;height:14px"></div><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div></div></div>
+    </div>
+  </div>
+  <div>
+    <p class="label">≥ 1024px · sombre</p>
+    <div class="frame dark">
+      <div class="sidebar">
+        <div class="head"><div class="mark">CP</div><div class="word">Captain Prospectus</div></div>
+        <div class="nav">
+          <div class="group">Pilotage</div>
+          <div class="item active"><svg><use href="#i-dash"/></svg>Tableau de bord</div>
+          <div class="item"><svg><use href="#i-users"/></svg>Agents</div>
+          <div class="group">Prospects</div>
+          <div class="item"><svg><use href="#i-store"/></svg>Prospects</div>
+          <div class="item"><svg><use href="#i-upload"/></svg>Import</div>
+          <div class="item"><svg><use href="#i-copy"/></svg>Doublons<span class="badge tnum">3</span></div>
+          <div class="group">Terrain</div>
+          <div class="item"><svg><use href="#i-pin"/></svg>Visites</div>
+          <div class="item"><svg><use href="#i-link"/></svg>À rattacher<span class="badge tnum">2</span></div>
+          <div class="item"><svg><use href="#i-doc"/></svg>Scripts</div>
+          <div class="item"><svg><use href="#i-route"/></svg>Tournée du jour</div>
+        </div>
+        <div class="foot"><div class="card">
+          <div class="over tnum">Mercredi 14 octobre</div>
+          <div class="headline"><span class="dot"></span><span class="tnum">1 / 2 agents actifs</span></div>
+          <div class="line tnum">12 visites</div>
+          <div class="meta">Dernière visite reçue il y a 4 min</div>
+        </div></div>
+      </div>
+      <div class="main"><div class="top"><div class="stub" style="width:70px"></div><div class="avatar">AD</div></div>
+        <div class="page"><div class="stub" style="width:120px;height:14px"></div><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div></div></div>
+    </div>
+  </div>
+  <div>
+    <p class="label">768–1023px · rail : icône Info + infobulle</p>
+    <div class="frame light rail">
+      <div class="sidebar">
+        <div class="head"><div class="mark">CP</div></div>
+        <div class="nav" style="padding:6px 6px">
+          <div style="height:12px"></div>
+          <div class="item active"><svg><use href="#i-dash"/></svg></div>
+          <div class="item"><svg><use href="#i-users"/></svg></div>
+          <div style="height:12px"></div>
+          <div class="item"><svg><use href="#i-store"/></svg></div>
+          <div class="item"><svg><use href="#i-upload"/></svg></div>
+          <div class="item"><svg><use href="#i-copy"/></svg><span class="badgedot"></span></div>
+          <div style="height:12px"></div>
+          <div class="item"><svg><use href="#i-pin"/></svg></div>
+          <div class="item"><svg><use href="#i-link"/></svg><span class="badgedot"></span></div>
+          <div class="item"><svg><use href="#i-doc"/></svg></div>
+          <div class="item"><svg><use href="#i-route"/></svg></div>
+        </div>
+        <div class="foot"><span class="pulse" style="color:var(--band-foreground)"><svg width="16" height="16"><use href="#i-info"/></svg></span></div>
+      </div>
+      <div class="main"><div class="top"><div class="stub" style="width:70px"></div><div class="avatar">AD</div></div>
+        <div class="page"><div class="kpi"></div><div class="kpi"></div></div>
+        <div class="tip">
+          <div class="m tnum">Mercredi 14 octobre</div>
+          <div class="tnum"><b>1 / 2 agents actifs</b></div>
+          <div class="tnum">12 visites</div>
+          <div class="m">Dernière visite reçue il y a 4 min</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="label" style="margin-top:28px">Les autres états de la carte (clair)</p>
+<div class="states">
+  <div class="state light"><div class="sidebar"><div class="foot" style="border-top:0"><div class="card">
+          <div class="over tnum">Mercredi 14 octobre</div>
+          <div class="headline"><span class="dot off"></span><span class="tnum">0 / 2 agents actifs</span></div>
+          <div class="line tnum">Aucune visite</div>
+        </div></div></div></div>
+  <div class="state light"><div class="sidebar"><div class="foot" style="border-top:0"><div class="card">
+          <div class="over tnum">Mercredi 14 octobre</div>
+          <div class="headline"><span class="dot"></span><span class="tnum">1 / 1 agent actif</span></div>
+          <div class="line tnum">1 visite</div>
+          <div class="meta">Dernière visite reçue à l'instant</div>
+        </div></div></div></div>
+  <div class="state light"><div class="sidebar"><div class="foot" style="border-top:0"><div class="card">
+          <div class="over tnum">Mercredi 14 octobre</div>
+          <div class="headline"><span class="dot"></span><span class="tnum">2 / 2 agents actifs</span></div>
+          <div class="line tnum">31 visites</div>
+          <div class="meta">Dernière visite reçue il y a 3 h</div>
+        </div></div></div></div>
+  <div class="state light" style="background:var(--band);height:118px;display:grid;place-items:center;color:var(--band-muted);font-size:12px;border:1px dashed var(--band-border)">(pas de carte)</div>
+</div>
+<p class="note">States, left to right: nothing today (muted dot, no third line) · singular · 19:00 after a full day · loading or failed: no card at all, the sidebar ends after Tournée du jour. The top-bar avatar keeps the email and « Se déconnecter ».</p>
+</body>
+</html>

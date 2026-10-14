@@ -152,6 +152,20 @@ export const adminCopy = {
     logout: "Se déconnecter",
   },
 
+  /** The sidebar's recap card (docs/design.md › Layout). The date heads it, so
+   * no line repeats « aujourd'hui »; agreement follows the roster's size. */
+  recap: {
+    /** The rail's Info button reads the whole card as its name. */
+    summary: (lines: string[]) => `Récapitulatif du jour : ${lines.join(", ")}`,
+    agents: (active: number, roster: number) =>
+      `${formatCount(active)} / ${formatCount(roster)} ${roster <= 1 ? "agent actif" : "agents actifs"}`,
+    visits: (n: number) =>
+      n === 0 ? "Aucune visite" : `${formatCount(n)} ${n === 1 ? "visite" : "visites"}`,
+    receivedNow: "Dernière visite reçue à l'instant",
+    receivedMinutes: (n: number) => `Dernière visite reçue il y a ${formatCount(n)} min`,
+    receivedHours: (n: number) => `Dernière visite reçue il y a ${formatCount(n)} h`,
+  },
+
   /** Tableau de bord at /admin (GH #107). */
   dashboard: {
     title: "Tableau de bord",
