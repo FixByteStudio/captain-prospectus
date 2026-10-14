@@ -69,7 +69,7 @@ try {
       // The Worker refuses a write without a same-origin Origin (src/worker/origin.ts).
       headers: { "Content-Type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify({
-        clientVersion: 1,
+        clientVersion: 2,
         prospects: [],
         visits: ids.slice(0, size).map((prospectId, i) => ({
           id: crypto.randomUUID(),

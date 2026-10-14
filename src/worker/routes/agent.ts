@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { validator } from "hono/validator";
 import { desc, eq, inArray } from "drizzle-orm";
 import { MIN_CLIENT_VERSION, VISIT_HISTORY_LIMIT } from "../../shared/constants";
+import { brusselsMidnightDaysFromNow } from "../../shared/period";
 import { chunk } from "../../shared/chunk";
 import { dedupeKey } from "../../shared/dedupe";
 import { foldForSearch } from "../../shared/search";
@@ -19,7 +20,9 @@ import { validate, validationFailed } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
 import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
 import { writeAgentPosition } from "../agent-position";
+import { doorDaysOn } from "../door-days";
 import { openAssignedProspects } from "../round";
+import { todayTournee, writeTournees } from "../tournee";
 import { deriveProspectStatus } from "./status";
 import { toWireProspect, toWireScript } from "./wire";
 import type { AppEnv } from "../types";
@@ -262,7 +265,11 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
   // have no settled prospect yet, and derive nothing until repaired.
   await deriveProspectStatus(db, touchedProspectIds, now);
 
-  // ---- 3b. The agent's latest reading (ADR-0028). Agents only: an admin
+  // ---- 3b. Tournées, then their stops (ADR-0036). Stops reference prospects,
+  // including field ones from step 1, so they come after it.
+  const acceptedTournee = await writeTournees(db, email, now, body.tournees, body.stops, idMap);
+
+  // ---- 3c. The agent's latest reading (ADR-0028). Agents only: an admin
   // walking a round from the field route stores nothing. A session or dev
   // identity always has an active `users` row, so the role is enough.
   if (body.position && role === "agent") {
@@ -280,12 +287,32 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
 
   const [activeScript] = await db.select().from(scripts).where(eq(scripts.isActive, true)).limit(1);
 
+  // Today's door-days are read once: they are the Carnet list and what keeps a
+  // visited stop from counting as left (ADR-0036).
+  const visitedStops = await doorDaysOn(db, {
+    dayStart: brusselsMidnightDaysFromNow(now, 0),
+    agentEmail: email,
+  });
+  const tournee = await todayTournee(
+    db,
+    email,
+    now,
+    new Set(visitedStops.map((d) => d.prospectId)),
+  );
+
   const response: SyncResponse = {
     serverTime: now,
-    accepted: { prospects: acceptedProspects, visits: acceptedVisits },
+    accepted: {
+      prospects: acceptedProspects,
+      visits: acceptedVisits,
+      tournees: acceptedTournee.tournees,
+      stops: acceptedTournee.stops,
+    },
     idMap,
     prospects: todayList.map(toWireProspect),
     script: activeScript ? toWireScript(activeScript) : null,
+    tournee,
+    visitedStops,
   };
   return c.json(response);
 });

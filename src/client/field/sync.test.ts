@@ -32,10 +32,12 @@ const visit = (over: Partial<Visit> = {}): Visit => ({
 
 const okResponse = (over: Partial<SyncResponse> = {}): SyncResponse => ({
   serverTime: 1_700_000_100_000,
-  accepted: { prospects: [], visits: [] },
+  accepted: { prospects: [], visits: [], tournees: [], stops: [] },
   idMap: {},
   prospects: [],
   script: null,
+  tournee: null,
+  visitedStops: [],
   ...over,
 });
 
@@ -68,7 +70,9 @@ describe("runSync — what clears the outbox", () => {
     const result = await runSync({
       db,
       identity: AGENT,
-      fetchFn: respondWith(okResponse({ accepted: { prospects: [], visits: [accepted.id] } })),
+      fetchFn: respondWith(
+        okResponse({ accepted: { prospects: [], visits: [accepted.id], tournees: [], stops: [] } }),
+      ),
     });
 
     expect(result.status).toBe("ok");
@@ -266,7 +270,7 @@ describe("runSync — dedupe collisions", () => {
       fetchFn: respondWith(
         okResponse({
           idMap: { [clientProspectId]: serverProspectId },
-          accepted: { prospects: [clientProspectId], visits: [] },
+          accepted: { prospects: [clientProspectId], visits: [], tournees: [], stops: [] },
         }),
       ),
     });
@@ -363,7 +367,12 @@ describe("runSync — visits per pass", () => {
     const fetchFn = (async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body)) as SyncRequest;
       sent.push(body.visits.length);
-      const accepted = { prospects: [], visits: body.visits.map((v) => v.id) };
+      const accepted = {
+        prospects: [],
+        visits: body.visits.map((v) => v.id),
+        tournees: [],
+        stops: [],
+      };
       return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
     }) as unknown as typeof fetch;
 
@@ -472,6 +481,8 @@ describe("runSync — rows written by another identity", () => {
       const accepted = {
         prospects: body.prospects.map((p) => p.id),
         visits: body.visits.map((v) => v.id),
+        tournees: [],
+        stops: [],
       };
       return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
     }) as unknown as typeof fetch;
@@ -602,6 +613,8 @@ describe("runSync — unconfirmed rows", () => {
       const accepted = {
         prospects: body.prospects.map((p) => p.id),
         visits: body.visits.map((v) => v.id),
+        tournees: [],
+        stops: [],
       };
       return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
     }) as unknown as typeof fetch;

@@ -385,6 +385,14 @@
   summary: No signal for when the server can lower its 200-visit accept limit, since `clientVersion` was not bumped (GH #451).
   evidence: Blind lens; the intent keeps 200 for old builds and forbids the bump, so retiring it needs a later decision.
 
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-498-sync-carries-tournee.md`
+  summary: Re-measure `POST /api/agent/sync` CPU with a tournée and stops in the request and the door-day and tournée reads in the pull (`node scripts/measure-sync-cpu.mjs`), before entry 3 ships the swipe.
+  evidence: The sync now runs doorDaysOn and todayTournee on every pass and up to ~20 stop statements; free-tier-budget.md's figures predate it and invariant 13 caps CPU at 10 ms.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-498-sync-carries-tournee.md`
+  summary: Decide whether a stop's `left` follows `merged_into` (a stop on a merged-away prospect whose survivor the agent visited today reads `left: true`).
+  evidence: `isStopLeft` checks the stop's own prospect and the door-days are keyed by the visit's prospect_id; entries 6 and 12 read `left`.
+
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-497-design-tournee-screens.md`
   summary: Carnet's « Rouvrir » on a door-day whose prospect has since been reassigned away from the agent would save a visit the server quarantines (ADR-0022); entries 2 and 8 should decide whether such a row stays a link.
   evidence: Carnet lists every door-day of today from the server's visited stops (design.md › Carnet), and a visit on a prospect assigned to another agent goes to visits_orphaned. Needs a flag in entry 2's visited-stops contract to grey the row; not settled by ADR-0036.

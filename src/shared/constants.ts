@@ -136,8 +136,8 @@ export function isOpen(status: Status): boolean {
  * raise MIN_CLIENT_VERSION only once every phone reports the new version; while
  * disposable, raise both together (ADR-0033).
  */
-export const CLIENT_VERSION = 1;
-export const MIN_CLIENT_VERSION = 1;
+export const CLIENT_VERSION = 2;
+export const MIN_CLIENT_VERSION = 2;
 
 /**
  * Payload caps.
@@ -159,6 +159,14 @@ export const IMPORT_ROWS_PER_REQUEST = 250;
 export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_VISITS_PER_BATCH = 50;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
+/**
+ * A tournée is one per agent per Brussels day (ADR-0036); a week's worth covers a
+ * phone that was offline for days. A bigger stop snapshot drains over passes.
+ */
+export const SYNC_TOURNEES_PER_REQUEST = 7;
+export const SYNC_STOPS_PER_REQUEST = 250;
+/** Highest stop number a tournée can hold: far above any real day, and it bounds the wire. */
+export const TOURNEE_STOP_NUMBER_MAX = 10_000;
 export const ADMIN_VISITS_PAGE_SIZE = 500;
 
 /** Coarsest fix worth keeping (metres): an IP-based one cannot order a walk (ADR-0028). */

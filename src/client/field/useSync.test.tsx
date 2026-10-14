@@ -23,10 +23,12 @@ function Probe() {
 
 const okBody = {
   serverTime: 1_700_000_100_000,
-  accepted: { prospects: [], visits: [] },
+  accepted: { prospects: [], visits: [], tournees: [], stops: [] },
   idMap: {},
   prospects: [],
   script: null,
+  tournee: null,
+  visitedStops: [],
 };
 
 const visit = (over: Partial<StoredVisit> = {}): StoredVisit => ({

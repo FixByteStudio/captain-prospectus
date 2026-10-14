@@ -23,7 +23,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 ## Agent
 | Route | Purpose |
 |---|---|
-| `POST /api/agent/sync` | Push outbox, pull today list + active script. A visit the server cannot take — unknown prospect, or a prospect not assigned to the sender — is quarantined and still reported in `accepted` ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md)). A visit may carry an optional `refusalReason` ([prospecting](domains/prospecting.md#refusal-reasons)). An optional `position` `{lat, lng, accuracy, capturedAt}` is stored for an assignable agent, newest wins, and an invalid one is dropped without failing the sync; the response never carries it ([ADR-0028](adr/0028-agent-position-at-sync.md)). See [field-operations](domains/field-operations.md#protocol) |
+| `POST /api/agent/sync` | Push outbox, pull today list + active script. A visit the server cannot take — unknown prospect, or a prospect not assigned to the sender — is quarantined and still reported in `accepted` ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md)). A visit may carry an optional `refusalReason` ([prospecting](domains/prospecting.md#refusal-reasons)). An optional `position` `{lat, lng, accuracy, capturedAt}` is stored for an assignable agent, newest wins, and an invalid one is dropped without failing the sync; the response never carries it ([ADR-0028](adr/0028-agent-position-at-sync.md)). Optional `tournees` `[{id, startedAt}]` and `stops` `[{id, tourneeId, prospectId, number, addedAt}]` carry the morning swipe, insert-only; a tournée's id is listed in `accepted.tournees` whether stored or lost, and a stop's in `accepted.stops` once stored or drained as unplaceable. A stop whose field prospect has not arrived yet is **not** listed, so the phone resends it; a phone sends a stop only in the same request as its tournée or after that tournée is accepted. The response returns `tournee` (today's Brussels day, `{id, dayStart, startedAt, stops: [{id, prospectId, number, addedAt, left}]}` in number order, or `null` before the first swipe) and `visitedStops` (today's door-days: `{prospectId, outcome, visitedAt, flyerGiven, visitIds, name, type, address}`, closed prospects included). `left` is derived, never stored ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)). See [field-operations](domains/field-operations.md#protocol) |
 | `GET /api/agent/prospects/:id/visits` | Last `VISIT_HISTORY_LIMIT` (20) visits of a prospect, newest first, `visitHistoryResponseSchema`. Agent: only if assigned to them; a non-UUID `:id` is 400, an unknown one 404. Narrower than the row — `clientVisitedAt`, `receivedAt` and `clientVersion` are clock-skew and upgrade diagnostics, not shown to an agent at a doorstep. Cached in Dexie `visitHistory` so the visit form still shows it offline |
 
 ## Admin
@@ -76,11 +76,12 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 ## Payload caps
 Every array is bounded, because one request must stay inside the Workers Free
 10 ms CPU budget (`docs/free-tier-budget.md`). The limits live in
-`src/shared/constants.ts`: 250 import rows, 200 visits and 100 field prospects
+`src/shared/constants.ts`: 250 import rows, 200 visits, 100 field prospects, 7 tournées and 250 stops
 per sync (the server's accept limit; a current phone sends at most 50 visits a
-pass, and an older build up to 200 — GH #404), 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign, 500 visits per live-feed page, 200 prospects
-per list page, 1000 candidates per Overpass import. A Google import is capped at 20 by
-Google itself.
+pass, and an older build up to 200 — GH #404). A stop's `number` is at most 10,000.
+Also 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign,
+500 visits per live-feed page, 200 prospects per list page and 1000 candidates per
+Overpass import. A Google import is capped at 20 by Google itself.
 
 Those cap **rows**. `MAX_REQUEST_BYTES` (2 MiB) caps **bytes**, Worker-wide, and is
 checked before any body is parsed — the two are not the same thing, because 200

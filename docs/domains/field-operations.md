@@ -140,9 +140,11 @@ the moment a live `/api/me` says who is really signed in
 `POST /api/agent/sync`
 ```json
 {
-  "clientVersion": 1,
+  "clientVersion": 2,
   "prospects": [{ "id": "uuid", "name": "…", "type": "food_truck", "lat": 0, "lng": 0 }],
   "visits": [{ "id": "uuid", "prospectId": "…", "visitedAt": 0, "outcome": "interested", "flyerGiven": true, "answers": {} }],
+  "tournees": [{ "id": "uuid", "startedAt": 0 }],
+  "stops": [{ "id": "uuid", "tourneeId": "uuid", "prospectId": "…", "number": 1, "addedAt": 0 }],
   "position": { "lat": 0, "lng": 0, "accuracy": 0, "capturedAt": 0 }
 }
 ```
@@ -152,18 +154,22 @@ Response
 ```json
 {
   "serverTime": 0,
-  "accepted": { "prospects": ["uuid"], "visits": ["uuid"] },
+  "accepted": { "prospects": ["uuid"], "visits": ["uuid"], "tournees": ["uuid"], "stops": ["uuid"] },
   "idMap": { "client-uuid": "existing-prospect-id" },
   "prospects": [],
-  "script": {}
+  "script": {},
+  "tournee": { "id": "uuid", "dayStart": 0, "startedAt": 0, "stops": [{ "id": "uuid", "prospectId": "…", "number": 1, "addedAt": 0, "left": false }] },
+  "visitedStops": [{ "prospectId": "…", "outcome": "converted", "visitedAt": 0, "flyerGiven": false, "visitIds": ["uuid"], "name": "…", "type": "restaurant", "address": null }]
 }
 ```
+`tournees` and `stops` are the morning swipe ([ADR-0036](../adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)); an admin syncing from the field gets their own tournée like an agent. `tournee` is the agent's tournée for today's Brussels day, stops in number order, or `null` before the first swipe. `left` is derived by the server: false once the agent has a visit on the stop today, otherwise true unless the prospect is still assigned to the agent, open and not merged. `visitedStops` lists today's door-days (one per prospect, the latest visit's outcome, flyer if any visit gave one), closed prospects included.
 
 ### Rules
-- **Order matters on the server:** field prospects first, then visits (visits may reference a prospect created in the same payload).
-- **Dedupe collision on a field prospect:** if the agent adds a place that already exists, the server keeps the existing prospect, returns `idMap[clientId] = existingId`, and rewrites `prospectId` on visits in the same payload. The client applies `idMap` to anything still in its outbox.
+- **Order matters on the server:** field prospects first, then visits (visits may reference a prospect created in the same payload), then tournées, then stops (a stop may reference a field prospect from the same payload, and a tournée from it too).
+- **Tournées and stops:** a tournée takes its Brussels day from its clamped `startedAt`, and the first one per agent and day wins. A phone sends a stop only in the same request as its tournée, or after that tournée was accepted; a stop for a tournée id the server does not hold, or that is not the sender's (the other phone's, lost on the day), is treated as lost and drained. The other phone's tournée, and its stops, are accepted and not stored, since they can never be attached later and an outbox row kept for them would retry for ever. A stop waits for its field prospect: one whose prospect (after `idMap`) does not exist yet is **not** accepted, and the phone resends it once the prospect is accepted; prospects are never deleted, so "unknown" only means "not arrived yet". A stop on a prospect reassigned since is stored and comes back with `left: true`.
+- **Dedupe collision on a field prospect:** if the agent adds a place that already exists, the server keeps the existing prospect, returns `idMap[clientId] = existingId`, and rewrites `prospectId` on visits and stops in the same payload. The client applies `idMap` to anything still in its outbox.
 - **Idempotency:** resending an accepted payload is a no-op. The client deletes outbox rows only after they appear in `accepted`. A visit the server already holds is listed in `accepted` again, so a phone that lost the first response can still clear its outbox instead of resending for ever.
-- **Bounded payload:** the client sends at most `SYNC_VISITS_PER_BATCH` visits and `SYNC_PROSPECTS_PER_REQUEST` field prospects per sync (`src/shared/constants.ts`) and repeats until the outbox is empty. A phone offline for a week must not build one request that exceeds the Worker's CPU budget. The server accepts up to `SYNC_VISITS_PER_REQUEST` visits, which older builds send; why the two differ is in [free-tier-budget](../free-tier-budget.md#watch-outs) (GH #404). `MAX_DRAIN_PASSES` is derived from the batch, so one trigger drains up to `DRAIN_VISITS` (`src/client/field/sync-schedule.ts`).
+- **Bounded payload:** the client sends at most `SYNC_VISITS_PER_BATCH` visits and `SYNC_PROSPECTS_PER_REQUEST` field prospects per sync, and the server accepts at most `SYNC_TOURNEES_PER_REQUEST` tournées and `SYNC_STOPS_PER_REQUEST` stops (a bigger snapshot drains over passes; a stop `number` is at most `TOURNEE_STOP_NUMBER_MAX`) (`src/shared/constants.ts`) and repeats until the outbox is empty. A phone offline for a week must not build one request that exceeds the Worker's CPU budget. The server accepts up to `SYNC_VISITS_PER_REQUEST` visits, which older builds send; why the two differ is in [free-tier-budget](../free-tier-budget.md#watch-outs) (GH #404). `MAX_DRAIN_PASSES` is derived from the batch, so one trigger drains up to `DRAIN_VISITS` (`src/client/field/sync-schedule.ts`).
 - **"Repeats" means while it is making progress.** `shouldDrain` (`src/client/field/sync-schedule.ts`) goes again only after a pass that succeeded, left rows behind **and** had something listed in `accepted`. The outbox slice is taken from the front, so a pass that accepted nothing would build the identical request again. Since ADR-0022 a quarantined visit is listed in `accepted` too, which is correct — the outbox really is draining, and the front of the queue really does move — so the condition now guards only against a pass the server rejected outright. The pass cap stays as the backstop above it.
 - **A visit the server cannot take is quarantined, not dropped and not refused.**
   Two cases: its `prospectId` resolves to nothing, or the prospect belongs to another

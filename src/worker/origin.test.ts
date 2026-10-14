@@ -1,5 +1,6 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { CLIENT_VERSION } from "../shared/constants";
 import worker from "./index";
 import { testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT } from "../../test/users";
@@ -12,7 +13,7 @@ import { workerFetch } from "../../test/worker-fetch";
  */
 
 const HOST = "https://captain.example";
-const SYNC_BODY = JSON.stringify({ clientVersion: 1, prospects: [], visits: [] });
+const SYNC_BODY = JSON.stringify({ clientVersion: CLIENT_VERSION, prospects: [], visits: [] });
 
 /** Sends the request exactly as given: no default Origin, unlike workerFetch. */
 async function rawFetch(path: string, init: RequestInit): Promise<Response> {

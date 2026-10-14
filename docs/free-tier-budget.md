@@ -49,6 +49,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 
 ## Watch-outs
 
+- **The sync pull also reads today's door-days and tournée each pass** (`doorDaysOn`, `todayTournee`, ADR-0036), and a request may carry tournées and stops. Not yet measured; `scripts/measure-sync-cpu.mjs` now sends `clientVersion` 2, re-run it before the swipe ships.
 - **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
   Each call reads about the day's received visits plus the `users` rows, so the cost grows

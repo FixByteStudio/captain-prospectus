@@ -2,7 +2,12 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { ADMIN_VISITS_PAGE_SIZE, IMPORT_STALE_MS, type RefusalReason } from "../shared/constants";
+import {
+  ADMIN_VISITS_PAGE_SIZE,
+  CLIENT_VERSION,
+  IMPORT_STALE_MS,
+  type RefusalReason,
+} from "../shared/constants";
 import { agentPositions, importBatches, imports, prospects, scripts, visits } from "./db/schema";
 import type {
   AdminVisitsResponse,
@@ -1359,7 +1364,11 @@ describe("merging duplicates", () => {
     });
     await post("/api/admin/prospects/merge", { survivorId: renamed, mergedId: original });
 
-    const sync = await post("/api/agent/sync", { clientVersion: 1, prospects: [], visits: [] });
+    const sync = await post("/api/agent/sync", {
+      clientVersion: CLIENT_VERSION,
+      prospects: [],
+      visits: [],
+    });
     const body = (await sync.json()) as { prospects: Prospect[] };
     expect(body.prospects.map((p) => p.id)).toEqual([renamed]);
   });

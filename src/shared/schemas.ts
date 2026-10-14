@@ -52,7 +52,10 @@ import {
   STATUSES,
   SOURCES,
   SYNC_PROSPECTS_PER_REQUEST,
+  SYNC_STOPS_PER_REQUEST,
+  SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_REQUEST,
+  TOURNEE_STOP_NUMBER_MAX,
 } from "./constants";
 
 /* ---------------------------------------------------------------- primitives */
@@ -665,6 +668,25 @@ export const visitSchema = z
   );
 export type Visit = z.infer<typeof visitSchema>;
 
+/** A tournée the swipe started. The agent comes from the session, the day from the server. */
+export const tourneeSyncSchema = z.object({
+  id: uuidSchema,
+  /** Phone clock. The server clamps it to received_at on insert (INVARIANT 12). */
+  startedAt: epochMsSchema,
+});
+export type TourneeSync = z.infer<typeof tourneeSyncSchema>;
+
+/** One numbered stop of a tournée (ADR-0036). */
+export const tourneeStopSyncSchema = z.object({
+  id: uuidSchema,
+  tourneeId: uuidSchema,
+  prospectId: uuidSchema,
+  number: z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX)),
+  /** Phone clock. The server clamps it to received_at on insert (INVARIANT 12). */
+  addedAt: epochMsSchema,
+});
+export type TourneeStopSync = z.infer<typeof tourneeStopSyncSchema>;
+
 export const syncRequestSchema = z.object({
   clientVersion: z.int().check(z.positive()),
   prospects: z._default(
@@ -672,10 +694,50 @@ export const syncRequestSchema = z.object({
     [],
   ),
   visits: z._default(z.array(visitSchema).check(z.maxLength(SYNC_VISITS_PER_REQUEST)), []),
+  tournees: z._default(
+    z.array(tourneeSyncSchema).check(z.maxLength(SYNC_TOURNEES_PER_REQUEST)),
+    [],
+  ),
+  stops: z._default(z.array(tourneeStopSyncSchema).check(z.maxLength(SYNC_STOPS_PER_REQUEST)), []),
   /** An invalid value parses to undefined: it never fails the sync (ADR-0028, INVARIANT 5). */
   position: z.catch(z.optional(agentPositionSchema), undefined),
 });
 export type SyncRequest = z.infer<typeof syncRequestSchema>;
+
+/** A stop of today's tournée, with the flag the server derives (`isStopLeft`). */
+export const tourneeStopSchema = z.object({
+  id: uuidSchema,
+  prospectId: uuidSchema,
+  number: z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX)),
+  addedAt: epochMsSchema,
+  /** Left the agent's open work unvisited: reassigned, closed or merged (ADR-0036). */
+  left: z.boolean(),
+});
+export type TourneeStop = z.infer<typeof tourneeStopSchema>;
+
+export const todayTourneeSchema = z.object({
+  id: uuidSchema,
+  dayStart: epochMsSchema,
+  startedAt: epochMsSchema,
+  /** In number order. */
+  stops: z.array(tourneeStopSchema),
+});
+export type TodayTournee = z.infer<typeof todayTourneeSchema>;
+
+/** A door-day: one prospect the agent visited today, as Carnet and the counter read it. */
+export const visitedStopSchema = z.object({
+  prospectId: uuidSchema,
+  /** The latest visit's outcome. */
+  outcome: outcomeSchema,
+  visitedAt: epochMsSchema,
+  /** Any of the day's visits gave a flyer. */
+  flyerGiven: z.boolean(),
+  visitIds: z.array(uuidSchema),
+  name: z.string(),
+  type: prospectTypeSchema,
+  address: z.nullable(z.string()),
+});
+export type VisitedStop = z.infer<typeof visitedStopSchema>;
 
 export const syncResponseSchema = z.object({
   serverTime: epochMsSchema,
@@ -685,6 +747,9 @@ export const syncResponseSchema = z.object({
   accepted: z.object({
     prospects: z.array(uuidSchema),
     visits: z.array(uuidSchema),
+    /** Taken or deliberately dropped (a lost day, an unknown prospect), like visits. */
+    tournees: z.array(uuidSchema),
+    stops: z.array(uuidSchema),
   }),
   /**
    * Field-prospect dedupe collisions: clientId -> the existing prospect's id.
@@ -693,6 +758,10 @@ export const syncResponseSchema = z.object({
   idMap: z.record(uuidSchema, uuidSchema),
   prospects: z.array(prospectSchema),
   script: z.nullable(scriptSchema),
+  /** The agent's tournée for today's Brussels day, or null before the first swipe. */
+  tournee: z.nullable(todayTourneeSchema),
+  /** Today's door-days, closed prospects included (ADR-0036). */
+  visitedStops: z.array(visitedStopSchema),
 });
 export type SyncResponse = z.infer<typeof syncResponseSchema>;
 

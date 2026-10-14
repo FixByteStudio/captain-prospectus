@@ -3,19 +3,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { boundParamsPerRow, getDb } from "./db/client";
 import { chunk } from "../shared/chunk";
-import { agentPositions, prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { dedupeKey } from "../shared/dedupe";
+import { DAY_MS } from "../shared/constants";
+import { brusselsMidnightDaysFromNow } from "../shared/period";
+import {
+  agentPositions,
+  prospects,
+  scripts,
+  tourneeStops,
+  tournees,
+  visits,
+  visitsOrphaned,
+} from "./db/schema";
 import { visitHistoryResponseSchema } from "../shared/schemas";
 import type { Outcome } from "../shared/constants";
 import { OUTCOMES, OUTCOME_TO_STATUS } from "../shared/constants";
 import {
+  CLIENT_VERSION,
   MAX_REQUEST_BYTES,
   SCRIPT_QUESTIONS_MAX,
+  SYNC_STOPS_PER_REQUEST,
+  SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_REQUEST,
+  TOURNEE_STOP_NUMBER_MAX,
 } from "../shared/constants";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
 import { workerFetch } from "../../test/worker-fetch";
-import { resetTestUsers, seedUser } from "../../test/users";
+import { testSessionCookie } from "../../test/session";
+import { TEST_AGENT, resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * Routes against a real D1, built by the real migrations.
@@ -33,7 +49,7 @@ async function sync(body: Partial<SyncRequest>): Promise<Response> {
   return call("/api/agent/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clientVersion: 1, prospects: [], visits: [], ...body }),
+    body: JSON.stringify({ clientVersion: CLIENT_VERSION, prospects: [], visits: [], ...body }),
   });
 }
 
@@ -71,7 +87,9 @@ async function seedProspects(ids: readonly string[], owner: string | null = AGEN
 
 beforeEach(async () => {
   const db = getDb(env.DB);
-  // Order matters: visits reference both of the others by foreign key.
+  // Order matters: stops reference tournées and prospects, visits reference prospects.
+  await db.delete(tourneeStops);
+  await db.delete(tournees);
   await db.delete(visits);
   // No foreign keys of its own, but it holds rows across tests just the same.
   await db.delete(visitsOrphaned);
@@ -378,7 +396,7 @@ describe("POST /api/agent/sync", () => {
     const prospectId = crypto.randomUUID();
     await seedProspect(prospectId);
     await sync({
-      clientVersion: 1,
+      clientVersion: CLIENT_VERSION,
       visits: [
         {
           id: crypto.randomUUID(),
@@ -393,7 +411,7 @@ describe("POST /api/agent/sync", () => {
 
     const db = getDb(env.DB);
     const [stored] = await db.select().from(visits);
-    expect(stored?.clientVersion).toBe(1);
+    expect(stored?.clientVersion).toBe(CLIENT_VERSION);
   });
 
   it("answers 426 for a build below the minimum supported version", async () => {
@@ -543,7 +561,7 @@ describe("POST /api/agent/sync", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientVersion: 1,
+          clientVersion: CLIENT_VERSION,
           prospects: [],
           visits: ids.map((prospectId, i) => ({
             id: crypto.randomUUID(),
@@ -1400,5 +1418,377 @@ describe("agent position at sync (ADR-0028)", () => {
     env.DEV_USER_EMAIL = AGENT_ONLY;
     await sync({ position: reading(Date.now() - 48 * 3_600_000) });
     expect(await stored()).toHaveLength(0);
+  });
+});
+
+describe("tournée at sync (ADR-0036)", () => {
+  const OTHER = TEST_AGENT;
+
+  const tourneeOf = (startedAt = Date.now()) => ({ id: crypto.randomUUID(), startedAt });
+  const stopOf = (tourneeId: string, prospectId: string, number: number) => ({
+    id: crypto.randomUUID(),
+    tourneeId,
+    prospectId,
+    number,
+    addedAt: Date.now(),
+  });
+  const visitOf = (
+    prospectId: string,
+    outcome: Outcome,
+    over: { visitedAt?: number; flyerGiven?: boolean } = {},
+  ) => ({
+    id: crypto.randomUUID(),
+    prospectId,
+    visitedAt: over.visitedAt ?? Date.now(),
+    flyerGiven: over.flyerGiven ?? false,
+    outcome,
+    answers: {},
+  });
+  const bodyOf = async (response: Response) => (await response.json()) as SyncResponse;
+
+  /** A stored visit, bypassing sync's ownership rule and its clamp to "now". */
+  async function insertVisit(prospectId: string, agentEmail: string, visitedAt: number) {
+    await getDb(env.DB).insert(visits).values({
+      id: crypto.randomUUID(),
+      prospectId,
+      agentEmail,
+      visitedAt,
+      clientVisitedAt: visitedAt,
+      receivedAt: visitedAt,
+      flyerGiven: false,
+      outcome: "interested",
+      answers: {},
+      clientVersion: CLIENT_VERSION,
+    });
+  }
+
+  async function asOther(body: Partial<SyncRequest>): Promise<Response> {
+    const saved = env.DEV_USER_EMAIL;
+    try {
+      env.DEV_USER_EMAIL = OTHER;
+      return await sync(body);
+    } finally {
+      env.DEV_USER_EMAIL = saved;
+    }
+  }
+
+  async function swipe(count: number) {
+    const ids = Array.from({ length: count }, () => crypto.randomUUID());
+    await seedProspects(ids);
+    const t = tourneeOf();
+    const stops = ids.map((id, i) => stopOf(t.id, id, i + 1));
+    return { ids, t, stops };
+  }
+
+  it("stores a swipe, accepts every id and returns the tournée with its stops", async () => {
+    const { t, stops } = await swipe(20);
+    const body = await bodyOf(await sync({ tournees: [t], stops }));
+
+    expect(body.accepted.tournees).toEqual([t.id]);
+    expect(body.accepted.stops).toEqual(stops.map((s) => s.id));
+    expect(body.tournee?.id).toBe(t.id);
+    expect(body.tournee?.dayStart).toBe(brusselsMidnightDaysFromNow(Date.now(), 0));
+    expect(body.tournee?.stops.map((s) => [s.id, s.number, s.left])).toEqual(
+      stops.map((s) => [s.id, s.number, false]),
+    );
+    const db = getDb(env.DB);
+    expect(await db.select().from(tournees)).toHaveLength(1);
+    expect(await db.select().from(tourneeStops)).toHaveLength(20);
+  });
+
+  it("gives a second session of the same agent the same tournée and numbers", async () => {
+    const { t, stops } = await swipe(3);
+    const first = await bodyOf(await sync({ tournees: [t], stops }));
+    const second = await bodyOf(await sync({}));
+    expect(second.tournee).toEqual(first.tournee);
+    expect(second.accepted.tournees).toEqual([]);
+  });
+
+  it("writes nothing twice when the same batch is sent again", async () => {
+    const { t, stops } = await swipe(20);
+    const first = await bodyOf(await sync({ tournees: [t], stops }));
+    const again = await bodyOf(await sync({ tournees: [t], stops }));
+
+    expect(again.accepted).toEqual(first.accepted);
+    expect(again.tournee).toEqual(first.tournee);
+    const db = getDb(env.DB);
+    expect(await db.select().from(tournees)).toHaveLength(1);
+    expect(await db.select().from(tourneeStops)).toHaveLength(20);
+  });
+
+  it("keeps the first swipe of the day and drains the losing phone", async () => {
+    const { ids, t, stops } = await swipe(3);
+    await sync({ tournees: [t], stops });
+
+    const t2 = tourneeOf();
+    const stops2 = ids.map((id, i) => stopOf(t2.id, id, 3 - i));
+    const body = await bodyOf(await sync({ tournees: [t2], stops: stops2 }));
+
+    expect(body.accepted.tournees).toEqual([t2.id]);
+    expect(body.accepted.stops).toEqual(stops2.map((s) => s.id));
+    expect(body.tournee?.id).toBe(t.id);
+    expect(body.tournee?.stops.map((s) => s.number)).toEqual([1, 2, 3]);
+    const db = getDb(env.DB);
+    expect(await db.select().from(tournees)).toHaveLength(1);
+    expect(await db.select().from(tourneeStops)).toHaveLength(3);
+  });
+
+  it("stores a stop on a prospect reassigned since, flagged left", async () => {
+    const { ids, t, stops } = await swipe(2);
+    await getDb(env.DB)
+      .update(prospects)
+      .set({ assignedTo: OTHER })
+      .where(eq(prospects.id, ids[1] ?? ""));
+
+    const body = await bodyOf(await sync({ tournees: [t], stops }));
+    expect(body.accepted.stops).toHaveLength(2);
+    expect(body.tournee?.stops.map((s) => s.left)).toEqual([false, true]);
+  });
+
+  it("keeps a visited stop, and lists the door-day with its latest outcome", async () => {
+    const { ids, t, stops } = await swipe(2);
+    await sync({ tournees: [t], stops });
+
+    const now = Date.now();
+    const first = visitOf(ids[0] ?? "", "no_contact", {
+      visitedAt: now - 60_000,
+      flyerGiven: true,
+    });
+    const second = visitOf(ids[0] ?? "", "converted", { visitedAt: now - 1_000 });
+    const body = await bodyOf(await sync({ visits: [second, first] }));
+
+    // Closed by the second visit, yet not left: the agent did it today.
+    expect(body.tournee?.stops.map((s) => s.left)).toEqual([false, false]);
+    expect(body.visitedStops).toHaveLength(1);
+    const [door] = body.visitedStops;
+    expect(door).toMatchObject({
+      prospectId: ids[0],
+      outcome: "converted",
+      flyerGiven: true,
+      name: "Le Bistrot",
+      type: "restaurant",
+      address: null,
+    });
+    expect(door?.visitIds).toEqual([first.id, second.id]);
+  });
+
+  it("flags an unvisited stop left once its prospect closes", async () => {
+    const { ids, t, stops } = await swipe(2);
+    await sync({ tournees: [t], stops });
+    await getDb(env.DB)
+      .update(prospects)
+      .set({ status: "rejected" })
+      .where(eq(prospects.id, ids[1] ?? ""));
+    const body = await bodyOf(await sync({}));
+    expect(body.tournee?.stops.map((s) => s.left)).toEqual([false, true]);
+  });
+
+  it("stores a stop on a field prospect against the server id its dedupe rewrote", async () => {
+    const existing = crypto.randomUUID();
+    await seedProspect(existing);
+    // Same place as the seeded row, under a new client id.
+    await getDb(env.DB)
+      .update(prospects)
+      .set({ dedupeKey: dedupeKey({ name: "Chez Nous", lat: 50.85, lng: 4.35, address: null }) })
+      .where(eq(prospects.id, existing));
+    const clientId = crypto.randomUUID();
+    const t = tourneeOf();
+    const stop = stopOf(t.id, clientId, 1);
+
+    const body = await bodyOf(
+      await sync({
+        prospects: [
+          { id: clientId, name: "Chez Nous", type: "cafe", lat: 50.85, lng: 4.35, createdAt: 1 },
+        ],
+        tournees: [t],
+        stops: [stop],
+      }),
+    );
+
+    expect(body.idMap[clientId]).toBe(existing);
+    const [row] = await getDb(env.DB).select().from(tourneeStops);
+    expect(row?.prospectId).toBe(existing);
+    expect(body.tournee?.stops[0]?.prospectId).toBe(existing);
+  });
+
+  it("holds back a stop whose prospect has not arrived, and takes it once it has", async () => {
+    const known = crypto.randomUUID();
+    await seedProspect(known);
+    const t = tourneeOf();
+    const waiting = stopOf(t.id, crypto.randomUUID(), 1);
+    const kept = stopOf(t.id, known, 2);
+
+    const first = await bodyOf(await sync({ tournees: [t], stops: [waiting, kept] }));
+    // Not accepted: the phone keeps the row and resends it.
+    expect(first.accepted.stops).toEqual([kept.id]);
+    expect(first.tournee?.stops.map((s) => s.id)).toEqual([kept.id]);
+
+    const second = await bodyOf(
+      await sync({
+        prospects: [
+          {
+            id: waiting.prospectId,
+            name: "Chez Nous",
+            type: "cafe",
+            lat: 50.85,
+            lng: 4.35,
+            createdAt: 1,
+          },
+        ],
+        stops: [waiting],
+      }),
+    );
+    expect(second.accepted.stops).toEqual([waiting.id]);
+    expect(second.tournee?.stops.map((s) => [s.id, s.number])).toEqual([
+      [waiting.id, 1],
+      [kept.id, 2],
+    ]);
+  });
+
+  it("accepts and drops a stop for a tournée that is not the agent's", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id, OTHER);
+    const theirs = tourneeOf();
+    await asOther({ tournees: [theirs] });
+
+    const stray = stopOf(theirs.id, id, 1);
+    const orphan = stopOf(crypto.randomUUID(), id, 2);
+    const body = await bodyOf(await sync({ stops: [stray, orphan] }));
+
+    expect(body.accepted.stops).toEqual([stray.id, orphan.id]);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(0);
+    expect(body.tournee).toBeNull();
+  });
+
+  it("keeps one tournée per agent, and shows each agent only their own", async () => {
+    const ids = [crypto.randomUUID()];
+    await seedProspects(ids, OTHER);
+    const mine = tourneeOf();
+    const theirs = tourneeOf();
+    await sync({ tournees: [mine] });
+    const body = await bodyOf(
+      await asOther({ tournees: [theirs], stops: [stopOf(theirs.id, ids[0] ?? "", 1)] }),
+    );
+    expect(body.tournee?.id).toBe(theirs.id);
+    expect(await getDb(env.DB).select().from(tournees)).toHaveLength(2);
+  });
+
+  it("answers 426 to the old build and writes nothing", async () => {
+    const { t, stops } = await swipe(2);
+    const response = await sync({ clientVersion: 1, tournees: [t], stops });
+    expect(response.status).toBe(426);
+    expect(await getDb(env.DB).select().from(tournees)).toHaveLength(0);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(0);
+  });
+
+  it("returns no tournée before the first swipe, yet today's visited stops", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+    const body = await bodyOf(await sync({ visits: [visitOf(id, "interested")] }));
+    expect(body.tournee).toBeNull();
+    expect(body.visitedStops.map((v) => [v.prospectId, v.outcome])).toEqual([[id, "interested"]]);
+  });
+
+  it("excludes yesterday's visits from the visited stops", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id);
+    const body = await bodyOf(
+      await sync({ visits: [visitOf(id, "interested", { visitedAt: Date.now() - 2 * DAY_MS })] }),
+    );
+    expect(body.visitedStops).toEqual([]);
+  });
+
+  it("clamps a future start to the server clock, and files an old swipe under its own day", async () => {
+    const future = tourneeOf(Date.now() + 3_600_000);
+    const past = tourneeOf(Date.now() - 3 * DAY_MS);
+    const before = Date.now();
+    const body = await bodyOf(await sync({ tournees: [future, past] }));
+
+    const rows = await getDb(env.DB).select().from(tournees);
+    const row = rows.find((r) => r.id === future.id);
+    expect(row?.clientStartedAt).toBe(future.startedAt);
+    expect(row?.startedAt).toBeGreaterThanOrEqual(before);
+    expect(row?.startedAt).toBeLessThan(future.startedAt);
+    expect(rows.find((r) => r.id === past.id)?.dayStart).toBe(
+      brusselsMidnightDaysFromNow(past.startedAt, 0),
+    );
+    expect(body.tournee?.id).toBe(future.id);
+  });
+
+  it("gives an admin their own tournée like an agent", async () => {
+    // AGENT is the dev admin.
+    const { t, stops } = await swipe(2);
+    const body = await bodyOf(await sync({ tournees: [t], stops }));
+    expect(body.tournee?.stops).toHaveLength(2);
+  });
+
+  it("ignores another agent's visit to a shared prospect", async () => {
+    const id = crypto.randomUUID();
+    await seedProspect(id, OTHER);
+    const t = tourneeOf();
+    await sync({ tournees: [t], stops: [stopOf(t.id, id, 1)] });
+    await insertVisit(id, OTHER, Date.now() - 1_000);
+
+    const body = await bodyOf(await sync({}));
+    expect(body.visitedStops).toEqual([]);
+    // Reassigned and visited by somebody else: still left for this agent.
+    expect(body.tournee?.stops.map((s) => s.left)).toEqual([true]);
+  });
+
+  it("counts the Brussels day from its midnight, inclusive", async () => {
+    const midnight = brusselsMidnightDaysFromNow(Date.now(), 0);
+    const [before, at] = [crypto.randomUUID(), crypto.randomUUID()];
+    await seedProspects([before, at]);
+    await insertVisit(before, AGENT, midnight - 1);
+    await insertVisit(at, AGENT, midnight);
+
+    const body = await bodyOf(await sync({}));
+    expect(body.visitedStops.map((v) => v.prospectId)).toEqual([at]);
+  });
+
+  it("takes a full 250-stop swipe", async () => {
+    const { t, stops } = await swipe(250);
+    const body = await bodyOf(await sync({ tournees: [t], stops }));
+    expect(body.accepted.stops).toHaveLength(250);
+    expect(body.tournee?.stops).toHaveLength(250);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(250);
+  });
+
+  it("refuses more tournées or stops than a request may carry", async () => {
+    const t = tourneeOf();
+    const tooManyTournees = await sync({
+      tournees: Array.from({ length: SYNC_TOURNEES_PER_REQUEST + 1 }, () => tourneeOf()),
+    });
+    expect(tooManyTournees.status).toBe(400);
+
+    const stops = Array.from({ length: SYNC_STOPS_PER_REQUEST + 1 }, (_, i) =>
+      stopOf(t.id, crypto.randomUUID(), i + 1),
+    );
+    expect((await sync({ tournees: [t], stops })).status).toBe(400);
+    expect(
+      (await sync({ stops: [{ ...stops[0], number: TOURNEE_STOP_NUMBER_MAX + 1 }] as never }))
+        .status,
+    ).toBe(400);
+  });
+
+  it("gives a second real session of the agent the same tournée", async () => {
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    await seedProspects(ids, TEST_AGENT);
+    const t = tourneeOf();
+    const stops = ids.map((id, i) => stopOf(t.id, id, i + 1));
+    const post = async (cookie: string, body: Partial<SyncRequest>) =>
+      bodyOf(
+        await call("/api/agent/sync", {
+          method: "POST",
+          // A session wins over DEV_USER_EMAIL, which stays set for the other tests.
+          headers: { "Content-Type": "application/json", Cookie: cookie },
+          body: JSON.stringify({ clientVersion: CLIENT_VERSION, ...body }),
+        }),
+      );
+
+    const first = await post(await testSessionCookie(TEST_AGENT), { tournees: [t], stops });
+    const second = await post(await testSessionCookie(TEST_AGENT), {});
+    expect(first.tournee?.id).toBe(t.id);
+    expect(second.tournee).toEqual(first.tournee);
   });
 });
