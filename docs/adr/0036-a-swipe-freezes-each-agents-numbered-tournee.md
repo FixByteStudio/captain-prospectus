@@ -1,6 +1,6 @@
 # ADR-0036: A morning swipe freezes each agent's numbered tournée
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-14
 - Deciders: owner
 - Amends: [ADR-0028](0028-agent-position-at-sync.md) (the admin round view takes its order from the tournée, not from the synced reading)
@@ -16,7 +16,7 @@ always 1 (`NextStopCard.tsx:17`), the rows start at 2, and the map pins start at
 
 **The day's counter is wrong in two ways.** `dailyProgress` puts visit ids in `n` and
 prospect ids in `total` (`src/client/field/progress.ts:36`), so a second visit to one stop
-reads "17 sur 16" (#492). Half of `n` comes from `sentVisits`, a log kept only on the phone.
+read "17 sur 16" until #492 made it count each prospect once. Half of `n` comes from `sentVisits`, a log kept only on the phone.
 `clearAgentCache` wipes it on a sync 401/403, on a `/api/me` 401 and on an identity switch
 (`src/client/field/db.ts:276`). The round comes back with the next pull, but the log does
 not, so an agent who saved 16 visits can read "0 sur 23".
@@ -186,4 +186,4 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
   (tournée, gates, counter, Carnet), the `round-placement.md` spec, `docs/design.md` (including line
   1723), `EXPERIENCE.md`, `docs/api.md`, `docs/data-model.md`, the comment at
   `useAgentPosition.ts:10`, and the glossary (Tournée, Arrêt, Carnet, door-day).
-- #492 ships first as a stopgap. This decision replaces it.
+- #492 shipped first as a stopgap. This decision replaces it.
