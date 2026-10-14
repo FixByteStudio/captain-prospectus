@@ -1,7 +1,7 @@
 ---
 name: Captain Prospectus
 status: final
-updated: 2026-10-12
+updated: 2026-10-14
 sources:
   - .memlog.md
   - DESIGN.md
@@ -48,7 +48,7 @@ The sidebar has three groups. A count badge shows the number waiting in a queue.
 | **Terrain** | Visites | Live feed of the visits agents have synced, with a KPI strip and a date range. |
 | | À rattacher *(badge)* | Quarantined visits waiting to be attached to a prospect (ADR-0022). |
 | | Scripts | The versioned questionnaire. |
-| | Tournée du jour | **New.** A read-only view of any agent's round, ordered from their last synced position. |
+| | Tournée du jour | **New.** A read-only view of any agent's round, ordered from their last synced position. *Pending ADR-0036 (numbered-tournée epic #496, entry 12):* in the phone's stop numbers; the position only places the marker. |
 
 - **Top bar, on every admin surface.** Sidebar toggle · breadcrumb · search · notifications · theme · avatar.
   - Search looks up prospects by name and opens the matching row in Prospects.
@@ -60,9 +60,12 @@ The sidebar has three groups. A count badge shows the number waiting in a queue.
 
 | Surface | Reached from | Purpose |
 |---|---|---|
-| **Tournée du jour** | Tab "Tournée" (home) | The next stop, the rest of the round, and follow-ups not yet due |
-| **Carte** | Tab "Carte" | Today's round on a map, with the next stop in a sheet |
-| **Visite — étape 1: Résultat** | "Visiter" on a stop or a pin, or a swipe | Flyer, outcome, follow-up date, earlier visits |
+| **Aucune tournée / pas encore chargée** | Signing in, or midnight, with no tournée to start | Say why there is no day to start (ADR-0036) |
+| **Départ** (start screen) | Signing in, or midnight, before today's swipe | The date and the stops, the location dialog, then the swipe « Commencer la tournée » |
+| **Tournée du jour** | Tab "Tournée" (home, after the swipe) | The counter « {n} sur {total} », the next stop, and the stops still to do, by their swipe numbers |
+| **Carte** | Tab "Carte" | The same stops on a map, with the next stop in a sheet |
+| **Carnet** | Tab "Carnet" | Today's visited stops with their latest outcome; reopening one saves a new visit |
+| **Visite — étape 1: Résultat** | "Visiter" on a stop or a pin, a swipe, or a Carnet row | Flyer, outcome, follow-up date, earlier visits |
 | **Visite — étape 2: Questions** | "Continuer" | Script questions and notes (skipped when there is no script) |
 | **Enregistrer cette visite ?** | "Enregistrer la visite" | Summary, then save to the outbox |
 | **Ajouter un prospect** | Tab "Ajouter" | Add a place that isn't on the list |
@@ -77,7 +80,9 @@ On a phone, the tabs sit at the bottom. From tablet width they move into the nav
 - Watch visits → Tableau de bord and Visites.
 - Repair → À rattacher and Doublons.
 - Configure questions → Scripts.
+- Start the day → Départ.
 - Walk the round → Tournée and Carte.
+- See what was done today, reopen a stop → Carnet.
 - Record a visit → Visite.
 - Add a place → Ajouter.
 - Admin in the field → Tableau de bord tab.
@@ -115,8 +120,12 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Admin shell — réseau et accès | Offline banner "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." · offline on an admin route after a reload "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." The button the second needs — "Retour à la tournée" — and "Vous n'avez pas accès à cette page." are already in `copy.ts`. |
 | Tableau de bord | "Tableau de bord" · "Où en est la prospection." · "7 jours" / "30 jours" / "90 jours" · "Prospects ouverts" · "Visites" · "Convertis" · "Taux de conversion" · "{+12,4 %} vs période précédente" · "Visites dans le temps" · "Pipeline par statut" · "{412} prospects" · "Activité par agent" (columns Agent · Visites · Convertis · À relancer · Prospects ouverts) · "À traiter" · "Relances dues" → "Voir" · "Visites à rattacher" → "Rattacher" · "Doublons" "{3} paires" → "Fusionner" · "Dernières visites" · "Tout voir" |
 | Prospects, Visites | "Exporter en CSV" · Visites strip: "Taux de conversion", "Flyers remis", "Relances dues sous 7 jours", "Agents en tournée" |
-| Field shell | Tabs "Tournée", "Carte", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
-| Tournée / Carte | "{5} visites sur {17} aujourd'hui" · "Carte indisponible hors ligne. La liste reste à jour." · "Voir la liste" · aria "Me recentrer" |
+| Field shell | Tabs "Tournée", "Carte", "Carnet", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
+| Avant le départ (`docs/design.md` › Before the swipe) | "Aucune tournée aujourd'hui" · "Aucun prospect ne vous est assigné pour l'instant. Votre tournée s'affichera ici dès qu'un admin vous en assigne." · "Tournée pas encore chargée" · "Connectez-vous à internet une fois pour récupérer votre tournée. Elle restera ensuite disponible hors ligne." · "{Mercredi 14 octobre}" · "Les arrêts seront numérotés au départ, du plus proche au plus loin." · "et {13} autres arrêts" / "et 1 autre arrêt" · "Glisser pour commencer la tournée" · button name "Commencer la tournée" · "En attente de votre position" · "Démarrage…" · "Impossible de commencer la tournée sur cet appareil. Libérez de l'espace de stockage, puis réessayez." |
+| Localisation | "Activez la localisation" · "Votre position fixe l'ordre des arrêts pour la journée." · "Activer" · "Refusée ? Ouvrez Réglages › Localisation, puis revenez ici." · "Précision : {350} m. On affine…" · "La localisation est refusée sur ce téléphone." · "Position introuvable. Sortez à découvert si possible, puis touchez Activer." (plus the existing "Recherche de votre position…") |
+| Tournée / Carte | "{15} sur {20}" · aria "{15} arrêts faits sur {20}" · aria "Arrêt {16} · {name}" · "Nouveau" (outline badge) · "Tous les arrêts sont faits." · "Retrouvez-les dans Carnet." · "Ouvrir le carnet" · "Plus aucun arrêt dans votre tournée aujourd'hui." · "Carte indisponible hors ligne. La liste reste à jour." · "Voir la liste" · aria "Me recentrer" |
+| Carnet | "Carnet" · "{2} visites" · aria "Arrêt {14} · {name} · {outcome}, à {15:10}. Rouvrir" · "Retour au carnet" · "Aucun arrêt fait aujourd'hui." · "Chaque arrêt enregistré arrive ici, avec son résultat." |
+| Visites (door-days) | "Une ligne par prospect et par jour, avec son dernier résultat. Ouvrez une ligne pour voir chaque visite." · "{2} visites" · "Visites de la journée" |
 | Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre." · Converti: "Déjà inscrit sur la liste d'attente." |
 | Visit | Step indicators "Étape 1 sur 2 · Résultat" / "Étape 2 sur 2 · Questions" · stepper aria "Diminuer" / "Augmenter" |
 | Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui. La tournée est triée par nom." · "{17} arrêts" |
@@ -143,7 +152,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | **Row menu** | Prospects | "Assigner à ›", "Retirer l'assignation", "Changer le statut ›". "Retirer l'assignation" shows only when the prospect has an agent: an unassigned row has nothing to remove. Submenus open to the side. |
 | **Top-bar search** | Admin | ⌘K / Ctrl+K opens a Command palette. It matches prospect names and opens the prospect's row in Prospects. *(Built later.)* |
 | **Table pagination** | Prospects, Visites | 25 rows per page, with "Précédent", page numbers and "Suivant". The page scrolls; tables never get a scroll area of their own. |
-| **Live feed** | Visites | Ordered by `received_at` (the server's clock), newest first. Notes show on a second line, in quotes. A visit to a merged prospect still appears, under the name it was made against. Arrivals are ambient: no toast. |
+| **Live feed** | Visites | One row per door-day (agent, prospect, Brussels day) showing its latest visit, ordered by that visit's `received_at` (the server's clock), newest first; « {2} visites » when there are more. Opening a row expands it in place to every visit of that door-day, oldest first. Notes show on a second line, in quotes. A visit to a merged prospect still appears, under the name it was made against. Arrivals are ambient: no toast. The CSV export stays one row per visit. |
 | **Import stepper** | Import | CSV path: Source · Fichier & colonnes · Aperçu & validation. Map path: Source · Zone. Both paths use the same rail. The file is read in the browser and never uploaded. The result shows in the "Import terminé" dialog; there is no "Terminé" step. |
 | **Source cards** | Import › Source | The heading "D'où viennent les prospects ?" is answered by two cards: "Un fichier CSV" and "Une zone sur la carte". "Importer un fichier" opens the browser's file picker immediately and, after the file is read, lands on Fichier & colonnes; "Dessiner une zone" opens Zone. If a file can't be read or holds no rows, the page stays on Source with a destructive Alert under the cards. Every bullet on a card states something the app does today. |
 | **Derniers imports** | Import › Source | The last 5 imports, newest first: Date & heure · Source (CSV / Carte OpenStreetMap / Carte Google) · Fichier ou zone (the file name, or "{7} sommets" / "Rayon {300} m") · Volume · Par (the admin's email) · Statut ("Terminé", or "Interrompu" when a batch failed). Read-only: no row action, no link to a full history. |
@@ -153,14 +162,17 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | **Doublons pair** | Doublons | Two stacked rows with the distance shown once for the pair. "Garder" on either row keeps that one and merges the other into it, with no confirmation (merging keeps every visit). |
 | **Repair row** | À rattacher | The outcome edge previews the effect, and the page lede says the effect has not happened yet. Candidate buttons show the distance inside the button, nearest first; the server proposes them. "Supprimer" sits far right and opens the destructive confirmation. |
 | **Script editor** | Scripts | Question cards reorder with a drag handle **and with the keyboard** (dnd-kit keyboard sensor). A saved key is locked, and "Modifier la clé" unlocks it with a warning that stays visible. Save opens the confirmation that names the version it will create. The versions rail is read-only. |
-| **Next-stop card** | Tournée du jour | The first stop in walking order. "Y aller" opens the phone's maps app with walking directions to the stop. "Visiter" opens Visite, step 1. |
+| **Start swipe** | Départ | « Glisser pour commencer la tournée »: drag the thumb right past three quarters of the track to start. It is one button, « Commencer la tournée »: Enter, Space and a screen reader start it; a pointer tap only nudges the thumb. Disabled until there is a position. Starting numbers the stops, nearest-next from that reading, once for the day. |
+| **Location dialog** | Départ | An alert dialog over the blurred start screen, with no way out but a position: « Activer », a status line, and the Réglages › Localisation line. One-off readings repeat until one is precise enough, then it closes. |
+| **Next-stop card** | Tournée du jour | The lowest-numbered stop with no visit today, shown by its swipe number. "Y aller" opens the phone's maps app with walking directions to the stop. "Visiter" opens Visite, step 1. |
 | **Stop row** | Tournée du jour, Carte list | Swipe left → **Visiter**; swipe right → **Y aller**. Tapping a row expands it in place to show the same two buttons, so neither action needs a swipe. Swipes only start agent-allowed actions and never change shared data (invariant 2). |
-| **Daily progress** | Tournée du jour | "{n} visites sur {total} aujourd'hui" with a bar. n = the agent's visits recorded today, including those not yet sent; total = n + stops still on today's list. Only the bar and the count: no percentage, no ETA, no "restants". |
-| **Plus tard** | Tournée du jour | Follow-ups whose date hasn't come yet, each with "À relancer le {date}". They can't be visited from here. |
-| **Carte sheet** | Carte | A bottom sheet shows the next stop (number, name, type, distance) with "Y aller" and "Visiter". Tapping another pin moves the sheet to that stop. The re-centre button follows the agent's position. The sheet always sits above the tab bar. |
+| **Counter** | Tournée du jour | « {n} sur {total} » with a bar, in arrêts. n = the tournée's stops with at least one visit today (a second visit does not count again); total = the snapshot, plus joiners, minus stops that left unvisited (ADR-0036 › The counter). Only the bar and the count: no percentage, no ETA, no « visites ». |
+| **Numbers** | Tournée, Carte | Frozen at the swipe. Rows follow the numbers, not the distance. A stop that leaves unvisited leaves a gap; a joiner takes the next number and « Nouveau ». Every saved stop, whatever its outcome, moves to Carnet. There is no « Plus tard »: a follow-up comes back on its day. |
+| **Carte sheet** | Carte | A bottom sheet shows the next stop (its swipe number, name, type, distance) with "Y aller" and "Visiter". Tapping another pin moves the sheet to that stop; the pins carry the same numbers as Tournée. The re-centre button asks for one reading. The sheet always sits above the tab bar. |
+| **Carnet row** | Carnet | Newest first: number, name, latest outcome as a neutral badge (never a status colour), time, « {2} visites » when reopened, « Pas encore envoyé » while in the outbox. Tapping it opens Visite and saves a new visit; the counter does not move. A door-day outside the tournée shows without a number. |
 | **Outcome cards** | Visite, step 1 | Single choice; required before "Continuer". The date is not asked here: À relancer and Personne sur place say when to come back on the when step ("Aujourd'hui" / "Choisir une date", GH #239). The cards never show or imply a status (invariant 3). |
 | **Step indicator** | Visite | "Étape 1 sur 2 · Résultat" and "Étape 2 sur 2 · Questions". When there is no script, the visit is one step with no indicator, and the button reads "Enregistrer la visite". |
-| **Back links** | Visite | Step 1: "Retour à la tournée". Step 2: "Résultat", which goes back to step 1 with the draft intact. |
+| **Back links** | Visite | Step 1: "Retour à la tournée", or "Retour au carnet" when the visit was opened from Carnet (a save then returns to Carnet too). Step 2: "Résultat", which goes back to step 1 with the draft intact. |
 | **Number stepper** | Visite, step 2 | − / + change the value by 1. The number stays typeable, and the field never goes below 0. |
 | **Save sheet / dialog** | Visite | "Enregistrer la visite" opens the summary. "Enregistrer" writes the visit to the outbox, returns to Tournée du jour and shows the existing "Visite enregistrée…" message. "Modifier" closes the sheet and leaves the form as it was. |
 | **Ajouter un prospect** | Tab Ajouter | Nom and Type are required. "Utiliser ma position" fills the position and then reads "Actualiser". Adresse and Téléphone are optional. "Ajouter" writes the place to the outbox, and it joins the list at once. |
@@ -188,11 +200,16 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Empty: filters match nothing | Prospects | "Aucun prospect ne correspond à ces filtres." with "Effacer les filtres". |
 | Empty queues | Doublons, À rattacher | "Aucun doublon détecté." / "Aucune visite à rattacher. Tout ce que les agents ont envoyé est arrivé à destination." (the healthy state) |
 | Empty feed | Visites, Dernières visites | "Aucune visite reçue. Les visites apparaissent ici dès qu'un agent synchronise." |
-| Empty round | Tournée du jour | "Aucun prospect à visiter. Synchronisez pour récupérer votre liste." |
-| Position denied | Tournée du jour, Carte | Under the title: "Sans votre position, la tournée n'est pas triée par distance." with "Réessayer". Distances read "Position inconnue". |
+| No tournée: nothing assigned | Départ | "Aucune tournée aujourd'hui" and "Aucun prospect ne vous est assigné pour l'instant. Votre tournée s'affichera ici dès qu'un admin vous en assigne." No tab bar, no dialog. |
+| No tournée: never loaded | Départ | "Tournée pas encore chargée" and "Connectez-vous à internet une fois pour récupérer votre tournée. Elle restera ensuite disponible hors ligne." |
+| No position yet | Départ | The location dialog, whose status line reads "Recherche de votre position…", then "Précision : {350} m. On affine…" while readings repeat; refused: "La localisation est refusée sur ce téléphone." The swipe stays disabled: "En attente de votre position". T1 has no way past it. |
+| Position unknown | Tournée du jour, Carte | After the swipe the order is fixed: no notice, no other order. Distances read "Position inconnue", and Carte has no agent dot. |
+| All done | Tournée du jour, Carte | "Tous les arrêts sont faits." "Retrouvez-les dans Carnet." with "Ouvrir le carnet". |
+| Empty Carnet | Carnet | "Aucun arrêt fait aujourd'hui." "Chaque arrêt enregistré arrive ici, avec son résultat." |
+| Midnight | Field | The gates come back at Brussels midnight. A visit form open at midnight saves to the outbox first, then the new day's start screen shows. |
 | Offline | Field shell | The strip reads "Hors ligne. Vos visites sont conservées et partiront au retour du réseau." Everything except the map keeps working. |
 | Offline map | Carte | Grey canvas with "Carte indisponible hors ligne. La liste reste à jour." and "Voir la liste". Tiles are never downloaded in bulk (OSM tile policy). |
-| Waiting to send | Field shell, stop rows | Amber dot with a count, and the strip "{n} éléments en attente d'envoi". A stop visited but not yet sent keeps a row only when it stays on the round (kept for today, at the end, or under Plus tard); that row shows "Pas encore envoyé". Intéressé, Converti and Pas intéressé take the stop off the round at once (round-placement, GH #239). |
+| Waiting to send | Field shell, Carnet rows | Amber dot with a count, and the strip "{n} éléments en attente d'envoi", before and after the swipe. A saved stop leaves Tournée at once, whatever its outcome, and its Carnet row shows "Pas encore envoyé" until the sync takes it; a joiner added on the phone shows it on Tournée. |
 | Session expired | Field shell | Red strip "Votre session a expiré. Reconnectez-vous pour synchroniser." with "Se reconnecter". The outbox is kept (invariant 5). |
 | Update required (426) | Field shell | Strip "Une mise à jour est nécessaire. Vos visites sont conservées." with "Mettre à jour". The outbox is kept. |
 | Sync failed | Field shell | Strip "La synchronisation a échoué. Nouvel essai automatique." No button. |
@@ -206,7 +223,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 
 ## Interaction Primitives
 
-- **Field is thumb-first.** Everything is a tap on a target of at least 48px; outcomes are at least 56px. There are swipes on stop rows, and each swipe action can also be reached by tapping. There is no long-press, no pull-to-refresh (sync runs on its own triggers), and no hover-only affordance.
+- **Field is thumb-first.** Everything is a tap on a target of at least 48px; outcomes are at least 56px. There are swipes on stop rows, and each swipe action can also be reached by tapping. The morning swipe « Commencer la tournée » is the one exception: a tap does not start it, on purpose, and the keyboard and screen readers start it as a button. There is no long-press, no pull-to-refresh (sync runs on its own triggers), and no hover-only affordance.
 - **Native controls on the field route** where the platform already has them: the date input, the radio and checkbox semantics under the styled cards (ADR-0015). Forms use react-hook-form with the shared validators (ADR-0018).
 - **Admin is pointer- and keyboard-friendly.**
   - ⌘K / Ctrl+K opens search.
@@ -232,7 +249,7 @@ Visual contrast is in `DESIGN.md` and asserted in `palette.test.ts`.
 - Charts come with a text equivalent: the Pipeline list already *is* text, and "Visites dans le temps" gets a visually hidden summary table.
 - **Stacked segments are told apart by more than hue.** Each series is 3:1 against the card (`{colors.outcome-no-contact}` and the rest — see DESIGN.md), and neighbouring segments are separated by a 1px card-coloured stroke plus an in-segment count. Series are *not* 3:1 against one another and cannot be: five such series need an 81:1 luminance range, sRGB has 21:1. The stroke and the count are what satisfy WCAG 1.4.11 here, so neither is decorative and neither may be dropped for density. Each series' measured ratio is tabulated in [`mockups/key-a1-outcome-chart.html`](mockups/key-a1-outcome-chart.html).
 - The import stepper marks a done step with a visually hidden "(terminée)" and the current one with `aria-current="step"`.
-- Script reordering works from the keyboard, and swipe actions have tap equivalents.
+- Script reordering works from the keyboard, and stop-row swipe actions have tap equivalents. The start swipe is a real button, « Commencer la tournée », for the keyboard and screen readers.
 - Field text is at least 16px, and inputs are 16px so iOS never zooms.
 - Screens reflow at 200 % text size without cutting off controls.
 
@@ -253,15 +270,15 @@ Each figure is defined once here, and the Worker computes it. "Period" is the da
 | Figure | Definition |
 |---|---|
 | Prospects ouverts | Live (non-merged) prospects whose status is new, assigned or follow_up. A snapshot, so it has no delta. |
-| Visites | Visits whose `visited_at` falls in the period (clamped per invariant 12). |
+| Visites | Visits whose `visited_at` falls in the period (clamped per invariant 12). *Pending ADR-0036 (numbered-tournée epic #496, entry 10):* door-days (one agent, one prospect, one Brussels day) instead. |
 | Convertis | Prospects that became converted during the period. |
 | **Taux de conversion** | Prospects that became Converti during the period ÷ distinct prospects visited during the period. |
 | Pipeline par statut | Count and share of live prospects in each status. A snapshot. |
 | Activité par agent | Per agent: visits in the period, conversions in the period, follow_up prospects assigned to them now, open prospects assigned to them now. |
 | Relances dues | follow_up prospects whose `next_visit_at` is today or earlier. |
-| Flyers remis | Visits in the period with `flyer_given`. |
+| Flyers remis | Visits in the period with `flyer_given`. *Pending ADR-0036 (numbered-tournée epic #496, entry 10):* door-days where any visit gave one. |
 | Relances dues sous 7 jours | follow_up prospects whose `next_visit_at` falls within the next 7 days. |
-| Agents en tournée | Agents who synced at least once today. |
+| Agents en tournée | Agents who synced at least once today. *Pending ADR-0036 (numbered-tournée epic #496, entry 12):* agents who started today's tournée. |
 | Delta | (period − previous period of the same length) ÷ previous period. Shows "—" when the previous period is 0. |
 
 ## Inspiration & Anti-patterns
@@ -296,14 +313,14 @@ Each figure is defined once here, and the Worker computes it. "Period" is the da
 
 ### Flow 1 — A door on Rue du Midi (Léa, field agent, Tuesday 11:40, weak 4G)
 
-→ Steps 1 and 3–5 appear in [`mockups/key-f1-tournee.html`](mockups/key-f1-tournee.html) and [`mockups/key-f3-f5-visit.html`](mockups/key-f3-f5-visit.html).
+→ Steps 1 and 6 appear in [`mockups/key-t2-tournee.png`](mockups/key-t2-tournee.png), steps 3–5 in [`mockups/key-f3-f5-visit.html`](mockups/key-f3-f5-visit.html). [`mockups/key-f1-tournee.html`](mockups/key-f1-tournee.html) shows the round before ADR-0036 (live order, « visites sur », Plus tard) and is kept for history.
 
-1. Léa opens the app. Tournée du jour shows "5 visites sur 17 aujourd'hui". The next stop is **1 · Curry House · Restaurant · 350 m**. The band shows an amber dot with "2": two visits from the morning are still waiting to send.
+1. Léa opens the app; they swiped « Commencer la tournée » at 9:00. Tournée du jour shows « 5 sur 17 ». The next stop is **6 · Curry House · Restaurant · 350 m**. The band shows an amber dot with "2": two visits from the morning are still waiting to send.
 2. They tap "Y aller"; their maps app walks them there. Back in the app, they tap "Visiter".
 3. Step 1: they tick "Flyer remis" and tap "Intéressé". The card turns gold, with a check. "Visites précédentes" shows a note from 12 September.
 4. "Continuer" takes them to step 2. They answer four questions: Oui; Papier; 45 couverts with the stepper; Accueil 4. Then they type a note.
 5. "Enregistrer la visite" opens the sheet: "Curry House · Intéressé · Flyer remis · 4 réponses".
-6. **Climax:** they tap "Enregistrer". They're back on the round at once. Curry House is gone, the progress reads 6 of 17, the next stop is Bar des Marolles, and the band dot now shows "3". Nothing asks them to wait for the network. The visit is safe on the phone, and they're already walking.
+6. **Climax:** they tap "Enregistrer". They're back on the round at once. Curry House has moved to Carnet, the counter reads « 6 sur 17 », the next stop is **7 · Bar des Marolles**, and the band dot now shows "3". Nothing asks them to wait for the network. The visit is safe on the phone, and they're already walking.
 
 Failure: the signal drops. The strip says "Hors ligne…", and everything above still works except the Carte tiles. When the network is back, the dot turns green without them doing anything.
 
@@ -331,4 +348,4 @@ Failure: Léa hasn't synced today. The list is ordered by name, with the no-posi
 
 1. Walking between stops, François spots a new friterie. They tap the Ajouter tab.
 2. They type "Friterie des Minimes", pick "Restauration rapide" and tap "Utiliser ma position".
-3. **Climax:** "Ajouter" puts it straight on their round, as the nearest stop. They tap "Visiter" without leaving the pavement.
+3. **Climax:** "Ajouter" puts it straight on their tournée as the next number, 18, with « Nouveau ». They tap "Visiter" on its row without leaving the pavement.
