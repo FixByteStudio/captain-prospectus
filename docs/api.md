@@ -32,6 +32,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue, flyersGiven, agentsActiveToday, followUpsDueSoon: {value, dueBefore}, inactiveAgentProspects}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
 | `GET /api/admin/agents/:email/round` | `agentRoundResponseSchema` `{prospects, position}`: the agent's open prospects (the sync pull's query) and their latest reading `{lat, lng, accuracy, capturedAt}` (`capturedAt` clamped to receipt) or `null` when none from today. An admin's email answers 200 with `position: null`, since admins' positions are never stored. **404** for an email that is not assignable, **400** for a malformed one. `Cache-Control: no-store` ([ADR-0028](adr/0028-agent-position-at-sync.md)) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
+| `GET /api/admin/recap` | The sidebar's recap card, `recapResponseSchema` `{date, activeAgents, rosterSize, visitsToday, lastReceivedAt, serverTime}`: today's Brussels date and what arrived since its midnight. `lastReceivedAt` is `null` on a day with no visit. Read-only, `no-store`, polled every 15 s. See [The recap card](#the-recap-card) |
 | `GET /api/admin/users` | `usersResponseSchema` `{users: [{email, name, role, active, sessions, openProspects, devices}]}` — every user, active or not, ordered by name then email; names compare ignoring case and accents (French collation), unnamed rows last. `sessions` counts unexpired sessions; `openProspects` counts prospects assigned to them with status `new`, `assigned` or `follow_up` and not merged. `devices` `[{id, label, createdAt, lastSeenAt, current}]` lists the unexpired sessions, newest `lastSeenAt` first; `label` is null when the User-Agent gave no summary, `current` marks the caller's own session. The token hash is never sent ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)) |
 | `POST /api/admin/users` | `userCreateSchema` `{email, name, role}` → **201** with the list row (`devices` is empty). The email is trimmed and lowercased, the name required. Created active, with no passphrase. **409** `email_taken` for an existing email, active or not |
 | `PATCH /api/admin/users/:email` | `userUpdateSchema` `{role?, active?}`, at least one → **204**. What is absent stays. Deactivating deletes the user's sessions and unused codes in the same batch; reactivating leaves none. `role: "agent"` or `active: false` also clears `passphrase_hash` in the same `UPDATE`. **404** for an unknown email. **409** `last_admin` when the change would leave no active admin, decided inside the write and counting active admin `users` rows; nothing is written. No user is ever deleted |
@@ -277,6 +278,28 @@ the same response, additively.
   added. The screen does not poll this endpoint: each call reads several
   thousand rows on the seed, so every 15 s from one open tab would spend the
   D1 daily read quota within hours.
+
+## The recap card
+
+`GET /api/admin/recap` feeds the card at the foot of the admin sidebar
+([design](design.md#layout)). An admin has no outbox, so it reports what the
+agents sent rather than a sync. Every figure reads `received_at` over one
+Brussels day, midnight to midnight tomorrow (`brusselsMidnightDaysFromNow`),
+so a visit made offline yesterday and synced this morning counts today.
+
+- `date`: that day, `YYYY-MM-DD`. The client never works out which day it is.
+- `rosterSize`: the roster, the active `users` rows, admins included.
+- `activeAgents`: roster members with a visit received that day. Unlike
+  `agentsActiveToday` on the dashboard, a sender off the roster (deactivated)
+  is left out, so it never exceeds `rosterSize`.
+- `visitsToday`: every visit received that day, off-roster senders included.
+- `lastReceivedAt`: the latest `received_at` that day, or `null`.
+- `serverTime`: the Worker's clock. The card's age is `serverTime −
+  lastReceivedAt`, never the device's clock.
+- **Cost.** Two statements: the roster, and one grouped read of the day's
+  visits on `visits_received_idx`, one row per sender. Each call reads about the
+  day's visits plus the `users` rows; polled every 15 s from each visible admin
+  tab (ADR-0010), see [free-tier-budget](free-tier-budget.md#watch-outs).
 
 ## The repair queue
 

@@ -4,11 +4,11 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
-| Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~2,000 ≈ 3,000 / day | ~30× |
+| Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
 | Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
-| D1 rows read | 5 M / day (**enforced**: queries fail past it) | low tens of thousands | large |
+| D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
 | D1 rows written | 100 k / day (**enforced**) | imports up to a few thousand; visits ~100 | large |
 | Zone rate-limiting rules | 1 per zone on the Free plan, counted per IP | 1, in front of `/api/auth/*` ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md)) | **none** |
 | Custom domain | `fixbyte.cloud`, already owned for other work | one subdomain | no added cost |
@@ -49,6 +49,12 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 
 ## Watch-outs
 
+- **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
+  recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
+  Each call reads about the day's received visits plus the `users` rows, so the cost grows
+  through the day: an estimate, not a measurement, of 240 × 8 h × ~100 rows ≈ 200,000 rows a
+  day for one tab open all day on a 100-visit day. If D1 reads ever get tight, lengthen this
+  poll first; the card's figures do not need 15 s.
 - **Google Places is the one line here that can actually bill us** (ADR-0020), and the only
   one whose free allowance this file does not state a number for. Per-SKU allowances changed
   in March 2025 and the figures in circulation disagree; the authoritative number is in the

@@ -94,6 +94,7 @@ import type {
   MergeResult,
   AreaSearchResponse,
   ProspectsResponse,
+  RecapResponse,
   Script,
   ScriptsResponse,
 } from "../../shared/schemas";
@@ -193,6 +194,54 @@ adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema)
 async function unknownAssignee(email: string | null, db: Db): Promise<boolean> {
   return email !== null && !(await activeRosterMember(db, email));
 }
+
+/* -------------------------------------------------------------------- recap */
+
+/**
+ * The sidebar's recap card — docs/api.md › The recap card. Polled every 15 s
+ * from every admin page, so it stays two statements beside the dashboard's
+ * thirteen rather than a figure added to them (free-tier-budget.md).
+ */
+adminRoutes.get("/recap", async (c) => {
+  const now = Date.now();
+  const dayStart = brusselsMidnightDaysFromNow(now, 0);
+  const db = getDb(c.env.DB);
+  const [roster, byAgent] = await Promise.all([
+    activeRoster(db),
+    // One row per sender, on `visits_received_idx`: a day has a handful.
+    db
+      .select({
+        email: visits.agentEmail,
+        n: count(),
+        last: sql<number>`max(${visits.receivedAt})`.mapWith(Number),
+      })
+      .from(visits)
+      .where(
+        and(
+          gte(visits.receivedAt, dayStart),
+          lt(visits.receivedAt, brusselsMidnightDaysFromNow(now, 1)),
+        ),
+      )
+      .groupBy(visits.agentEmail),
+  ]);
+
+  // A sender off the roster still counts as a visit, never as an active
+  // agent, so the card cannot read "3 / 2".
+  const onRoster = new Set(roster.map((r) => r.email));
+  const lastReceivedAt = byAgent.length === 0 ? null : Math.max(...byAgent.map((r) => r.last));
+  // One day asked for, so exactly one date comes back.
+  const [date] = periodDates(dayStart, 1);
+  if (date === undefined) throw new Error("periodDates returned no day for one day");
+  c.header("Cache-Control", "no-store");
+  return c.json<RecapResponse>({
+    date,
+    activeAgents: byAgent.filter((r) => onRoster.has(r.email)).length,
+    rosterSize: roster.length,
+    visitsToday: byAgent.reduce((n, r) => n + r.n, 0),
+    lastReceivedAt,
+    serverTime: now,
+  });
+});
 
 /* ---------------------------------------------------------------- dashboard */
 

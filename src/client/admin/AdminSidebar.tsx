@@ -24,6 +24,7 @@ import {
   type NavCountSource,
 } from "./nav";
 import { useDuplicates, useOrphans } from "./queries";
+import { RecapCard } from "./RecapCard";
 
 /**
  * The count behind each badge, `undefined` while its query is loading or has
@@ -102,6 +103,7 @@ export function AdminSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <RecapCard rail={rail} />
     </Sidebar>
   );
 }

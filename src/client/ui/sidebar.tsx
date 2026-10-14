@@ -193,6 +193,16 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="sidebar-footer"
+      className={cn("flex shrink-0 flex-col gap-2 border-t border-sidebar-border p-2", className)}
+      {...props}
+    />
+  );
+}
+
 function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -327,6 +337,7 @@ function SidebarMenuBadge({ className, ...props }: React.ComponentProps<"span">)
 export {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
