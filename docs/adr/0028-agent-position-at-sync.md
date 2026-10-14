@@ -1,6 +1,6 @@
 # ADR-0028: The phone sends its last reading of the day with each sync
 
-- Status: accepted
+- Status: accepted — amended by [ADR-0036](0036-a-swipe-freezes-each-agents-numbered-tournee.md): the admin round view orders stops by the tournée's frozen numbers; the synced reading only places the marker
 - Date: 2026-10-05
 - Deciders: owner
 - Amends: [ADR-0023](0023-retention-by-redaction.md) (a second table in the retention sweep)

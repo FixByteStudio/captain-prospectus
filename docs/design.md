@@ -1100,7 +1100,7 @@ one `Surface` holding the rows.
 │▎« patron absent, repasser jeudi »                                        │
 │▎Rattacher à [Pizza Roma · 40 m] [Roma Express · 120 m]      🗑 Supprimer │
 ├──────────────────────────────────────────────────────────────────────────┤
-│▎24/09 15:12 [Pas intéressé] karim@…         [Prospect d'un autre agent] │
+│▎24/09 15:12 [Pas intéressé] francois@…      [Prospect d'un autre agent] │
 │▎Rattacher à [Le Comptoir · 30 m]                            🗑 Supprimer │
 ├──────────────────────────────────────────────────────────────────────────┤
 │▎24/09 11:05 [Intéressé] lea@…                     [Prospect introuvable] │

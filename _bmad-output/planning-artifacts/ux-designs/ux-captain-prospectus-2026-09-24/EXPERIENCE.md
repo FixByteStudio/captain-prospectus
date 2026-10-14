@@ -323,12 +323,12 @@ Failure: the signal drops. The strip says "Hors ligne…", and everything above 
 
 1. From the sidebar, the admin opens Terrain › Tournée du jour and picks Léa.
 2. The list is ordered from Léa's last synced position ("Position du 24/09/2026 15:24"), with the remaining stops as numbered pins on the map.
-3. **Climax:** without calling Léa, the admin sees 11 stops left around the Marolles, and decides the 6 follow-ups due tomorrow can go to Karim instead.
+3. **Climax:** without calling Léa, the admin sees 11 stops left around the Marolles, and decides the 6 follow-ups due tomorrow can go to François instead.
 
 Failure: Léa hasn't synced today. The list is ordered by name, with the no-position notice.
 
-### Flow 4 — A place that isn't on the list (Karim, field agent)
+### Flow 4 — A place that isn't on the list (François, field agent)
 
-1. Walking between stops, Karim spots a new friterie. They tap the Ajouter tab.
+1. Walking between stops, François spots a new friterie. They tap the Ajouter tab.
 2. They type "Friterie des Minimes", pick "Restauration rapide" and tap "Utiliser ma position".
 3. **Climax:** "Ajouter" puts it straight on their round, as the nearest stop. They tap "Visiter" without leaving the pavement.
