@@ -1,4 +1,7 @@
 ---
+tracker_id: "4"
+remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/4"
+tracker_status: backlog
 type: initiative
 title: "Each agent's day runs on a numbered tournée"
 parent: none

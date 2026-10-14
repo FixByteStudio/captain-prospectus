@@ -1,4 +1,7 @@
 ---
+tracker_id: "496"
+remote: "https://github.com/FixByteStudio/captain-prospectus/issues/496"
+tracker_status: backlog
 type: epic
 title: "Each agent's day runs on a numbered tournée"
 parent: initiative-daily-tournee
