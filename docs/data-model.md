@@ -64,7 +64,7 @@ erDiagram
     text id PK "client UUID"
     text tournee_id FK
     text prospect_id FK
-    int number "frozen at the swipe; no unique (tournee, number)"
+    int number "frozen at the swipe; no unique (tournee, number), a joiner on a held number is dropped on insert"
     int added_at "clamped to received_at"
     int client_added_at "raw phone clock"
     int received_at "server clock"
@@ -230,7 +230,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 ## Rules
 - **A visit is kept for ever; its personal fields are not.** `lat`, `lng` and `notes` are nulled once `received_at` is older than `RETENTION_DAYS` (90), by a daily Cron Trigger ([ADR-0023](adr/0023-retention-by-redaction.md)). This is the single exception to `visits` being append-only: no row is deleted and nothing sync or the derived status reads is touched.
 - A quarantined visit is not in the prospect's history or the live feed until it is repaired. Why it is still reported in `accepted`: [field-operations](domains/field-operations.md#rules).
-- **Tournées and stops are insert-only** ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)). A tournée is one agent's day: `tournees(agent_email, day_start)` is unique, so the first swipe wins and a second phone's tournée is accepted and dropped with its stops, while a stop whose field prospect has not arrived yet is not accepted and waits for a resend. A stop is unique per `(tournee_id, prospect_id)`. "A stop left" (`left` in the sync response) is derived from the prospect's assignment, status and merge, and from today's visits, in `isStopLeft`; never written. Neither table holds a position, so the retention sweep gains none. Visits carry no tournée id: which stop and which day come from the agent, the prospect and the Brussels day of `visited_at`.
+- **Tournées and stops are insert-only** ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)). A tournée is one agent's day: `tournees(agent_email, day_start)` is unique, so the first swipe wins and a second phone's tournée is accepted and dropped with its stops, while a stop whose field prospect has not arrived yet is not accepted and waits for a resend. A stop is unique per `(tournee_id, prospect_id)`. Two phones can append different joiners under one number, so `writeTournees` decides it in code, not with an index: the first stored keeps the number, the other stop is accepted and dropped, and the losing phone re-appends its prospect as the next number on its next pull. "A stop left" (`left` in the sync response) is derived from the prospect's assignment, status and merge, and from today's visits, in `isStopLeft`; never written. Neither table holds a position, so the retention sweep gains none. Visits carry no tournée id: which stop and which day come from the agent, the prospect and the Brussels day of `visited_at`.
 - **Visits are append-only.** Never updated, never deleted by the app. A revisit is a new row.
 - **Answers live on the visit** as JSON, keyed by question `key`. The visit references the exact `script_id` (a specific version), so answers stay interpretable after the script changes.
 - **Scripts are immutable per version.** Editing a script creates version N+1 and makes it active.

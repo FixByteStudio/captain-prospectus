@@ -10,7 +10,7 @@
  * screens.
  */
 import { StopNumber } from "./StopNumber";
-import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
+import { JoinerBadge, NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { copy, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
 import type { TourneeItem } from "./tournee-stops";
@@ -18,11 +18,14 @@ import type { TourneeItem } from "./tournee-stops";
 export function CarteSheet({
   item,
   loaded,
+  total,
   isNext,
 }: {
   item: TourneeItem | null;
   /** False while the tables are read: no sentence yet, not "all done". */
   loaded: boolean;
+  /** The day's stops: 0 reads « Plus aucun arrêt », not « all done ». */
+  total: number;
   /** Gold only when the selected stop is the next one. */
   isNext: boolean;
 }) {
@@ -46,7 +49,11 @@ export function CarteSheet({
       <div aria-hidden="true" className="bg-border mx-auto mb-2.5 h-1 w-9 rounded-full" />
 
       {!item ? (
-        loaded && <p className="text-muted-foreground py-2 text-center">{copy.today.allDone}</p>
+        loaded && (
+          <p className="text-muted-foreground py-2 text-center">
+            {total === 0 ? copy.today.nothingLeft : copy.today.allDone}
+          </p>
+        )
       ) : (
         <>
           {/* `aria-live` on the whole row: a pin tap changes the number, the
@@ -60,6 +67,7 @@ export function CarteSheet({
               <p className="text-muted-foreground text-meta truncate">
                 {copy.today.meta(TYPE_LABELS[item.type], item.address)}
               </p>
+              <JoinerBadge item={item} />
               <NotSyncedBadge item={item} />
             </div>
             <p className="shrink-0">

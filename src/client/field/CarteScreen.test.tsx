@@ -17,6 +17,7 @@ const round = vi.hoisted(() => ({
   current: {
     loaded: true,
     stops: [] as TourneeItem[],
+    total: 1,
     point: null,
     refresh: vi.fn(),
     now: 0,
@@ -56,6 +57,7 @@ const item = (over: Partial<TourneeItem> = {}): TourneeItem => ({
   address: "12 rue Sainte-Catherine",
   status: "assigned",
   pending: false,
+  joiner: false,
   distanceM: null,
   ...over,
 });
@@ -143,6 +145,7 @@ afterEach(() => {
   round.current = {
     loaded: true,
     stops: [],
+    total: 1,
     point: null,
     refresh: vi.fn(),
     now: 0,
@@ -234,6 +237,25 @@ describe("CarteScreen, phone (< 768px)", () => {
     const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
     expect(within(sheet).getByText(copy.today.allDone)).toBeTruthy();
     expect(within(sheet).queryByRole("link", { name: copy.today.visit })).toBeNull();
+  });
+
+  it("says nothing is left, not that every stop is done, when the day holds no stop", () => {
+    setViewport(true);
+    round.current = { ...round.current, total: 0 };
+    renderScreen();
+
+    const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
+    expect(within(sheet).getByText(copy.today.nothingLeft)).toBeTruthy();
+    expect(within(sheet).queryByText(copy.today.allDone)).toBeNull();
+  });
+
+  it("marks a joiner « Nouveau » in the sheet", () => {
+    setViewport(true);
+    round.current = { ...round.current, stops: [item({ joiner: true })] };
+    renderScreen();
+
+    const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
+    expect(within(sheet).getByText(copy.today.joiner)).toBeTruthy();
   });
 
   it("shows the distance and the Pas encore envoyé badge in the sheet", () => {
@@ -450,6 +472,16 @@ describe("CarteScreen, tablet (>= 768px)", () => {
       </MemoryRouter>,
     );
     expect(screen.queryByText(copy.today.allDone)).toBeNull();
+  });
+
+  it("says nothing is left in the list pane when the day holds no stop", () => {
+    setViewport(false);
+    round.current = { ...round.current, total: 0 };
+    renderScreen();
+
+    const list = screen.getByRole("region", { name: copy.carte.listLabel });
+    expect(within(list).getByText(copy.today.nothingLeft)).toBeTruthy();
+    expect(within(list).queryByText(copy.today.allDone)).toBeNull();
   });
 
   it("renders an empty map with no pins for an empty round", () => {

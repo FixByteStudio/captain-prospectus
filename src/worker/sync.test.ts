@@ -1645,6 +1645,94 @@ describe("tournée at sync (ADR-0036)", () => {
     ]);
   });
 
+  describe("a joiner number another prospect already holds", () => {
+    it("keeps the first stored, accepts the second and stores only the first", async () => {
+      const { t, stops } = await swipe(2);
+      await sync({ tournees: [t], stops });
+      const [x, y] = [crypto.randomUUID(), crypto.randomUUID()];
+      await seedProspects([x, y]);
+
+      // Phone A synced X as 3. Phone B, which has not pulled yet, sends Y as 3.
+      const first = stopOf(t.id, x, 3);
+      const second = stopOf(t.id, y, 3);
+      await sync({ stops: [first] });
+      const body = await bodyOf(await sync({ stops: [second] }));
+
+      expect(body.accepted.stops).toEqual([second.id]);
+      expect(body.tournee?.stops.map((s) => [s.prospectId, s.number])).toEqual([
+        ...stops.map((s) => [s.prospectId, s.number]),
+        [x, 3],
+      ]);
+      expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(3);
+    });
+
+    it("stores the joiners 21 and 22 of a 20-stop swipe", async () => {
+      const { t, stops } = await swipe(20);
+      await sync({ tournees: [t], stops });
+      const [x, y] = [crypto.randomUUID(), crypto.randomUUID()];
+      await seedProspects([x, y]);
+
+      const body = await bodyOf(await sync({ stops: [stopOf(t.id, x, 21), stopOf(t.id, y, 22)] }));
+
+      expect(body.tournee?.stops.slice(20).map((s) => [s.prospectId, s.number])).toEqual([
+        [x, 21],
+        [y, 22],
+      ]);
+      expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(22);
+    });
+
+    it("keeps the earlier one of two sent in one request", async () => {
+      const { t, stops } = await swipe(1);
+      await sync({ tournees: [t], stops });
+      const [x, y, z] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+      await seedProspects([x, y, z]);
+      const batch = [stopOf(t.id, x, 2), stopOf(t.id, y, 2), stopOf(t.id, z, 3)];
+
+      const body = await bodyOf(await sync({ stops: batch }));
+
+      expect(body.accepted.stops).toEqual(batch.map((s) => s.id));
+      expect(body.tournee?.stops.map((s) => [s.prospectId, s.number])).toEqual([
+        ...stops.map((s) => [s.prospectId, s.number]),
+        [x, 2],
+        [z, 3],
+      ]);
+    });
+
+    it("is no collision when the same stop is sent again", async () => {
+      const { t, stops } = await swipe(2);
+      await sync({ tournees: [t], stops });
+      const x = crypto.randomUUID();
+      await seedProspect(x);
+      const joiner = stopOf(t.id, x, 3);
+      await sync({ stops: [joiner] });
+
+      // Same id, and a fresh id for the same prospect and number.
+      const body = await bodyOf(await sync({ stops: [joiner, stopOf(t.id, x, 3)] }));
+
+      expect(body.accepted.stops).toHaveLength(2);
+      expect(body.tournee?.stops.filter((s) => s.prospectId === x)).toHaveLength(1);
+      expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(3);
+    });
+
+    it("drops a joiner on a number a stop that left still holds", async () => {
+      const { ids, t, stops } = await swipe(2);
+      await sync({ tournees: [t], stops });
+      await getDb(env.DB)
+        .update(prospects)
+        .set({ assignedTo: OTHER })
+        .where(eq(prospects.id, ids[1] ?? ""));
+      const x = crypto.randomUUID();
+      await seedProspect(x);
+
+      const body = await bodyOf(await sync({ stops: [stopOf(t.id, x, 2)] }));
+
+      // The left stop still holds 2: the phone numbers from 3 and would not send this.
+      expect(body.tournee?.stops.filter((s) => s.number === 2).map((s) => s.prospectId)).toEqual([
+        ids[1],
+      ]);
+    });
+  });
+
   it("accepts and drops a stop for a tournée that is not the agent's", async () => {
     const id = crypto.randomUUID();
     await seedProspect(id, OTHER);

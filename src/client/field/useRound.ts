@@ -8,7 +8,7 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Point } from "../../shared/geo";
 import { fieldDb, type StoredVisit } from "./db";
-import { todaysStops, type TourneeItem } from "./tournee-stops";
+import { todaysStops, tourneeTotal, type TourneeItem } from "./tournee-stops";
 import { useAgentPosition } from "./useAgentPosition";
 import { useSyncState } from "./useSync";
 
@@ -19,6 +19,8 @@ export type RoundState = {
   loaded: boolean;
   /** Today's tournée stops with no visit today, in number order. */
   stops: TourneeItem[];
+  /** The day's stops, visited ones included and left ones not: 0 is not « all done ». */
+  total: number;
   point: Point | null;
   /** Ask again — the agent has moved, or granted permission since. */
   refresh: () => void;
@@ -84,8 +86,14 @@ export function useRound(): RoundState {
     [stored, identity, now, point],
   );
 
+  const total = useMemo(
+    () => (stored ? tourneeTotal({ ...stored, identity, now }) : 0),
+    [stored, identity, now],
+  );
+
   return {
     stops,
+    total,
     loaded: stored !== undefined,
     point,
     refresh,

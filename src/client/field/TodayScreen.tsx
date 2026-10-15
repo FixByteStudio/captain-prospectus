@@ -30,7 +30,7 @@ import { useSyncState } from "./useSync";
 type RoundState = { saved?: boolean; added?: boolean };
 
 export function TodayScreen() {
-  const { stops, loaded, now, outboxVisits } = useRound();
+  const { stops, loaded, total, now, outboxVisits } = useRound();
   const { identity } = useSyncState();
   const { state } = useLocation();
   const justSaved = (state as RoundState | null) ?? null;
@@ -122,7 +122,7 @@ export function TodayScreen() {
       ) : (
         loaded && (
           <div className="mt-4">
-            <AllDoneCard />
+            <AllDoneCard total={total} />
           </div>
         )
       )}

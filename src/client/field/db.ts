@@ -21,6 +21,8 @@ import type {
 } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
 import { dropReading } from "./last-reading";
+import { joinersFor } from "./tournee-joiners";
+import { stopsOfToday } from "./tournee-stops";
 import { sendableBy, writtenByOrUnstamped, type OutboxStamp } from "./outbox-stamp";
 
 // Re-exported so the store module still names everything a row carries;
@@ -220,6 +222,91 @@ export async function startTournee(
     await db.outboxTournees.add({ ...day.tournee, writtenBy: identity, ...flag });
     await db.outboxStops.bulkAdd(day.stops.map((s) => ({ ...s, writtenBy: identity, ...flag })));
   });
+}
+
+/**
+ * Appends to today's tournée every open prospect it does not hold yet, as stops
+ * numbered after the highest number ever given (ADR-0036 › Numbers). Stamped like
+ * the swipe's own stops, and never updated afterwards (invariant 2).
+ *
+ * One transaction reads the tables and writes the stops, and IndexedDB runs two
+ * of them one after the other, so two tabs cannot both append the same prospect.
+ * Nothing is appended before the swipe: the swipe freezes those itself.
+ */
+export async function appendJoiners(
+  db: FieldDb,
+  identity: string,
+  now: number,
+  unconfirmed = false,
+): Promise<void> {
+  const flag = unconfirmed ? ({ unconfirmed: true } as const) : {};
+  await db.transaction(
+    "rw",
+    [
+      db.prospects,
+      db.outboxProspects,
+      db.tournees,
+      db.tourneeStops,
+      db.outboxTournees,
+      db.outboxStops,
+    ],
+    async () => {
+      const [prospects, outboxProspects, pulledTournees, pulledStops, outboxTournees, outboxStops] =
+        await Promise.all([
+          db.prospects.toArray(),
+          db.outboxProspects.toArray(),
+          db.tournees.toArray(),
+          db.tourneeStops.toArray(),
+          db.outboxTournees.toArray(),
+          db.outboxStops.toArray(),
+        ]);
+      const today = stopsOfToday(
+        { pulledTournees, pulledStops, outboxTournees, outboxStops, identity },
+        brusselsPeriod(now, 1),
+      );
+      if (!today) return;
+      const joiners = joinersFor({
+        tournee: { id: today.tourneeId },
+        stops: today.stops,
+        prospects,
+        outboxProspects,
+        identity,
+        now,
+      });
+      if (joiners.length === 0) return;
+      await db.outboxStops.bulkAdd(joiners.map((s) => ({ ...s, writtenBy: identity, ...flag })));
+    },
+  );
+}
+
+/**
+ * Queues a field prospect and, in the same transaction, appends it to today's
+ * tournée: a place added after the swipe is never queued without its stop, nor the
+ * reverse. Stamped like a visit (docs/backlog/013).
+ */
+export async function queueFieldProspect(
+  db: FieldDb,
+  prospect: FieldProspect,
+  identity: string,
+  unconfirmed = false,
+  now = Date.now(),
+): Promise<void> {
+  const flag = unconfirmed ? ({ unconfirmed: true } as const) : {};
+  await db.transaction(
+    "rw",
+    [
+      db.prospects,
+      db.outboxProspects,
+      db.tournees,
+      db.tourneeStops,
+      db.outboxTournees,
+      db.outboxStops,
+    ],
+    async () => {
+      await db.outboxProspects.add({ ...prospect, writtenBy: identity, ...flag });
+      await appendJoiners(db, identity, now, unconfirmed);
+    },
+  );
 }
 
 /**

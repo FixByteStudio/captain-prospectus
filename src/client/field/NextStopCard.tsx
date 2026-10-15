@@ -3,7 +3,7 @@
  * no visit today is not a row, it is an instruction: the only stop set apart by
  * a card, a gold edge and carrying its own actions.
  */
-import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
+import { JoinerBadge, NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { StopNumber } from "./StopNumber";
 import { copy, TYPE_LABELS } from "../copy/field";
 import type { TourneeItem } from "./tournee-stops";
@@ -26,6 +26,7 @@ export function NextStopCard({ item }: { item: TourneeItem }) {
           <p className="text-muted-foreground text-meta break-words">
             {copy.today.meta(TYPE_LABELS[item.type], item.address)}
           </p>
+          <JoinerBadge item={item} />
           <NotSyncedBadge item={item} />
         </div>
         <p className="shrink-0">

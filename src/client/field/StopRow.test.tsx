@@ -26,6 +26,7 @@ const item = (over: Partial<TourneeItem> = {}): TourneeItem => ({
   address: "Rue du Midi 42",
   status: "assigned",
   pending: false,
+  joiner: false,
   distanceM: 120,
   ...over,
 });

@@ -7,12 +7,14 @@ import {
 } from "../../shared/constants";
 import type {
   FieldProspect,
+  Prospect,
   Script,
   SyncRequest,
   SyncResponse,
   TodayTournee,
   Visit,
 } from "../../shared/schemas";
+import { brusselsPeriod } from "../../shared/period";
 import { clearAgentCache, FieldDb, getMeta, setMeta, startTournee } from "./db";
 import { dropReading, rememberReading, setReadingIdentity } from "./last-reading";
 import { backoffDelayMs, runSync } from "./sync";
@@ -1004,6 +1006,152 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
 
     expect(await db.outboxTournees.count()).toBe(0);
     expect((await db.tournees.toArray()).map((t) => t.id)).toEqual([winner.id]);
+  });
+
+  describe("joiners", () => {
+    const prospectOf = (over: Partial<Prospect> = {}): Prospect => ({
+      id: crypto.randomUUID(),
+      name: "Le Bouchon",
+      type: "restaurant",
+      lat: 50.85,
+      lng: 4.35,
+      address: null,
+      phone: null,
+      website: null,
+      cuisine: null,
+      source: "csv",
+      status: "assigned",
+      assignedTo: AGENT,
+      lastVisitAt: null,
+      nextVisitAt: null,
+      ...over,
+    });
+
+    /** A pulled tournée numbering `held` 1..n, started before the response's serverTime. */
+    const pulledDay = (held: readonly Prospect[], left: readonly number[] = []): TodayTournee => ({
+      id: crypto.randomUUID(),
+      dayStart: brusselsPeriod(1_700_000_100_000, 1).from,
+      startedAt: 1_700_000_000_000,
+      stops: held.map((p, i) => ({
+        id: crypto.randomUUID(),
+        prospectId: p.id,
+        number: i + 1,
+        addedAt: 1_700_000_000_000,
+        left: left.includes(i + 1),
+      })),
+    });
+
+    it("queues stops 21 and 22 for the two prospects a pull brings after a 20-stop swipe", async () => {
+      const held = Array.from({ length: 20 }, (_, i) => prospectOf({ name: `P${i + 1}` }));
+      const [p, q] = [prospectOf({ name: "P" }), prospectOf({ name: "Q" })];
+
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(okResponse({ prospects: [...held, p, q], tournee: pulledDay(held) })),
+      });
+
+      const stops = (await db.outboxStops.toArray()).sort((a, b) => a.number - b.number);
+      expect(stops.map((s) => s.number)).toEqual([21, 22]);
+      expect(new Set(stops.map((s) => s.prospectId))).toEqual(new Set([p.id, q.id]));
+      expect(stops.every((s) => s.writtenBy === AGENT && !("unconfirmed" in s))).toBe(true);
+      expect(stops.every((s) => s.addedAt === 1_700_000_100_000)).toBe(true);
+    });
+
+    it("sends the joiner on the next sync, and queues a prospect once per pull", async () => {
+      const held = [prospectOf(), prospectOf()];
+      const p = prospectOf();
+      const requests: SyncRequest[] = [];
+      const server = acceptingServer(requests);
+      // The server accepts what it is sent but has not stored the joiner yet.
+      const echo = (async (url: string, init: RequestInit) => {
+        const res = await server(url, init);
+        const body = (await res.json()) as SyncResponse;
+        return new Response(
+          JSON.stringify({ ...body, prospects: [...held, p], tournee: pulledDay(held) }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch;
+
+      await runSync({ db, identity: AGENT, fetchFn: echo });
+      expect(await db.outboxStops.count()).toBe(1);
+
+      await runSync({ db, identity: AGENT, fetchFn: echo });
+      expect(requests[1]?.stops.map((s) => [s.number, s.prospectId])).toEqual([[3, p.id]]);
+    });
+
+    it("does not rejoin a stop that left, nor one the pull marks left and brings back", async () => {
+      const held = Array.from({ length: 3 }, () => prospectOf());
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(
+          // Stop 2 is `left` yet its prospect is still pulled (open again): it must not rejoin.
+          okResponse({
+            prospects: held,
+            tournee: pulledDay(held, [2]),
+          }),
+        ),
+      });
+
+      expect(await db.outboxStops.count()).toBe(0);
+    });
+
+    it("appends nothing when the pull has no tournée today", async () => {
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(okResponse({ prospects: [prospectOf()], tournee: null })),
+      });
+
+      expect(await db.outboxStops.count()).toBe(0);
+    });
+
+    it("re-appends the prospect a colliding phone lost, as the next number", async () => {
+      const held = [prospectOf(), prospectOf()];
+      const winner = prospectOf({ name: "X" });
+      const loser = prospectOf({ name: "Y" });
+      const day = pulledDay(held);
+      // This phone sent Y as 3; the server kept X as 3 (from the other phone) and accepted Y.
+      await db.outboxStops.add({
+        id: crypto.randomUUID(),
+        tourneeId: day.id,
+        prospectId: loser.id,
+        number: 3,
+        addedAt: 1_700_000_050_000,
+        writtenBy: AGENT,
+      });
+      const stopId = (await db.outboxStops.toArray())[0]?.id ?? "";
+      const withWinner: TodayTournee = {
+        ...day,
+        stops: [
+          ...day.stops,
+          {
+            id: crypto.randomUUID(),
+            prospectId: winner.id,
+            number: 3,
+            addedAt: 1_700_000_060_000,
+            left: false,
+          },
+        ],
+      };
+
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(
+          okResponse({
+            accepted: { prospects: [], visits: [], tournees: [], stops: [stopId] },
+            prospects: [...held, winner, loser],
+            tournee: withWinner,
+          }),
+        ),
+      });
+
+      const [again] = await db.outboxStops.toArray();
+      expect(again).toMatchObject({ prospectId: loser.id, number: 4 });
+      expect(again?.id).not.toBe(stopId);
+    });
   });
 
   it("clears the pulled tournée when the pull says there is none", async () => {

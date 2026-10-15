@@ -89,7 +89,43 @@ export async function writeTournees(
     for (const s of mapped) {
       if (owned.has(s.tourneeId) && !known.has(s.prospectId)) waiting.add(s.id);
     }
-    const rows: NewTourneeStopRow[] = insertable.map((s) => ({
+    // Two phones of one agent can append different joiners under the same number:
+    // the first stored keeps it (ADR-0036 › Numbers). The loser's stop is still accepted, and
+    // its next pull makes the phone re-append that prospect as the next number.
+    const numbers = new Map<string, Map<number, string>>();
+    const prospectsHeld = new Map<string, Set<string>>();
+    const touched = [...new Set(insertable.map((s) => s.tourneeId))];
+    for (const batch of chunk(touched, 1)) {
+      for (const row of await db
+        .select({
+          tourneeId: tourneeStops.tourneeId,
+          number: tourneeStops.number,
+          prospectId: tourneeStops.prospectId,
+        })
+        .from(tourneeStops)
+        .where(inArray(tourneeStops.tourneeId, batch))) {
+        const byNumber = numbers.get(row.tourneeId) ?? new Map<number, string>();
+        byNumber.set(row.number, row.prospectId);
+        numbers.set(row.tourneeId, byNumber);
+        const byProspect = prospectsHeld.get(row.tourneeId) ?? new Set<string>();
+        byProspect.add(row.prospectId);
+        prospectsHeld.set(row.tourneeId, byProspect);
+      }
+    }
+    const storable = insertable.filter((s) => {
+      const byNumber = numbers.get(s.tourneeId) ?? new Map<number, string>();
+      const byProspect = prospectsHeld.get(s.tourneeId) ?? new Set<string>();
+      // A resend of a prospect the tournée already holds is no collision, and the
+      // insert would ignore it anyway.
+      if (byProspect.has(s.prospectId)) return false;
+      if (byNumber.has(s.number)) return false;
+      byNumber.set(s.number, s.prospectId);
+      byProspect.add(s.prospectId);
+      numbers.set(s.tourneeId, byNumber);
+      prospectsHeld.set(s.tourneeId, byProspect);
+      return true;
+    });
+    const rows: NewTourneeStopRow[] = storable.map((s) => ({
       id: s.id,
       tourneeId: s.tourneeId,
       prospectId: s.prospectId,

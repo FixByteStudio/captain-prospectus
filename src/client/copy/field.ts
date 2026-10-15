@@ -41,6 +41,10 @@ export const copy = {
     title: "Tournée du jour",
     /** Every stop has a visit today. Carnet's line and button arrive with entry 8 of #496. */
     allDone: "Tous les arrêts sont faits.",
+    /** Every stop left unvisited: the day holds none, which is not « all done ». */
+    nothingLeft: "Plus aucun arrêt dans votre tournée aujourd'hui.",
+    /** A prospect that joined the tournée after the swipe. */
+    joiner: "Nouveau",
     distanceUnknown: "Position inconnue",
     navigate: "Y aller",
     visit: "Visiter",

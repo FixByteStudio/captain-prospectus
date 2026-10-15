@@ -14,12 +14,15 @@ import type { TourneeItem } from "./tournee-stops";
 export function CarteList({
   stops,
   loaded,
+  total,
   selectedId,
   onToggle,
 }: {
   stops: readonly TourneeItem[];
   /** False while the tables are read: no sentence yet, not "all done". */
   loaded: boolean;
+  /** The day's stops: 0 reads « Plus aucun arrêt », not « all done ». */
+  total: number;
   /** `CarteScreen`'s own selection: null means "the next stop", which is
    * already open on the card — no row matches it, so none expands. */
   selectedId: string | null;
@@ -57,7 +60,11 @@ export function CarteList({
   return (
     <section aria-label={copy.carte.listLabel} className="space-y-4 p-4">
       {!next ? (
-        loaded && <p className="text-muted-foreground">{copy.today.allDone}</p>
+        loaded && (
+          <p className="text-muted-foreground">
+            {total === 0 ? copy.today.nothingLeft : copy.today.allDone}
+          </p>
+        )
       ) : (
         <>
           <div ref={cardRef}>

@@ -1,15 +1,17 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";
-import type { Visit } from "../../shared/schemas";
+import type { Prospect, Visit } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
 import {
+  appendJoiners,
   cacheVisitHistory,
   clearAgentCache,
   confirmOutbox,
   FieldDb,
   getMeta,
   outboxCounts,
+  queueFieldProspect,
   queueVisit,
   releaseUnconfirmed,
   setMeta,
@@ -934,6 +936,219 @@ describe("clearAgentCache and the tournée", () => {
     await expect(db.visitedStops.count()).resolves.toBe(0);
     await expect(db.outboxTournees.count()).resolves.toBe(1);
     await expect(db.outboxStops.count()).resolves.toBe(2);
+    db.close();
+  });
+});
+
+describe("appendJoiners", () => {
+  const NOW = 1_700_000_100_000;
+  const AGENT = "a@example.com";
+  const DAY_START = brusselsPeriod(NOW, 1).from;
+
+  const prospect = (over: Partial<Prospect> = {}): Prospect => ({
+    id: crypto.randomUUID(),
+    name: "Le Bouchon",
+    type: "restaurant",
+    lat: 50.85,
+    lng: 4.35,
+    address: null,
+    phone: null,
+    website: null,
+    cuisine: null,
+    source: "csv",
+    status: "assigned",
+    assignedTo: AGENT,
+    lastVisitAt: null,
+    nextVisitAt: null,
+    ...over,
+  });
+
+  /** A pulled tournée of `held`, numbered 1..n and started before `NOW`. */
+  async function pulled(db: FieldDb, held: readonly Prospect[]) {
+    const tourneeId = crypto.randomUUID();
+    await db.prospects.bulkPut([...held]);
+    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tourneeStops.bulkPut(
+      held.map((p, i) => ({
+        id: crypto.randomUUID(),
+        tourneeId,
+        prospectId: p.id,
+        number: i + 1,
+        addedAt: DAY_START + 1,
+        left: false,
+      })),
+    );
+    return tourneeId;
+  }
+
+  it("queues the missing prospects as the next numbers, stamped like the swipe", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const held = [prospect(), prospect()];
+    const tourneeId = await pulled(db, held);
+    const [p, q] = [prospect({ name: "P" }), prospect({ name: "Q" })];
+    await db.prospects.bulkPut([p, q]);
+
+    await appendJoiners(db, AGENT, NOW);
+
+    const stops = (await db.outboxStops.toArray()).sort((a, b) => a.number - b.number);
+    expect(stops.map((s) => s.number)).toEqual([3, 4]);
+    expect(stops.every((s) => s.tourneeId === tourneeId && s.writtenBy === AGENT)).toBe(true);
+    expect(stops.every((s) => s.addedAt === NOW && !("unconfirmed" in s))).toBe(true);
+    expect(new Set(stops.map((s) => s.prospectId))).toEqual(new Set([p.id, q.id]));
+    db.close();
+  });
+
+  it("appends a prospect once, however many times it runs", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await pulled(db, [prospect()]);
+    await db.prospects.put(prospect());
+
+    await appendJoiners(db, AGENT, NOW);
+    await appendJoiners(db, AGENT, NOW + 1);
+
+    await expect(db.outboxStops.count()).resolves.toBe(1);
+    db.close();
+  });
+
+  it("does nothing before the swipe, or with yesterday's tournée", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await db.prospects.put(prospect());
+    await appendJoiners(db, AGENT, NOW);
+
+    await db.tournees.put({
+      id: crypto.randomUUID(),
+      dayStart: DAY_START - 86_400_000,
+      startedAt: DAY_START - 86_000_000,
+    });
+    await appendJoiners(db, AGENT, NOW);
+
+    await expect(db.outboxStops.count()).resolves.toBe(0);
+    db.close();
+  });
+
+  it("stamps a joiner unconfirmed when asked", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await pulled(db, [prospect()]);
+    await db.prospects.put(prospect());
+
+    await appendJoiners(db, AGENT, NOW, true);
+
+    expect((await db.outboxStops.toArray())[0]?.unconfirmed).toBe(true);
+    db.close();
+  });
+
+  it("appends to a tournée still in the outbox and counts its queued stops", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const held = prospect();
+    await db.prospects.put(held);
+    const tourneeId = crypto.randomUUID();
+    await startTournee(
+      db,
+      {
+        tournee: { id: tourneeId, startedAt: DAY_START + 1 },
+        stops: [
+          {
+            id: crypto.randomUUID(),
+            tourneeId,
+            prospectId: held.id,
+            number: 9,
+            addedAt: DAY_START + 1,
+          },
+        ],
+      },
+      AGENT,
+    );
+    await db.prospects.put(prospect());
+
+    await appendJoiners(db, AGENT, NOW);
+
+    const numbers = (await db.outboxStops.toArray()).map((s) => s.number).sort((a, b) => a - b);
+    expect(numbers).toEqual([9, 10]);
+    db.close();
+  });
+});
+
+describe("queueFieldProspect", () => {
+  const NOW = 1_700_000_100_000;
+  const AGENT = "a@example.com";
+  const DAY_START = brusselsPeriod(NOW, 1).from;
+
+  const field = () => ({
+    id: crypto.randomUUID(),
+    name: "Food truck du pont",
+    type: "food_truck" as const,
+    lat: null,
+    lng: null,
+    address: null,
+    phone: null,
+    createdAt: NOW,
+  });
+
+  it("queues the prospect and its stop together once the day has started", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const tourneeId = crypto.randomUUID();
+    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tourneeStops.put({
+      id: crypto.randomUUID(),
+      tourneeId,
+      prospectId: crypto.randomUUID(),
+      number: 20,
+      addedAt: DAY_START + 1,
+      left: false,
+    });
+    const prospect = field();
+
+    await queueFieldProspect(db, prospect, AGENT, false, NOW);
+
+    await expect(db.outboxProspects.toArray()).resolves.toEqual([
+      { ...prospect, writtenBy: AGENT },
+    ]);
+    const [stop] = await db.outboxStops.toArray();
+    expect(stop).toMatchObject({ prospectId: prospect.id, number: 21, tourneeId });
+    db.close();
+  });
+
+  it("stamps the joiner stop unconfirmed with the prospect", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const tourneeId = crypto.randomUUID();
+    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+
+    await queueFieldProspect(db, field(), AGENT, true, NOW);
+
+    const [stop] = await db.outboxStops.toArray();
+    expect(stop).toMatchObject({ tourneeId, writtenBy: AGENT, unconfirmed: true });
+    db.close();
+  });
+
+  it("queues only the prospect before the swipe", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+
+    await queueFieldProspect(db, field(), AGENT, true, NOW);
+
+    expect((await db.outboxProspects.toArray())[0]?.unconfirmed).toBe(true);
+    await expect(db.outboxStops.count()).resolves.toBe(0);
+    db.close();
+  });
+
+  it("queues neither when the stop cannot be written", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const tourneeId = crypto.randomUUID();
+    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    const prospect = field();
+    vi.spyOn(db.outboxStops, "bulkAdd").mockRejectedValueOnce(new Error("QuotaExceededError"));
+
+    await expect(queueFieldProspect(db, prospect, AGENT, false, NOW)).rejects.toThrow();
+
+    await expect(db.outboxProspects.count()).resolves.toBe(0);
     db.close();
   });
 });

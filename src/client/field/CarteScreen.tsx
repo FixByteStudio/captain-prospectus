@@ -114,7 +114,7 @@ function OfflineCanvas({ className }: { className?: string }) {
 }
 
 export function CarteScreen() {
-  const { stops, loaded, point, refresh } = useRound();
+  const { stops, loaded, total, point, refresh } = useRound();
   const online = useOnline();
   const isMobile = useIsMobile();
   const paneRef = useCarteTop<HTMLDivElement>();
@@ -163,7 +163,13 @@ export function CarteScreen() {
     >
       {!isMobile && (
         <div className="md:col-span-2 md:overflow-y-auto">
-          <CarteList stops={stops} loaded={loaded} selectedId={selectedId} onToggle={toggle} />
+          <CarteList
+            stops={stops}
+            loaded={loaded}
+            total={total}
+            selectedId={selectedId}
+            onToggle={toggle}
+          />
         </div>
       )}
       {mapArea}
@@ -171,6 +177,7 @@ export function CarteScreen() {
         <CarteSheet
           item={selected}
           loaded={loaded}
+          total={total}
           isNext={selected !== null && selected === stops[0]}
         />
       )}

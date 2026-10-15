@@ -9,7 +9,13 @@ import type {
   StoredTournee,
   StoredVisit,
 } from "./db";
-import { todaysStops, visitedTodayIds, type TodaysStopsInput } from "./tournee-stops";
+import {
+  stopsOfToday,
+  todaysStops,
+  tourneeTotal,
+  visitedTodayIds,
+  type TodaysStopsInput,
+} from "./tournee-stops";
 
 const ME = "a@example.com";
 const NOW = 1_700_000_000_000;
@@ -434,5 +440,143 @@ describe("visitedTodayIds", () => {
     });
 
     expect([...ids].sort()).toEqual([a, b].sort());
+  });
+});
+
+describe("leavers, joiners and the total", () => {
+  const seven = () => Array.from({ length: 7 }, (_, i) => prospect({ name: `P${i + 4}` }));
+
+  it("drops a stop the server marks left, and the next stop does not change", () => {
+    const ps = seven();
+    const stops = ps.map((p, i) => pulledStop(p.id, i + 4, { left: i === 3 }));
+    const base = input({
+      pulledTournees: [pulledTournee()],
+      pulledStops: stops,
+      prospects: ps,
+    });
+
+    const items = todaysStops(base);
+
+    expect(items.map((i) => i.number)).toEqual([4, 5, 6, 8, 9, 10]);
+    expect(nth(items, 0).number).toBe(4);
+    expect(tourneeTotal(base)).toBe(6);
+  });
+
+  it("a stop that comes back keeps its number and is not a joiner", () => {
+    const p = prospect();
+    const items = todaysStops(
+      input({
+        pulledTournees: [pulledTournee()],
+        pulledStops: [pulledStop(p.id, 7, { left: false })],
+        prospects: [p],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([[7, false]]);
+  });
+
+  it("marks a stop added after the swipe as a joiner, and no other", () => {
+    const [a, b] = [prospect(), prospect()];
+    const items = todaysStops(
+      input({
+        pulledTournees: [pulledTournee()],
+        pulledStops: [pulledStop(a.id, 1), pulledStop(b.id, 2, { addedAt: TODAY + 1 })],
+        prospects: [a, b],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("shows a joiner still in the outbox next to the pulled stops, once", () => {
+    const [a, b] = [prospect(), prospect()];
+    const items = todaysStops(
+      input({
+        pulledTournees: [pulledTournee()],
+        pulledStops: [pulledStop(a.id, 1)],
+        // The pull holds `a` already, so its queued twin is not drawn again.
+        outboxStops: [
+          queuedStop(a.id, 1, { tourneeId: TOURNEE_ID }),
+          queuedStop(b.id, 2, { tourneeId: TOURNEE_ID, addedAt: TODAY + 1 }),
+          queuedStop(prospect().id, 3, { tourneeId: TOURNEE_ID, writtenBy: "b@example.com" }),
+        ],
+        prospects: [a, b],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("flags a joiner on a tournée still only in the outbox", () => {
+    const [a, b] = [prospect(), prospect()];
+    const items = todaysStops(
+      input({
+        outboxTournees: [queuedTournee()],
+        outboxStops: [queuedStop(a.id, 1), queuedStop(b.id, 2, { addedAt: TODAY + 1 })],
+        prospects: [a, b],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("counts each prospect once, visited stops in and left stops out", () => {
+    const ps = [prospect(), prospect(), prospect()];
+    const total = tourneeTotal({
+      pulledTournees: [pulledTournee()],
+      pulledStops: [
+        pulledStop(nth(ps, 0).id, 1),
+        pulledStop(nth(ps, 1).id, 2, { left: true }),
+        pulledStop(nth(ps, 2).id, 3),
+      ],
+      outboxTournees: [],
+      outboxStops: [queuedStop(nth(ps, 0).id, 4, { tourneeId: TOURNEE_ID })],
+      identity: ME,
+      now: NOW,
+    });
+
+    expect(total).toBe(2);
+  });
+
+  it("a total with no tournée today is 0", () => {
+    expect(
+      tourneeTotal({
+        pulledTournees: [],
+        pulledStops: [],
+        outboxTournees: [queuedTournee({ startedAt: YESTERDAY })],
+        outboxStops: [],
+        identity: ME,
+        now: NOW,
+      }),
+    ).toBe(0);
+  });
+
+  it("reads the queued tournée's stops, and nobody else's", () => {
+    const p = prospect();
+    const day = stopsOfToday(
+      {
+        pulledTournees: [],
+        pulledStops: [],
+        outboxTournees: [
+          queuedTournee(),
+          queuedTournee({ id: crypto.randomUUID(), writtenBy: "b@example.com" }),
+        ],
+        outboxStops: [queuedStop(p.id, 1)],
+        identity: ME,
+      },
+      PERIOD,
+    );
+
+    expect(day?.tourneeId).toBe(QUEUED_ID);
+    expect(day?.stops.map((s) => s.number)).toEqual([1]);
   });
 });

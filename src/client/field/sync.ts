@@ -31,7 +31,7 @@ import type {
   TourneeSync,
   Visit,
 } from "../../shared/schemas";
-import { clearAgentCache, type FieldDb, outboxCounts, setMeta } from "./db";
+import { appendJoiners, clearAgentCache, type FieldDb, outboxCounts, setMeta } from "./db";
 import { readingToSend } from "./last-reading";
 import { type OutboxStamp, sendableBy } from "./outbox-stamp";
 
@@ -287,6 +287,11 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       // The today list is a cache: replace it wholesale.
       await db.prospects.clear();
       await db.prospects.bulkPut(body.prospects);
+
+      // What the pull brought in after the swipe joins the tournée, in this
+      // same transaction so a phone never shows the prospects without a stop.
+      // `identity` is the one the server just answered for.
+      await appendJoiners(db, identity, body.serverTime);
 
       await setMeta(db, "script", body.script);
       await setMeta(db, "lastSyncAt", body.serverTime);

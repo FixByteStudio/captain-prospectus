@@ -31,7 +31,7 @@ import { copy, TYPE_LABELS } from "../copy/field";
 import { formatCoordinate } from "../format";
 import { PROSPECT_TYPES, type ProspectType } from "../../shared/constants";
 import { fieldProspectSchema } from "../../shared/schemas";
-import { fieldDb } from "./db";
+import { fieldDb, queueFieldProspect } from "./db";
 import { useAgentPosition } from "./useAgentPosition";
 import { useRegisterDirty } from "./leave-guard";
 import { useSyncState } from "./useSync";
@@ -89,11 +89,9 @@ export function AddProspectScreen() {
       setSaveFailed(false);
 
       try {
-        await fieldDb.outboxProspects.add({
-          ...parsed.data,
-          writtenBy: identity,
-          ...(confirmed ? {} : { unconfirmed: true }),
-        });
+        // One transaction: the prospect is queued and, once the day has started,
+        // appended to the tournée as « Nouveau » (ADR-0036 › Numbers).
+        await queueFieldProspect(fieldDb, parsed.data, identity, !confirmed);
       } catch {
         // Same rule as the visit form: the outbox row is the only copy of this
         // prospect, so a failed write is reported rather than navigated past.
