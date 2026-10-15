@@ -542,7 +542,10 @@ export function VisitScreen() {
       }
 
       void syncNow();
-      await navigate(backTo, { replace: true, state: { saved: true } });
+      await navigate(backTo, {
+        replace: true,
+        state: { saved: true, savedAt: result.visit.visitedAt },
+      });
     },
     [backTo, confirmed, id, identity, navigate, point, script, syncNow, visitId],
   );

@@ -7,14 +7,19 @@
  * `RoundMap` is mocked, as `CarteScreen.test.tsx` does: Leaflet is
  * `RoundMap.test.tsx`'s business.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { copy } from "../copy/field";
 import type { Prospect, Visit } from "../../shared/schemas";
 import { fieldDb } from "./db";
 import { RoundMap } from "./RoundMap";
-import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
+import {
+  clearTourneeTables,
+  seedPulledTournee,
+  setPhoneClockToTourneeDay,
+  TOURNEE_NOW,
+} from "./tournee-test-helpers";
 import { CarteScreen } from "./CarteScreen";
 import type { SyncState } from "./useSync";
 
@@ -83,7 +88,10 @@ function asPhone() {
   );
 }
 
+beforeEach(setPhoneClockToTourneeDay);
+
 afterEach(async () => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.clearAllMocks();
   syncState.current = { lastSyncAt: TOURNEE_NOW, identity: "agent@example.com" };

@@ -3,12 +3,24 @@
  * tournée and its numbered stops, written to Dexie the way a sync would.
  * Tests only.
  */
+import { vi } from "vitest";
 import { brusselsPeriod } from "../../shared/period";
 import type { Prospect } from "../../shared/schemas";
 import { fieldDb } from "./db";
 
 /** The clock every screen test fixes through the mocked `useSyncState().lastSyncAt`. */
 export const TOURNEE_NOW = 1_700_000_000_000;
+
+/**
+ * The phone's clock on the tournée's day. `useFieldNow` takes the later of the mocked
+ * `lastSyncAt` and the real mount time, so a screen test that fakes the former must
+ * fake the latter too. Only `Date`: Dexie and Testing Library keep their timers.
+ * Pair with `vi.useRealTimers()` in `afterEach`.
+ */
+export function setPhoneClockToTourneeDay(): void {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(TOURNEE_NOW);
+}
 
 /** Caches `prospects` and pulls a tournée for the day of `now` numbering them 1, 2, 3… or by `numbers`. */
 export async function seedPulledTournee(

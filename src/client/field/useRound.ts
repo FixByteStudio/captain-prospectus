@@ -4,7 +4,7 @@
  * re-derived the stops on its own could number its pins or rows differently
  * from the other screen's, which is exactly the drift a shared hook rules out.
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Point } from "../../shared/geo";
 import { fieldDb } from "./db";
@@ -16,6 +16,7 @@ import {
   type RoundProgress,
   type TourneeItem,
 } from "./tournee-stops";
+import { useFieldNow } from "./field-clock";
 import { useAgentPosition } from "./useAgentPosition";
 import { useSyncState } from "./useSync";
 
@@ -35,24 +36,16 @@ export type RoundState = {
   progress: RoundProgress;
   /** Today's door-days, newest first: Carnet's rows, from this same snapshot and clock. */
   carnet: CarnetEntry[];
-  /** The deliberately stale "now" the stops were built with (see below). */
+  /** The field clock's "now" the stops were built with (`useFieldNow`). */
   now: number;
 };
 
 export function useRound(): RoundState {
   const { point, refresh } = useAgentPosition();
-  const { lastSyncAt, identity } = useSyncState();
+  const { identity } = useSyncState();
 
-  /**
-   * "Now", for deciding which Brussels day is today.
-   *
-   * Taken from the last successful sync rather than read during render, which
-   * would be an impure call, so Tournée picks the same day the gate opened on
-   * (`useTourneeGate`). The mount time covers the first render, before any sync
-   * has landed.
-   */
-  const [openedAt] = useState(() => Date.now());
-  const now = lastSyncAt ?? openedAt;
+  // The one field clock (`field-clock.ts`), so Tournée picks the same day the gate opened on.
+  const now = useFieldNow();
 
   // One snapshot, like `useTourneeGate`: eight separate queries would each
   // default to `[]` and flash an empty tournée between ticks.

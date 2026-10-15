@@ -100,7 +100,10 @@ export function AddProspectScreen() {
       }
 
       void syncNow();
-      await navigate("/tournee", { replace: true, state: { added: true } });
+      await navigate("/tournee", {
+        replace: true,
+        state: { added: true, addedAt: parsed.data.createdAt },
+      });
     },
     [confirmed, form, identity, navigate, point, prospectId, syncNow],
   );

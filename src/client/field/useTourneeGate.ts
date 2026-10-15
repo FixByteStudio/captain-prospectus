@@ -7,18 +7,18 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { fieldDb, getMeta } from "./db";
-import { useSyncState } from "./useSync";
-import { decideTourneeGate, type GateInput, type TourneeGate } from "./tournee-gate";
+import { decideTourneeGate, holdGate, type GateInput, type TourneeGate } from "./tournee-gate";
 
 type Stored = Omit<GateInput, "identity" | "now">;
 
-export function useTourneeGate(identity: string): TourneeGate {
-  // "Today" is `useRound`'s pattern: the last sync of this session, else the
-  // moment the screens opened, both on the phone's clock like the swipe's
-  // `startedAt`. `meta.lastSyncAt` is the server's clock and only answers
-  // "has a pull ever succeeded?". Midnight timers are entry 9.
-  const { lastSyncAt: syncedAt } = useSyncState();
-  const [openedAt] = useState(() => Date.now());
+/**
+ * `now` is the frame's field clock (`useFieldNow`), the one it also keys the
+ * start screen by; it turns over at Brussels midnight, which brings the gates
+ * back. `onForm` is whether the route is a visit or add-prospect form: the gate
+ * does not close under one that was entered open (`holdGate`).
+ */
+export function useTourneeGate(identity: string, now: number, onForm: boolean): TourneeGate {
+  const [wasOpen, setWasOpen] = useState(false);
 
   const stored = useLiveQuery(async (): Promise<Stored> => {
     const [lastSyncAt, pulled, outboxTournees, prospects, outboxProspects] = await Promise.all([
@@ -31,10 +31,11 @@ export function useTourneeGate(identity: string): TourneeGate {
     return { lastSyncAt, pulled, outboxTournees, prospects, outboxProspects };
   }, []);
 
-  if (!stored) return { kind: "loading" };
-  return decideTourneeGate({
-    ...stored,
-    identity,
-    now: syncedAt ?? openedAt,
-  });
+  const live: TourneeGate = stored
+    ? decideTourneeGate({ ...stored, identity, now })
+    : { kind: "loading" };
+  const held = holdGate(live, onForm, wasOpen);
+  // Adjusted during render, React's pattern for state derived from a changing value.
+  if (held.wasOpen !== wasOpen) setWasOpen(held.wasOpen);
+  return held.gate;
 }
