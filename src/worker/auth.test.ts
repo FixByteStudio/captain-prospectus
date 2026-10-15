@@ -571,12 +571,18 @@ describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
     await db().update(users).set({ passphraseHash: agentHash }).where(eq(users.email, TEST_AGENT));
     await db().delete(sessions);
 
+    // The generated passphrase can already end in "X"; always change the last character.
+    const wrongLast = passphrase.endsWith("A") ? "B" : "A";
     const responses = await Promise.all([
       login({ kind: "passphrase", email: "unknown@x.be", passphrase }),
       login({ kind: "passphrase", email: "nohash@x.be", passphrase }),
       login({ kind: "passphrase", email: "gone@x.be", passphrase }),
       login({ kind: "passphrase", email: TEST_AGENT, passphrase }),
-      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: `${passphrase.slice(0, -1)}X` }),
+      login({
+        kind: "passphrase",
+        email: TEST_ADMIN,
+        passphrase: `${passphrase.slice(0, -1)}${wrongLast}`,
+      }),
       login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "0".repeat(64) }),
     ]);
     const bodies = await Promise.all(responses.map((r) => r.text()));
