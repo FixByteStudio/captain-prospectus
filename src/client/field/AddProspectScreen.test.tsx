@@ -79,7 +79,6 @@ afterEach(async () => {
     fieldDb.prospects.clear(),
     fieldDb.outboxProspects.clear(),
     fieldDb.outboxVisits.clear(),
-    fieldDb.sentVisits.clear(),
     clearTourneeTables(),
   ]);
 });

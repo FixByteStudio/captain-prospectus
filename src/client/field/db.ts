@@ -26,7 +26,7 @@ import { stopsOfToday } from "./tournee-stops";
 import { sendableBy, writtenByOrUnstamped, type OutboxStamp } from "./outbox-stamp";
 
 // Re-exported so the store module still names everything a row carries;
-// pure callers (`progress.ts`, `sync.ts`) import from `outbox-stamp.ts`.
+// pure callers (`tournee-stops.ts`, `sync.ts`) import from `outbox-stamp.ts`.
 export { sendableBy, writtenByOrUnstamped, type OutboxStamp };
 
 export type MetaValues = {
@@ -54,27 +54,6 @@ export type PulledStop = TourneeStop & { tourneeId: string };
 export type PulledTournee = Omit<TodayTournee, "stops">;
 export type MetaRow = { key: MetaKey; value: MetaValues[MetaKey] };
 
-/**
- * One row of the client-only log of visits queued today — GH #119, G8.
- *
- * `id` is the visit id (the outbox's own primary key), so the union with
- * `outboxVisits` dedupes for free. `prospectId` is the stop the visit
- * belongs to, so `dailyProgress` can exclude a stop already counted from the
- * denominator. `writtenBy` is the identity that queued it, filtered exactly
- * like the outbox side (`sendableBy`) so a shared phone's count is the
- * signed-in agent's own. `unconfirmed` mirrors the outbox stamp
- * (docs/backlog/013): set when `writtenBy` came from a cached identity, and
- * cleared by `confirmOutbox` along with the outbox rows. Never sent: this
- * store never touches the wire.
- */
-export type SentVisit = {
-  id: string;
-  prospectId: string;
-  sentAt: number;
-  writtenBy: string;
-  unconfirmed?: true;
-};
-
 export class FieldDb extends Dexie {
   prospects!: Table<Prospect, string>;
   outboxProspects!: Table<StoredFieldProspect, string>;
@@ -87,15 +66,13 @@ export class FieldDb extends Dexie {
    * outbox, losing this loses nothing.
    */
   visitHistory!: Table<VisitHistoryEntry, string>;
-  /** The log `queueVisit` writes and `todaysSentVisits` reads — see `SentVisit`. */
-  sentVisits!: Table<SentVisit, string>;
   /** The swipe's tournée and its numbered stops, queued until the server lists them in `accepted`. */
   outboxTournees!: Table<StoredTournee, string>;
   outboxStops!: Table<StoredStop, string>;
   /** Today's tournée as the last pull returned it: a cache, replaced wholesale. */
   tournees!: Table<PulledTournee, string>;
   tourneeStops!: Table<PulledStop, string>;
-  /** Today's door-days from the last pull (Carnet and the counter read them later). */
+  /** Today's door-days from the last pull: the counter reads them, and Carnet will. */
   visitedStops!: Table<VisitedStop, string>;
 
   constructor(name = "captain-prospectus") {
@@ -155,6 +132,12 @@ export class FieldDb extends Dexie {
       tourneeStops: "id, tourneeId",
       visitedStops: "prospectId",
     });
+    /**
+     * v6 DROPS `sentVisits` (the phone-only log the counter no longer reads) and
+     * touches no other table, so no outbox row moves: the same no-upgrade shape
+     * v2, v4 and v5 used.
+     */
+    this.version(6).stores({ sentVisits: null });
   }
 }
 
@@ -310,32 +293,13 @@ export async function queueFieldProspect(
 }
 
 /**
- * Brussels midnight today — the admin dashboard's own day boundary
- * (`src/shared/period.ts`), reused so the agent's count and the admin's
- * "Visites aujourd'hui" can never disagree about where "today" starts.
- */
-function dayStart(now: number): number {
-  return brusselsPeriod(now, 1).from;
-}
-
-/**
- * The one queueing function (GH #119, docs/domains/field-operations.md
- * #offline-sync). One transaction, two writes — the outbox `add` and the log
- * `put` — so a visit logged but never queued (which would overcount for
- * ever) and a visit queued but never logged (which would undercount) are
- * both impossible: either both happen or, on a rejected write, neither does.
- *
- * The prune deliberately runs after this commits, not inside it: it is a
- * multi-row delete, and giving a bookkeeping delete the power to roll back a
- * queued visit is exactly what INVARIANT 5 forbids. Its failure is silent —
- * `todaysSentVisits` bounds the read at both ends, so an unpruned row from a
- * previous day is already invisible.
+ * The one queueing function (docs/domains/field-operations.md#offline-sync): the
+ * outbox `add`, which the counter reads back as today's unsent door-days.
  *
  * `unconfirmed` (docs/backlog/013) is set when `identity` came from the cache
- * rather than a live `/api/me`: the outbox row and its log entry are stamped
- * with the cached email, but marked as not yet safe to send, until
- * `confirmOutbox` re-stamps them once a live answer says who is really
- * signed in.
+ * rather than a live `/api/me`: the outbox row is stamped with the cached email,
+ * but marked as not yet safe to send, until `confirmOutbox` re-stamps it once a
+ * live answer says who is really signed in.
  */
 export async function queueVisit(
   db: FieldDb,
@@ -344,37 +308,7 @@ export async function queueVisit(
   unconfirmed = false,
 ): Promise<void> {
   const flag = unconfirmed ? ({ unconfirmed: true } as const) : {};
-  await db.transaction("rw", db.outboxVisits, db.sentVisits, async () => {
-    await db.outboxVisits.add({ ...visit, writtenBy: identity, ...flag });
-    await db.sentVisits.put({
-      id: visit.id,
-      prospectId: visit.prospectId,
-      sentAt: Date.now(),
-      writtenBy: identity,
-      ...flag,
-    });
-  });
-
-  void db.sentVisits
-    .where("sentAt")
-    .below(dayStart(Date.now()))
-    .delete()
-    .catch(() => {
-      // Housekeeping only — see the function comment for why a failure here
-      // costs nothing.
-    });
-}
-
-/**
- * Today's logged visits, Brussels calendar day, bounded at **both** ends: the
- * upper bound stops a phone whose clock runs ahead from logging a row that
- * would otherwise count today and again tomorrow, and the lower bound is what
- * makes "today" mean today rather than "ever queued" (`between`, not a bare
- * `aboveOrEqual`).
- */
-export async function todaysSentVisits(db: FieldDb, now: number): Promise<SentVisit[]> {
-  const { from, to } = brusselsPeriod(now, 1);
-  return db.sentVisits.where("sentAt").between(from, to, true, false).toArray();
+  await db.outboxVisits.add({ ...visit, writtenBy: identity, ...flag });
 }
 
 /**
@@ -407,11 +341,6 @@ export async function cacheVisitHistory(
  * `accepted` list delete a queued visit, and a revoked session is not that.
  * The next identity does not send those rows either: each is stamped with its
  * writer and `runSync` holds back any stamped by someone else.
- *
- * `sentVisits` goes with the rest, not with the outbox: it is read-only
- * knowledge for rendering "{n} portes sur {total}" (GH #119), not a queued
- * write, so leaving the previous agent's visit ids, prospect ids and email on
- * the device would be the same leak this function exists to close.
  */
 export async function clearAgentCache(db: FieldDb): Promise<void> {
   // The last position reading is the previous agent's too (ADR-0028).
@@ -419,7 +348,6 @@ export async function clearAgentCache(db: FieldDb): Promise<void> {
   await Promise.all([
     db.prospects.clear(),
     db.visitHistory.clear(),
-    db.sentVisits.clear(),
     db.tournees.clear(),
     db.tourneeStops.clear(),
     db.visitedStops.clear(),
@@ -440,7 +368,7 @@ function outboxTables(db: FieldDb): Table<OutboxStamp, string>[] {
 }
 
 /**
- * Re-stamp every `unconfirmed` outbox and log row with `email` and drop the
+ * Re-stamp every `unconfirmed` outbox row with `email` and drop the
  * flag, in one transaction — docs/backlog/013.
  *
  * Called on every live `/api/me`, not only when *this* session opened
@@ -460,14 +388,13 @@ export async function confirmOutbox(db: FieldDb, email: string): Promise<void> {
     row.writtenBy = email;
     delete row.unconfirmed;
   };
-  await db.transaction("rw", [...outboxTables(db), db.sentVisits], async () => {
+  await db.transaction("rw", outboxTables(db), async () => {
     for (const table of outboxTables(db)) await table.toCollection().modify(confirm);
-    await db.sentVisits.toCollection().modify(confirm);
   });
 }
 
 /**
- * Drop the `unconfirmed` flag from every outbox and log row, keeping each
+ * Drop the `unconfirmed` flag from every outbox row, keeping each
  * row's own `writtenBy` — docs/backlog/013.
  *
  * Called on a 401: an expired cookie cannot confirm *anyone*, so nothing here
@@ -482,8 +409,7 @@ export async function releaseUnconfirmed(db: FieldDb): Promise<void> {
   const release = (row: OutboxStamp) => {
     delete row.unconfirmed;
   };
-  await db.transaction("rw", [...outboxTables(db), db.sentVisits], async () => {
+  await db.transaction("rw", outboxTables(db), async () => {
     for (const table of outboxTables(db)) await table.toCollection().modify(release);
-    await db.sentVisits.toCollection().modify(release);
   });
 }

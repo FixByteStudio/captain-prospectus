@@ -7,12 +7,12 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Point } from "../../shared/geo";
-import { fieldDb, type StoredVisit } from "./db";
-import { todaysStops, tourneeTotal, type TourneeItem } from "./tournee-stops";
+import { fieldDb } from "./db";
+import { todaysStops, tourneeCounter, type RoundProgress, type TourneeItem } from "./tournee-stops";
 import { useAgentPosition } from "./useAgentPosition";
 import { useSyncState } from "./useSync";
 
-const NO_VISITS: StoredVisit[] = [];
+const NO_PROGRESS: RoundProgress = { n: 0, total: 0, percent: 0 };
 
 export type RoundState = {
   /** False until the tables have been read once: an empty `stops` is not "all done" yet. */
@@ -24,11 +24,10 @@ export type RoundState = {
   point: Point | null;
   /** Ask again — the agent has moved, or granted permission since. */
   refresh: () => void;
-  /** The deliberately stale "now" the stops were built with (see below);
-   * Tournée's daily progress re-runs its own query on it. */
+  /** The tournée's counter, « {n} sur {total} »: from this one snapshot, like `stops`. */
+  progress: RoundProgress;
+  /** The deliberately stale "now" the stops were built with (see below). */
   now: number;
-  /** The unaccepted visits that took stops off the list, for daily progress. */
-  outboxVisits: StoredVisit[];
 };
 
 export function useRound(): RoundState {
@@ -86,18 +85,18 @@ export function useRound(): RoundState {
     [stored, identity, now, point],
   );
 
-  const total = useMemo(
-    () => (stored ? tourneeTotal({ ...stored, identity, now }) : 0),
-    [stored, identity, now],
-  );
+  const progress = useMemo(() => {
+    if (!stored) return NO_PROGRESS;
+    return tourneeCounter({ ...stored, identity, now });
+  }, [stored, identity, now]);
 
   return {
     stops,
-    total,
+    total: progress.total,
+    progress,
     loaded: stored !== undefined,
     point,
     refresh,
     now,
-    outboxVisits: stored?.outboxVisits ?? NO_VISITS,
   };
 }

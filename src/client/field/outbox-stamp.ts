@@ -2,8 +2,8 @@
  * Which identity may send an outbox row — docs/backlog/005.
  *
  * Pure, and apart from `db.ts` on purpose: `db.ts` constructs `fieldDb` at
- * module scope, and `progress.ts` needs this one definition of "mine" with no
- * Dexie behind it (the outbox side and the log side must agree).
+ * module scope, and `tournee-stops.ts` needs this one definition of "mine" with no
+ * Dexie behind it (the outbox side and the counter must agree).
  */
 
 /**
@@ -26,7 +26,7 @@ export type OutboxStamp = { writtenBy?: string; unconfirmed?: true };
  * Whether a row is `identity`'s own — written by them, or unstamped (a
  * pre-v3 row with no identity cached, which belongs to whoever reads it
  * first, docs/backlog/005). This is "mine" for *display*: `outboxCounts`
- * (`db.ts`) and `dailyProgress` (`progress.ts`) use it so an agent's own
+ * (`db.ts`) and `tourneeCounter` (`tournee-stops.ts`) use it so an agent's own
  * `unconfirmed` row still counts as pending and toward today's progress —
  * it is their own not-yet-sendable work, not another agent's (that
  * distinction is exactly what the `"unconfirmed"` sync state and its own

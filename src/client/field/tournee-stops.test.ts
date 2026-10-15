@@ -10,10 +10,10 @@ import type {
   StoredVisit,
 } from "./db";
 import {
+  doorDaysToday,
   stopsOfToday,
   todaysStops,
-  tourneeTotal,
-  visitedTodayIds,
+  tourneeCounter,
   type TodaysStopsInput,
 } from "./tournee-stops";
 
@@ -424,7 +424,7 @@ describe("todaysStops", () => {
   });
 });
 
-describe("visitedTodayIds", () => {
+describe("doorDaysToday", () => {
   it("unions the server's visited stops with this identity's outbox, today only", () => {
     const [a, b, c, d] = [
       crypto.randomUUID(),
@@ -432,14 +432,238 @@ describe("visitedTodayIds", () => {
       crypto.randomUUID(),
       crypto.randomUUID(),
     ];
-    const ids = visitedTodayIds({
+    const days = doorDaysToday({
       visitedStops: [visited(a), visited(d, { visitedAt: YESTERDAY })],
       outboxVisits: [visit(b), visit(c, { writtenBy: "b@example.com" })],
       identity: ME,
       period: PERIOD,
     });
 
-    expect([...ids].sort()).toEqual([a, b].sort());
+    expect([...days.keys()].sort()).toEqual([a, b].sort());
+  });
+
+  it("joins by visit id: the same visit on both sides is one visit and not pending", () => {
+    const p = crypto.randomUUID();
+    const queued = visit(p);
+    const days = doorDaysToday({
+      visitedStops: [visited(p, { visitIds: [queued.id] })],
+      outboxVisits: [queued],
+      identity: ME,
+      period: PERIOD,
+    });
+
+    expect(days.get(p)).toMatchObject({ visitIds: [queued.id], pending: false });
+  });
+
+  it("a later outbox visit joins the day, is pending and gives the outcome", () => {
+    const p = crypto.randomUUID();
+    const server = visited(p, { outcome: "no_contact", visitedAt: TODAY });
+    const later = visit(p, { outcome: "converted", visitedAt: TODAY + 1000 });
+    const days = doorDaysToday({
+      visitedStops: [server],
+      outboxVisits: [later],
+      identity: ME,
+      period: PERIOD,
+    });
+
+    expect(days.get(p)).toMatchObject({
+      visitIds: [...server.visitIds, later.id],
+      outcome: "converted",
+      visitedAt: TODAY + 1000,
+      pending: true,
+    });
+  });
+
+  it("an unconfirmed or unstamped outbox visit is mine", () => {
+    const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+    const days = doorDaysToday({
+      visitedStops: [],
+      outboxVisits: [visit(a, { unconfirmed: true }), visit(b, { writtenBy: undefined })],
+      identity: ME,
+      period: PERIOD,
+    });
+
+    expect(days.size).toBe(2);
+  });
+});
+
+describe("tourneeCounter", () => {
+  const twenty = () => Array.from({ length: 20 }, () => prospect());
+  const tournee = (
+    ps: readonly Prospect[],
+    over: (i: number) => Partial<PulledStop> = () => ({}),
+  ) => ({
+    pulledTournees: [pulledTournee()],
+    pulledStops: ps.map((p, i) => pulledStop(p.id, i + 1, over(i))),
+    outboxTournees: [],
+    outboxStops: [],
+    visitedStops: [],
+    outboxVisits: [],
+    identity: ME,
+    now: NOW,
+  });
+
+  it("15 of 20, from the server and the outbox together", () => {
+    const ps = twenty();
+    const base = tournee(ps);
+
+    expect(
+      tourneeCounter({
+        ...base,
+        visitedStops: ps.slice(0, 10).map((p) => visited(p.id)),
+        outboxVisits: ps.slice(10, 15).map((p) => visit(p.id)),
+      }),
+    ).toEqual({ n: 15, total: 20, percent: 75 });
+  });
+
+  it("right after the swipe is 0 of 20", () => {
+    expect(tourneeCounter(tournee(twenty()))).toEqual({ n: 0, total: 20, percent: 0 });
+  });
+
+  it("a second visit to a visited stop does not move n", () => {
+    const ps = twenty();
+    const base = tournee(ps);
+    const first = visited(nth(ps, 2).id);
+
+    expect(
+      tourneeCounter({
+        ...base,
+        visitedStops: [first],
+        outboxVisits: [visit(nth(ps, 2).id)],
+      }),
+    ).toEqual({ n: 1, total: 20, percent: 5 });
+  });
+
+  it("the same visit on both sides counts once", () => {
+    const ps = twenty();
+    const queued = visit(nth(ps, 0).id);
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps),
+        visitedStops: [visited(queued.prospectId, { visitIds: [queued.id] })],
+        outboxVisits: [queued],
+      }),
+    ).toEqual({ n: 1, total: 20, percent: 5 });
+  });
+
+  it("an unsynced visit counts before any sync", () => {
+    const ps = twenty();
+
+    expect(tourneeCounter({ ...tournee(ps), outboxVisits: [visit(nth(ps, 5).id)] })).toEqual({
+      n: 1,
+      total: 20,
+      percent: 5,
+    });
+  });
+
+  it("another identity's outbox visit does not count", () => {
+    const ps = twenty();
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps),
+        outboxVisits: [visit(nth(ps, 5).id, { writtenBy: "b@example.com" })],
+      }),
+    ).toEqual({ n: 0, total: 20, percent: 0 });
+  });
+
+  it("yesterday's visits do not count", () => {
+    const ps = twenty();
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps),
+        visitedStops: [visited(nth(ps, 0).id, { visitedAt: YESTERDAY })],
+        outboxVisits: [visit(nth(ps, 1).id, { visitedAt: YESTERDAY })],
+      }),
+    ).toEqual({ n: 0, total: 20, percent: 0 });
+  });
+
+  it("a door-day with no stop counts in neither n nor total", () => {
+    const ps = twenty();
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps),
+        visitedStops: [visited(crypto.randomUUID())],
+        outboxVisits: [visit(crypto.randomUUID())],
+      }),
+    ).toEqual({ n: 0, total: 20, percent: 0 });
+  });
+
+  it("a stop reassigned unvisited leaves total and not n", () => {
+    const ps = twenty();
+
+    expect(tourneeCounter(tournee(ps, (i) => ({ left: i === 19 })))).toEqual({
+      n: 0,
+      total: 19,
+      percent: 0,
+    });
+  });
+
+  it("a stop pulled left with a visit still in the outbox stays in n and total", () => {
+    const ps = twenty();
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps, (i) => ({ left: i === 0 })),
+        outboxVisits: [visit(nth(ps, 0).id)],
+      }),
+    ).toEqual({ n: 1, total: 20, percent: 5 });
+  });
+
+  it("a joiner adds one to total", () => {
+    const ps = twenty();
+    const joiner = prospect();
+
+    expect(
+      tourneeCounter({
+        ...tournee(ps),
+        pulledStops: [
+          ...tournee(ps).pulledStops,
+          pulledStop(joiner.id, 21, { addedAt: TODAY + 1 }),
+        ],
+      }),
+    ).toEqual({ n: 0, total: 21, percent: 0 });
+  });
+
+  it("after a cache wipe, a pull of 15 visited stops reads 15 of 20 again", () => {
+    const ps = twenty();
+    const wiped = tournee(ps);
+    expect(tourneeCounter(wiped)).toEqual({ n: 0, total: 20, percent: 0 });
+
+    expect(
+      tourneeCounter({ ...wiped, visitedStops: ps.slice(0, 15).map((p) => visited(p.id)) }),
+    ).toEqual({ n: 15, total: 20, percent: 75 });
+  });
+
+  it("rounds percent: 2 of 3 visited is 67", () => {
+    const ps = twenty().slice(0, 3);
+
+    expect(
+      tourneeCounter({ ...tournee(ps), visitedStops: ps.slice(0, 2).map((p) => visited(p.id)) }),
+    ).toEqual({ n: 2, total: 3, percent: 67 });
+  });
+
+  it("no stops, or all left unvisited, has a total of 0", () => {
+    expect(tourneeCounter(tournee([]))).toEqual({ n: 0, total: 0, percent: 0 });
+    const ps = twenty().slice(0, 2);
+    expect(tourneeCounter(tournee(ps, () => ({ left: true })))).toEqual({
+      n: 0,
+      total: 0,
+      percent: 0,
+    });
+  });
+
+  it("no tournée today is 0 of 0", () => {
+    expect(
+      tourneeCounter({
+        ...tournee([]),
+        pulledTournees: [],
+        outboxTournees: [queuedTournee({ startedAt: YESTERDAY })],
+      }),
+    ).toEqual({ n: 0, total: 0, percent: 0 });
   });
 });
 
@@ -459,7 +683,7 @@ describe("leavers, joiners and the total", () => {
 
     expect(items.map((i) => i.number)).toEqual([4, 5, 6, 8, 9, 10]);
     expect(nth(items, 0).number).toBe(4);
-    expect(tourneeTotal(base)).toBe(6);
+    expect(tourneeCounter({ ...base, visitedStops: [], outboxVisits: [] }).total).toBe(6);
   });
 
   it("a stop that comes back keeps its number and is not a joiner", () => {
@@ -531,7 +755,9 @@ describe("leavers, joiners and the total", () => {
 
   it("counts each prospect once, visited stops in and left stops out", () => {
     const ps = [prospect(), prospect(), prospect()];
-    const total = tourneeTotal({
+    const { total } = tourneeCounter({
+      visitedStops: [],
+      outboxVisits: [],
       pulledTournees: [pulledTournee()],
       pulledStops: [
         pulledStop(nth(ps, 0).id, 1),
@@ -549,14 +775,16 @@ describe("leavers, joiners and the total", () => {
 
   it("a total with no tournée today is 0", () => {
     expect(
-      tourneeTotal({
+      tourneeCounter({
+        visitedStops: [],
+        outboxVisits: [],
         pulledTournees: [],
         pulledStops: [],
         outboxTournees: [queuedTournee({ startedAt: YESTERDAY })],
         outboxStops: [],
         identity: ME,
         now: NOW,
-      }),
+      }).total,
     ).toBe(0);
   });
 

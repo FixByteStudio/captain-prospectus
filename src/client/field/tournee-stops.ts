@@ -43,12 +43,25 @@ export type TourneeItem = {
 
 type Period = { from: number; to: number };
 
+/** One prospect's day at the door: every visit of the day, joined by visit id. */
+export type DoorDay = {
+  prospectId: string;
+  visitIds: string[];
+  /** The day's latest visit's outcome. */
+  outcome: VisitedStop["outcome"];
+  /** The day's latest visit's time. */
+  visitedAt: number;
+  /** At least one visit is in the outbox and the server has not listed it. */
+  pending: boolean;
+};
+
 /**
- * The prospects with at least one visit in `period`: the server's visited stops
- * unioned with this identity's outbox visits. A visit from another day never
- * counts, and neither does another identity's.
+ * Today's door-days: the server's visited stops joined with this identity's
+ * outbox visits by visit id, so a visit seen on both sides counts once. A visit
+ * from another day never counts, and neither does another identity's. The latest
+ * `visitedAt` gives the outcome. Carnet reads it too (#496).
  */
-export function visitedTodayIds({
+export function doorDaysToday({
   visitedStops,
   outboxVisits,
   identity,
@@ -58,17 +71,46 @@ export function visitedTodayIds({
   outboxVisits: readonly StoredVisit[];
   identity: string;
   period: Period;
-}): Set<string> {
+}): Map<string, DoorDay> {
   const mine = writtenByOrUnstamped(identity);
   const today = (at: number) => at >= period.from && at < period.to;
-  const ids = new Set<string>();
+  const days = new Map<string, DoorDay>();
+
   for (const stop of visitedStops) {
-    if (today(stop.visitedAt)) ids.add(stop.prospectId);
+    if (!today(stop.visitedAt)) continue;
+    days.set(stop.prospectId, {
+      prospectId: stop.prospectId,
+      visitIds: [...stop.visitIds],
+      outcome: stop.outcome,
+      visitedAt: stop.visitedAt,
+      pending: false,
+    });
   }
+
   for (const visit of outboxVisits) {
-    if (mine(visit) && today(visit.visitedAt)) ids.add(visit.prospectId);
+    if (!mine(visit) || !today(visit.visitedAt)) continue;
+    const day = days.get(visit.prospectId);
+    if (!day) {
+      days.set(visit.prospectId, {
+        prospectId: visit.prospectId,
+        visitIds: [visit.id],
+        outcome: visit.outcome,
+        visitedAt: visit.visitedAt,
+        pending: true,
+      });
+      continue;
+    }
+    // The server already lists this visit: it is not pending, and not a second one.
+    if (day.visitIds.includes(visit.id)) continue;
+    day.visitIds.push(visit.id);
+    day.pending = true;
+    if (visit.visitedAt >= day.visitedAt) {
+      day.outcome = visit.outcome;
+      day.visitedAt = visit.visitedAt;
+    }
   }
-  return ids;
+
+  return days;
 }
 
 export type TodaysStopsInput = {
@@ -143,15 +185,42 @@ export function stopsOfToday(input: StopSources, period: Period): DayStops | nul
   return { tourneeId: own.id, startedAt: own.startedAt, stops: queued(own.id) };
 }
 
+/** What the counter shows: `percent` only fills the bar. */
+export type RoundProgress = { n: number; total: number; percent: number };
+
 /**
- * How many stops the agent's day holds: the snapshot plus the joiners, minus the
- * stops the server says left. A visited stop stays in (it is never left). Each
- * prospect counts once.
+ * The day's counter, « {n} sur {total} » (docs/design.md › Next-stop card).
+ * `n` is the tournée's stops with a door-day today, each once, so a second visit
+ * never moves it. `total` is the stops the server has not marked `left`, plus any
+ * `left` one that still has a door-day: a visited stop is always in `total`, so
+ * `n <= total`. A door-day with no stop in the tournée counts in neither.
  */
-export function tourneeTotal(input: StopSources & { now: number }): number {
-  const today = stopsOfToday(input, brusselsPeriod(input.now, 1));
-  if (!today) return 0;
-  return new Set(today.stops.filter((s) => !s.left).map((s) => s.prospectId)).size;
+export function tourneeCounter(
+  input: StopSources & {
+    visitedStops: readonly VisitedStop[];
+    outboxVisits: readonly StoredVisit[];
+    now: number;
+  },
+): RoundProgress {
+  const period = brusselsPeriod(input.now, 1);
+  const today = stopsOfToday(input, period);
+  if (!today) return { n: 0, total: 0, percent: 0 };
+  const visited = doorDaysToday({ ...input, period });
+
+  // A prospect has one stop; a `left` flag on any copy of it does not hide a visit.
+  const counted = new Set<string>();
+  const done = new Set<string>();
+  for (const stop of today.stops) {
+    if (visited.has(stop.prospectId)) {
+      counted.add(stop.prospectId);
+      done.add(stop.prospectId);
+    } else if (!stop.left) {
+      counted.add(stop.prospectId);
+    }
+  }
+  const n = done.size;
+  const total = counted.size;
+  return { n, total, percent: total === 0 ? 0 : Math.round((n / total) * 100) };
 }
 
 /**
@@ -161,7 +230,7 @@ export function tourneeTotal(input: StopSources & { now: number }): number {
  */
 export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
   const period = brusselsPeriod(input.now, 1);
-  const visited = visitedTodayIds({
+  const visited = doorDaysToday({
     visitedStops: input.visitedStops,
     outboxVisits: input.outboxVisits,
     identity: input.identity,

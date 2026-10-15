@@ -21,7 +21,7 @@ const round = vi.hoisted(() => ({
     point: null,
     refresh: vi.fn(),
     now: 0,
-    outboxVisits: [],
+    progress: { n: 0, total: 1, percent: 0 },
   } as RoundState,
 }));
 vi.mock("./useRound", () => ({ useRound: () => round.current }));
@@ -149,7 +149,7 @@ afterEach(() => {
     point: null,
     refresh: vi.fn(),
     now: 0,
-    outboxVisits: [],
+    progress: { n: 0, total: 1, percent: 0 },
   };
 });
 
