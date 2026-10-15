@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "./db/client";
 import { prospects, visits, visitsOrphaned } from "./db/schema";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
-import type { RecapResponse } from "../shared/schemas";
+import type { DashboardResponse, RecapResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 import { TEST_ADMIN, TEST_AGENT, resetTestUsers, seedUser } from "../../test/users";
 
@@ -73,6 +73,41 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("GET /api/admin/recap › door-days (ADR-0036)", () => {
+  it("counts a correction on one door once, and each door and each agent separately", async () => {
+    const dayStart = brusselsMidnightDaysFromNow(NOW, 0);
+    const a = await seedProspect();
+    const b = await seedProspect();
+    // `receive` makes the visit an hour before it arrives.
+    await receive(a, dayStart + 3 * 3_600_000);
+    await receive(a, dayStart + 6 * 3_600_000);
+    await receive(b, dayStart + 7 * 3_600_000);
+    await receive(a, dayStart + 8 * 3_600_000, TEST_ADMIN);
+
+    const { body } = await recap();
+
+    expect(body.visitsToday).toBe(3);
+  });
+
+  it("equals the dashboard's Visites for one day", async () => {
+    const dayStart = brusselsMidnightDaysFromNow(NOW, 0);
+    const a = await seedProspect();
+    await receive(a, dayStart + 3 * 3_600_000);
+    await receive(a, dayStart + 6 * 3_600_000);
+    await receive(await seedProspect(), dayStart + 7 * 3_600_000);
+    // Made yesterday, synced today: not today's door-day.
+    await receive(a, dayStart + 1_000);
+
+    const dashboard = await workerFetch("http://localhost/api/admin/dashboard?period=7");
+    const { visits: figure } = (await dashboard.json()) as DashboardResponse;
+    const { body } = await recap();
+
+    expect(body.visitsToday).toBe(2);
+    // The dashboard's last day of period 7 is today.
+    expect(figure.byDay[6]).toBe(body.visitsToday);
+  });
+});
+
 describe("GET /api/admin/recap", () => {
   it("reports an empty day with the roster, the Brussels date and the server's clock", async () => {
     const { status, cache, body } = await recap();
@@ -89,23 +124,25 @@ describe("GET /api/admin/recap", () => {
     });
   });
 
-  it("counts visits received from Brussels midnight to the next, by received_at", async () => {
+  it("counts today's door-days among the visits received from Brussels midnight to the next, by visited_at", async () => {
     const dayStart = brusselsMidnightDaysFromNow(NOW, 0);
     const prospectId = await seedProspect();
     // Received yesterday, one millisecond before midnight: not today.
     await receive(prospectId, dayStart - 1);
-    // Received today, though made yesterday (visitedAt is an hour earlier).
+    // Received today, though made yesterday (visitedAt is an hour earlier):
+    // yesterday's door-day, synced today, is not today's.
     await receive(prospectId, dayStart);
     await receive(prospectId, NOW - 4 * 60_000);
 
     const { body } = await recap();
 
-    expect(body.visitsToday).toBe(2);
+    expect(body.visitsToday).toBe(1);
+    // Received today still makes the agent active (entry 12 changes that).
     expect(body.activeAgents).toBe(1);
     expect(body.lastReceivedAt).toBe(NOW - 4 * 60_000);
   });
 
-  it("counts each roster member once, and a sender off the roster as a visit only", async () => {
+  it("counts each roster member once, and a sender off the roster as a door-day only", async () => {
     const prospectId = await seedProspect();
     await seedUser("gone@example.com", "agent", false);
     await receive(prospectId, NOW - 60_000, TEST_AGENT);
@@ -116,7 +153,8 @@ describe("GET /api/admin/recap", () => {
 
     expect(body.activeAgents).toBe(1);
     expect(body.rosterSize).toBe(2);
-    expect(body.visitsToday).toBe(3);
+    // The agent's two visits to one door are one door-day; the sender off the roster has one.
+    expect(body.visitsToday).toBe(2);
     expect(body.lastReceivedAt).toBe(NOW - 10_000);
   });
 

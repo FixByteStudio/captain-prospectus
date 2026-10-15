@@ -172,21 +172,36 @@ the same response, additively.
 - **Delta** = (value − previous) ÷ previous, as a ratio (`0.124` is +12,4 %).
   It is `null` when previous is 0, and the screen shows "—". Taux de
   conversion is the one exception, below.
-- **Visites** (`visits`): rows in `visits` whose `visited_at` — already clamped
-  (INVARIANT 12) — falls in the period. Visits of merged prospects count,
-  because they still happened; quarantined visits do not, because they are in
-  `visits_orphaned` until repaired. `previous` is the same count over the
-  previous period, and both come from one range read on `visits_visited_idx`.
+- **Door-days** ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)).
+  Every visit figure below counts one unit: a door-day, meaning one agent, one
+  prospect (the visit's own `prospect_id`, merged or not) and one Brussels
+  calendar day of the clamped `visited_at` (INVARIANT 12). Its outcome and
+  refusal reason are the **latest** visit's (`visited_at`, then `received_at`,
+  then `id`, all descending), so a correction replaces the earlier answer: a
+  Personne sur place at 10:00 then a Converti at 16:00 is one Converti. Its flyer
+  is given if **any** of its visits gave one. Two agents at one door are two
+  door-days. `doorDaysBetween` in `src/worker/door-days.ts` is the one SQL
+  fragment; the statements below read through it, and the visits themselves stay
+  as they are (the ledger and the CSV export are not door-days yet). No
+  dashboard figure counts refusal reasons yet; the fragment carries the latest
+  visit's, for the ledger's `reason=` filter.
+- **Visites** (`visits`): door-days whose day falls in the period. Door-days of
+  merged prospects count, because they still happened; quarantined visits do
+  not, because they are in `visits_orphaned` until repaired. `previous` is the
+  same count over the previous period, and both come from one range read on
+  `visits_visited_idx`. A door-day sits on one Brussels day and a period starts
+  at a midnight, so no door-day straddles the two periods.
 - **Prospects ouverts** (`openProspects`): live prospects (`merged_into IS NULL`)
   whose status is in `OPEN_STATUSES` (new, assigned, follow_up). A snapshot of
   now: it ignores the period and has no delta.
 - **Convertis** (`converted`): distinct prospects converted in the period. A
-  prospect converted when it has a visit with outcome `converted` in the period
-  (clamped `visited_at`, quarantined visits out), or when its status is
+  prospect converted when it has a door-day in the period whose latest outcome is
+  `converted` (so a `converted` visit a later visit the same day took back is no
+  conversion; quarantined visits out), or when its status is
   `converted` with `status_set_at` in the period — a manual change. It counts
   once however many times either happens, and still counts if it was reopened
-  later: a conversion is an event, so a past period never shrinks. Every visit
-  and manual change is keyed by `coalesce(merged_into, id)`, so an absorbed
+  on a later day: a conversion is an event, so a past period never shrinks. Every
+  door-day and manual change is keyed by `coalesce(merged_into, id)`, so an absorbed
   prospect counts as its survivor (one hop; A→B→C counts A under B). Its delta
   follows the rule above. An `interested` prospect is never a conversion
   ([ADR-0027](adr/0027-interested-is-its-own-closed-status.md)).
@@ -197,27 +212,30 @@ the same response, additively.
   counted, and a visit's conversion is never mistaken for a manual one dated
   at an earlier manual change.
 - **Taux de conversion** (`conversionRate`): Convertis ÷ distinct prospects
-  with a visit in the period (`visitedProspects`, keyed the same way), as a
+  with a door-day in the period (`visitedProspects`, keyed the same way), as a
   ratio (`0.106` is 10,6 %). `null` when nothing was visited, shown "—". A
   prospect converted by hand with no visit in the period is in the numerator
   only, so the rate can in theory exceed 1. Its `delta` is in percentage
   points, `value − previous` (`0.012` is +1,2 pt), and `null` when either rate
-  is `null`. Convertis and both denominators come from one statement: a
-  `visits_visited_idx` range read joined to `prospects`, `UNION ALL` the manual
+  is `null`. Convertis and both denominators come from one statement: the
+  door-days of both periods joined to `prospects`, `UNION ALL` the manual
   conversions read on `prospects_status_idx`.
-- **Visites dans le temps** (`visitsByDay`): the period's visits — the same
-  rows as Visites — per Brussels calendar day and outcome. Exactly `period`
+- **Visites dans le temps** (`visitsByDay`): the period's door-days — the same
+  rows as Visites — per Brussels calendar day and latest outcome. Exactly `period`
   entries, oldest first; `date` is the Brussels date `YYYY-MM-DD` and
   `counts` has all five outcomes, zeros included, so the entries of a period
-  sum to `visits.value`. One range read on `visits_visited_idx` groups by
+  sum to `visits.value`. The door-days' day is
   `(visited_at + offset) / 86 400 000`, the Brussels day number: the offset
   changes at most once in a period (`periodOffsets` in `src/shared/period.ts`),
-  so the statement binds a handful of parameters whatever the period.
+  so a statement binds a handful of parameters whatever the period. A statement
+  that spans both periods builds one key per period (current days `0…`,
+  previous days `−period…−1`), because the two can hold a clock change each.
 - **The KPI cards' series** (GH #111). Each has `period` entries on the days of
   `visitsByDay` and sums to its card's figure. `visits.byDay` is
   `visitsByDay` summed over outcomes. `converted.byDay` counts each Convertis
   prospect once, on the Brussels day of its **first** conversion event in the
-  period, meaning the same events and key as `converted`. A prospect converted twice
+  period (a converted door-day counts on its day), meaning the same events and
+  key as `converted`. A prospect converted twice
   counts on the earlier day only. `openProspectsByStatus` splits
   `openProspects` into `new`, `assigned` and `follow_up` with the same filter,
   and `openProspects` is its sum.
@@ -229,11 +247,11 @@ the same response, additively.
 - **Activité par agent** (`agents`, GH #112): one row for each email on the
   roster (the active `users` rows), zeros included; a deactivated user has no
   row, though their visits stay in the totals; sorted
-  by `visits` descending, then `email`. `visits` is that agent's rows among
-  Visites, so the column sums to `visits.value` less the visits of anyone off
+  by `visits` descending, then `email`. `visits` is that agent's door-days among
+  Visites, so the column sums to `visits.value` less the door-days of anyone off
   the roster (no active `users` row: deactivated). `converted` is the distinct prospects
-  (`coalesce(merged_into, id)`) they visited with outcome `converted` in the
-  period. Its column can differ from Convertis either way: a manual
+  (`coalesce(merged_into, id)`) with a door-day of theirs whose latest outcome is
+  `converted` in the period. Its column can differ from Convertis either way: a manual
   conversion has no visitor and is credited to nobody, an off-the-roster visitor
   has no row, and one prospect
   converted by two agents counts for both. `followUp` and `openProspects` are the live `follow_up` and
@@ -248,8 +266,8 @@ the same response, additively.
   response: they are the queues' own endpoints, `visits.length + remaining`
   on `GET /api/admin/visits/orphaned` and `pairs.length` on
   `GET /api/admin/prospects/duplicates`.
-- **Flyers remis** (`flyersGiven`, GH #177): the period's Visites — same rows
-  as `visits.value` — with `flyer_given`. Folded into that statement's `sum`,
+- **Flyers remis** (`flyersGiven`, GH #177): the period's door-days — same rows
+  as `visits.value` — with a flyer given on any of their visits. Folded into that statement's `sum`,
   so it follows `period` and costs no extra statement.
 - **Agents en tournée** (`agentsActiveToday`, GH #177, settling G6): distinct
   `agent_email` over `visits` whose `received_at` falls today, Brussels
@@ -271,9 +289,10 @@ the same response, additively.
   (`NO_ACTIVE_AGENT`) shared with the prospects list's `inactiveAgent=true`,
   so `GET /api/admin/prospects?status=new,assigned,follow_up&inactiveAgent=true`
   totals it. One count; the subselect is a primary-key lookup on `users`.
-- **Cost** (as of GH #308). Thirteen statements run in parallel; the largest
-  binds 11 parameters (INVARIANT 7), and every range read on `visits` uses
-  `visits_visited_idx` or `visits_received_idx`. The plans and the Worker's
+- **Cost** (as of ADR-0036's door-days). Thirteen statements run in parallel; the
+  largest binds 20 parameters (INVARIANT 7), and every range read on `visits` uses
+  `visits_visited_idx` or `visits_received_idx`. The six door-day statements
+  each read the range once and window it by agent, prospect and day. The plans and the Worker's
   CPU per request are in [free-tier-budget](free-tier-budget.md#watch-outs);
   re-check both with `scripts/measure-dashboard-cpu.mjs` when a figure is
   added. The screen does not poll this endpoint: each call reads several
@@ -286,19 +305,25 @@ the same response, additively.
 ([design](design.md#layout)). An admin has no outbox, so it reports what the
 agents sent rather than a sync. Every figure reads `received_at` over one
 Brussels day, midnight to midnight tomorrow (`brusselsMidnightDaysFromNow`),
-so a visit made offline yesterday and synced this morning counts today.
+so a visit made offline yesterday and synced this morning counts as seen today
+by `activeAgents` and `lastReceivedAt`, though not in `visitsToday`.
 
 - `date`: that day, `YYYY-MM-DD`. The client never works out which day it is.
 - `rosterSize`: the roster, the active `users` rows, admins included.
 - `activeAgents`: roster members with a visit received that day. Unlike
   `agentsActiveToday` on the dashboard, a sender off the roster (deactivated)
   is left out, so it never exceeds `rosterSize`.
-- `visitsToday`: every visit received that day, off-roster senders included.
+- `visitsToday`: today's door-days (ADR-0036), off-roster senders included: one
+  per agent, prospect and visit made that Brussels day (`visited_at`), among the
+  visits received so far (the clamp gives `visited_at ≤ received_at`). It equals
+  the dashboard's one-day Visites once every phone has synced. A visit made before
+  midnight and synced after it is the earlier day's door-day and counts in no recap.
 - `lastReceivedAt`: the latest `received_at` that day, or `null`.
 - `serverTime`: the Worker's clock. The card's age is `serverTime −
   lastReceivedAt`, never the device's clock.
 - **Cost.** Two statements: the roster, and one grouped read of the day's
-  visits on `visits_received_idx`, one row per sender. Each call reads about the
+  visits on `visits_received_idx`, one row per sender, whose count is distinct
+  prospects among the rows made today. Each call reads about the
   day's visits plus the `users` rows; polled every 15 s from each visible admin
   tab (ADR-0010), see [free-tier-budget](free-tier-budget.md#watch-outs).
 
