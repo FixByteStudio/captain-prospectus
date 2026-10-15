@@ -3,8 +3,8 @@
  * docs/design.md › Before the swipe. Pure, so the table is testable without
  * Dexie or a browser.
  *
- * The location dialog is a gate too but belongs to entry 4; until then a
- * missing position only disables the swipe.
+ * The location dialog is a gate too, but a screen's own (`StartScreen`), not a
+ * decision made here.
  */
 import { brusselsPeriod } from "../../shared/period";
 import type { FieldProspect, Prospect } from "../../shared/schemas";
@@ -55,4 +55,24 @@ export function decideTourneeGate(input: GateInput): TourneeGate {
     input.now,
   );
   return snapshot.length === 0 ? { kind: "nothingAssigned" } : { kind: "start", snapshot };
+}
+
+/**
+ * The gate the frame shows: `live`, except that an open visit or add-prospect
+ * form does not lose its screen when the gate closes under it, at midnight say
+ * (ADR-0036 › The gates, docs/design.md › Midnight). The agent saves it or
+ * leaves it; the next route, which is not a form, shows `live`.
+ *
+ * Generic on purpose: any open-to-gated change under a form waits, not only
+ * midnight. `wasOpen` is the caller's memory of "this form was entered while
+ * the gate was open", handed back as the next value.
+ */
+export function holdGate(
+  live: TourneeGate,
+  onForm: boolean,
+  wasOpen: boolean,
+): { gate: TourneeGate; wasOpen: boolean } {
+  const open = live.kind === "open";
+  const held = onForm && wasOpen;
+  return { gate: !open && held ? { kind: "open" } : live, wasOpen: open || held };
 }

@@ -17,7 +17,12 @@ import { copy } from "../copy";
 import type { FieldProspect, Prospect, Visit } from "../../shared/schemas";
 import { fieldDb } from "./db";
 import { TodayScreen } from "./TodayScreen";
-import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
+import {
+  clearTourneeTables,
+  seedPulledTournee,
+  setPhoneClockToTourneeDay,
+  TOURNEE_NOW,
+} from "./tournee-test-helpers";
 import type { SyncState } from "./useSync";
 
 const syncState = vi.hoisted(() => ({
@@ -85,10 +90,12 @@ function renderScreen() {
 }
 
 beforeEach(() => {
+  setPhoneClockToTourneeDay();
   syncState.current = { lastSyncAt: TOURNEE_NOW, identity: "agent@example.com" };
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all([
     fieldDb.prospects.clear(),
     fieldDb.outboxProspects.clear(),

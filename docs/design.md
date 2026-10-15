@@ -2053,7 +2053,7 @@ the screen alike. History lives where it always has: in the visit form's
 
 ### Midnight
 
-*Built by entry 9 of the numbered-tournée epic (#496).* Mockup:
+*Built by entry 9 of the numbered-tournée epic (#496, shipped in #505).* Mockup:
 [`key-t3-carnet.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t3-carnet.png),
 frames 3 and 4.
 

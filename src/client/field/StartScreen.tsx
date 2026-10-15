@@ -8,18 +8,23 @@
  * and the strip are the frame's, not this screen's. Until a reading is precise
  * enough, the location dialog holds the screen (`useLocationGate`).
  */
-import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 import { copy, TYPE_LABELS } from "../copy/field";
 import { formatBrusselsWeekday } from "../format";
 import { buttonVariants } from "@/ui/button-variants";
+import { brusselsPeriod } from "../../shared/period";
 import type { SnapshotProspect } from "../../shared/tournee";
 import { numberStops } from "../../shared/tournee";
 import { fieldDb, startTournee } from "./db";
+import { useFieldNow } from "./field-clock";
 import { LocationDialog } from "./LocationDialog";
 import { StartSwipe } from "./StartSwipe";
 import { useLocationGate } from "./useLocationGate";
 import { useSyncState } from "./useSync";
+
+/** What the visit and add-prospect forms leave in the router state, with the save's time. */
+type SaveState = { saved?: boolean; savedAt?: number; added?: boolean; addedAt?: number };
 
 /** The preview shows this many stops, then « et {n} autres arrêts ». */
 const PREVIEW_STOPS = 7;
@@ -35,7 +40,23 @@ export function StartScreen({
   const swipeRef = useRef<HTMLButtonElement | null>(null);
   const { identity, confirmed, syncNow } = useSyncState();
   const navigate = useNavigate();
-  const [today] = useState(() => Date.now());
+  const today = useFieldNow();
+  // A form that was open at midnight saved first, then landed here with this
+  // state (docs/design.md › Midnight): the dialog says the visit is safe, once.
+  // Only a save made in the clock's day counts: the state of an earlier save,
+  // still on this history entry when the gate flipped, is yesterday's.
+  const location = useLocation();
+  const [notice] = useState(() => {
+    const kept = location.state as SaveState | null;
+    const at = kept?.saved ? kept.savedAt : kept?.added ? kept.addedAt : undefined;
+    if (at === undefined || at < brusselsPeriod(today, 1).from) return undefined;
+    return kept?.saved ? copy.visit.saved : copy.fieldProspect.saved;
+  });
+  // Read once, then dropped, so a reload does not show it again.
+  const hasState = location.state !== null;
+  useEffect(() => {
+    if (hasState) void navigate(location.pathname, { replace: true, state: null });
+  }, [hasState, location.pathname, navigate]);
   const [starting, setStarting] = useState(false);
   const [failed, setFailed] = useState(false);
   // State lags a frame behind a second event; one day must not start twice.
@@ -141,6 +162,7 @@ export function StartScreen({
         onActivate={activate}
         adminOnline={adminOnline}
         swipeRef={swipeRef}
+        notice={notice}
       />
     </>
   );

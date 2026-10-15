@@ -7,7 +7,7 @@
  * passes, and focus goes to the swipe, which a dialog would otherwise hand back
  * to whatever opened it.
  */
-import type { RefObject } from "react";
+import { useId, type RefObject } from "react";
 import { Link } from "react-router";
 import { MapPinIcon } from "lucide-react";
 import { copy } from "../copy/field";
@@ -45,6 +45,7 @@ export function LocationDialog({
   onActivate,
   adminOnline,
   swipeRef,
+  notice,
 }: {
   open: boolean;
   status: LocationStatus;
@@ -52,11 +53,16 @@ export function LocationDialog({
   /** The dialog covers the « Tableau de bord » link above the track, so it carries its own. */
   adminOnline: boolean;
   swipeRef: RefObject<HTMLButtonElement | null>;
+  /** A save's confirmation, above the title: a form open at midnight saved, then landed here. */
+  notice?: string;
 }) {
   const line = statusLine(status);
+  const noticeId = useId();
   return (
     <AlertDialog open={open}>
       <AlertDialogContent
+        // Radix appends its own description id to this one, so the notice is read first.
+        aria-describedby={notice ? noticeId : undefined}
         overlayClassName="backdrop-blur-sm"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => {
@@ -71,6 +77,11 @@ export function LocationDialog({
           >
             <MapPinIcon className="size-6" />
           </span>
+          {notice && (
+            <p id={noticeId} className="text-success text-sm font-medium">
+              {notice}
+            </p>
+          )}
           <AlertDialogTitle>{copy.location.title}</AlertDialogTitle>
           <AlertDialogDescription className="text-base">
             {copy.location.description}

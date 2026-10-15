@@ -13,7 +13,12 @@ import { LocationDialog } from "./LocationDialog";
 
 function renderDialog(
   status: LocationStatus,
-  { open = true, adminOnline = false, onActivate = vi.fn() } = {},
+  {
+    open = true,
+    adminOnline = false,
+    onActivate = vi.fn(),
+    notice = undefined as string | undefined,
+  } = {},
 ) {
   const swipeRef = createRef<HTMLButtonElement>();
   const view = render(
@@ -27,6 +32,7 @@ function renderDialog(
         onActivate={onActivate}
         adminOnline={adminOnline}
         swipeRef={swipeRef}
+        notice={notice}
       />
     </MemoryRouter>,
   );
@@ -56,6 +62,22 @@ describe("LocationDialog", () => {
     expect(line.textContent).toBe(text);
     expect(line.getAttribute("aria-live")).toBe("polite");
     expect(line.querySelector(".animate-spin") !== null).toBe(spinning);
+  });
+
+  it("shows a save's confirmation above the title, and nothing without one", () => {
+    const { unmount } = renderDialog({ kind: "idle" }, { notice: copy.visit.saved });
+
+    const line = screen.getByText(copy.visit.saved);
+    // A screen reader opening the alert hears the save first, then the description.
+    const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
+    const description = screen.getByText(copy.location.description);
+    expect(dialog.getAttribute("aria-describedby")).toBe(`${line.id} ${description.id}`);
+    const title = screen.getByText(copy.location.title);
+    expect(line.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+
+    renderDialog({ kind: "idle" });
+    expect(screen.queryByText(copy.visit.saved)).toBeNull();
   });
 
   it("calls onActivate from « Activer »", async () => {

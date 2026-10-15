@@ -14,14 +14,16 @@
  * does not drag TanStack Query, sonner and PapaParse into a shell test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
+import type * as AddProspectModule from "./field/AddProspectScreen";
 import type { MeResponse, Prospect, Visit } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
 import { brusselsPeriod } from "../shared/period";
+import { formatBrusselsWeekday } from "./format";
 import { fieldDb, getMeta, setMeta } from "./field/db";
 import type { SyncState } from "./field/useSync";
 
@@ -63,6 +65,10 @@ const stub = vi.hoisted(() => ({
   /** Counts every `/api/me` fetch, so a test can pin that a live-confirmed
    * session going offline and back costs it no extra request (spec-gh-115). */
   identityCalls: 0,
+  /** What the sync engine last stamped, on the phone's clock; null before any sync. */
+  lastSyncAt: null as number | null,
+  /** True to render the real add-prospect form instead of the dirty-form stand-in. */
+  realAddProspect: false,
 }));
 
 /** What a revoked session's `ApiError` carries. A fixture, not UI copy:
@@ -89,7 +95,7 @@ vi.mock("./api", async (importOriginal) => {
 
 vi.mock("./field/useSync", () => ({
   SyncProvider: ({ children }: { children: React.ReactNode }) => children,
-  useSyncState: () => ({ ...stub.sync, lastSyncAt: null, syncNow: async () => {} }),
+  useSyncState: () => ({ ...stub.sync, lastSyncAt: stub.lastSyncAt, syncNow: async () => {} }),
 }));
 
 vi.mock("virtual:pwa-register/react", () => ({
@@ -102,13 +108,16 @@ vi.mock("virtual:pwa-register/react", () => ({
 
 // The real form needs a prospect list and react-hook-form; the leave guard only
 // needs its dirty registration (GH #356).
-vi.mock("./field/AddProspectScreen", async () => {
+vi.mock("./field/AddProspectScreen", async (importOriginal) => {
   const { useRegisterDirty } = await import("./field/leave-guard");
+  const actual = await importOriginal<typeof AddProspectModule>();
+  const DirtyForm = () => {
+    useRegisterDirty(true);
+    return <p>dirty form</p>;
+  };
   return {
-    AddProspectScreen: () => {
-      useRegisterDirty(true);
-      return <p>dirty form</p>;
-    },
+    // Only the midnight cases save through the real form.
+    AddProspectScreen: () => (stub.realAddProspect ? <actual.AddProspectScreen /> : <DirtyForm />),
   };
 });
 
@@ -123,9 +132,9 @@ function CurrentPath() {
   return <p data-testid="pathname">{useLocation().pathname}</p>;
 }
 
-function renderApp(path: string) {
+function renderApp(path: string, state?: unknown) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[{ pathname: path, state }]}>
       <App />
       <CurrentPath />
     </MemoryRouter>,
@@ -195,6 +204,8 @@ beforeEach(async () => {
   stub.identityUnreachable = false;
   stub.identityUnauthorized = false;
   stub.identityCalls = 0;
+  stub.lastSyncAt = null;
+  stub.realAddProspect = false;
 });
 
 afterEach(async () => {
@@ -411,6 +422,282 @@ describe("The tournée gate", () => {
     const link = await screen.findByRole("link", { name: copy.nav.tabs.dashboard });
     expect(link.getAttribute("href")).toBe("/admin");
     expect(fieldBand()).toBeNull();
+  });
+
+  /**
+   * Midnight brings the gates back (#505, docs/design.md › Midnight). The clock
+   * is faked from 23:59:30 on 14 October 2026 (Brussels, UTC+2).
+   *
+   * Only `Date` is faked, and `crossTo` moves it and wakes the field clock the
+   * way a page becoming visible does: faking `setTimeout` as well would hang
+   * Testing Library's and user-event's own settling timers, and the one-shot
+   * timer has its own test (`field-clock.test.ts`). The first case runs the real
+   * timer end to end, with the shim `waitFor` needs to advance a fake clock.
+   */
+  describe("at Brussels midnight", () => {
+    const EVE = Date.UTC(2026, 9, 14, 21, 59, 30);
+    const MIDNIGHT = Date.UTC(2026, 9, 14, 22, 0, 0);
+    const weekdayOf = formatBrusselsWeekday;
+    /** The prospect a visit form opens on, assigned so it is also the next day's snapshot. */
+    const BAR = assigned({ id: "44444444-4444-4444-8444-444444444444", name: "Bar du soir" });
+
+    /** The phone on the eve: a tournée swiped for the 14th, and BAR still open work. */
+    async function onTheEve(toFake: ("Date" | "setTimeout" | "clearTimeout")[] = ["Date"]) {
+      vi.useFakeTimers({ toFake });
+      vi.setSystemTime(EVE);
+      await fieldDb.tournees.clear();
+      await openGate();
+      await fieldDb.prospects.put(BAR);
+      stub.lastSyncAt = Date.now();
+    }
+
+    /** The clock reads `at`, and the page is visible again: what a phone waking up does. */
+    const crossTo = (at: number) => {
+      vi.setSystemTime(at);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+    };
+    const swipe = () => screen.findByRole("button", { name: copy.start.swipeName, hidden: true });
+    const interestedRadio = () => {
+      const radio = screen
+        .getAllByRole("radio")
+        .find((r) => (r as HTMLInputElement).value === "interested");
+      if (!radio) throw new Error("no outcome radio for interested");
+      return radio;
+    };
+    /** The visit form's one-step save: pick an outcome, then confirm. */
+    async function saveVisit(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(interestedRadio());
+      await user.click(screen.getByRole("button", { name: copy.visit.save }));
+      const dialog = await screen.findByRole("dialog", { name: copy.visit.confirm.title });
+      await user.click(within(dialog).getByRole("button", { name: copy.visit.confirm.save }));
+    }
+
+    afterEach(async () => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      await Promise.all([
+        fieldDb.outboxVisits.clear(),
+        fieldDb.outboxProspects.clear(),
+        fieldDb.outboxStops.clear(),
+      ]);
+    });
+
+    it("gives Tournée way to the new day's start screen, with its date and no tabs", async () => {
+      // The field clock's own timer, not a wake-up: Testing Library settles on
+      // `setTimeout`, so `jest` stands in for the advance its `waitFor` looks for.
+      vi.stubGlobal("jest", { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) });
+      await onTheEve(["Date", "setTimeout", "clearTimeout"]);
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      await act(() => vi.advanceTimersByTimeAsync(30_000));
+
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.queryByText(weekdayOf(EVE))).toBeNull();
+      expect(screen.getByRole("alertdialog", { name: copy.location.title })).toBeTruthy();
+      expect(fieldBand()).toBeNull();
+    });
+
+    it.each([
+      ["Carte", "/tournee/carte", copy.nav.subtitle.map],
+      ["Carnet", "/tournee/carnet", copy.nav.subtitle.carnet],
+    ])(
+      "gives %s way to the same start screen, with no subtitle of its own",
+      async (_n, path, subtitle) => {
+        await onTheEve();
+        const offline = mockOffline();
+        try {
+          const { container } = renderApp(path);
+          await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+          const named = () => bandHeader(container)?.querySelector(".text-band-muted");
+          expect(named()?.textContent).toBe(subtitle);
+
+          crossTo(MIDNIGHT);
+
+          expect(await swipe()).toBeTruthy();
+          expect(named()).toBeNull();
+          expect(fieldBand()).toBeNull();
+        } finally {
+          offline.mockRestore();
+        }
+      },
+    );
+
+    it("keeps a visit form that was open, saves at 00:01, then shows the saved line once", async () => {
+      await onTheEve();
+      const user = userEvent.setup({ delay: null });
+      renderApp(`/tournee/${BAR.id}`);
+      await screen.findByRole("heading", { name: BAR.name });
+
+      crossTo(MIDNIGHT + 60_000);
+
+      // Nothing moves under the agent's thumb: the form and the tabs stay.
+      expect(screen.getByRole("heading", { name: BAR.name })).toBeTruthy();
+      expect(screen.getByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
+
+      await saveVisit(user);
+      await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+      const [row] = await fieldDb.outboxVisits.toArray();
+      expect(row?.visitedAt).toBe(MIDNIGHT + 60_000);
+      expect(row?.prospectId).toBe(BAR.id);
+
+      expect(await swipe()).toBeTruthy();
+      const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
+      expect(dialog.textContent).toContain(copy.visit.saved);
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+    });
+
+    it("leaves the save summary open across midnight, and saving behaves the same", async () => {
+      await onTheEve();
+      const user = userEvent.setup({ delay: null });
+      renderApp(`/tournee/${BAR.id}`);
+      await screen.findByRole("heading", { name: BAR.name });
+      await user.click(interestedRadio());
+      await user.click(screen.getByRole("button", { name: copy.visit.save }));
+      const dialog = await screen.findByRole("dialog", { name: copy.visit.confirm.title });
+
+      crossTo(MIDNIGHT + 60_000);
+
+      expect(screen.getByRole("dialog", { name: copy.visit.confirm.title })).toBeTruthy();
+      await user.click(within(dialog).getByRole("button", { name: copy.visit.confirm.save }));
+      await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByRole("alertdialog", { name: copy.location.title }).textContent).toContain(
+        copy.visit.saved,
+      );
+    });
+
+    it("asks before a tab leaves the held form, and Quitter lands on the start screen", async () => {
+      await onTheEve();
+      const user = userEvent.setup({ delay: null });
+      renderApp("/tournee/nouveau");
+      expect(await screen.findByText("dirty form")).toBeTruthy();
+
+      crossTo(MIDNIGHT + 60_000);
+      expect(screen.getByText("dirty form")).toBeTruthy();
+      await user.click(screen.getByRole("link", { name: copy.nav.tabs.today }));
+      await screen.findByText(copy.nav.leaveGuard.title);
+      await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
+
+      expect(await swipe()).toBeTruthy();
+      expect(fieldBand()).toBeNull();
+    });
+
+    it("queues an added place and no stop after midnight, and says so on the start screen", async () => {
+      await onTheEve();
+      stub.realAddProspect = true;
+      const user = userEvent.setup({ delay: null });
+      renderApp("/tournee/nouveau");
+      await user.type(
+        await screen.findByRole("textbox", { name: copy.fieldProspect.name }),
+        "Chez Nouveau",
+      );
+
+      crossTo(MIDNIGHT + 60_000);
+      await user.click(screen.getByRole("button", { name: copy.fieldProspect.save }));
+
+      await vi.waitFor(async () => expect(await fieldDb.outboxProspects.count()).toBe(1));
+      expect(await fieldDb.outboxStops.count()).toBe(0);
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByRole("alertdialog", { name: copy.location.title }).textContent).toContain(
+        copy.fieldProspect.saved,
+      );
+      // The new place is in the new day's snapshot, beside the assigned one.
+      expect(screen.getByText(copy.today.remaining(2))).toBeTruthy();
+    });
+
+    it("does not hold a form opened while gated: a deep link lands on the start screen", async () => {
+      await onTheEve();
+      await fieldDb.tournees.clear();
+      renderApp(`/tournee/${BAR.id}`);
+
+      expect(await swipe()).toBeTruthy();
+      expect(screen.queryByRole("heading", { name: BAR.name })).toBeNull();
+      expect(fieldBand()).toBeNull();
+    });
+
+    it("says nothing is assigned when the new day has no open work", async () => {
+      await onTheEve();
+      await fieldDb.prospects.clear();
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      crossTo(MIDNIGHT);
+
+      expect(await screen.findByText(copy.start.nothingAssignedTitle)).toBeTruthy();
+      expect(fieldBand()).toBeNull();
+    });
+
+    it("takes the new day when a sleeping phone's page becomes visible again", async () => {
+      await onTheEve();
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      // The timer never ran: the clock jumped to 07:00 while the phone slept.
+      vi.setSystemTime(Date.UTC(2026, 9, 15, 5, 0, 0));
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+    });
+
+    it("stays on the new day when a sync lands at 00:05", async () => {
+      await onTheEve();
+      renderApp("/tournee");
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+      crossTo(MIDNIGHT);
+      expect(await swipe()).toBeTruthy();
+
+      crossTo(MIDNIGHT + 5 * 60_000);
+      stub.lastSyncAt = Date.now();
+      await setMeta(fieldDb, "lastSyncAt", Date.now());
+
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+    });
+
+    it("shows no saved line for a save made before midnight, on the same history entry", async () => {
+      await onTheEve();
+      renderApp("/tournee", { saved: true, savedAt: EVE - 20 * 60_000 });
+      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+
+      crossTo(MIDNIGHT);
+
+      expect(await swipe()).toBeTruthy();
+      const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
+      expect(dialog.textContent).not.toContain(copy.visit.saved);
+    });
+
+    it("reads the new day when the frame remounts after midnight with the eve's sync last", async () => {
+      await onTheEve();
+      // An admin back from /admin, offline: the last sync is still yesterday's.
+      vi.setSystemTime(Date.UTC(2026, 9, 15, 5, 0, 0));
+      renderApp("/tournee");
+
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(fieldBand()).toBeNull();
+    });
+
+    it("remounts a start screen nobody swiped with the new day's date", async () => {
+      await onTheEve();
+      await fieldDb.tournees.clear();
+      renderApp("/tournee");
+      expect(await swipe()).toBeTruthy();
+      expect(screen.getByText(weekdayOf(EVE))).toBeTruthy();
+
+      crossTo(MIDNIGHT);
+
+      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.queryByText(weekdayOf(EVE))).toBeNull();
+      expect(screen.getByRole("alertdialog", { name: copy.location.title })).toBeTruthy();
+    });
   });
 });
 

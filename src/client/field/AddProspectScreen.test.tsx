@@ -12,7 +12,7 @@
  * INVARIANT 2: the one write is an insert of the schema's fields — no
  * `status`, `source` or owner leaves the phone.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -23,7 +23,12 @@ import type { Prospect } from "../../shared/schemas";
 import { fieldDb } from "./db";
 import { AddProspectScreen } from "./AddProspectScreen";
 import { TodayScreen } from "./TodayScreen";
-import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
+import {
+  clearTourneeTables,
+  seedPulledTournee,
+  setPhoneClockToTourneeDay,
+  TOURNEE_NOW,
+} from "./tournee-test-helpers";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 
@@ -72,7 +77,10 @@ const nameInput = () => screen.getByRole("textbox", { name: copy.fieldProspect.n
 const addButton = () => screen.getByRole("button", { name: copy.fieldProspect.save });
 const typeGroup = () => screen.getByRole("radiogroup", { name: copy.fieldProspect.type });
 
+beforeEach(setPhoneClockToTourneeDay);
+
 afterEach(async () => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   syncState.confirmed = true;
   await Promise.all([
@@ -209,7 +217,8 @@ describe("AddProspectScreen", () => {
     expect(card).not.toBeNull();
     // `as HTMLElement`: asserted non-null on the line above.
     expect(within(card as HTMLElement).getByText("Chez Léa")).toBeTruthy();
-    expect(screen.queryByText("Friterie des Minimes")).toBeNull();
+    // The phone's clock is on the tournée's day, so the place joins it at the end.
+    expect(within(card as HTMLElement).queryByText("Friterie des Minimes")).toBeNull();
 
     const rows = await fieldDb.outboxProspects.toArray();
     expect(rows).toHaveLength(1);

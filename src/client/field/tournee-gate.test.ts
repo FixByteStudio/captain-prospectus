@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Prospect } from "../../shared/schemas";
 import { brusselsMidnightDaysFromNow, brusselsPeriod } from "../../shared/period";
-import { decideTourneeGate, type GateInput } from "./tournee-gate";
+import { decideTourneeGate, holdGate, type GateInput, type TourneeGate } from "./tournee-gate";
 
 const ME = "agent@example.com";
 const NOW = Date.UTC(2026, 9, 14, 8, 0, 0);
@@ -103,5 +103,37 @@ describe("decideTourneeGate", () => {
   it("does not open on an outbox tournée started yesterday", () => {
     const old = { id: crypto.randomUUID(), startedAt: DAY_START - 3_600_000, writtenBy: ME };
     expect(decideTourneeGate(input({ outboxTournees: [old] })).kind).toBe("start");
+  });
+});
+
+describe("holdGate", () => {
+  const open: TourneeGate = { kind: "open" };
+  const start: TourneeGate = { kind: "start", snapshot: [] };
+  const loading: TourneeGate = { kind: "loading" };
+
+  it.each<[string, TourneeGate, boolean, boolean, TourneeGate, boolean]>([
+    // live, onForm, wasOpen -> gate, wasOpen
+    ["remembers an open gate on a form", open, true, false, open, true],
+    ["remembers an open gate off a form", open, false, false, open, true],
+    ["holds a form entered open when the gate closes under it", start, true, true, open, true],
+    ["holds it when the store answers loading again", loading, true, true, open, true],
+    [
+      "holds it through a nothing-assigned day",
+      { kind: "nothingAssigned" },
+      true,
+      true,
+      open,
+      true,
+    ],
+    ["shows the live gate off a form, whatever it was", start, false, true, start, false],
+    ["does not hold a form entered while gated: a deep link", start, true, false, start, false],
+    ["keeps the held gate while the form stays open", open, true, true, open, true],
+  ])("%s", (_name, live, onForm, wasOpen, gate, next) => {
+    expect(holdGate(live, onForm, wasOpen)).toEqual({ gate, wasOpen: next });
+  });
+
+  it("stops holding once the agent leaves the form", () => {
+    const onForm = holdGate(start, true, true);
+    expect(holdGate(start, false, onForm.wasOpen)).toEqual({ gate: start, wasOpen: false });
   });
 });

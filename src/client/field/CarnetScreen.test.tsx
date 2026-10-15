@@ -4,7 +4,7 @@
  * does, so the clock and identity are fixed; the reopen test routes through the
  * real visit form.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -13,7 +13,12 @@ import type { Prospect, VisitedStop } from "../../shared/schemas";
 import { formatBrusselsTime } from "../format";
 import { CarnetScreen } from "./CarnetScreen";
 import { fieldDb, type StoredVisit } from "./db";
-import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
+import {
+  clearTourneeTables,
+  seedPulledTournee,
+  setPhoneClockToTourneeDay,
+  TOURNEE_NOW,
+} from "./tournee-test-helpers";
 import { TodayScreen } from "./TodayScreen";
 import { tourneeCounter } from "./tournee-stops";
 import { VisitScreen } from "./VisitScreen";
@@ -106,7 +111,10 @@ const rows = () =>
     .queryAllByRole("link")
     .filter((l) => /Rouvrir/.test(l.ariaLabel ?? l.getAttribute("aria-label") ?? ""));
 
+beforeEach(setPhoneClockToTourneeDay);
+
 afterEach(async () => {
+  vi.useRealTimers();
   vi.useRealTimers();
   await Promise.all([
     fieldDb.prospects.clear(),

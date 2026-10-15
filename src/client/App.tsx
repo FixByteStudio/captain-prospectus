@@ -24,7 +24,9 @@ import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
 import { cn } from "./lib/utils";
+import { brusselsPeriod } from "../shared/period";
 import { FieldTabs } from "./field/FieldTabs";
+import { useFieldNow } from "./field/field-clock";
 import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
 import { NoTourneeMessage } from "./field/NoTourneeMessage";
 import { StartScreen } from "./field/StartScreen";
@@ -100,8 +102,8 @@ const CarnetScreen = lazy(() =>
   import("./field/CarnetScreen").then((module) => ({ default: module.CarnetScreen })),
 );
 
-/** What `FieldFrame` hands the routes under it: the gate it already decided. */
-type FieldContext = { gate: TourneeGate; adminOnline: boolean };
+/** What `FieldFrame` hands the routes under it: the gate it already decided, and the clock it decided it on. */
+type FieldContext = { gate: TourneeGate; adminOnline: boolean; now: number };
 
 /**
  * The field routes, which every role can reach, behind the tournée gate
@@ -110,7 +112,7 @@ type FieldContext = { gate: TourneeGate; adminOnline: boolean };
  * stop included, because the app opens at the swipe.
  */
 function FieldRoutes() {
-  const { gate, adminOnline } = useOutletContext<FieldContext>();
+  const { gate, adminOnline, now } = useOutletContext<FieldContext>();
 
   if (gate.kind === "loading") {
     return <p className="text-muted-foreground" aria-busy="true" />;
@@ -119,7 +121,15 @@ function FieldRoutes() {
     return <NoTourneeMessage kind={gate.kind} adminOnline={adminOnline} />;
   }
   if (gate.kind === "start") {
-    return <StartScreen snapshot={gate.snapshot} adminOnline={adminOnline} />;
+    // Keyed by the Brussels day, so midnight remounts it: its date and its
+    // location dialog are the new day's, and a reading from yesterday is not.
+    return (
+      <StartScreen
+        key={brusselsPeriod(now, 1).from}
+        snapshot={gate.snapshot}
+        adminOnline={adminOnline}
+      />
+    );
   }
 
   return (
@@ -177,16 +187,21 @@ function FieldFrame({
   pwa: PwaState;
   email: string;
 }) {
+  const now = useFieldNow();
   // `FieldFrame` also wraps the forbidden and not-found fallbacks (neither is
   // under /tournee), so the subtitle names a tab only when there is one.
-  const gate = useTourneeGate(email);
-  // The tabs are the app, and the app opens at the swipe: no tab bar on a gate
-  // screen. The band, its dot and the strip stay, because the sync is never gated.
-  const gateOpen = gate.kind === "open";
   const onTournee = useMatch("/tournee/*");
   const onAddProspect = useMatch("/tournee/nouveau/*");
   const onCarte = useMatch("/tournee/carte/*");
   const onCarnet = useMatch("/tournee/carnet/*");
+  // A form is a visit (`/tournee/:id`, which is none of the tabs) or the
+  // add-prospect form: the gate waits for those at midnight (`holdGate`).
+  const onStop = useMatch("/tournee/:id");
+  const onForm = onAddProspect !== null || (onStop !== null && !onCarte && !onCarnet);
+  const gate = useTourneeGate(email, now, onForm);
+  // The tabs are the app, and the app opens at the swipe: no tab bar on a gate
+  // screen. The band, its dot and the strip stay, because the sync is never gated.
+  const gateOpen = gate.kind === "open";
   // No tab subtitle while a gate screen stands in for the tab: a deep link to
   // Carte must not read « Carte » over the start screen.
   const subtitle = !gateOpen
@@ -247,7 +262,7 @@ function FieldFrame({
           gateOpen ? "pb-tab-bar" : gate.kind === "start" ? "pb-start-track" : "pb-page",
         )}
       >
-        <Outlet context={{ gate, adminOnline } satisfies FieldContext} />
+        <Outlet context={{ gate, adminOnline, now } satisfies FieldContext} />
       </main>
     </>
   );
