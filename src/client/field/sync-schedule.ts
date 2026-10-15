@@ -26,7 +26,12 @@ export const MAX_DRAIN_PASSES = Math.ceil(DRAIN_VISITS / SYNC_VISITS_PER_BATCH);
 export function shouldDrain(result: SyncResult, passesSoFar: number): boolean {
   if (result.status !== "ok") return false;
   if (result.remaining <= 0) return false;
-  if (result.acceptedProspects + result.acceptedVisits <= 0) return false;
+  const accepted =
+    result.acceptedProspects +
+    result.acceptedVisits +
+    result.acceptedTournees +
+    result.acceptedStops;
+  if (accepted <= 0) return false;
   return passesSoFar < MAX_DRAIN_PASSES;
 }
 

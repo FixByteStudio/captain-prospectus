@@ -465,6 +465,15 @@
     padding-bottom: calc(var(--spacing-tab-bar-height) + env(safe-area-inset-bottom, 0px));
   }
 
+  /**
+   * The start screen has no tab bar; its fixed bar is what scrolling content
+   * has to clear. Worst case: an online admin's « Tableau de bord » (48px), the
+   * 64px track and « Réessayer » (48px), with their gaps and padding (~200px).
+   */
+  .pb-start-track {
+    padding-bottom: calc(var(--spacing) * 52 + env(safe-area-inset-bottom, 0px));
+  }
+
   @media (width >= 48rem) {
     .pb-tab-bar {
       padding-bottom: calc(var(--spacing) * 6);

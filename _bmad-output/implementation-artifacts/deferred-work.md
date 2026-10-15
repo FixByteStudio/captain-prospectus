@@ -396,3 +396,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-497-design-tournee-screens.md`
   summary: Carnet's « Rouvrir » on a door-day whose prospect has since been reassigned away from the agent would save a visit the server quarantines (ADR-0022); entries 2 and 8 should decide whether such a row stays a link.
   evidence: Carnet lists every door-day of today from the server's visited stops (design.md › Carnet), and a visit on a prospect assigned to another agent goes to visits_orphaned. Needs a flag in entry 2's visited-stops contract to grey the row; not settled by ADR-0036.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-499-swipe-freezes-day.md`
+  summary: Since the tournée gate (#499), a visit form open across Brussels midnight is unmounted by the first sync after midnight, which flips the gate to the start screen and loses the unsaved form; entry 9 (#505) must save it first.
+  evidence: The gate's day advances with `useSyncState().lastSyncAt`, and the pull replaces the pulled tournée with the new day's (none), so `FieldRoutes` swaps the visit route for the start screen. design.md › Midnight and #505 already require "a visit form open at midnight saves first".
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-499-swipe-freezes-day.md`
+  summary: The swipe numbers the stops from the latest `useAgentPosition` reading, which can be minutes old (taken at mount, `maximumAge` 120 s) if the agent waits before swiping; entry 4 (#500) should make the reading the swipe uses a recent one.
+  evidence: StartScreen reads `point` once from `useAgentPosition` and numbers from it at commit with no freshness check. ADR-0036 says nearest-next "from the swipe position"; #500 owns repeated readings and the accuracy threshold.

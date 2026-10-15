@@ -21,6 +21,8 @@ const result = (over: Partial<SyncResult> = {}): SyncResult => ({
   status: "ok",
   acceptedProspects: 0,
   acceptedVisits: 0,
+  acceptedTournees: 0,
+  acceptedStops: 0,
   remaining: 0,
   heldBack: 0,
   ...over,
@@ -57,6 +59,11 @@ describe("shouldDrain", () => {
 
   it("counts an accepted prospect as progress, not only a visit", () => {
     expect(shouldDrain(result({ acceptedProspects: 1, remaining: 3 }), 1)).toBe(true);
+  });
+
+  it("counts an accepted tournée or stops as progress, so a swipe of 300 stops drains", () => {
+    expect(shouldDrain(result({ acceptedTournees: 1, remaining: 50 }), 1)).toBe(true);
+    expect(shouldDrain(result({ acceptedStops: 250, remaining: 50 }), 1)).toBe(true);
   });
 
   it("caps the passes even while every one of them is making progress", () => {

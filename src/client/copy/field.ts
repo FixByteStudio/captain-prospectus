@@ -66,6 +66,29 @@ export const copy = {
     retryPosition: "Réessayer",
   },
 
+  /** Before the swipe (docs/design.md › Before the swipe, ADR-0036). */
+  start: {
+    /** No pull ever succeeded on this phone. */
+    neverLoadedTitle: "Tournée pas encore chargée",
+    neverLoadedBody:
+      "Connectez-vous à internet une fois pour récupérer votre tournée. Elle restera ensuite disponible hors ligne.",
+    /** A pull happened and a swipe would freeze no stop. */
+    nothingAssignedTitle: "Aucune tournée aujourd'hui",
+    nothingAssignedBody:
+      "Aucun prospect ne vous est assigné pour l'instant. Votre tournée s'affichera ici dès qu'un admin vous en assigne.",
+    explainer: "Les arrêts seront numérotés au départ, du plus proche au plus loin.",
+    /** The preview lists seven stops, then this line; 1 is singular. */
+    more: (n: number) => (n === 1 ? "et 1 autre arrêt" : `et ${n} autres arrêts`),
+    previewLabel: "Arrêts de la tournée",
+    swipeLabel: "Glisser pour commencer la tournée",
+    /** The button's accessible name, whatever the visible label says. */
+    swipeName: "Commencer la tournée",
+    waiting: "En attente de votre position",
+    starting: "Démarrage…",
+    storageError:
+      "Impossible de commencer la tournée sur cet appareil. Libérez de l'espace de stockage, puis réessayez.",
+  },
+
   visit: {
     title: "Nouvelle visite",
     flyerGiven: "Flyer remis",

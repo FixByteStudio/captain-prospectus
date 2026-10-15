@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deltaTone,
   formatBrusselsTime,
+  formatBrusselsWeekday,
   formatCoordinate,
   formatCount,
   formatFileSize,
@@ -193,5 +194,12 @@ describe("formatBrusselsTime", () => {
     expect(formatBrusselsTime(Date.UTC(2026, 9, 7, 13, 24))).toBe("15:24");
     // …and 14:24 on 7 December (CET).
     expect(formatBrusselsTime(Date.UTC(2026, 11, 7, 13, 24))).toBe("14:24");
+  });
+});
+
+describe("formatBrusselsWeekday", () => {
+  it("reads the Brussels day, not the UTC one", () => {
+    // 22:30 UTC on the 13th is 00:30 on the 14th in Brussels (CEST).
+    expect(formatBrusselsWeekday(Date.parse("2026-10-13T22:30:00Z"))).toBe("mercredi 14 octobre");
   });
 });

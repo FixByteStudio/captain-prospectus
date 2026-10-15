@@ -1,5 +1,14 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate, Outlet, Route, Routes, useMatch, useNavigate } from "react-router";
+import {
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useMatch,
+  useNavigate,
+  useOutletContext,
+} from "react-router";
 import {
   LockIcon,
   MapPinOffIcon,
@@ -14,9 +23,14 @@ import { initials } from "./format";
 import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
+import { cn } from "./lib/utils";
 import { FieldTabs } from "./field/FieldTabs";
 import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
+import { NoTourneeMessage } from "./field/NoTourneeMessage";
+import { StartScreen } from "./field/StartScreen";
 import { TodayScreen } from "./field/TodayScreen";
+import type { TourneeGate } from "./field/tournee-gate";
+import { useTourneeGate } from "./field/useTourneeGate";
 import { SyncDot, SyncStrip, useSyncView } from "./field/SyncIndicator";
 import { hidesUpdateBanner } from "./field/sync-view";
 import { SyncProvider } from "./field/useSync";
@@ -78,8 +92,28 @@ const CarteScreen = lazy(() =>
   import("./field/CarteScreen").then((module) => ({ default: module.CarteScreen })),
 );
 
-/** The field routes, which every role can reach. */
+/** What `FieldFrame` hands the routes under it: the gate it already decided. */
+type FieldContext = { gate: TourneeGate; adminOnline: boolean };
+
+/**
+ * The field routes, which every role can reach, behind the tournée gate
+ * (ADR-0036, docs/design.md › Before the swipe): a no-tournée message, the
+ * start screen, or the app. Every `/tournee/*` path is gated, a deep link to a
+ * stop included, because the app opens at the swipe.
+ */
 function FieldRoutes() {
+  const { gate, adminOnline } = useOutletContext<FieldContext>();
+
+  if (gate.kind === "loading") {
+    return <p className="text-muted-foreground" aria-busy="true" />;
+  }
+  if (gate.kind === "neverLoaded" || gate.kind === "nothingAssigned") {
+    return <NoTourneeMessage kind={gate.kind} adminOnline={adminOnline} />;
+  }
+  if (gate.kind === "start") {
+    return <StartScreen snapshot={gate.snapshot} adminOnline={adminOnline} />;
+  }
+
   return (
     <Routes>
       {/* Relative to the parent's /tournee/*. "carte" and "nouveau" come
@@ -129,16 +163,24 @@ function FieldFrame({
 }) {
   // `FieldFrame` also wraps the forbidden and not-found fallbacks (neither is
   // under /tournee), so the subtitle names a tab only when there is one.
+  const gate = useTourneeGate(email);
+  // The tabs are the app, and the app opens at the swipe: no tab bar on a gate
+  // screen. The band, its dot and the strip stay, because the sync is never gated.
+  const gateOpen = gate.kind === "open";
   const onTournee = useMatch("/tournee/*");
   const onAddProspect = useMatch("/tournee/nouveau/*");
   const onCarte = useMatch("/tournee/carte/*");
-  const subtitle = onAddProspect
-    ? copy.nav.subtitle.add
-    : onCarte
-      ? copy.nav.subtitle.map
-      : onTournee
-        ? copy.nav.subtitle.today
-        : undefined;
+  // No tab subtitle while a gate screen stands in for the tab: a deep link to
+  // Carte must not read « Carte » over the start screen.
+  const subtitle = !gateOpen
+    ? undefined
+    : onAddProspect
+      ? copy.nav.subtitle.add
+      : onCarte
+        ? copy.nav.subtitle.map
+        : onTournee
+          ? copy.nav.subtitle.today
+          : undefined;
 
   // The update-needed strip already says a build is waiting; the banner
   // would repeat it (hidesUpdateBanner, sync-view.ts).
@@ -155,7 +197,7 @@ function FieldFrame({
             the row's right edge the way the band nav it replaced used to —
             `ml-auto` on the wrapper below does that instead, standing down
             once the tab bar is back in flow and doing that job itself. */}
-        <FieldTabs adminOnline={adminOnline} />
+        {gateOpen && <FieldTabs adminOnline={adminOnline} />}
         <span className="ml-auto md:ml-0">
           <SyncDot />
         </span>
@@ -180,8 +222,13 @@ function FieldFrame({
           the last row of content — a screen with its own action bar
           (VisitScreen, AddProspectScreen) additionally clears that with
           `.pb-action-bar` on its own form. */}
-      <main className="px-4 pt-6 pb-tab-bar">
-        <Outlet />
+      <main
+        className={cn(
+          "px-4 pt-6",
+          gateOpen ? "pb-tab-bar" : gate.kind === "start" ? "pb-start-track" : "pb-page",
+        )}
+      >
+        <Outlet context={{ gate, adminOnline } satisfies FieldContext} />
       </main>
     </>
   );
