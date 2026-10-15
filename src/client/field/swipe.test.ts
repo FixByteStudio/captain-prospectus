@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clampOffset, lockAxis, swipeAction, SWIPE_COMMIT, SWIPE_SLOP } from "./swipe";
+import {
+  clampOffset,
+  lockAxis,
+  swipeAction,
+  SWIPE_COMMIT,
+  SWIPE_SLOP,
+  thumbOffset,
+  trackCommits,
+} from "./swipe";
 
 describe("lockAxis", () => {
   it("stays undecided within the slop on both axes", () => {
@@ -57,5 +65,21 @@ describe("swipeAction", () => {
   it("starts nothing on a right swipe with no coordinates, however far", () => {
     expect(swipeAction(120, false)).toBeNull();
     expect(swipeAction(500, false)).toBeNull();
+  });
+});
+
+describe("the start swipe's track maths", () => {
+  it("clamps the thumb to [0, travel]", () => {
+    expect(thumbOffset(-20, 300)).toBe(0);
+    expect(thumbOffset(120, 300)).toBe(120);
+    expect(thumbOffset(900, 300)).toBe(300);
+    expect(thumbOffset(50, 0)).toBe(0);
+  });
+
+  it("commits from three quarters of the track, not before", () => {
+    expect(trackCommits(224, 300)).toBe(false);
+    expect(trackCommits(225, 300)).toBe(true);
+    expect(trackCommits(300, 300)).toBe(true);
+    expect(trackCommits(100, 0)).toBe(false);
   });
 });

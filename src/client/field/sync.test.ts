@@ -1,7 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLIENT_VERSION, MAX_REQUEST_BYTES, SYNC_VISITS_PER_BATCH } from "../../shared/constants";
-import type { FieldProspect, Script, SyncRequest, SyncResponse, Visit } from "../../shared/schemas";
-import { clearAgentCache, FieldDb, getMeta, setMeta } from "./db";
+import {
+  CLIENT_VERSION,
+  MAX_REQUEST_BYTES,
+  SYNC_STOPS_PER_REQUEST,
+  SYNC_VISITS_PER_BATCH,
+} from "../../shared/constants";
+import type {
+  FieldProspect,
+  Script,
+  SyncRequest,
+  SyncResponse,
+  TodayTournee,
+  Visit,
+} from "../../shared/schemas";
+import { clearAgentCache, FieldDb, getMeta, setMeta, startTournee } from "./db";
 import { dropReading, rememberReading, setReadingIdentity } from "./last-reading";
 import { backoffDelayMs, runSync } from "./sync";
 
@@ -799,5 +811,204 @@ describe("runSync — the position", () => {
     }
     expect(getCurrentPosition).not.toHaveBeenCalled();
     expect(watchPosition).not.toHaveBeenCalled();
+  });
+});
+
+const day = (stops: number, prospectIds: string[] = []) => {
+  const tourneeId = crypto.randomUUID();
+  return {
+    tournee: { id: tourneeId, startedAt: 1_700_000_000_000 },
+    stops: Array.from({ length: stops }, (_, i) => ({
+      id: crypto.randomUUID(),
+      tourneeId,
+      prospectId: prospectIds[i] ?? crypto.randomUUID(),
+      number: i + 1,
+      addedAt: 1_700_000_000_000,
+    })),
+  };
+};
+
+/** Echoes every tournée and stop it receives into `accepted`, recording each request. */
+function acceptingServer(requests: SyncRequest[] = []) {
+  return (async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body)) as SyncRequest;
+    requests.push(body);
+    const accepted = {
+      prospects: [],
+      visits: [],
+      tournees: body.tournees.map((t) => t.id),
+      stops: body.stops.map((s) => s.id),
+    };
+    return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+  }) as unknown as typeof fetch;
+}
+
+describe("runSync — the swipe's outbox (ADR-0036)", () => {
+  it("sends the tournée with its stops, never the stamp, and deletes them once listed", async () => {
+    const { tournee, stops } = day(3);
+    await startTournee(db, { tournee, stops }, AGENT);
+    const requests: SyncRequest[] = [];
+
+    const result = await runSync({ db, identity: AGENT, fetchFn: acceptingServer(requests) });
+
+    expect(requests[0]?.tournees).toEqual([tournee]);
+    expect([...(requests[0]?.stops ?? [])].sort((a, b) => a.number - b.number)).toEqual(stops);
+    expect(result).toMatchObject({ status: "ok", acceptedTournees: 1, acceptedStops: 3 });
+    expect(result.remaining).toBe(0);
+    expect(await db.outboxTournees.count()).toBe(0);
+    expect(await db.outboxStops.count()).toBe(0);
+  });
+
+  it("keeps every row the server did not list — INVARIANT 5", async () => {
+    await startTournee(db, day(3), AGENT);
+    await runSync({ db, identity: AGENT, fetchFn: respondWith(okResponse()) });
+    expect(await db.outboxTournees.count()).toBe(1);
+    expect(await db.outboxStops.count()).toBe(3);
+  });
+
+  it("keeps them through a 426, a 401 and a lost network", async () => {
+    await startTournee(db, day(2), AGENT);
+    await runSync({ db, identity: AGENT, fetchFn: failWith(426) });
+    await runSync({ db, identity: AGENT, fetchFn: failWith(401) });
+    await runSync({
+      db,
+      identity: AGENT,
+      fetchFn: (async () => {
+        throw new TypeError("offline");
+      }) as unknown as typeof fetch,
+    });
+    expect(await db.outboxTournees.count()).toBe(1);
+    expect(await db.outboxStops.count()).toBe(2);
+  });
+
+  it("drains a big snapshot over passes, the tournée first", async () => {
+    const total = SYNC_STOPS_PER_REQUEST + 50;
+    const { tournee, stops } = day(total);
+    await startTournee(db, { tournee, stops }, AGENT);
+    const requests: SyncRequest[] = [];
+    const fetchFn = acceptingServer(requests);
+
+    const first = await runSync({ db, identity: AGENT, fetchFn });
+    expect(requests[0]?.tournees).toHaveLength(1);
+    expect(requests[0]?.stops).toHaveLength(SYNC_STOPS_PER_REQUEST);
+    expect(first.remaining).toBe(50);
+
+    const second = await runSync({ db, identity: AGENT, fetchFn });
+    expect(requests[1]?.tournees).toHaveLength(0);
+    expect(requests[1]?.stops).toHaveLength(50);
+    expect(second.remaining).toBe(0);
+  });
+
+  it("holds a stop back while its tournée waits outside this request", async () => {
+    const { tournee, stops } = day(2);
+    await startTournee(db, { tournee, stops }, AGENT);
+    // A second, older tournée fills nothing here; the point is the stops of a
+    // tournée that is queued but unsendable are not sent ahead of it.
+    await db.outboxTournees.update(tournee.id, { unconfirmed: true });
+    await db.outboxStops.toCollection().modify({ writtenBy: AGENT });
+    const requests: SyncRequest[] = [];
+
+    await runSync({ db, identity: AGENT, fetchFn: acceptingServer(requests) });
+
+    expect(requests[0]?.tournees).toEqual([]);
+    expect(requests[0]?.stops).toEqual([]);
+  });
+
+  it("rewrites a stop's prospect id through idMap before resending", async () => {
+    const clientId = crypto.randomUUID();
+    const serverId = crypto.randomUUID();
+    const { tournee, stops } = day(2, [clientId]);
+    await startTournee(db, { tournee, stops }, AGENT);
+
+    await runSync({
+      db,
+      identity: AGENT,
+      fetchFn: respondWith(okResponse({ idMap: { [clientId]: serverId } })),
+    });
+
+    const rewritten = await db.outboxStops.where("tourneeId").equals(tournee.id).toArray();
+    expect(rewritten.map((s) => s.prospectId)).toContain(serverId);
+    expect(rewritten.map((s) => s.prospectId)).not.toContain(clientId);
+  });
+
+  it("never sends another identity's tournée", async () => {
+    await startTournee(db, day(2), "other@example.com");
+    const requests: SyncRequest[] = [];
+
+    const result = await runSync({ db, identity: AGENT, fetchFn: acceptingServer(requests) });
+
+    expect(requests[0]?.tournees).toEqual([]);
+    expect(requests[0]?.stops).toEqual([]);
+    expect(result).toMatchObject({ remaining: 0, heldBack: 1 });
+    expect(await db.outboxTournees.count()).toBe(1);
+  });
+
+  it("stores the pulled tournée, its stops and the visited stops, replacing the last pull", async () => {
+    const stale = day(1);
+    await db.tournees.put({ id: stale.tournee.id, dayStart: 1, startedAt: 1 });
+    const tournee: TodayTournee = {
+      id: crypto.randomUUID(),
+      dayStart: 1_700_000_000_000,
+      startedAt: 1_700_000_050_000,
+      stops: [
+        {
+          id: crypto.randomUUID(),
+          prospectId: crypto.randomUUID(),
+          number: 1,
+          addedAt: 1_700_000_050_000,
+          left: false,
+        },
+      ],
+    };
+    const visitedStop = {
+      prospectId: crypto.randomUUID(),
+      outcome: "interested" as const,
+      visitedAt: 1_700_000_060_000,
+      flyerGiven: false,
+      visitIds: [crypto.randomUUID()],
+      name: "Chez Paul",
+      type: "bar" as const,
+      address: null,
+    };
+
+    await runSync({
+      db,
+      identity: AGENT,
+      fetchFn: respondWith(okResponse({ tournee, visitedStops: [visitedStop] })),
+    });
+
+    expect((await db.tournees.toArray()).map((t) => t.id)).toEqual([tournee.id]);
+    expect(await db.tourneeStops.toArray()).toEqual([
+      { ...tournee.stops[0], tourneeId: tournee.id },
+    ]);
+    expect(await db.visitedStops.toArray()).toEqual([visitedStop]);
+  });
+
+  it("drains the outbox and adopts the winner's tournée when the server kept another", async () => {
+    const mine = day(2);
+    await startTournee(db, mine, AGENT);
+    const winner: TodayTournee = {
+      id: crypto.randomUUID(),
+      dayStart: 1_700_000_000_000,
+      startedAt: 1_699_999_000_000,
+      stops: [],
+    };
+    const echo = acceptingServer();
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      const res = await echo(url, init);
+      const body = (await res.json()) as SyncResponse;
+      return new Response(JSON.stringify({ ...body, tournee: winner }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await runSync({ db, identity: AGENT, fetchFn });
+
+    expect(await db.outboxTournees.count()).toBe(0);
+    expect((await db.tournees.toArray()).map((t) => t.id)).toEqual([winner.id]);
+  });
+
+  it("clears the pulled tournée when the pull says there is none", async () => {
+    await db.tournees.put({ id: crypto.randomUUID(), dayStart: 1, startedAt: 1 });
+    await runSync({ db, identity: AGENT, fetchFn: respondWith(okResponse({ tournee: null })) });
+    expect(await db.tournees.count()).toBe(0);
   });
 });

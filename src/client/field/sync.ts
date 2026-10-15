@@ -19,10 +19,18 @@ import {
   CLIENT_VERSION,
   MAX_REQUEST_BYTES,
   SYNC_PROSPECTS_PER_REQUEST,
+  SYNC_STOPS_PER_REQUEST,
+  SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_BATCH,
 } from "../../shared/constants";
 import { syncResponseSchema } from "../../shared/schemas";
-import type { FieldProspect, SyncRequest, Visit } from "../../shared/schemas";
+import type {
+  FieldProspect,
+  SyncRequest,
+  TourneeStopSync,
+  TourneeSync,
+  Visit,
+} from "../../shared/schemas";
 import { clearAgentCache, type FieldDb, outboxCounts, setMeta } from "./db";
 import { readingToSend } from "./last-reading";
 import { type OutboxStamp, sendableBy } from "./outbox-stamp";
@@ -49,6 +57,8 @@ export type SyncResult = {
   status: SyncStatus;
   acceptedProspects: number;
   acceptedVisits: number;
+  acceptedTournees: number;
+  acceptedStops: number;
   /** Still pending after this attempt: rows this identity will send. */
   remaining: number;
   /** Rows another identity wrote, left in the outbox and not sent. */
@@ -65,7 +75,12 @@ export type SyncDeps = {
   now?: () => number;
 };
 
-const EMPTY = { acceptedProspects: 0, acceptedVisits: 0 };
+const EMPTY = {
+  acceptedProspects: 0,
+  acceptedVisits: 0,
+  acceptedTournees: 0,
+  acceptedStops: 0,
+};
 
 /**
  * Serialize the payload, dropping visits off the end until it fits
@@ -132,13 +147,29 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     .toArray();
   const outboxVisits = await db.outboxVisits.filter(mine).limit(SYNC_VISITS_PER_BATCH).toArray();
 
+  // A swipe goes tournée first (ADR-0036): a stop travels with its tournée, or
+  // after that tournée left the outbox, never ahead of it. A day of 300 stops
+  // drains over passes: the tournée and the first 250 stops, then the rest.
+  const outboxTournees = await db.outboxTournees
+    .filter(mine)
+    .limit(SYNC_TOURNEES_PER_REQUEST)
+    .toArray();
+  const sendingTournees = new Set(outboxTournees.map((t) => t.id));
+  const queuedTournees = new Set(await db.outboxTournees.toCollection().primaryKeys());
+  const outboxStops = await db.outboxStops
+    .filter(
+      (row) =>
+        mine(row) && (sendingTournees.has(row.tourneeId) || !queuedTournees.has(row.tourneeId)),
+    )
+    .limit(SYNC_STOPS_PER_REQUEST)
+    .toArray();
+
   const requestBody = serializeWithinCap({
     clientVersion: CLIENT_VERSION,
     prospects: outboxProspects.map((row): FieldProspect => unstamped(row)),
     visits: outboxVisits.map((row): Visit => unstamped(row)),
-    // The phone has no tournée outbox yet: the start screen that sends the swipe and its stops comes with ADR-0036.
-    tournees: [],
-    stops: [],
+    tournees: outboxTournees.map((row): TourneeSync => unstamped(row)),
+    stops: outboxStops.map((row): TourneeStopSync => unstamped(row)),
     // The latest reading the phone already took today, if it qualifies; never a
     // new one (ADR-0028). `undefined` leaves the key out of the JSON.
     position: readingToSend(identity, (deps.now ?? Date.now)()),
@@ -184,7 +215,17 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
 
   await db.transaction(
     "rw",
-    [db.prospects, db.outboxProspects, db.outboxVisits, db.meta],
+    [
+      db.prospects,
+      db.outboxProspects,
+      db.outboxVisits,
+      db.outboxTournees,
+      db.outboxStops,
+      db.tournees,
+      db.tourneeStops,
+      db.visitedStops,
+      db.meta,
+    ],
     async () => {
       // A field prospect that turned out to already exist: rewrite every
       // reference still sitting in the outbox before anything is deleted.
@@ -192,6 +233,12 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
         const affected = await db.outboxVisits.where("prospectId").equals(clientId).toArray();
         for (const visit of affected) {
           await db.outboxVisits.put({ ...visit, prospectId: serverId });
+        }
+        // The swipe's stops too, before they are resent: a stop left on the
+        // client's id would name a prospect the server never kept.
+        const stops = await db.outboxStops.where("prospectId").equals(clientId).toArray();
+        for (const stop of stops) {
+          await db.outboxStops.put({ ...stop, prospectId: serverId });
         }
       }
 
@@ -218,6 +265,25 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
         await db.outboxVisits.bulkDelete(body.accepted.visits);
       }
 
+      if (body.accepted.tournees.length > 0) {
+        await db.outboxTournees.bulkDelete(body.accepted.tournees);
+      }
+      if (body.accepted.stops.length > 0) {
+        await db.outboxStops.bulkDelete(body.accepted.stops);
+      }
+
+      // The tournée and the visited stops are caches too, replaced wholesale:
+      // a phone that lost the first-swipe race adopts the winner's numbering here.
+      await db.tournees.clear();
+      await db.tourneeStops.clear();
+      await db.visitedStops.clear();
+      if (body.tournee) {
+        const { stops, ...tournee } = body.tournee;
+        await db.tournees.put(tournee);
+        await db.tourneeStops.bulkPut(stops.map((stop) => ({ ...stop, tourneeId: tournee.id })));
+      }
+      await db.visitedStops.bulkPut(body.visitedStops);
+
       // The today list is a cache: replace it wholesale.
       await db.prospects.clear();
       await db.prospects.bulkPut(body.prospects);
@@ -231,6 +297,8 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     status: "ok",
     acceptedProspects: body.accepted.prospects.length,
     acceptedVisits: body.accepted.visits.length,
+    acceptedTournees: body.accepted.tournees.length,
+    acceptedStops: body.accepted.stops.length,
     ...(await countPending()),
   };
 }

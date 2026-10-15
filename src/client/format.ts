@@ -27,6 +27,18 @@ export function formatBrusselsDate(epochMs: number): string {
   return brusselsDate.format(new Date(epochMs));
 }
 
+const brusselsWeekday = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "Europe/Brussels",
+});
+
+/** "mercredi 14 octobre" as Brussels reads it; the screen uppercases it. */
+export function formatBrusselsWeekday(epochMs: number): string {
+  return brusselsWeekday.format(new Date(epochMs));
+}
+
 const brusselsTime = new Intl.DateTimeFormat("fr-FR", {
   hour: "2-digit",
   minute: "2-digit",

@@ -18,9 +18,10 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import type * as ApiModule from "./api";
-import type { MeResponse, Visit } from "../shared/schemas";
+import type { MeResponse, Prospect, Visit } from "../shared/schemas";
 import { App } from "./App";
 import { copy } from "./copy";
+import { brusselsPeriod } from "../shared/period";
 import { fieldDb, getMeta, setMeta } from "./field/db";
 import type { SyncState } from "./field/useSync";
 
@@ -159,6 +160,19 @@ function bandHeader(container: HTMLElement) {
   return container.querySelector("header.safe-top.bg-band > .h-band-height");
 }
 
+/**
+ * A tournée pulled for today, so the gate is open and the field frame shows its
+ * tabs. The gate cases below clear it to test the screens before the swipe.
+ */
+async function openGate() {
+  await setMeta(fieldDb, "lastSyncAt", Date.now());
+  await fieldDb.tournees.put({
+    id: crypto.randomUUID(),
+    dayStart: brusselsPeriod(Date.now(), 1).from,
+    startedAt: Date.now(),
+  });
+}
+
 // `stub` is module scope and every case writes to it, so without this the
 // suite would only pass in the order it happens to be written in. The Dexie
 // row goes too: `App`'s identity effect writes `meta.identity` without
@@ -170,6 +184,10 @@ beforeEach(async () => {
   // identity-error case below reads `offlineFirstRun` only with nothing
   // cached (identity.ts), so for that one the row decides the outcome.
   await fieldDb.meta.clear();
+  await fieldDb.tournees.clear();
+  await fieldDb.outboxTournees.clear();
+  await fieldDb.prospects.clear();
+  await openGate();
   stub.me = AGENT;
   stub.sync = QUIET;
   stub.needRefresh = false;
@@ -181,6 +199,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fieldDb.meta.clear();
+  await fieldDb.tournees.clear();
 });
 
 describe("App routing", () => {
@@ -232,7 +251,8 @@ describe("App routing", () => {
     expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
       "/tournee",
     );
-    expect(fieldBand()).toBeTruthy();
+    // The tabs wait for the gate's answer from Dexie, so they arrive a beat after the text.
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
   });
 
@@ -241,7 +261,147 @@ describe("App routing", () => {
     renderApp("/nulle-part");
 
     expect(await screen.findByText(copy.errors.notFound)).toBeTruthy();
-    expect(fieldBand()).toBeTruthy();
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+  });
+});
+
+/**
+ * The tournée gate (ADR-0036, docs/design.md › Before the swipe): one screen per
+ * gate, none with a tab bar, the band and the sync always there.
+ */
+describe("The tournée gate", () => {
+  const assigned = (over: Partial<Prospect> = {}): Prospect => ({
+    id: crypto.randomUUID(),
+    name: "Bar des Marolles",
+    type: "bar",
+    lat: null,
+    lng: null,
+    address: null,
+    phone: null,
+    website: null,
+    cuisine: null,
+    source: "csv",
+    status: "assigned",
+    assignedTo: AGENT.email,
+    lastVisitAt: null,
+    nextVisitAt: null,
+    ...over,
+  });
+
+  beforeEach(async () => {
+    await fieldDb.tournees.clear();
+  });
+
+  it("says the tournée was never loaded when no pull ever succeeded, with no tabs", async () => {
+    await fieldDb.meta.delete("lastSyncAt");
+    const { container } = renderApp("/tournee");
+
+    expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
+    expect(screen.getByText(copy.start.neverLoadedBody)).toBeTruthy();
+    expect(fieldBand()).toBeNull();
+    // The frame stays: the band is there, and the sync with it.
+    expect(bandHeader(container)).toBeTruthy();
+  });
+
+  it("says nothing is assigned after a pull with an empty snapshot", async () => {
+    renderApp("/tournee");
+
+    expect(await screen.findByText(copy.start.nothingAssignedTitle)).toBeTruthy();
+    expect(fieldBand()).toBeNull();
+  });
+
+  it("shows the start screen, the count and the swipe, with no tabs, when there is work and no tournée", async () => {
+    await fieldDb.prospects.bulkPut([assigned(), assigned({ name: "Chez Marcel" })]);
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(screen.getByText("2 arrêts")).toBeTruthy();
+    expect(fieldBand()).toBeNull();
+  });
+
+  it("gates a deep link to a stop the same way", async () => {
+    await fieldDb.prospects.put(assigned());
+    renderApp("/tournee/carte");
+
+    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    // Neither the Carte subtitle nor the tabs speak for a screen that stands in for the tab.
+    expect(screen.queryByText(copy.nav.subtitle.map)).toBeNull();
+    expect(fieldBand()).toBeNull();
+  });
+
+  it("gives a no-tournée message no tab subtitle either", async () => {
+    renderApp("/tournee/nouveau");
+
+    expect(await screen.findByText(copy.start.nothingAssignedTitle)).toBeTruthy();
+    expect(screen.queryByText(copy.nav.subtitle.add)).toBeNull();
+  });
+
+  it("reads a swipe made now as today's on the phone's clock, whatever the last pull's server time says", async () => {
+    await setMeta(fieldDb, "lastSyncAt", Date.now() - 2 * 86_400_000);
+    await fieldDb.prospects.put(assigned());
+    await fieldDb.outboxTournees.put({
+      id: crypto.randomUUID(),
+      startedAt: Date.now(),
+      writtenBy: AGENT.email,
+    });
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+  });
+
+  it("keeps the unsent-visits strip on the start screen: the sync is never gated", async () => {
+    await fieldDb.prospects.put(assigned());
+    await fieldDb.outboxVisits.put({ ...visit(), writtenBy: AGENT.email });
+    stub.sync = { status: "ok", running: false, pending: 1 };
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(screen.getAllByText(copy.sync.pending(1)).length).toBeGreaterThan(0);
+    await fieldDb.outboxVisits.clear();
+  });
+
+  it("opens the app on this agent's queued tournée, without the start screen", async () => {
+    await fieldDb.prospects.put(assigned());
+    await fieldDb.outboxTournees.put({
+      id: crypto.randomUUID(),
+      startedAt: Date.now(),
+      writtenBy: AGENT.email,
+    });
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+  });
+
+  it("opens the app when a pull returns today's tournée, as a second phone does", async () => {
+    await openGate();
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+  });
+
+  it("does not open on another agent's queued tournée", async () => {
+    await fieldDb.prospects.put(assigned());
+    await fieldDb.outboxTournees.put({
+      id: crypto.randomUUID(),
+      startedAt: Date.now(),
+      writtenBy: OTHER_AGENT.email,
+    });
+    renderApp("/tournee");
+
+    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(fieldBand()).toBeNull();
+  });
+
+  it("gives an online admin the way back on a gate screen", async () => {
+    stub.me = ADMIN;
+    renderApp("/tournee");
+
+    const link = await screen.findByRole("link", { name: copy.nav.tabs.dashboard });
+    expect(link.getAttribute("href")).toBe("/admin");
+    expect(fieldBand()).toBeNull();
   });
 });
 
@@ -383,7 +543,11 @@ describe("The admin tab and routes follow the network", () => {
         window.dispatchEvent(new Event("online"));
       });
 
-      await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+      // The switch drops the admin's cached tournée and last pull with the rest
+      // of their cache (`clearAgentCache`), so the agent lands on the
+      // never-loaded gate, which has no tab bar and, for an agent, no
+      // « Tableau de bord » either.
+      expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
       expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
       expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
     } finally {
@@ -461,7 +625,7 @@ describe("The admin tab and routes follow the network", () => {
       expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
         "/tournee",
       );
-      expect(fieldBand()).toBeTruthy();
+      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
       onlineSpy.mockRestore();

@@ -11,7 +11,12 @@ import type {
   MeResponse,
   Prospect,
   Script,
+  TodayTournee,
+  TourneeStop,
+  TourneeStopSync,
+  TourneeSync,
   Visit,
+  VisitedStop,
   VisitHistoryEntry,
 } from "../../shared/schemas";
 import { brusselsPeriod } from "../../shared/period";
@@ -40,6 +45,11 @@ export type MetaKey = keyof MetaValues;
 
 export type StoredVisit = Visit & OutboxStamp;
 export type StoredFieldProspect = FieldProspect & OutboxStamp;
+export type StoredTournee = TourneeSync & OutboxStamp;
+export type StoredStop = TourneeStopSync & OutboxStamp;
+/** A pulled stop remembers its tournée, which the nested wire shape leaves implicit. */
+export type PulledStop = TourneeStop & { tourneeId: string };
+export type PulledTournee = Omit<TodayTournee, "stops">;
 export type MetaRow = { key: MetaKey; value: MetaValues[MetaKey] };
 
 /**
@@ -77,6 +87,14 @@ export class FieldDb extends Dexie {
   visitHistory!: Table<VisitHistoryEntry, string>;
   /** The log `queueVisit` writes and `todaysSentVisits` reads — see `SentVisit`. */
   sentVisits!: Table<SentVisit, string>;
+  /** The swipe's tournée and its numbered stops, queued until the server lists them in `accepted`. */
+  outboxTournees!: Table<StoredTournee, string>;
+  outboxStops!: Table<StoredStop, string>;
+  /** Today's tournée as the last pull returned it: a cache, replaced wholesale. */
+  tournees!: Table<PulledTournee, string>;
+  tourneeStops!: Table<PulledStop, string>;
+  /** Today's door-days from the last pull (Carnet and the counter read them later). */
+  visitedStops!: Table<VisitedStop, string>;
 
   constructor(name = "captain-prospectus") {
     super(name);
@@ -124,6 +142,17 @@ export class FieldDb extends Dexie {
     this.version(4).stores({
       sentVisits: "id, sentAt",
     });
+    /**
+     * v5 ADDS five tables (ADR-0036) and changes none, the same shape v2 and v4
+     * used, so the outbox is not touched.
+     */
+    this.version(5).stores({
+      outboxTournees: "id",
+      outboxStops: "id, tourneeId, prospectId",
+      tournees: "id",
+      tourneeStops: "id, tourneeId",
+      visitedStops: "prospectId",
+    });
   }
 }
 
@@ -160,13 +189,37 @@ export type OutboxCounts = {
 /** Split the outbox between what `identity` owns and what it holds back. */
 export async function outboxCounts(db: FieldDb, identity: string): Promise<OutboxCounts> {
   const mine = writtenByOrUnstamped(identity);
-  const [prospects, visits] = await Promise.all([
+  const [prospects, visits, tournees, stops] = await Promise.all([
     db.outboxProspects.toArray(),
     db.outboxVisits.toArray(),
+    db.outboxTournees.toArray(),
+    db.outboxStops.toArray(),
   ]);
-  const rows: OutboxStamp[] = [...prospects, ...visits];
+  // A swipe reads as one element: its stops count only once their tournée has
+  // left the outbox, so a day of 20 stops is not "21 éléments en attente".
+  const queued = new Set(tournees.map((t) => t.id));
+  const lonelyStops = stops.filter((stop) => !queued.has(stop.tourneeId));
+  const rows: OutboxStamp[] = [...prospects, ...visits, ...tournees, ...lonelyStops];
   const pending = rows.filter(mine).length;
   return { pending, heldBack: rows.length - pending };
+}
+
+/**
+ * The swipe's write: the tournée and every numbered stop in one transaction, so
+ * a day with stops but no tournée (or the reverse) is never queued. Stamped like
+ * a visit, and `unconfirmed` under the same rule (docs/backlog/013).
+ */
+export async function startTournee(
+  db: FieldDb,
+  day: { tournee: TourneeSync; stops: readonly TourneeStopSync[] },
+  identity: string,
+  unconfirmed = false,
+): Promise<void> {
+  const flag = unconfirmed ? ({ unconfirmed: true } as const) : {};
+  await db.transaction("rw", db.outboxTournees, db.outboxStops, async () => {
+    await db.outboxTournees.add({ ...day.tournee, writtenBy: identity, ...flag });
+    await db.outboxStops.bulkAdd(day.stops.map((s) => ({ ...s, writtenBy: identity, ...flag })));
+  });
 }
 
 /**
@@ -280,8 +333,23 @@ export async function clearAgentCache(db: FieldDb): Promise<void> {
     db.prospects.clear(),
     db.visitHistory.clear(),
     db.sentVisits.clear(),
+    db.tournees.clear(),
+    db.tourneeStops.clear(),
+    db.visitedStops.clear(),
     db.meta.delete("identity" satisfies MetaKey),
+    // The pull that filled the cache above was this agent's: the next one must
+    // read as "never loaded" until it lands (the tournée gate).
+    db.meta.delete("lastSyncAt" satisfies MetaKey),
   ]);
+}
+
+/**
+ * Every outbox table: a stamp helper that forgets one strands its rows. Typed
+ * as `Table<OutboxStamp>` so one `modify` serves them all (Dexie's `modify` is
+ * not callable on a union of tables).
+ */
+function outboxTables(db: FieldDb): Table<OutboxStamp, string>[] {
+  return [db.outboxVisits, db.outboxProspects, db.outboxTournees, db.outboxStops];
 }
 
 /**
@@ -305,9 +373,8 @@ export async function confirmOutbox(db: FieldDb, email: string): Promise<void> {
     row.writtenBy = email;
     delete row.unconfirmed;
   };
-  await db.transaction("rw", db.outboxVisits, db.outboxProspects, db.sentVisits, async () => {
-    await db.outboxVisits.toCollection().modify(confirm);
-    await db.outboxProspects.toCollection().modify(confirm);
+  await db.transaction("rw", [...outboxTables(db), db.sentVisits], async () => {
+    for (const table of outboxTables(db)) await table.toCollection().modify(confirm);
     await db.sentVisits.toCollection().modify(confirm);
   });
 }
@@ -328,9 +395,8 @@ export async function releaseUnconfirmed(db: FieldDb): Promise<void> {
   const release = (row: OutboxStamp) => {
     delete row.unconfirmed;
   };
-  await db.transaction("rw", db.outboxVisits, db.outboxProspects, db.sentVisits, async () => {
-    await db.outboxVisits.toCollection().modify(release);
-    await db.outboxProspects.toCollection().modify(release);
+  await db.transaction("rw", [...outboxTables(db), db.sentVisits], async () => {
+    for (const table of outboxTables(db)) await table.toCollection().modify(release);
     await db.sentVisits.toCollection().modify(release);
   });
 }

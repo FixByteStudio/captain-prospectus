@@ -13,6 +13,7 @@ import {
   queueVisit,
   releaseUnconfirmed,
   setMeta,
+  startTournee,
   todaysSentVisits,
 } from "./db";
 import { readingToSend, rememberReading, setReadingIdentity } from "./last-reading";
@@ -81,14 +82,23 @@ describe("the v1 → v2 upgrade", () => {
     v2.close();
   });
 
-  it("reaches v4 with the history and log tables present but empty", async () => {
+  it("reaches v5 with the history, log and tournée tables present but empty", async () => {
     const name = dbName();
     const db = new FieldDb(name);
     await db.open();
 
-    expect(db.verno).toBe(4);
+    expect(db.verno).toBe(5);
     await expect(db.visitHistory.count()).resolves.toBe(0);
     await expect(db.sentVisits.count()).resolves.toBe(0);
+    for (const table of [
+      db.outboxTournees,
+      db.outboxStops,
+      db.tournees,
+      db.tourneeStops,
+      db.visitedStops,
+    ]) {
+      await expect(table.count()).resolves.toBe(0);
+    }
     db.close();
   });
 });
@@ -145,7 +155,7 @@ const openV3 = async (name: string) => {
   return v3;
 };
 
-describe("the v2 → v4 upgrade", () => {
+describe("the v2 → v5 upgrade", () => {
   it("carries the outbox across, stamped with the cached identity, and opens sentVisits empty", async () => {
     const name = dbName();
     const v2 = await openV2(name);
@@ -166,20 +176,20 @@ describe("the v2 → v4 upgrade", () => {
       .put({ key: "identity", value: { email: "a@example.com", role: "agent" } });
     v2.close();
 
-    const v4 = new FieldDb(name);
-    await v4.open();
+    const v5 = new FieldDb(name);
+    await v5.open();
 
-    expect(v4.verno).toBe(4);
-    const kept = await v4.outboxVisits.toArray();
+    expect(v5.verno).toBe(5);
+    const kept = await v5.outboxVisits.toArray();
     expect(kept.map((v) => v.id).sort()).toEqual(pending.map((v) => v.id).sort());
     expect(kept.every((v) => v.writtenBy === "a@example.com")).toBe(true);
     const { writtenBy, ...wire } = kept.find((v) => v.id === pending[0]?.id) ?? {};
     expect(writtenBy).toBe("a@example.com");
     expect(wire).toEqual(pending[0]);
-    const prospects = await v4.outboxProspects.toArray();
+    const prospects = await v5.outboxProspects.toArray();
     expect(prospects.map((p) => p.writtenBy)).toEqual(["a@example.com"]);
-    await expect(v4.sentVisits.count()).resolves.toBe(0);
-    v4.close();
+    await expect(v5.sentVisits.count()).resolves.toBe(0);
+    v5.close();
   });
 
   it("leaves rows unstamped, never dropped, when no identity is cached", async () => {
@@ -189,18 +199,18 @@ describe("the v2 → v4 upgrade", () => {
     await v2.table("outboxVisits").bulkPut(pending);
     v2.close();
 
-    const v4 = new FieldDb(name);
-    await v4.open();
+    const v5 = new FieldDb(name);
+    await v5.open();
 
-    const kept = await v4.outboxVisits.toArray();
+    const kept = await v5.outboxVisits.toArray();
     expect(kept).toHaveLength(2);
     expect(kept.every((v) => v.writtenBy === undefined)).toBe(true);
-    await expect(v4.sentVisits.count()).resolves.toBe(0);
-    v4.close();
+    await expect(v5.sentVisits.count()).resolves.toBe(0);
+    v5.close();
   });
 });
 
-describe("the v3 → v4 upgrade", () => {
+describe("the v3 → v5 upgrade", () => {
   it("carries stamped outbox rows and their stamps across, and opens sentVisits empty", async () => {
     const name = dbName();
     const v3 = await openV3(name);
@@ -208,15 +218,72 @@ describe("the v3 → v4 upgrade", () => {
     await v3.table("outboxVisits").bulkPut(pending);
     v3.close();
 
-    const v4 = new FieldDb(name);
-    await v4.open();
+    const v5 = new FieldDb(name);
+    await v5.open();
 
-    expect(v4.verno).toBe(4);
-    const kept = await v4.outboxVisits.toArray();
+    expect(v5.verno).toBe(5);
+    const kept = await v5.outboxVisits.toArray();
     expect(kept.map((v) => v.id).sort()).toEqual(pending.map((v) => v.id).sort());
     expect(kept.every((v) => v.writtenBy === "a@example.com")).toBe(true);
-    await expect(v4.sentVisits.count()).resolves.toBe(0);
+    await expect(v5.sentVisits.count()).resolves.toBe(0);
+    v5.close();
+  });
+});
+
+/** The schema a phone stopped on before v5 shipped, copied by hand like `openV3`. */
+const openV4 = async (name: string) => {
+  const v4 = new Dexie(name);
+  v4.version(1).stores({
+    prospects: "id, status, assignedTo",
+    outboxProspects: "id",
+    outboxVisits: "id, prospectId",
+    meta: "key",
+  });
+  v4.version(2).stores({ visitHistory: "id, prospectId" });
+  v4.version(3).stores({});
+  v4.version(4).stores({ sentVisits: "id, sentAt" });
+  await v4.open();
+  return v4;
+};
+
+describe("the v4 → v5 upgrade", () => {
+  it("carries a populated outbox across untouched and opens the tournée tables empty — INVARIANT 5", async () => {
+    const name = dbName();
+    const v4 = await openV4(name);
+    const queued = visit();
+    const fieldProspect = {
+      id: crypto.randomUUID(),
+      name: "Le camion",
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+      writtenBy: "a@example.com",
+    };
+    await v4.table("outboxVisits").put({ ...queued, writtenBy: "a@example.com" });
+    await v4.table("outboxProspects").put(fieldProspect);
     v4.close();
+
+    const v5 = new FieldDb(name);
+    await v5.open();
+
+    expect(v5.verno).toBe(5);
+    await expect(v5.outboxVisits.toArray()).resolves.toEqual([
+      { ...queued, writtenBy: "a@example.com" },
+    ]);
+    await expect(v5.outboxProspects.toArray()).resolves.toEqual([fieldProspect]);
+    for (const table of [
+      v5.outboxTournees,
+      v5.outboxStops,
+      v5.tournees,
+      v5.tourneeStops,
+      v5.visitedStops,
+    ]) {
+      await expect(table.count()).resolves.toBe(0);
+    }
+    v5.close();
   });
 });
 
@@ -535,14 +602,14 @@ describe("clearAgentCache", () => {
     db.close();
   });
 
-  it("keeps the last sync time, which belongs to the device, not the agent", async () => {
+  it("forgets the last sync time, so the next agent reads « pas encore chargée » until a pull lands", async () => {
     const db = new FieldDb(dbName());
     await db.open();
     await setMeta(db, "lastSyncAt", 1_700_000_000_000);
 
     await clearAgentCache(db);
 
-    await expect(getMeta(db, "lastSyncAt")).resolves.toBe(1_700_000_000_000);
+    await expect(getMeta(db, "lastSyncAt")).resolves.toBeUndefined();
     db.close();
   });
 });
@@ -719,6 +786,154 @@ describe("releaseUnconfirmed", () => {
 
     await expect(db.outboxVisits.count()).resolves.toBe(1);
     await expect(db.sentVisits.count()).resolves.toBe(1);
+    db.close();
+  });
+});
+
+const day = (stops = 3) => {
+  const tourneeId = crypto.randomUUID();
+  return {
+    tournee: { id: tourneeId, startedAt: 1_700_000_000_000 },
+    stops: Array.from({ length: stops }, (_, i) => ({
+      id: crypto.randomUUID(),
+      tourneeId,
+      prospectId: crypto.randomUUID(),
+      number: i + 1,
+      addedAt: 1_700_000_000_000,
+    })),
+  };
+};
+
+describe("startTournee", () => {
+  it("writes the tournée and every stop, stamped with the identity", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const { tournee, stops } = day();
+
+    await startTournee(db, { tournee, stops }, "a@example.com");
+
+    await expect(db.outboxTournees.toArray()).resolves.toEqual([
+      { ...tournee, writtenBy: "a@example.com" },
+    ]);
+    const stored = await db.outboxStops.toArray();
+    expect(stored).toHaveLength(3);
+    expect(stored.every((s) => s.writtenBy === "a@example.com")).toBe(true);
+    db.close();
+  });
+
+  it("stamps every row unconfirmed when asked, docs/backlog/013", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await startTournee(db, day(), "a@example.com", true);
+
+    expect((await db.outboxTournees.toArray()).every((t) => t.unconfirmed)).toBe(true);
+    expect((await db.outboxStops.toArray()).every((t) => t.unconfirmed)).toBe(true);
+
+    await confirmOutbox(db, "b@example.com");
+    expect((await db.outboxTournees.toArray())[0]).toMatchObject({ writtenBy: "b@example.com" });
+    expect((await db.outboxStops.toArray()).every((s) => s.writtenBy === "b@example.com")).toBe(
+      true,
+    );
+    expect((await db.outboxStops.toArray())[0]).not.toHaveProperty("unconfirmed");
+    db.close();
+  });
+
+  it("writes nothing when a stop cannot be written — no tournée without its stops", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const { tournee, stops } = day(2);
+    const [first] = stops;
+    if (!first) throw new Error("fixture");
+
+    // A duplicate stop id makes the bulk add fail after the tournée was added.
+    await expect(
+      startTournee(db, { tournee, stops: [first, first] }, "a@example.com"),
+    ).rejects.toThrow();
+
+    await expect(db.outboxTournees.count()).resolves.toBe(0);
+    await expect(db.outboxStops.count()).resolves.toBe(0);
+    db.close();
+  });
+
+  it("is dropped from the unconfirmed flag by releaseUnconfirmed, keeping the writer", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await startTournee(db, day(), "a@example.com", true);
+
+    await releaseUnconfirmed(db);
+
+    const [t] = await db.outboxTournees.toArray();
+    expect(t).toMatchObject({ writtenBy: "a@example.com" });
+    expect(t).not.toHaveProperty("unconfirmed");
+    expect((await db.outboxStops.toArray())[0]).not.toHaveProperty("unconfirmed");
+    db.close();
+  });
+});
+
+describe("outboxCounts with a tournée", () => {
+  it("counts a swipe of 20 stops as one element", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await startTournee(db, day(20), "a@example.com");
+
+    await expect(outboxCounts(db, "a@example.com")).resolves.toEqual({ pending: 1, heldBack: 0 });
+    db.close();
+  });
+
+  it("counts stops alone once their tournée left the outbox", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const { tournee, stops } = day(20);
+    await startTournee(db, { tournee, stops }, "a@example.com");
+    await db.outboxTournees.delete(tournee.id);
+
+    await expect(outboxCounts(db, "a@example.com")).resolves.toEqual({ pending: 20, heldBack: 0 });
+    db.close();
+  });
+
+  it("holds back another identity's tournée", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    await startTournee(db, day(5), "a@example.com");
+
+    await expect(outboxCounts(db, "b@example.com")).resolves.toEqual({ pending: 0, heldBack: 1 });
+    db.close();
+  });
+});
+
+describe("clearAgentCache and the tournée", () => {
+  it("clears the pulled tournée tables and keeps the outbox", async () => {
+    const db = new FieldDb(dbName());
+    await db.open();
+    const { tournee, stops } = day(2);
+    await startTournee(db, { tournee, stops }, "a@example.com");
+    await db.tournees.put({ id: tournee.id, dayStart: 1, startedAt: 2 });
+    await db.tourneeStops.put({
+      id: crypto.randomUUID(),
+      tourneeId: tournee.id,
+      prospectId: crypto.randomUUID(),
+      number: 1,
+      addedAt: 1,
+      left: false,
+    });
+    await db.visitedStops.put({
+      prospectId: crypto.randomUUID(),
+      outcome: "interested",
+      visitedAt: 1,
+      flyerGiven: false,
+      visitIds: [],
+      name: "x",
+      type: "bar",
+      address: null,
+    });
+
+    await clearAgentCache(db);
+
+    await expect(db.tournees.count()).resolves.toBe(0);
+    await expect(db.tourneeStops.count()).resolves.toBe(0);
+    await expect(db.visitedStops.count()).resolves.toBe(0);
+    await expect(db.outboxTournees.count()).resolves.toBe(1);
+    await expect(db.outboxStops.count()).resolves.toBe(2);
     db.close();
   });
 });

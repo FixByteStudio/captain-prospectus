@@ -43,3 +43,20 @@ export function swipeAction(dx: number, canRight: boolean): "visit" | "navigate"
   if (canRight && dx >= SWIPE_COMMIT) return "navigate";
   return null;
 }
+
+/**
+ * The start swipe's track maths (docs/design.md › Before the swipe). Its commit
+ * is a share of the track, not `SWIPE_COMMIT`: 96px on a 358px track would start
+ * the day by accident, and a started tournée cannot be undone that day.
+ */
+export const TRACK_COMMIT_SHARE = 3 / 4;
+
+/** The thumb follows the finger to the right and stops at the end of the track. */
+export function thumbOffset(dx: number, travel: number): number {
+  return Math.min(Math.max(0, travel), Math.max(0, dx));
+}
+
+/** Whether a release at `dx` starts the tournée: at least three quarters of the track. */
+export function trackCommits(dx: number, travel: number): boolean {
+  return travel > 0 && dx >= travel * TRACK_COMMIT_SHARE;
+}
