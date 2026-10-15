@@ -25,7 +25,7 @@ import { clearAgentCache, fieldDb, setMeta } from "./db";
 import { questionDomId } from "./ScriptQuestions";
 import { VisitScreen } from "./VisitScreen";
 import { RoundMap } from "./RoundMap";
-import type { TodayItem } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 
@@ -48,11 +48,12 @@ vi.mock("../api", () => ({
  * this only asserts whether the visit mounts it and with what. The round is
  * empty by default, so the pane shows no map unless a test puts the place on
  * it. */
-const round = vi.hoisted(() => ({ now: [] as TodayItem[], refresh: vi.fn() }));
+const round = vi.hoisted(() => ({ now: [] as TourneeItem[], refresh: vi.fn() }));
 const network = vi.hoisted(() => ({ online: true }));
 vi.mock("./useRound", () => ({
   useRound: () => ({
-    list: { now: round.now, later: [] },
+    stops: round.now,
+    loaded: true,
     point: { lat: 50.85, lng: 4.35 },
     refresh: round.refresh,
   }),
@@ -1372,21 +1373,19 @@ describe("VisitScreen — save confirmation", () => {
 });
 
 /** This place as a stop on today's round, the next one, with coordinates. */
-function onRound(over: Partial<TodayItem> = {}) {
+function onRound(over: Partial<TourneeItem> = {}) {
   round.now = [
     {
       id: PROSPECT.id,
+      number: 1,
       name: PROSPECT.name,
       type: PROSPECT.type,
       lat: 50.8467,
       lng: 4.3525,
       address: null,
       status: "assigned",
-      nextVisitAt: null,
-      lastVisitAt: null,
       pending: false,
       distanceM: null,
-      visitQueued: false,
       ...over,
     },
   ];
@@ -1458,7 +1457,7 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
 
     const props = vi.mocked(RoundMap).mock.calls.at(-1)?.[0];
     expect(props?.pins).toEqual([
-      expect.objectContaining({ id: PROSPECT.id, index: 1, next: true }),
+      expect.objectContaining({ id: PROSPECT.id, number: 1, next: true }),
     ]);
     expect(props?.path).toEqual([]);
     expect(props?.position).toEqual({ lat: 50.85, lng: 4.35 });
@@ -1470,16 +1469,19 @@ describe("VisitScreen — tablet layout (GH #126)", () => {
     expect(screen.getByRole("complementary", { name: copy.visit.previousVisits })).toBe(pane);
   });
 
-  it("numbers the pin by its place in the walking order, gold only for the next stop", async () => {
+  it("numbers the pin with the stop's own number, gold only for the next stop", async () => {
     onRound();
     const [self] = round.now;
     if (!self) throw new Error("onRound set no stop");
-    round.now = [{ ...self, id: crypto.randomUUID(), name: "Avant" }, self];
+    round.now = [
+      { ...self, id: crypto.randomUUID(), name: "Avant" },
+      { ...self, number: 2 },
+    ];
     await renderVisit({ expectContinue: false });
     await screen.findByTestId("round-map");
 
     expect(vi.mocked(RoundMap).mock.calls.at(-1)?.[0].pins).toEqual([
-      expect.objectContaining({ id: PROSPECT.id, index: 2, next: false }),
+      expect.objectContaining({ id: PROSPECT.id, number: 2, next: false }),
     ]);
   });
 

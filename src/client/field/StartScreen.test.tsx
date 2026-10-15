@@ -139,7 +139,7 @@ describe("the location dialog", () => {
     expect(screen.getByRole("status").textContent).toBe("");
     expect(swipe().getAttribute("aria-disabled")).toBe("true");
     expect(swipe().textContent).toContain(copy.start.waiting);
-    expect(screen.queryByRole("button", { name: copy.today.retryPosition })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Réessayer" })).toBeNull();
 
     fireEvent.click(swipe(), { detail: 0 });
     expect(await fieldDb.outboxTournees.count()).toBe(0);

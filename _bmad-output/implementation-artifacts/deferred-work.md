@@ -409,3 +409,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-500-location-dialog.md`
   summary: The field precache is at 998.62 of 1,000 KiB after story 1.4, leaving 1.38 KiB for entries 5–9 of epic #496.
   evidence: `pnpm check:precache` on the story 1.4 branch; story 1.3 ended at 995.33 KiB. Entries 5–9 add screens (Carnet) and will need a trim or a split chunk first.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-501-tournee-carte-swipe-numbers.md`
+  summary: No test pins the counter line on a finished day (every stop visited) since « reads n portes sur n on a finished round » was removed.
+  evidence: Verification-gap lens, story 1.5 review pass 1; entry 7 (#503) rewrites the counter and should add it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-501-tournee-carte-swipe-numbers.md`
+  summary: After a cache wipe the counter reads too low (e.g. « 0 portes sur 3 » on a 6-stop day), because `n` comes from the phone-only `sentVisits` log.
+  evidence: Edge-case lens, story 1.5 review pass 1; pre-existing, fixed by entry 7's server-plus-outbox counter.

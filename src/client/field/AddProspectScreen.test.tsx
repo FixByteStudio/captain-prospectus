@@ -1,12 +1,12 @@
 /**
  * Ajouter un prospect (GH #127): the two-column type chips, the tile-free
  * position card, the missing-name error, and Flow 4's climax — the new place
- * is the next stop on Tournée du jour at once, offline.
+ * is queued at once, offline, and the agent lands back on Tournée du jour. It
+ * joins the tournée's numbers with entry 6 of #496, not before.
  *
  * `useSync` is mocked (as `VisitScreen.test.tsx` does) and `../api` rejects
  * every call, so nothing here can reach a network. The Tournée route is the
- * real `TodayScreen` reading the real Dexie tables, so "joins the round" is
- * the round's own reading, not a stub's.
+ * real `TodayScreen` reading the real Dexie tables.
  *
  * INVARIANT 2: the one write is an insert of the schema's fields — no
  * `status`, `source` or owner leaves the phone.
@@ -22,6 +22,7 @@ import type { Prospect } from "../../shared/schemas";
 import { fieldDb } from "./db";
 import { AddProspectScreen } from "./AddProspectScreen";
 import { TodayScreen } from "./TodayScreen";
+import { clearTourneeTables, seedPulledTournee } from "./tournee-test-helpers";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 
@@ -78,6 +79,7 @@ afterEach(async () => {
     fieldDb.outboxProspects.clear(),
     fieldDb.outboxVisits.clear(),
     fieldDb.sentVisits.clear(),
+    clearTourneeTables(),
   ]);
 });
 
@@ -172,26 +174,27 @@ describe("AddProspectScreen", () => {
     expect(await fieldDb.outboxProspects.count()).toBe(0);
   });
 
-  it("adds one outbox row and lands on Tournée du jour, the place already the next stop", async () => {
+  it("adds one outbox row and lands on Tournée du jour, the swipe's numbers untouched", async () => {
     grantPosition();
-    // A stop from the server, a few kilometres off: the new place, added
-    // where the agent stands, must come before it (Flow 4, "the nearest stop").
-    await fieldDb.prospects.add({
-      id: "44444444-4444-4444-8444-444444444444",
-      name: "Chez Léa",
-      type: "restaurant",
-      lat: 50.88,
-      lng: 4.4,
-      address: null,
-      phone: null,
-      website: null,
-      cuisine: null,
-      source: "csv",
-      status: "assigned",
-      assignedTo: "agent@example.com",
-      lastVisitAt: null,
-      nextVisitAt: null,
-    } satisfies Prospect);
+    // A stop from the swipe: the new place does not renumber it or take its card.
+    await seedPulledTournee([
+      {
+        id: "44444444-4444-4444-8444-444444444444",
+        name: "Chez Léa",
+        type: "restaurant",
+        lat: 50.88,
+        lng: 4.4,
+        address: null,
+        phone: null,
+        website: null,
+        cuisine: null,
+        source: "csv",
+        status: "assigned",
+        assignedTo: "agent@example.com",
+        lastVisitAt: null,
+        nextVisitAt: null,
+      } satisfies Prospect,
+    ]);
 
     const user = userEvent.setup();
     renderAdd();
@@ -205,7 +208,8 @@ describe("AddProspectScreen", () => {
     const card = (await screen.findByText(copy.today.nextStop)).closest("article");
     expect(card).not.toBeNull();
     // `as HTMLElement`: asserted non-null on the line above.
-    expect(within(card as HTMLElement).getByText("Friterie des Minimes")).toBeTruthy();
+    expect(within(card as HTMLElement).getByText("Chez Léa")).toBeTruthy();
+    expect(screen.queryByText("Friterie des Minimes")).toBeNull();
 
     const rows = await fieldDb.outboxProspects.toArray();
     expect(rows).toHaveLength(1);

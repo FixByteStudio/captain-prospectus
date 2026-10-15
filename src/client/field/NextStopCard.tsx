@@ -1,20 +1,23 @@
 /**
- * The next stop — docs/design.md, "Next-stop card". Nearest-next ordering
- * means the first item in the round is not a row, it is an instruction: the
- * only stop set apart by a card, a gold edge and carrying its own actions.
+ * The next stop — docs/design.md, "Next-stop card". The lowest-numbered stop with
+ * no visit today is not a row, it is an instruction: the only stop set apart by
+ * a card, a gold edge and carrying its own actions.
  */
 import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { StopNumber } from "./StopNumber";
 import { copy, TYPE_LABELS } from "../copy/field";
-import type { TodayItem } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 
-export function NextStopCard({ item }: { item: TodayItem }) {
+export function NextStopCard({ item }: { item: TourneeItem }) {
   return (
-    <article className="bg-card border-border shadow-[inset_4px_0_0_0_var(--color-primary)] rounded-xl border p-4">
+    <article
+      aria-label={copy.carte.pinLabel(item.number, item.name)}
+      className="bg-card border-border shadow-[inset_4px_0_0_0_var(--color-primary)] rounded-xl border p-4"
+    >
       <p className="text-overline text-muted-foreground uppercase">{copy.today.nextStop}</p>
 
       <div className="mt-2 flex items-start gap-3">
-        <StopNumber index={1} variant="next" />
+        <StopNumber number={item.number} variant="next" />
         <div className="min-w-0 flex-1">
           {/* docs/design.md type table: Heading is "the next stop's name on a
               phone" — an `<h3>` so screen-reader heading navigation finds it,

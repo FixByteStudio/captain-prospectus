@@ -67,7 +67,7 @@ describe("roundMap", () => {
       NOW,
     );
     const map = roundMap(ordered, at);
-    expect(map.pins.map((p) => [p.name, p.index, p.next])).toEqual([
+    expect(map.pins.map((p) => [p.name, p.number, p.next])).toEqual([
       ["Madeleine", 1, true],
       ["Zeste", 2, false],
     ]);
@@ -84,7 +84,7 @@ describe("roundMap", () => {
 
   it("a stop without coordinates keeps its number and draws no pin", () => {
     const map = roundMap(stops, null);
-    expect(map.pins.map((p) => [p.name, p.index])).toEqual([
+    expect(map.pins.map((p) => [p.name, p.number])).toEqual([
       ["Madeleine", 2],
       ["Zeste", 3],
     ]);
@@ -105,6 +105,6 @@ describe("roundMap", () => {
     const first = [prospect("a", "Alpha", 50.8, 4.3), prospect("z", "Zeste", 50.9, 4.4)];
     const list = roundStops({ prospects: first, position: null }, NOW);
     const map = roundMap(list, null);
-    expect(map.pins[0]).toEqual(expect.objectContaining({ name: "Alpha", index: 1, next: false }));
+    expect(map.pins[0]).toEqual(expect.objectContaining({ name: "Alpha", number: 1, next: false }));
   });
 });

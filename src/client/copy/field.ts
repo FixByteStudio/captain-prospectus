@@ -39,8 +39,8 @@ export const copy = {
 
   today: {
     title: "Tournée du jour",
-    empty: "Aucun prospect à visiter. Synchronisez pour récupérer votre liste.",
-    later: "Plus tard",
+    /** Every stop has a visit today. Carnet's line and button arrive with entry 8 of #496. */
+    allDone: "Tous les arrêts sont faits.",
     distanceUnknown: "Position inconnue",
     navigate: "Y aller",
     visit: "Visiter",
@@ -58,12 +58,9 @@ export const copy = {
      * yet, or a stop whose visit is still sitting in the outbox. Either way
      * nothing about the round has changed server-side (invariants 2, 3). */
     notSynced: "Pas encore envoyé",
-    dueOn: (when: string) => `À relancer le ${when}`,
     /** "type · address", or the type alone when there is no address. */
     meta: (type: string, address: string | null) => (address ? `${type} · ${address}` : type),
     locating: "Recherche de votre position…",
-    positionDenied: "Sans votre position, la tournée n'est pas triée par distance.",
-    retryPosition: "Réessayer",
   },
 
   /** Before the swipe (docs/design.md › Before the swipe, ADR-0036). */

@@ -8,18 +8,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { copy, TYPE_LABELS } from "../copy";
-import type { TodayItem, TodayList } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 import type { RoundState } from "./useRound";
 
 const round = vi.hoisted(() => ({
   current: {
-    list: { now: [], later: [] } as TodayList,
+    loaded: true,
+    stops: [] as TourneeItem[],
     point: null,
-    locating: false,
-    denied: false,
     refresh: vi.fn(),
     now: 0,
     outboxVisits: [],
@@ -46,19 +44,19 @@ vi.mock("./RoundMap", () => ({
 import { RoundMap } from "./RoundMap";
 import { CarteScreen } from "./CarteScreen";
 
-const item = (over: Partial<TodayItem> = {}): TodayItem => ({
+/** Each stop takes the next number unless a test gives it one, like a tournée's own. */
+let seq = 0;
+const item = (over: Partial<TourneeItem> = {}): TourneeItem => ({
   id: crypto.randomUUID(),
+  number: ++seq,
   name: "Le Bouchon",
   type: "restaurant",
   lat: 50.8467,
   lng: 4.3525,
   address: "12 rue Sainte-Catherine",
   status: "assigned",
-  nextVisitAt: null,
-  lastVisitAt: null,
   pending: false,
   distanceM: null,
-  visitQueued: false,
   ...over,
 });
 
@@ -133,7 +131,7 @@ function selectPin(id: string) {
   });
 }
 
-function metaText(item: TodayItem): string {
+function metaText(item: TourneeItem): string {
   return copy.today.meta(TYPE_LABELS[item.type], item.address);
 }
 
@@ -141,11 +139,11 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   mapMounts.count = 0;
+  seq = 0;
   round.current = {
-    list: { now: [], later: [] },
+    loaded: true,
+    stops: [],
     point: null,
-    locating: false,
-    denied: false,
     refresh: vi.fn(),
     now: 0,
     outboxVisits: [],
@@ -156,7 +154,7 @@ describe("CarteScreen, phone (< 768px)", () => {
   it("shows the next stop in the sheet, gold number, Y aller and Visiter to /tournee/:id (matrix: Phone, open)", () => {
     setViewport(true);
     const stop = item();
-    round.current = { ...round.current, list: { now: [stop], later: [] } };
+    round.current = { ...round.current, stops: [stop] };
 
     renderScreen();
 
@@ -179,7 +177,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     const stop1 = item({ name: "Curry House" });
     const stop2 = item({ name: "Chez Léon" });
     const stop3 = item({ name: "Café des Arts" });
-    round.current = { ...round.current, list: { now: [stop1, stop2, stop3], later: [] } };
+    round.current = { ...round.current, stops: [stop1, stop2, stop3] };
 
     renderScreen();
     selectPin(stop3.id);
@@ -196,7 +194,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     setViewport(true);
     const stop1 = item({ name: "Curry House" });
     const stop3 = item({ name: "Café des Arts" });
-    round.current = { ...round.current, list: { now: [stop1, stop3], later: [] } };
+    round.current = { ...round.current, stops: [stop1, stop3] };
 
     const { rerender } = renderScreen();
     selectPin(stop3.id);
@@ -205,7 +203,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     ).toBeTruthy();
 
     // The visit synced away: stop3 is no longer in `list.now`.
-    round.current = { ...round.current, list: { now: [stop1], later: [] } };
+    round.current = { ...round.current, stops: [stop1] };
     rerender(
       <MemoryRouter initialEntries={["/tournee/carte"]}>
         <CarteScreen />
@@ -220,7 +218,7 @@ describe("CarteScreen, phone (< 768px)", () => {
   it("shows Visiter full width with no Y aller when the selected stop has no coordinates (matrix: No coordinates)", () => {
     setViewport(true);
     const stop = item({ lat: null, lng: null });
-    round.current = { ...round.current, list: { now: [stop], later: [] } };
+    round.current = { ...round.current, stops: [stop] };
 
     renderScreen();
 
@@ -229,19 +227,19 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(within(sheet).getByRole("link", { name: copy.today.visit })).toBeTruthy();
   });
 
-  it("shows the empty message and no actions for an empty round (matrix: Empty round)", () => {
+  it("shows the all-done sentence and no actions when no stop is left (matrix: All visited)", () => {
     setViewport(true);
     renderScreen();
 
     const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
-    expect(within(sheet).getByText(copy.today.empty)).toBeTruthy();
+    expect(within(sheet).getByText(copy.today.allDone)).toBeTruthy();
     expect(within(sheet).queryByRole("link", { name: copy.today.visit })).toBeNull();
   });
 
   it("shows the distance and the Pas encore envoyé badge in the sheet", () => {
     setViewport(true);
     const stop = item({ pending: true, distanceM: 350 });
-    round.current = { ...round.current, list: { now: [stop], later: [] } };
+    round.current = { ...round.current, stops: [stop] };
 
     renderScreen();
 
@@ -254,7 +252,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     setViewport(true);
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     const stop = item();
-    round.current = { ...round.current, list: { now: [stop], later: [] } };
+    round.current = { ...round.current, stops: [stop] };
 
     renderScreen();
 
@@ -273,7 +271,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     const stop = item();
     round.current = {
       ...round.current,
-      list: { now: [stop], later: [] },
+      stops: [stop],
       point: { lat: 50.85, lng: 4.35 },
     };
 
@@ -281,7 +279,7 @@ describe("CarteScreen, phone (< 768px)", () => {
 
     const props = roundMapProps();
     expect(props.pins).toEqual([
-      { id: stop.id, index: 1, lat: 50.8467, lng: 4.3525, next: true, name: stop.name },
+      { id: stop.id, number: 1, lat: 50.8467, lng: 4.3525, next: true, name: stop.name },
     ]);
     expect(props.path).toEqual([[50.8467, 4.3525]]);
     expect(props.position).toBe(round.current.point);
@@ -291,34 +289,36 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(round.current.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("draws no pin for a Plus tard follow-up", () => {
+  it("shows no position notice and no Réessayer: the pins, numbers and order do not depend on a reading", () => {
     setViewport(true);
-    const stop = item();
-    const later = item({ status: "follow_up", nextVisitAt: Date.now() + 86_400_000 });
-    round.current = { ...round.current, list: { now: [stop], later: [later] } };
+    round.current = { ...round.current, point: null, stops: [item({ number: 4 })] };
 
     renderScreen();
 
-    expect(roundMapProps().pins.map((pin) => pin.id)).toEqual([stop.id]);
+    expect(screen.getByTestId("round-map")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Réessayer" })).toBeNull();
+    expect(screen.queryByText(/triée par distance/)).toBeNull();
   });
 
-  it("shows the position-denied notice over the map, pins still shown, and Réessayer calls refresh", async () => {
+  it("shows the swipe's numbers, gaps included: pins 4, 5 and 9, the sheet on 4 in gold", () => {
     setViewport(true);
-    const user = userEvent.setup();
-    round.current = { ...round.current, denied: true, list: { now: [item()], later: [] } };
+    const stops = [item({ number: 4 }), item({ number: 5 }), item({ number: 9 })];
+    round.current = { ...round.current, stops };
 
     renderScreen();
 
-    expect(screen.getByText(copy.today.positionDenied)).toBeTruthy();
-    expect(screen.getByTestId("round-map")).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: copy.today.retryPosition }));
-    expect(round.current.refresh).toHaveBeenCalledTimes(1);
+    expect(roundMapProps().pins.map((pin) => [pin.number, pin.next])).toEqual([
+      [4, true],
+      [5, false],
+      [9, false],
+    ]);
+    const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
+    expect(within(sheet).getByText("4", { selector: "span" }).className).toContain("bg-primary");
   });
 
   it("swaps the map for the offline notice the instant the network drops, and remounts it once back online", () => {
     setViewport(true);
-    round.current = { ...round.current, list: { now: [item()], later: [] } };
+    round.current = { ...round.current, stops: [item()] };
     renderScreen();
     expect(screen.getByTestId("round-map")).toBeTruthy();
 
@@ -343,7 +343,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     setViewport(false);
     const stop1 = item({ name: "Curry House" });
     const stop2 = item({ name: "Chez Léon" });
-    round.current = { ...round.current, list: { now: [stop1, stop2], later: [] } };
+    round.current = { ...round.current, stops: [stop1, stop2] };
 
     renderScreen();
 
@@ -358,7 +358,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     const stop1 = item({ name: "Curry House" });
     const stop2 = item({ name: "Chez Léon" });
     const stop3 = item({ name: "Café des Arts" });
-    round.current = { ...round.current, list: { now: [stop1, stop2, stop3], later: [] } };
+    round.current = { ...round.current, stops: [stop1, stop2, stop3] };
 
     const scrolled: Element[] = [];
     vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (
@@ -391,7 +391,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     const stop1 = item({ name: "Curry House" });
     const stop2 = item({ name: "Chez Léon" });
     const stop3 = item({ name: "Café des Arts" });
-    round.current = { ...round.current, list: { now: [stop1, stop2, stop3], later: [] } };
+    round.current = { ...round.current, stops: [stop1, stop2, stop3] };
 
     renderScreen();
 
@@ -419,25 +419,11 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     expect(row2Toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("shows the position-denied notice over the map, pins still shown, and Réessayer calls refresh", async () => {
-    setViewport(false);
-    const user = userEvent.setup();
-    round.current = { ...round.current, denied: true, list: { now: [item()], later: [] } };
-
-    renderScreen();
-
-    expect(screen.getByText(copy.today.positionDenied)).toBeTruthy();
-    expect(screen.getByTestId("round-map")).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: copy.today.retryPosition }));
-    expect(round.current.refresh).toHaveBeenCalledTimes(1);
-  });
-
   it("shows the list left and the offline notice right (matrix: Tablet offline)", () => {
     setViewport(false);
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     const stop = item();
-    round.current = { ...round.current, list: { now: [stop], later: [] } };
+    round.current = { ...round.current, stops: [stop] };
 
     renderScreen();
 
@@ -448,6 +434,22 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     expect(screen.getByRole("link", { name: copy.carte.showList }).getAttribute("href")).toBe(
       "/tournee",
     );
+  });
+
+  it("says every stop is done in the list pane when none is left, and nothing while loading", () => {
+    setViewport(false);
+    const { rerender } = renderScreen();
+
+    const list = screen.getByRole("region", { name: copy.carte.listLabel });
+    expect(within(list).getByText(copy.today.allDone)).toBeTruthy();
+
+    round.current = { ...round.current, loaded: false };
+    rerender(
+      <MemoryRouter initialEntries={["/tournee/carte"]}>
+        <CarteScreen />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(copy.today.allDone)).toBeNull();
   });
 
   it("renders an empty map with no pins for an empty round", () => {
@@ -462,7 +464,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
 describe("CarteScreen, crossing the breakpoint", () => {
   it("does not remount RoundMap when the viewport crosses 768px", () => {
     const viewport = viewportController(false);
-    round.current = { ...round.current, list: { now: [item()], later: [] } };
+    round.current = { ...round.current, stops: [item()] };
 
     renderScreen();
     expect(mapMounts.count).toBe(1);
