@@ -1702,8 +1702,12 @@ rather than linking.
 browser already reports the permission as granted, readings start as the dialog
 opens, with no tap. While the dialog is open and the page is visible, the phone
 repeats one-off readings (`getCurrentPosition`, never `watchPosition`) until one
-is precise enough; entry 4 sets the threshold and the cadence after the
-pavement test. The status line (`role="status"`, polite) says where that stands:
+is precise enough: the threshold (`LOCATION_GATE_ACCURACY_M`), the cadence
+(`LOCATION_GATE_RETRY_MS`) and the fix's `enableHighAccuracy`
+(`LOCATION_GATE_HIGH_ACCURACY`) are named constants in `location-gate.ts`, set
+by the owner's pavement test. An admin's « Tableau de bord » link sits inside
+the dialog, under the Réglages line, because the dialog covers the one above
+the track. The status line (`role="status"`, polite) says where that stands:
 
 | State | Status line |
 |---|---|

@@ -7,6 +7,8 @@
  */
 export type GeolocationFix =
   | "denied"
+  /** Error code 2: the device could not get a fix. */
+  | "unavailable"
   | {
       lat: number;
       lng: number;
@@ -24,9 +26,24 @@ export function setGeolocation(next: GeolocationFix): void {
 
 export function resetGeolocation(): void {
   fix = "denied";
+  permission = null;
 }
 
 /** Read at call time, so a test can switch the fix between two readings. */
 export function currentGeolocation(): GeolocationFix {
   return fix;
+}
+
+/** What `navigator.permissions.query({ name: "geolocation" })` answers. */
+export type GeolocationPermission = "granted" | "prompt" | "denied";
+
+let permission: GeolocationPermission | null = null;
+
+/** `null` removes the Permissions API altogether, as in an older WebView. */
+export function setGeolocationPermission(next: GeolocationPermission | null): void {
+  permission = next;
+}
+
+export function currentGeolocationPermission(): GeolocationPermission | null {
+  return permission;
 }
