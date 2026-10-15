@@ -102,6 +102,7 @@ import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
 import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
+import { doorDaysBetween } from "../door-days";
 import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
 import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
@@ -209,10 +210,16 @@ adminRoutes.get("/recap", async (c) => {
   const [roster, byAgent] = await Promise.all([
     activeRoster(db),
     // One row per sender, on `visits_received_idx`: a day has a handful.
+    // `n` is the sender's door-days of today (ADR-0036). `visited_at` is clamped
+    // to `received_at`, so a visit made today and already received is among these
+    // rows: today's door-days received so far, one per prospect for one agent.
+    // One made before midnight and synced after it is yesterday's, in no recap.
     db
       .select({
         email: visits.agentEmail,
-        n: count(),
+        n: sql<number>`count(distinct case when ${visits.visitedAt} >= ${dayStart} then ${visits.prospectId} end)`.mapWith(
+          Number,
+        ),
         last: sql<number>`max(${visits.receivedAt})`.mapWith(Number),
       })
       .from(visits)
@@ -225,7 +232,7 @@ adminRoutes.get("/recap", async (c) => {
       .groupBy(visits.agentEmail),
   ]);
 
-  // A sender off the roster still counts as a visit, never as an active
+  // A sender off the roster still counts as a door-day, never as an active
   // agent, so the card cannot read "3 / 2".
   const onRoster = new Set(roster.map((r) => r.email));
   const lastReceivedAt = byAgent.length === 0 ? null : Math.max(...byAgent.map((r) => r.last));
@@ -257,9 +264,20 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
   const now = Date.now();
   const { from, to, previousFrom } = brusselsPeriod(now, period);
   const db = getDb(c.env.DB);
-  // 1 for a visit in the current period, 0 for one in the previous period.
-  const inCurrent = sql`(case when ${visits.visitedAt} >= ${from} then 1 else 0 end)`;
+  // 1 for a door-day in the current period, 0 for one in the previous period.
+  // A door-day sits on one Brussels day, and a period starts at a midnight, so
+  // its latest visit decides.
+  const inCurrent = sql`(case when dd.visited_at >= ${from} then 1 else 0 end)`;
   const days = periodDays(from, to, period);
+  // Both periods' door-days: the current period's days count 0.., the previous
+  // period's -period..-1, each with its own offsets (`periodOffsets` allows one
+  // clock change per period, and `[previousFrom, to)` can hold two).
+  const bothPeriods = doorDaysBetween({
+    from: previousFrom,
+    to,
+    dayKey: twoPeriodsDayKey({ from, to, previousFrom }, period),
+  });
+  const currentPeriod = doorDaysBetween({ from, to, dayKey: days.dayOf });
   // Snapshots that ignore `period` (docs/api.md › The dashboard).
   const todayStart = brusselsMidnightDaysFromNow(now, 0);
   const dueSoonBefore = brusselsMidnightDaysFromNow(now, 7);
@@ -280,23 +298,20 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     inactiveAgent,
   ] = await Promise.all([
     /**
-     * Both periods in one range read, which `visits_visited_idx` serves.
-     * Not filtered on `merged_into`: an absorbed prospect keeps its visits and
-     * they still happened. Quarantined visits live in another table, so they
-     * are out by construction. `visited_at` is already clamped (INVARIANT 12).
-     * `flyersGiven` follows `period`, same rows as `value` (GH #177).
+     * Both periods' door-days in one range read (`doorDaysBetween`, which
+     * `visits_visited_idx` serves). Not filtered on `merged_into`: an absorbed
+     * prospect keeps its visits and they still happened. Quarantined visits live
+     * in another table, so they are out by construction. `visited_at` is already
+     * clamped (INVARIANT 12). `flyersGiven` follows `period`, same rows as
+     * `value` (GH #177); a door-day counts if any of its visits gave one.
      */
-    db
-      .select({
-        value: sql<number>`coalesce(sum(${inCurrent}), 0)`.mapWith(Number),
-        previous: sql<number>`coalesce(sum(1 - ${inCurrent}), 0)`.mapWith(Number),
-        flyersGiven:
-          sql<number>`coalesce(sum(case when ${inCurrent} = 1 and ${visits.flyerGiven} then 1 else 0 end), 0)`.mapWith(
-            Number,
-          ),
-      })
-      .from(visits)
-      .where(and(gte(visits.visitedAt, previousFrom), lt(visits.visitedAt, to))),
+    db.all<{ value: number; previous: number; flyersGiven: number }>(sql`
+      select
+        coalesce(sum(${inCurrent}), 0) as value,
+        coalesce(sum(1 - ${inCurrent}), 0) as previous,
+        coalesce(sum(case when ${inCurrent} = 1 and dd.flyer_given then 1 else 0 end), 0) as flyersGiven
+      from (${bothPeriods}) dd
+    `),
     // A snapshot of now: the period does not apply. Split by status for the
     // card's mini-bar; the figure is the sum, so the two never disagree.
     db
@@ -304,21 +319,21 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .from(prospects)
       .where(and(isNull(prospects.mergedInto), inArray(prospects.status, [...OPEN_STATUSES])))
       .groupBy(prospects.status),
-    conversionCounts(db, { from, to, previousFrom }),
-    visitsByDay(db, days),
-    convertedByDay(db, days),
+    conversionCounts(db, { from, to, previousFrom, bothPeriods }),
+    visitsByDay(db, days, currentPeriod),
+    convertedByDay(db, days, currentPeriod),
     // Pipeline par statut: every live prospect, a snapshot like `open`.
     db
       .select({ status: prospects.status, n: count() })
       .from(prospects)
       .where(isNull(prospects.mergedInto))
       .groupBy(prospects.status),
-    // Activité par agent. Same rows as `visits.value`'s current period.
-    db
-      .select({ email: visits.agentEmail, n: count() })
-      .from(visits)
-      .where(and(gte(visits.visitedAt, from), lt(visits.visitedAt, to)))
-      .groupBy(visits.agentEmail),
+    // Activité par agent. Same door-days as `visits.value`'s current period.
+    db.all<{ email: string; n: number }>(sql`
+      select agent_email as email, count(*) as n
+      from (${currentPeriod})
+      group by agent_email
+    `),
     db
       .select({
         email: sql<string>`${prospects.assignedTo}`,
@@ -335,7 +350,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       .from(prospects)
       .where(and(isNull(prospects.mergedInto), isNotNull(prospects.assignedTo)))
       .groupBy(prospects.assignedTo),
-    agentConversions(db, { from, to }),
+    agentConversions(db, currentPeriod),
     // Relances dues: "today or earlier" is before `to`, Brussels midnight
     // tomorrow, so the day boundary stays brusselsPeriod's. A snapshot.
     // `dueSoonBefore` (> `to`) widens the where clause so one range read
@@ -377,8 +392,8 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
       ),
   ]);
 
-  const value = visitCounts[0]?.value ?? 0;
-  const previous = visitCounts[0]?.previous ?? 0;
+  const value = Number(visitCounts[0]?.value ?? 0);
+  const previous = Number(visitCounts[0]?.previous ?? 0);
   const rate = rateOf(conversions.converted, conversions.visited);
   const previousRate = rateOf(conversions.convertedPrevious, conversions.visitedPrevious);
   const openByStatus = { new: 0, assigned: 0, follow_up: 0 };
@@ -417,12 +432,12 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     pipeline: pipelineOf(pipelineRows),
     agents: agentRows(
       roster.map((r) => r.email),
-      agentVisits,
+      agentVisits.map((r) => ({ email: r.email, n: Number(r.n) })),
       agentOpen,
       agentConverted,
     ),
     followUpsDue: due[0]?.n ?? 0,
-    flyersGiven: visitCounts[0]?.flyersGiven ?? 0,
+    flyersGiven: Number(visitCounts[0]?.flyersGiven ?? 0),
     agentsActiveToday: agentsToday[0]?.n ?? 0,
     followUpsDueSoon: { value: due[0]?.dueSoon ?? 0, dueBefore: dueSoonBefore },
     inactiveAgentProspects: inactiveAgent[0]?.n ?? 0,
@@ -480,22 +495,22 @@ const PROSPECT_KEY = sql`coalesce(${prospects.mergedInto}, ${prospects.id})`;
 const MANUAL_STATUS_IN_FORCE = sql`(${prospects.lastVisitAt} is null or ${prospects.lastVisitAt} <= ${prospects.statusSetAt})`;
 
 /**
- * An agent's Convertis: distinct prospects, keyed by `PROSPECT_KEY`,
- * they visited with outcome `converted` in `[from, to)`. A manual conversion
- * has no visitor and is credited to nobody.
+ * An agent's Convertis: distinct prospects, keyed by `PROSPECT_KEY`, with a
+ * door-day of theirs whose latest outcome is `converted` in the current period
+ * (`currentPeriod` is `doorDaysBetween` over it). A manual conversion has no
+ * visitor and is credited to nobody.
  */
 async function agentConversions(
   db: Db,
-  { from, to }: { from: number; to: number },
+  currentPeriod: SQL,
 ): Promise<{ email: string; n: number }[]> {
   const converted = "converted" satisfies Outcome;
   const rows = await db.all<{ email: string; n: number }>(sql`
-    select ${visits.agentEmail} as email, count(distinct ${PROSPECT_KEY}) as n
-    from ${visits}
-    inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
-    where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
-      and ${visits.outcome} = ${converted}
-    group by ${visits.agentEmail}
+    select dd.agent_email as email, count(distinct ${PROSPECT_KEY}) as n
+    from (${currentPeriod}) dd
+    inner join ${prospects} on ${prospects.id} = dd.prospect_id
+    where dd.outcome = ${converted}
+    group by dd.agent_email
   `);
   return rows.map((r) => ({ email: r.email, n: Number(r.n) }));
 }
@@ -513,33 +528,49 @@ function rateOf(n: number, d: number): number | null {
  */
 type PeriodDays = { from: number; to: number; dates: string[]; dayOf: (t: SQL) => SQL };
 
-function periodDays(from: number, to: number, period: number): PeriodDays {
+/** `dayOf` for `[from, to)`: days counted from `from`'s, so `from`'s own day is 0. */
+function dayIndexer(from: number, to: number): (t: SQL) => SQL {
   const { before, after, changeAt } = periodOffsets(from, to);
   const firstDay = Math.floor((from + before) / DAY_MS);
-  return {
-    from,
-    to,
-    dates: periodDates(from, period),
-    // D1 binds a JS number as REAL, so the division is a float one: the cast
-    // floors it (the operand is never negative).
-    dayOf: (t) =>
-      sql`cast((${t} + case when ${t} >= ${changeAt} then ${after} else ${before} end) / ${DAY_MS} as integer) - ${firstDay}`,
-  };
+  // D1 binds a JS number as REAL, so the division is a float one: the cast
+  // floors it (the operand is never negative).
+  return (t) =>
+    sql`cast((${t} + case when ${t} >= ${changeAt} then ${after} else ${before} end) / ${DAY_MS} as integer) - ${firstDay}`;
+}
+
+function periodDays(from: number, to: number, period: number): PeriodDays {
+  return { from, to, dates: periodDates(from, period), dayOf: dayIndexer(from, to) };
 }
 
 /**
- * Visites dans le temps: the period's visits per Brussels day and outcome, in
- * one range read that `visits_visited_idx` serves. Same visits as `visits`
- * above: merged prospects' in, quarantined ones out, `visited_at` clamped.
+ * A day key for a statement that spans both periods: the current period's days
+ * are 0.., the previous period's are -period..-1. Each period has its own
+ * offsets because `periodOffsets` assumes at most one clock change in the span
+ * it is given, and two periods can hold two (INVARIANT 7 stays: a dozen binds).
+ */
+function twoPeriodsDayKey(
+  { from, to, previousFrom }: { from: number; to: number; previousFrom: number },
+  period: number,
+): (t: SQL) => SQL {
+  const current = dayIndexer(from, to);
+  const previous = dayIndexer(previousFrom, from);
+  return (t) =>
+    sql`(case when ${t} >= ${from} then ${current(t)} else ${previous(t)} - ${period} end)`;
+}
+
+/**
+ * Visites dans le temps: the period's door-days per Brussels day and latest
+ * outcome. Same door-days as `visits` above (`currentPeriod`, whose `day` is
+ * `dayOf`'s): merged prospects' in, quarantined ones out, `visited_at` clamped.
  */
 async function visitsByDay(
   db: Db,
-  { from, to, dates, dayOf }: PeriodDays,
+  { dates }: PeriodDays,
+  currentPeriod: SQL,
 ): Promise<DashboardResponse["visitsByDay"]> {
   const rows = await db.all<{ day: number; outcome: Outcome; n: number }>(sql`
-    select ${dayOf(sql`${visits.visitedAt}`)} as day, ${visits.outcome} as outcome, count(*) as n
-    from ${visits}
-    where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
+    select day, outcome, count(*) as n
+    from (${currentPeriod})
     group by day, outcome
   `);
   const result = dates.map((date) => ({
@@ -557,22 +588,26 @@ async function visitsByDay(
 
 /**
  * Convertis per Brussels day, for the card's sparkline: the same events as
- * `conversionCounts`' current period, and each prospect on the day of its
+ * `conversionCounts`' current period (door-days whose latest outcome is
+ * `converted`, or a manual conversion), and each prospect on the day of its
  * first one, so the series sums to `converted.value` (docs/api.md › The
  * dashboard).
  */
-async function convertedByDay(db: Db, { from, to, dates, dayOf }: PeriodDays): Promise<number[]> {
+async function convertedByDay(
+  db: Db,
+  { from, to, dates, dayOf }: PeriodDays,
+  currentPeriod: SQL,
+): Promise<number[]> {
   const converted = "converted" satisfies Status;
   const rows = await db.all<{ day: number; n: number }>(sql`
     select ${dayOf(sql`first_at`)} as day, count(*) as n
     from (
       select prospect_key, min(at) as first_at
       from (
-        select ${PROSPECT_KEY} as prospect_key, ${visits.visitedAt} as at
-        from ${visits}
-        inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
-        where ${visits.visitedAt} >= ${from} and ${visits.visitedAt} < ${to}
-          and ${visits.outcome} = ${converted}
+        select ${PROSPECT_KEY} as prospect_key, dd.visited_at as at
+        from (${currentPeriod}) dd
+        inner join ${prospects} on ${prospects.id} = dd.prospect_id
+        where dd.outcome = ${converted}
         union all
         select ${PROSPECT_KEY}, ${prospects.statusSetAt}
         from ${prospects}
@@ -605,8 +640,10 @@ type ConversionCounts = {
  * Convertis and the rate's denominator for both periods, in one statement —
  * docs/api.md › The dashboard defines them.
  *
- * Each row of the inner union is one event: a visit in `[previousFrom, to)`
- * (served by `visits_visited_idx`), or a prospect whose current status is a
+ * Each row of the inner union is one event: a door-day over both periods
+ * (`bothPeriods` is `doorDaysBetween` over `[previousFrom, to)`, served by
+ * `visits_visited_idx`) whose latest outcome is `converted` is a conversion and
+ * any is a visit; or a prospect whose current status is a
  * manual `converted` set in that range and not since overridden by a visit
  * (served by `prospects_status_idx`).
  * Events are keyed by `PROSPECT_KEY`, so an absorbed prospect
@@ -614,7 +651,12 @@ type ConversionCounts = {
  */
 async function conversionCounts(
   db: Db,
-  { from, to, previousFrom }: { from: number; to: number; previousFrom: number },
+  {
+    from,
+    to,
+    previousFrom,
+    bothPeriods,
+  }: { from: number; to: number; previousFrom: number; bothPeriods: SQL },
 ): Promise<ConversionCounts> {
   const converted = "converted" satisfies Status;
   const rows = await db.all<Record<keyof ConversionCounts, number | null>>(sql`
@@ -626,12 +668,11 @@ async function conversionCounts(
     from (
       select
         ${PROSPECT_KEY} as prospect_key,
-        ${visits.visitedAt} >= ${from} as in_current,
+        dd.visited_at >= ${from} as in_current,
         1 as is_visit,
-        ${visits.outcome} = ${converted} as is_conversion
-      from ${visits}
-      inner join ${prospects} on ${prospects.id} = ${visits.prospectId}
-      where ${visits.visitedAt} >= ${previousFrom} and ${visits.visitedAt} < ${to}
+        dd.outcome = ${converted} as is_conversion
+      from (${bothPeriods}) dd
+      inner join ${prospects} on ${prospects.id} = dd.prospect_id
       union all
       select ${PROSPECT_KEY}, ${prospects.statusSetAt} >= ${from}, 0, 1
       from ${prospects}

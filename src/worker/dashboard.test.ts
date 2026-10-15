@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "./db/client";
 import { eq, sql } from "drizzle-orm";
 import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { doorDaysBetween } from "./door-days";
 import {
   DASHBOARD_PERIODS,
   DAY_MS,
   OUTCOMES,
   type Outcome,
+  type RefusalReason,
   type Status,
 } from "../shared/constants";
 import { brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
@@ -127,7 +129,7 @@ afterEach(() => {
 
 describe("GET /api/admin/dashboard", () => {
   it.each(DASHBOARD_PERIODS)(
-    "counts period %i and its previous period at the exact bounds (I/O matrix, boundary)",
+    "counts period %i and its previous period at the exact bounds, from and from + 1 being one door-day (I/O matrix, boundary)",
     async (period) => {
       const { from, to, previousFrom } = brusselsPeriod(Date.now(), period);
       const prospectId = await seedProspect();
@@ -148,7 +150,9 @@ describe("GET /api/admin/dashboard", () => {
       expect(body.period).toBe(period);
       expect(body.from).toBe(from);
       expect(body.to).toBe(to);
-      expect(body.visits).toMatchObject({ value: 3, previous: 2, delta: 0.5 });
+      // Current: from and from + 1 are one door-day, to - 1 another (the last
+      // day). Previous: from - 1 and previousFrom, the last day and the first.
+      expect(body.visits).toMatchObject({ value: 2, previous: 2, delta: 0 });
     },
   );
 
@@ -158,9 +162,10 @@ describe("GET /api/admin/dashboard", () => {
     expect(body.from).toBe(brusselsPeriod(Date.now(), 30).from);
   });
 
-  it("has a null delta when the previous period is empty (I/O matrix, previous empty)", async () => {
+  it("has a null delta when the previous period is empty, two visits to one door being one door-day (I/O matrix, previous empty)", async () => {
     const { from } = brusselsPeriod(Date.now(), 7);
     await seedVisits(await seedProspect(), [from, from + 1]);
+    await seedVisits(await seedProspect(), [from + 2]);
 
     const body = await dashboard("?period=7");
     expect(body.visits).toMatchObject({ value: 2, previous: 0, delta: null });
@@ -423,11 +428,11 @@ describe("GET /api/admin/dashboard › Convertis and Taux de conversion", () => 
     },
   );
 
-  it("still counts a conversion reopened later in the period (I/O matrix, reopened)", async () => {
+  it("still counts a conversion reopened on a later day of the period (I/O matrix, reopened)", async () => {
     const { from } = brusselsPeriod(Date.now(), 30);
     const prospectId = await seedProspect("follow_up");
     await seedVisits(prospectId, [from], "converted");
-    await seedVisits(prospectId, [from + 1], "follow_up");
+    await seedVisits(prospectId, [from + DAY_MS + 1], "follow_up");
 
     const body = await dashboard("?period=30");
     expect(body.converted.value).toBe(1);
@@ -454,13 +459,17 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
   );
 
   it.each(DASHBOARD_PERIODS)(
-    "counts period %i's visits per day and outcome (I/O matrix, per outcome)",
+    "counts period %i's door-days per day and latest outcome (I/O matrix, per outcome)",
     async (period) => {
       const { from } = brusselsPeriod(Date.now(), period);
-      const prospectId = await seedProspect();
-      await seedVisits(prospectId, [dayStart(from, 0), dayStart(from, 0) + HOUR], "no_contact");
-      await seedVisits(prospectId, [dayStart(from, 0) + 2 * HOUR], "converted");
-      await seedVisits(prospectId, [dayStart(from, 3) + 5 * HOUR], "follow_up");
+      // Two doors, one visit each, and a third door visited twice the same
+      // day: it is one door-day, and the later visit decides its outcome.
+      await seedVisits(await seedProspect(), [dayStart(from, 0)], "no_contact");
+      await seedVisits(await seedProspect(), [dayStart(from, 0) + HOUR], "no_contact");
+      const corrected = await seedProspect();
+      await seedVisits(corrected, [dayStart(from, 0) + HOUR / 2], "no_contact");
+      await seedVisits(corrected, [dayStart(from, 0) + 2 * HOUR], "converted");
+      await seedVisits(await seedProspect(), [dayStart(from, 3) + 5 * HOUR], "follow_up");
 
       const { visitsByDay, visits: total } = await dashboard(`?period=${period}`);
       const expected = visitsByDay.map(() => zeros());
@@ -480,9 +489,9 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
     "puts a day's midnight and its last millisecond on that day, and leaves the period's outside out, for %i (I/O matrix, day and period bounds)",
     async (period) => {
       const { from, to } = brusselsPeriod(Date.now(), period);
-      const prospectId = await seedProspect();
       const last = period - 1;
-      await seedVisits(prospectId, [
+      // One door per instant, so each bound is pinned on its own.
+      for (const at of [
         from,
         dayStart(from, 1) - 1,
         dayStart(from, last),
@@ -490,7 +499,9 @@ describe("GET /api/admin/dashboard › Visites dans le temps (GH #110)", () => {
         // Neither
         from - 1,
         to,
-      ]);
+      ]) {
+        await seedVisits(await seedProspect(), [at]);
+      }
 
       const { visitsByDay } = await dashboard(`?period=${period}`);
       expect(visitsByDay[0]?.counts.interested).toBe(2);
@@ -782,12 +793,12 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
   );
 
   it.each(DASHBOARD_PERIODS)(
-    "counts an agent's visits and Convertis in period %i only (I/O matrix, previous period)",
+    "counts an agent's door-days and Convertis in period %i only (I/O matrix, previous period)",
     async (period) => {
       const { from, to } = brusselsPeriod(Date.now(), period);
       const converted = await seedProspect("converted");
-      // Twice on one prospect: one Convertis.
-      await seedVisits(converted, [from, from + 1], "converted");
+      // Two days on one prospect: two door-days, one Convertis.
+      await seedVisits(converted, [from, to - 1], "converted");
       await seedVisits(await seedProspect("assigned"), [to - 1], "interested", OTHER);
       // Previous period and after `to`: in no row.
       await seedVisits(await seedProspect("assigned"), [from - 1, to], "converted");
@@ -1126,5 +1137,226 @@ describe("À traiter › Prospects sans agent actif (GH #308)", () => {
     expect((await dashboard()).inactiveAgentProspects).toBe(1);
     expect((await setActive(true)).status).toBe(204);
     expect((await dashboard()).inactiveAgentProspects).toBe(0);
+  });
+});
+
+describe("door-days (ADR-0036)", () => {
+  const OTHER = "other@example.com";
+  const HOUR = 60 * 60 * 1000;
+  beforeEach(async () => {
+    await seedUser(OTHER, "agent");
+  });
+
+  /** NOW is 12:00 on 2026-06-17 in Brussels (UTC+2), so these are that day's 10:00 and 16:00. */
+  const TEN = Date.parse("2026-06-17T08:00:00.000Z");
+  const FOUR_PM = Date.parse("2026-06-17T14:00:00.000Z");
+
+  async function insertVisit(
+    prospectId: string,
+    visitedAt: number,
+    outcome: Outcome,
+    extra: {
+      agentEmail?: string;
+      flyerGiven?: boolean;
+      refusalReason?: RefusalReason;
+      receivedAt?: number;
+      id?: string;
+    } = {},
+  ): Promise<void> {
+    await getDb(env.DB)
+      .insert(visits)
+      .values({
+        id: extra.id ?? crypto.randomUUID(),
+        prospectId,
+        agentEmail: extra.agentEmail ?? AGENT,
+        visitedAt,
+        clientVisitedAt: visitedAt,
+        receivedAt: extra.receivedAt ?? visitedAt,
+        outcome,
+        flyerGiven: extra.flyerGiven ?? false,
+        refusalReason: extra.refusalReason ?? null,
+        clientVersion: 1,
+      });
+  }
+
+  const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0);
+  const zeros = () => Object.fromEntries(OUTCOMES.map((o) => [o, 0])) as Record<Outcome, number>;
+  const agentRow = (body: DashboardResponse, email: string) =>
+    body.agents.find((a) => a.email === email);
+
+  it("counts a correction once, with the later outcome (I/O matrix, correction)", async () => {
+    const id = await seedProspect("converted");
+    await insertVisit(id, TEN, "no_contact");
+    await insertVisit(id, FOUR_PM, "converted");
+
+    const body = await dashboard("?period=7");
+    expect(body.visits).toMatchObject({ value: 1, previous: 0 });
+    expect(body.visitsByDay[6]?.counts).toEqual({ ...zeros(), converted: 1 });
+    expect(body.converted.value).toBe(1);
+    expect(body.converted.byDay[6]).toBe(1);
+    expect(body.conversionRate.visitedProspects.value).toBe(1);
+    expect(agentRow(body, AGENT)).toMatchObject({ visits: 1, converted: 1 });
+    expect(sum(body.visits.byDay)).toBe(body.visits.value);
+    expect(sum(body.converted.byDay)).toBe(body.converted.value);
+  });
+
+  it("lets a later outcome take a conversion back (I/O matrix, reverse correction)", async () => {
+    const id = await seedProspect("assigned");
+    await insertVisit(id, TEN, "converted");
+    await insertVisit(id, FOUR_PM, "no_contact");
+
+    const body = await dashboard("?period=7");
+    expect(body.visits.value).toBe(1);
+    expect(body.converted.value).toBe(0);
+    expect(body.converted.byDay[6]).toBe(0);
+    expect(body.visitsByDay[6]?.counts).toEqual({ ...zeros(), no_contact: 1 });
+    expect(agentRow(body, AGENT)).toMatchObject({ visits: 1, converted: 0 });
+  });
+
+  it("breaks a visited_at tie by the later arrival, whatever the ids say", async () => {
+    const id = await seedProspect("assigned");
+    // The earlier arrival has the larger id, so only `received_at desc` picks no_contact.
+    await insertVisit(id, TEN, "converted", { receivedAt: TEN, id: "z-early" });
+    await insertVisit(id, TEN, "no_contact", { receivedAt: TEN + 1, id: "a-late" });
+
+    const body = await dashboard("?period=7");
+    expect(body.visitsByDay[6]?.counts).toEqual({ ...zeros(), no_contact: 1 });
+  });
+
+  it("breaks a visited_at and received_at tie by the larger id", async () => {
+    const id = await seedProspect("assigned");
+    await insertVisit(id, TEN, "converted", { receivedAt: TEN, id: "a-smaller" });
+    await insertVisit(id, TEN, "no_contact", { receivedAt: TEN, id: "b-larger" });
+
+    const body = await dashboard("?period=7");
+    expect(body.visitsByDay[6]?.counts).toEqual({ ...zeros(), no_contact: 1 });
+  });
+
+  it("counts a flyer given on any visit of the door-day once (I/O matrix, flyer on first visit)", async () => {
+    const id = await seedProspect("assigned");
+    await insertVisit(id, TEN, "no_contact", { flyerGiven: true });
+    await insertVisit(id, FOUR_PM, "interested", { flyerGiven: false });
+    const other = await seedProspect("assigned");
+    await insertVisit(other, TEN, "no_contact", { flyerGiven: true });
+    await insertVisit(other, FOUR_PM, "no_contact", { flyerGiven: true });
+
+    const body = await dashboard("?period=7");
+    expect(body.visits.value).toBe(2);
+    expect(body.flyersGiven).toBe(2);
+  });
+
+  it("carries the latest visit's refusal reason on the door-day (decision 1; I/O matrix, refusal reason)", async () => {
+    const { from } = brusselsPeriod(Date.now(), 7);
+    const range = {
+      from,
+      to: brusselsMidnightDaysFromNow(Date.now(), 1),
+      // One UTC day is one Brussels day here; the fragment only needs a day key.
+      dayKey: (t: ReturnType<typeof sql>) => sql`cast(${t} / ${DAY_MS} as integer)`,
+    };
+    const read = () =>
+      getDb(env.DB).all<{
+        refusal_reason: RefusalReason | null;
+        outcome: Outcome;
+        visit_count: number;
+      }>(sql`select refusal_reason, outcome, visit_count from (${doorDaysBetween(range)})`);
+
+    const refusedFirst = await seedProspect("assigned");
+    await insertVisit(refusedFirst, TEN, "not_interested", { refusalReason: "no_need" });
+    await insertVisit(refusedFirst, FOUR_PM, "converted");
+    expect(await read()).toEqual([{ refusal_reason: null, outcome: "converted", visit_count: 2 }]);
+
+    await getDb(env.DB).delete(visits);
+    const refusedLast = await seedProspect("assigned");
+    await insertVisit(refusedLast, TEN, "converted");
+    await insertVisit(refusedLast, FOUR_PM, "not_interested", { refusalReason: "no_need" });
+    expect(await read()).toEqual([
+      { refusal_reason: "no_need", outcome: "not_interested", visit_count: 2 },
+    ]);
+  });
+
+  it("counts one door-day per day for a door visited on two days (I/O matrix, two days)", async () => {
+    const id = await seedProspect("assigned");
+    await insertVisit(id, TEN - 2 * DAY_MS, "no_contact");
+    await insertVisit(id, TEN - 2 * DAY_MS + HOUR, "no_contact");
+    await insertVisit(id, TEN - DAY_MS, "interested");
+
+    const body = await dashboard("?period=7");
+    expect(body.visits.value).toBe(2);
+    expect(body.visitsByDay[4]?.counts).toEqual({ ...zeros(), no_contact: 1 });
+    expect(body.visitsByDay[5]?.counts).toEqual({ ...zeros(), interested: 1 });
+    expect(sum(body.visits.byDay)).toBe(2);
+  });
+
+  it("counts a door twice for two agents but converts the place once (I/O matrix, two agents)", async () => {
+    const id = await seedProspect("converted");
+    await insertVisit(id, TEN, "converted");
+    await insertVisit(id, FOUR_PM, "converted", { agentEmail: OTHER });
+
+    const body = await dashboard("?period=7");
+    expect(body.visits.value).toBe(2);
+    expect(body.converted.value).toBe(1);
+    expect(body.converted.byDay[6]).toBe(1);
+    expect(agentRow(body, AGENT)).toMatchObject({ visits: 1, converted: 1 });
+    expect(agentRow(body, OTHER)).toMatchObject({ visits: 1, converted: 1 });
+  });
+
+  it("counts a previous-period door-day in previous only (I/O matrix, previous period)", async () => {
+    const { from } = brusselsPeriod(Date.now(), 7);
+    const id = await seedProspect("assigned");
+    await insertVisit(id, from - 3 * HOUR, "no_contact", { flyerGiven: true });
+    await insertVisit(id, from - 2 * HOUR, "converted");
+
+    const body = await dashboard("?period=7");
+    expect(body.visits).toMatchObject({ value: 0, previous: 1 });
+    expect(body.flyersGiven).toBe(0);
+    expect(body.converted).toMatchObject({ value: 0, previous: 1 });
+    expect(body.conversionRate.visitedProspects).toEqual({ value: 0, previous: 1 });
+    expect(sum(body.visits.byDay)).toBe(0);
+    expect(agentRow(body, AGENT)).toMatchObject({ visits: 0, converted: 0 });
+  });
+
+  it("puts each visit on its Brussels day when both periods hold a clock change (I/O matrix, DST night in range)", async () => {
+    // 90 days to 2026-04-10: the current period holds the 2026-03-29 change,
+    // the previous one the 2025-10-26 change.
+    vi.setSystemTime(Date.parse("2026-04-10T10:00:00.000Z"));
+    const previousDoor = await seedProspect("assigned");
+    for (const at of [
+      "2025-10-25T21:30:00.000Z", // 25 Oct 23:30
+      "2025-10-25T22:30:00.000Z", // 26 Oct 00:30
+      "2025-10-26T22:30:00.000Z", // 26 Oct 23:30: the same day as the line above
+      "2025-10-26T23:30:00.000Z", // 27 Oct 00:30
+    ]) {
+      await insertVisit(previousDoor, Date.parse(at), "no_contact");
+    }
+    const currentDoor = await seedProspect("assigned");
+    for (const at of [
+      "2026-03-28T22:30:00.000Z", // 28 Mar 23:30
+      "2026-03-28T23:30:00.000Z", // 29 Mar 00:30
+      "2026-03-29T21:30:00.000Z", // 29 Mar 23:30: the same day as the line above
+      "2026-03-29T22:30:00.000Z", // 30 Mar 00:30
+    ]) {
+      await insertVisit(currentDoor, Date.parse(at), "no_contact");
+    }
+
+    const body = await dashboard("?period=90");
+    expect(body.visits).toMatchObject({ value: 3, previous: 3 });
+    const counts = (date: string) => body.visitsByDay.find((d) => d.date === date)?.counts;
+    expect(counts("2026-03-28")).toEqual({ ...zeros(), no_contact: 1 });
+    expect(counts("2026-03-29")).toEqual({ ...zeros(), no_contact: 1 });
+    expect(counts("2026-03-30")).toEqual({ ...zeros(), no_contact: 1 });
+    expect(sum(body.visits.byDay)).toBe(3);
+  });
+
+  it("keeps folding merged prospects only where a figure already did (Design Notes)", async () => {
+    const survivor = await seedProspect("converted");
+    const absorbed = await seedProspect("converted", survivor);
+    await insertVisit(survivor, TEN, "converted");
+    await insertVisit(absorbed, FOUR_PM, "converted");
+
+    const body = await dashboard("?period=7");
+    // Two doors as visited, one place as converted.
+    expect(body.visits.value).toBe(2);
+    expect(body.converted.value).toBe(1);
+    expect(agentRow(body, AGENT)).toMatchObject({ visits: 2, converted: 1 });
   });
 });

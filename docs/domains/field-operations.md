@@ -120,7 +120,7 @@ day as the list.
   `unconfirmed` (docs/backlog/013) counts, being their own queued visit.
 - Nothing about the counter lives only on the phone: after a cache wipe or a
   reinstall, the next sync pulls the visited stops and the counter reads the same
-  again. The admin's door-day figures follow the same unit (later stories of #496).
+  again. The admin's figures count the same unit: door-days ([api](../api.md#the-dashboard)).
 
 **Carnet (GH #504; ADR-0036 › Placement and Carnet).** The third tab,
 `/tournee/carnet`, lists today's door-days newest first: what is done, where

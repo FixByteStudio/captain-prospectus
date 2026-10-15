@@ -258,8 +258,10 @@ of their own, so it never says "synchronisé"; it reports what the agents sent
 style ("MARDI 14 OCTOBRE"), then three `text-xs` lines on `band-accent`: a dot
 and "1 / 2 agents actifs", "12 visites", and in `band-muted` "Dernière visite
 reçue il y a 4 min". Actif means an agent on the roster with a visit received
-that day, so the figure never passes the roster; the visits are every visit
-received that day; all three read `received_at`, the server's clock. The dot is
+that day, so the figure never passes the roster; the visits are the day's
+door-days (one per agent, prospect and visit made that Brussels day, the
+dashboard's Visites for one day, [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md));
+the agents and the last visit read `received_at`, the server's clock. The dot is
 `success` while anyone is active and `band-muted` otherwise. It is not a verdict:
 there are no working hours, so no amber. With nothing yet, the lines read
 "0 / 2 agents actifs" and "Aucune visite". The card is capped at the date and
@@ -987,8 +989,8 @@ spine, **one row per door-day**: one agent, one prospect, one Brussels day,
 showing that day's latest visit
 ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › Admin
 and stats count door-days). *The door-day rows and their history are built by
-entry 11 of the numbered-tournée epic (#496); what the figures count is entry
-10's.* Mockup:
+entry 11 of the numbered-tournée epic (#496); the figures count door-days
+already (entry 10, [api](api.md#the-dashboard)).* Mockup:
 [`key-t4-visites-ledger.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t4-visites-ledger.png).
 
 ```

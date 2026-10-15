@@ -155,9 +155,19 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   schema. Same seeded D1 (313 prospects, 1,690 visits), alternating `main` and this build, 14 cold
   first requests each: median 7.76 ms after vs 9.29 ms before (7.50–8.16 vs 9.09–11.51). Warm
   medians 0.53–0.63 ms, unchanged. Every route's first request gains the same, sync's included.
+- **After ADR-0036's door-days** (story 1.10, #506: six statements read `doorDaysBetween`, a
+  window over agent, prospect and day, instead of `visits` directly; still 13 statements, the
+  largest now 20 bound parameters). `measure-dashboard-cpu.mjs` on the local seed (303 prospects,
+  1,689 visits), 200 warm requests a period: Worker medians 0.62, 0.64 and 0.75 ms and worst
+  1.8 ms at 7, 30 and 90 days; one cold first request 7.62 ms. The window work runs in D1, which
+  Workers do not bill: its time per request rose to a median 2.4, 6.8 and 14.9 ms at 7, 30 and
+  90 days on this machine (the script prints it, "not billed"). The rows read are the same range
+  reads as before, so the D1 daily read quota is unchanged; the extra is query time, and the
+  dashboard still is not polled.
 - **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
   GH #113, eleven since GH #177, the
-  largest with 11 bound parameters. Every range read on `visits` — Visites and its previous period,
+  largest with 11 bound parameters (20 since ADR-0036; the plans below are the pre-door-day ones, each range read
+  is still one `visits_visited_idx` search, now feeding a window in a `USE TEMP B-TREE FOR ORDER BY`). Every range read on `visits` — Visites and its previous period,
   Visites dans le temps, Convertis and the rate, the Convertis series, the agents' visits and
   Convertis — is a `SEARCH visits USING INDEX visits_visited_idx (visited_at>? AND visited_at<?)`
   (a covering index for Visites), with each joined prospect found by primary key. Prospects
