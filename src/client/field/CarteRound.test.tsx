@@ -1,8 +1,8 @@
 /**
- * Carte against the real `useRound()` and the real Dexie tables — GH #239's
- * round-placement.md: `CarteScreen.test.tsx` mocks `useRound` module-wide, so
- * this is the one place Flow 1's climax ("Curry House is gone") is checked on
- * Carte too, not only on Tournée du jour (`TodayScreen.test.tsx`).
+ * Carte against the real `useRound()` and the real Dexie tables — GH #239 and
+ * ADR-0036: `CarteScreen.test.tsx` mocks `useRound` module-wide, so this is the
+ * one place a saved stop leaving, and the pins keeping the swipe's numbers, are
+ * checked on Carte too, not only on Tournée du jour (`TodayScreen.test.tsx`).
  *
  * `RoundMap` is mocked, as `CarteScreen.test.tsx` does: Leaflet is
  * `RoundMap.test.tsx`'s business.
@@ -13,6 +13,8 @@ import { MemoryRouter } from "react-router";
 import { copy } from "../copy/field";
 import type { Prospect, Visit } from "../../shared/schemas";
 import { fieldDb } from "./db";
+import { RoundMap } from "./RoundMap";
+import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
 import { CarteScreen } from "./CarteScreen";
 import type { SyncState } from "./useSync";
 
@@ -30,8 +32,8 @@ const prospect = (over: Partial<Prospect> = {}): Prospect => ({
   id: crypto.randomUUID(),
   name: "Le Bouchon",
   type: "restaurant",
-  lat: null,
-  lng: null,
+  lat: 50.85,
+  lng: 4.35,
   address: null,
   phone: null,
   website: null,
@@ -47,7 +49,7 @@ const prospect = (over: Partial<Prospect> = {}): Prospect => ({
 const visit = (over: Partial<Visit> = {}): Visit => ({
   id: crypto.randomUUID(),
   prospectId: crypto.randomUUID(),
-  visitedAt: syncState.current.lastSyncAt ?? Date.now(),
+  visitedAt: TOURNEE_NOW,
   lat: null,
   lng: null,
   flyerGiven: false,
@@ -83,41 +85,56 @@ function asPhone() {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  syncState.current = { lastSyncAt: 1_700_000_000_000, identity: "agent@example.com" };
-  await Promise.all([fieldDb.prospects.clear(), fieldDb.outboxVisits.clear()]);
+  vi.clearAllMocks();
+  syncState.current = { lastSyncAt: TOURNEE_NOW, identity: "agent@example.com" };
+  await Promise.all([
+    fieldDb.prospects.clear(),
+    fieldDb.outboxVisits.clear(),
+    clearTourneeTables(),
+  ]);
 });
 
-describe("Carte — round placement (GH #239)", () => {
-  it("a queued closed outcome leaves the round: the sheet names a different stop", async () => {
-    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
-    const second = prospect({
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "Bar des Marolles",
-    });
-    await fieldDb.prospects.bulkAdd([first, second]);
-    await fieldDb.outboxVisits.add(visit({ prospectId: first.id, outcome: "interested" }));
+const IDS = [1, 2, 3, 4, 5].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+
+describe("Carte — the swipe's numbers", () => {
+  it("a queued visit leaves the sheet and the map, whatever its outcome, and nothing renumbers", async () => {
+    const stops = IDS.map((id, i) => prospect({ id, name: `Stop ${i + 1}` }));
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.bulkAdd([
+      visit({ prospectId: IDS[0], outcome: "converted" }),
+      visit({ prospectId: IDS[1], outcome: "follow_up", followUpAt: TOURNEE_NOW }),
+      visit({
+        prospectId: IDS[2],
+        outcome: "no_contact",
+        followUpAt: TOURNEE_NOW + 3 * 86_400_000,
+      }),
+    ]);
 
     asPhone();
     renderScreen();
 
-    // Both `prospects` and `outboxVisits` are independent live queries, so the
-    // round can render once with the first settled and not yet the second;
-    // wait for the settled state rather than the first render that mentions
-    // either stop.
     await waitFor(() => {
       const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
-      expect(within(sheet).getByText("Bar des Marolles")).toBeTruthy();
-      expect(screen.queryByText("Curry House")).toBeNull();
+      expect(within(sheet).getByText("Stop 4")).toBeTruthy();
+      expect(within(sheet).getByText("4", { selector: "span" })).toBeTruthy();
     });
+    const props = vi.mocked(RoundMap).mock.lastCall?.[0];
+    expect(props?.pins.map((pin) => [pin.number, pin.next])).toEqual([
+      [4, true],
+      [5, false],
+    ]);
   });
 
-  it("still shows the round's own empty state once every stop has left it", async () => {
+  it("says every stop is done once the last one has a visit", async () => {
     const solo = prospect({ name: "Curry House" });
-    await fieldDb.prospects.add(solo);
+    await seedPulledTournee([solo]);
     await fieldDb.outboxVisits.add(visit({ prospectId: solo.id, outcome: "converted" }));
 
+    asPhone();
     renderScreen();
 
-    expect(await screen.findByText(copy.today.empty)).toBeTruthy();
+    const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
+    expect(await within(sheet).findByText(copy.today.allDone)).toBeTruthy();
+    expect(vi.mocked(RoundMap).mock.lastCall?.[0].pins).toEqual([]);
   });
 });

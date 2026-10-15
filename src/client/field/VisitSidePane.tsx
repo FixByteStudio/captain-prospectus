@@ -47,8 +47,8 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
  * (and its position reading) only runs while the map can show.
  */
 function VisitMap({ prospectId }: { prospectId: string }) {
-  const { list, point, refresh } = useRound();
-  const pins = mapPins(list.now).filter((pin) => pin.id === prospectId);
+  const { stops, point, refresh } = useRound();
+  const pins = mapPins(stops).filter((pin) => pin.id === prospectId);
   if (pins.length === 0) return null;
 
   return (

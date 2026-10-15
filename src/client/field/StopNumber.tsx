@@ -1,17 +1,17 @@
 /**
  * The walking-order disc — docs/design.md, "Next-stop card".
  *
- * `orderByNearestNext` produces a real sequence, so numbering it is structure,
- * not decoration. Shared by the next-stop card and every stop row, and reused
- * by Carte and the admin round view (epic-117 context).
+ * The number is the stop's own (the swipe's, ADR-0036), never a position in
+ * the list. Shared by the next-stop card and every stop row, and reused by
+ * Carte and the admin round view (epic-117 context).
  */
 import { cn } from "../lib/utils";
 
 export function StopNumber({
-  index,
+  number,
   variant = "default",
 }: {
-  index: number;
+  number: number;
   variant?: "default" | "next";
 }) {
   return (
@@ -23,7 +23,7 @@ export function StopNumber({
           : "bg-secondary font-semibold",
       )}
     >
-      {index}
+      {number}
     </span>
   );
 }

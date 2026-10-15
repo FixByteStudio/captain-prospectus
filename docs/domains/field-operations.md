@@ -10,25 +10,13 @@ Every `/tournee/*` route sits behind a gate ([ADR-0036](../adr/0036-a-swipe-free
 - "Today" for the gate follows `useRound`: the last sync of this session on the phone's clock, else the moment the field screens opened, so a phone last synced yesterday still reads a swipe made now as today's. `meta.lastSyncAt` (the server's clock) only tells never loaded from loaded. Midnight is not watched yet.
 
 ## Today list
-- One rule builds it, `buildTodayList` in `src/shared/today.ts`: the phone calls it with its outbox and queued visits. It is shared so the admin round view (epic 5) can call it with none and the position stored at sync, and show the same stops in the same order.
-- All prospects assigned to the agent with an open status.
-- Ordered by **greedy nearest-next** from the phone's current position; prospects without coordinates go last.
-- With epic 5, the latest reading the phone took today goes with each sync, so the admin round view (Terrain › Tournée du jour) can order the same stops; sync never takes a reading itself ([ADR-0028](../adr/0028-agent-position-at-sync.md)).
-- `follow_up` prospects whose `next_visit_at` is in the future are shown in a separate "later" group.
+- Tournée and Carte list **today's tournée** in the numbers the swipe gave its stops ([ADR-0036](../adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)), in number order. `src/client/field/tournee-stops.ts` reads the pulled tournée (else this identity's queued one), joins each stop with its prospect from the cache or the outbox, and drops the stops with a visit today. The number is the stop's own: it never changes and a missing number is a gap, with no placeholder row.
+- **A stop leaves the moment it has a visit today**, whatever the outcome: the server's visited stops for the day, unioned with this identity's outbox visits. Placement reads the outbox, never a status (invariants 2, 3). There is no "Plus tard" section and no end-of-round rows; a follow-up due on a later day comes back as a stop in that day's tournée.
+- The next stop is the lowest-numbered stop left. When none is left, Tournée shows the all-done card and Carte's sheet the same sentence.
+- A stop whose prospect the phone does not hold has no row, no pin and a missing number. A stop without coordinates keeps its row and number and draws no pin. A field prospect still in `outboxProspects` shows « Pas encore envoyé ».
+- Distances come from the latest reading and are information only: they never reorder anything. With no reading they read « Position inconnue », with no notice and no « Réessayer » on Tournée or Carte; each screen takes one reading when it opens.
 - Each item links to the phone's maps app for navigation.
-- **A saved visit places its stop immediately, before the sync confirms it**
-  (GH #239, `_bmad-output/specs/spec-done-stop-leaves-the-round/round-placement.md`):
-  a closed outcome (Intéressé, Converti, Pas intéressé) leaves the round
-  entirely, and À relancer or Personne sur place moves it to Plus tard or to
-  the end of today's round, depending on the when choice. The phone never
-  derives or shows a status from this (invariant 3) — the picked outcome only
-  decides placement, in `buildTodayList`.
-- **A `follow_up` stop visited today stays on today's round, at the end.**
-  After the sync, a stop with `status = follow_up`, `last_visit_at` on today's
-  Brussels calendar day and no `next_visit_at` at or after tomorrow's Brussels
-  midnight is kept in the round rather than moving to "later" — "end of
-  today's round" ignores distance and always sorts after every stop not
-  visited today.
+- `buildTodayList` in `src/shared/today.ts` (nearest-next order, "later" group, queued-visit placement) now serves the admin round view only, where list positions are the numbers. It goes with the last caller (entry 12 of #496). With epic 5, the latest reading the phone took today goes with each sync ([ADR-0028](../adr/0028-agent-position-at-sync.md)); sync never takes a reading itself.
 
 ## Visit
 Captured fields: check-in position (one reading, if permitted), `flyer_given`, script answers, `outcome`, optional `follow_up_at`, optional notes.

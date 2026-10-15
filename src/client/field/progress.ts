@@ -27,14 +27,10 @@ export type DailyProgressValue = { n: number; total: number; percent: number };
  * today's, and the agent's line would disagree with the admin's "Visites
  * aujourd'hui" (docs/domains/field-operations.md).
  *
- * `total` is the round's own size, not `n + stops.length`: a stop the agent
- * just visited for follow_up or no_contact can be kept on the list, at the
- * end of today's round, until the sync catches up (round-placement.md), so
- * adding the two would double-count it. It is the size of the *union* of
- * counted prospect ids and the stops still on the list, not `n` plus the
- * uncounted stops — a union, so a second visit to an already-counted stop
- * never grows it, and a stop that has since moved to "Plus tard" and is no
- * longer in `stops` still holds its place because it is still in `n`.
+ * `total` is the size of the *union* of counted prospect ids and `stops`,
+ * today's unvisited tournée stops, so a stop counted in `n` is never counted
+ * again and a visited stop that left `stops` still holds its place. Entry 7
+ * of #496 replaces this helper with the server's counter.
  */
 export function dailyProgress({
   logged,

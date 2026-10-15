@@ -20,7 +20,7 @@ const RECENTRE_TIMEOUT_MS = 10_000;
 
 const pin = (over: Partial<MapPin> = {}): MapPin => ({
   id: crypto.randomUUID(),
-  index: 1,
+  number: 1,
   lat: 50.85,
   lng: 4.35,
   next: false,
@@ -52,8 +52,8 @@ describe("RoundMap", () => {
 
   it("draws one marker per pin: gold 34px only for `next`, card 28px for the rest", () => {
     const pins = [
-      pin({ index: 1, lat: 1, lng: 2, next: true }),
-      pin({ index: 2, lat: 3, lng: 4, next: false }),
+      pin({ number: 1, lat: 1, lng: 2, next: true }),
+      pin({ number: 2, lat: 3, lng: 4, next: false }),
     ];
     const { container } = render(
       <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} />,
@@ -208,7 +208,7 @@ describe("RoundMap", () => {
 describe("RoundMap selection (spec-gh-122)", () => {
   it("names each marker and calls onSelect(id) on a click, when onSelect is given", () => {
     const onSelect = vi.fn();
-    const pins = [pin({ id: "a", index: 1, name: "Curry House" })];
+    const pins = [pin({ id: "a", number: 1, name: "Curry House" })];
     const { container } = render(
       <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} onSelect={onSelect} />,
     );

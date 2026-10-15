@@ -50,7 +50,7 @@ function pinIcon(pin: MapPin): L.DivIcon {
   const size = pin.next ? 34 : 28;
   return L.divIcon({
     className: "",
-    html: `<span class="${pin.next ? GOLD_PIN : CARD_PIN}">${pin.index}</span>`,
+    html: `<span class="${pin.next ? GOLD_PIN : CARD_PIN}">${pin.number}</span>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -278,7 +278,7 @@ export function RoundMap({
         icon: pinIcon(pin),
         interactive: Boolean(onSelect),
         keyboard: Boolean(onSelect),
-        title: onSelect ? copy.carte.pinLabel(pin.index, pin.name) : undefined,
+        title: onSelect ? copy.carte.pinLabel(pin.number, pin.name) : undefined,
       });
       if (onSelect) {
         marker.on("click", () => onSelect(pin.id));

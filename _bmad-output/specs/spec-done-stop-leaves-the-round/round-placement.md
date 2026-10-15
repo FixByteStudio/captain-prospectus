@@ -2,6 +2,8 @@
 
 Where a stop sits on Tournée du jour once its visit is saved. "Before sync" reads the outbox (the outcome the agent picked); "after sync" reads server data only (`status`, `lastVisitAt`, `nextVisitAt`).
 
+> **Superseded by [ADR-0036](../../../docs/adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) (story 1.5, #501).** Tournée and Carte now list the day's numbered tournée and read the outbox only: every saved stop leaves Tournée the moment its visit is queued, whatever its outcome. The « Plus tard » and « end of today's round » rows below no longer exist on the phone; they survive only in `buildTodayList`, which the admin round view still calls until entry 12.
+
 | Result and choice | Server status | Before sync | After sync |
 |---|---|---|---|
 | Intéressé | `interested` (closed) | Leaves the round | Absent (closed) |

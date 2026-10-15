@@ -154,7 +154,7 @@ export function RoundScreen() {
 function RoundRow({ stop, index }: { stop: TodayItem; index: number }) {
   return (
     <li className={cn("flex items-center gap-3 px-3 py-2.5", edgeFor(stop))}>
-      <StopNumber index={index} />
+      <StopNumber number={index} />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{stop.name}</span>
         <span className="text-muted-foreground text-meta block truncate">

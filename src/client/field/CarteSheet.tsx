@@ -13,9 +13,19 @@ import { StopNumber } from "./StopNumber";
 import { NotSyncedBadge, StopActions, Distance } from "./StopRow";
 import { copy, TYPE_LABELS } from "../copy/field";
 import { cn } from "../lib/utils";
-import type { TodayItem } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 
-export function CarteSheet({ item, index }: { item: TodayItem | null; index: number }) {
+export function CarteSheet({
+  item,
+  loaded,
+  isNext,
+}: {
+  item: TourneeItem | null;
+  /** False while the tables are read: no sentence yet, not "all done". */
+  loaded: boolean;
+  /** Gold only when the selected stop is the next one. */
+  isNext: boolean;
+}) {
   return (
     <section
       aria-label={copy.carte.sheetLabel}
@@ -36,7 +46,7 @@ export function CarteSheet({ item, index }: { item: TodayItem | null; index: num
       <div aria-hidden="true" className="bg-border mx-auto mb-2.5 h-1 w-9 rounded-full" />
 
       {!item ? (
-        <p className="text-muted-foreground py-2 text-center">{copy.today.empty}</p>
+        loaded && <p className="text-muted-foreground py-2 text-center">{copy.today.allDone}</p>
       ) : (
         <>
           {/* `aria-live` on the whole row: a pin tap changes the number, the
@@ -44,7 +54,7 @@ export function CarteSheet({ item, index }: { item: TodayItem | null; index: num
               a screen-reader user needs all of it announced, not just the
               name. */}
           <div aria-live="polite" className="flex items-start gap-3">
-            <StopNumber index={index} variant={index === 1 ? "next" : "default"} />
+            <StopNumber number={item.number} variant={isNext ? "next" : "default"} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-base font-semibold">{item.name}</p>
               <p className="text-muted-foreground text-meta truncate">

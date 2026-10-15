@@ -22,7 +22,6 @@ import { cn } from "../lib/utils";
 import { useOnline } from "../hooks/use-online";
 import { CarteList } from "./CarteList";
 import { CarteSheet } from "./CarteSheet";
-import { PositionDenied } from "./PositionDenied";
 import { mapPins, walkingPath } from "./round-map";
 import { RoundMap } from "./RoundMap";
 import { useRound } from "./useRound";
@@ -115,31 +114,24 @@ function OfflineCanvas({ className }: { className?: string }) {
 }
 
 export function CarteScreen() {
-  const { list, point, denied, refresh } = useRound();
+  const { stops, loaded, point, refresh } = useRound();
   const online = useOnline();
   const isMobile = useIsMobile();
   const paneRef = useCarteTop<HTMLDivElement>();
 
   // The id `RoundMap`'s `onSelect` or a `CarteList` row last chose; null
-  // means "the next stop" (Design Notes). Resolved against `list.now` on
+  // means "the next stop" (Design Notes). Resolved against `stops` on
   // every render rather than reset by an effect, so a stop that syncs away
   // while selected falls back on its own (matrix, "Selected stop leaves").
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = list.now.find((item) => item.id === selectedId) ?? list.now[0] ?? null;
-  const selectedIndex = selected ? list.now.indexOf(selected) + 1 : 0;
+  const selected = stops.find((item) => item.id === selectedId) ?? stops[0] ?? null;
 
   // Same "expand in place" semantics as `TodayScreen`'s own row toggle: tapping
   // an already-expanded row collapses it back to "the next stop".
   const toggle = (id: string) => setSelectedId((current) => (current === id ? null : id));
 
-  const pins = mapPins(list.now);
+  const pins = mapPins(stops);
   const path = walkingPath(pins);
-
-  const deniedNotice = denied && (
-    <div className="bg-card border-border absolute inset-x-4 top-3 z-10 rounded-lg border p-3 shadow-sm">
-      <PositionDenied onRetry={refresh} className="text-sm" />
-    </div>
-  );
 
   // One tree for all four cases (phone/tablet × online/offline), `RoundMap`
   // always in the same slot, so crossing 768px never remounts it (only
@@ -151,16 +143,13 @@ export function CarteScreen() {
   const mapArea = (
     <div className={cn("relative", isMobile ? "min-h-0 flex-1" : "md:col-span-3")}>
       {online ? (
-        <>
-          {deniedNotice}
-          <RoundMap
-            pins={pins}
-            path={path}
-            position={point}
-            recentre={refresh}
-            onSelect={setSelectedId}
-          />
-        </>
+        <RoundMap
+          pins={pins}
+          path={path}
+          position={point}
+          recentre={refresh}
+          onSelect={setSelectedId}
+        />
       ) : (
         <OfflineCanvas className="size-full" />
       )}
@@ -174,11 +163,17 @@ export function CarteScreen() {
     >
       {!isMobile && (
         <div className="md:col-span-2 md:overflow-y-auto">
-          <CarteList list={list} selectedId={selectedId} onToggle={toggle} />
+          <CarteList stops={stops} loaded={loaded} selectedId={selectedId} onToggle={toggle} />
         </div>
       )}
       {mapArea}
-      {isMobile && <CarteSheet item={selected} index={selectedIndex} />}
+      {isMobile && (
+        <CarteSheet
+          item={selected}
+          loaded={loaded}
+          isNext={selected !== null && selected === stops[0]}
+        />
+      )}
     </div>
   );
 }

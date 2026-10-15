@@ -3,53 +3,22 @@
  *
  * The next stop gets a card, its own gold edge and both actions. Everything
  * after it is a quiet ledger that expands in place on tap, or slides open on
- * a swipe (GH #120) — no navigation on tap. Follow-ups not yet due sit in
- * "Plus tard", visible but not walkable from here.
+ * a swipe (GH #120) — no navigation on tap. The stops keep the numbers the swipe
+ * gave them, and a stop with a visit today has left (ADR-0036).
  */
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { useLiveQuery } from "dexie-react-hooks";
 import { copy } from "../copy/field";
-import { formatDate } from "../format";
-import { cn } from "../lib/utils";
 import { brusselsPeriod } from "../../shared/period";
+import { AllDoneCard } from "./AllDoneCard";
 import { DailyProgress } from "./DailyProgress";
 import { fieldDb, todaysSentVisits, type SentVisit } from "./db";
 import { NextStopCard } from "./NextStopCard";
-import { PositionDenied } from "./PositionDenied";
 import { dailyProgress } from "./progress";
-import { edgeFor, StopRow } from "./StopRow";
-import type { TodayItem } from "../../shared/today";
+import { StopRow } from "./StopRow";
 import { useRound } from "./useRound";
 import { useSyncState } from "./useSync";
-
-/** A follow-up not yet due. Visible and subordinate — it "can't be visited
- * from here" (EXPERIENCE.md), so it is a plain `<li>`, never a link or button. */
-function LaterRow({ item }: { item: TodayItem }) {
-  return (
-    <li className={cn("bg-card border-border rounded-xl border px-3.5 py-2.5", edgeFor(item))}>
-      <p className="text-base font-medium">{item.name}</p>
-      {item.nextVisitAt !== null && (
-        <p className="tnum text-warn text-sm">{copy.today.dueOn(formatDate(item.nextVisitAt))}</p>
-      )}
-    </li>
-  );
-}
-
-/** "Plus tard": follow-ups not yet due, heading plus their rows. Used both in
- * the two-column layout and when there is no next stop to split around. */
-function LaterSection({ items }: { items: readonly TodayItem[] }) {
-  return (
-    <div>
-      <h3 className="text-base font-semibold">{copy.today.later}</h3>
-      <ul className="mt-2 space-y-2">
-        {items.map((item) => (
-          <LaterRow key={item.id} item={item} />
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 /**
  * What the visit form and the add-prospect form left in the router state.
@@ -61,7 +30,7 @@ function LaterSection({ items }: { items: readonly TodayItem[] }) {
 type RoundState = { saved?: boolean; added?: boolean };
 
 export function TodayScreen() {
-  const { list, now, outboxVisits, locating, denied, refresh } = useRound();
+  const { stops, loaded, now, outboxVisits } = useRound();
   const { identity } = useSyncState();
   const { state } = useLocation();
   const justSaved = (state as RoundState | null) ?? null;
@@ -90,13 +59,13 @@ export function TodayScreen() {
     { sentToday: [] as SentVisit[], period: brusselsPeriod(now, 1) },
   );
 
-  const [next, ...rest] = list.now;
+  const [next, ...rest] = stops;
 
   const progress = dailyProgress({
     logged: sentToday,
     outboxVisits,
     identity,
-    stops: list.now,
+    stops,
     period,
   });
 
@@ -108,9 +77,9 @@ export function TodayScreen() {
     <section>
       <header>
         <h2 className="text-title">{copy.today.title}</h2>
-        {list.now.length > 0 && (
+        {stops.length > 0 && (
           <p className="tnum text-muted-foreground text-base">
-            {copy.today.remaining(list.now.length)}
+            {copy.today.remaining(stops.length)}
           </p>
         )}
       </header>
@@ -128,14 +97,7 @@ export function TodayScreen() {
         </p>
       )}
 
-      {locating && <p className="text-muted-foreground mt-1 text-sm">{copy.today.locating}</p>}
-      {denied && (
-        <PositionDenied onRetry={refresh} className="text-muted-foreground mt-1 text-sm" />
-      )}
-
-      {!next && list.later.length === 0 ? (
-        <p className="text-muted-foreground mt-4">{copy.today.empty}</p>
-      ) : next ? (
+      {next ? (
         <div className="mt-4 md:grid md:grid-cols-5 md:gap-6">
           {/* DOM order keeps the card first; from 768px only its grid
               placement moves it to the right. self-start, or the stretched
@@ -144,30 +106,25 @@ export function TodayScreen() {
             <NextStopCard item={next} />
           </div>
 
-          {(rest.length > 0 || list.later.length > 0) && (
-            <div className="mt-4 space-y-4 md:col-span-2 md:col-start-1 md:row-start-1 md:mt-0">
-              {rest.length > 0 && (
-                <ul className="space-y-2">
-                  {rest.map((item, i) => (
-                    <StopRow
-                      key={item.id}
-                      item={item}
-                      index={i + 2}
-                      expanded={expandedId === item.id}
-                      onToggle={() => toggle(item.id)}
-                    />
-                  ))}
-                </ul>
-              )}
-
-              {list.later.length > 0 && <LaterSection items={list.later} />}
-            </div>
+          {rest.length > 0 && (
+            <ul className="mt-4 space-y-2 md:col-span-2 md:col-start-1 md:row-start-1 md:mt-0">
+              {rest.map((item) => (
+                <StopRow
+                  key={item.id}
+                  item={item}
+                  expanded={expandedId === item.id}
+                  onToggle={() => toggle(item.id)}
+                />
+              ))}
+            </ul>
           )}
         </div>
       ) : (
-        <div className="mt-4">
-          <LaterSection items={list.later} />
-        </div>
+        loaded && (
+          <div className="mt-4">
+            <AllDoneCard />
+          </div>
+        )
       )}
     </section>
   );

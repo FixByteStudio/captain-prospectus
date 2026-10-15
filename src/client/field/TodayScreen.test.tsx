@@ -1,23 +1,23 @@
 /**
- * The round screen (spec-gh-118): single-open rows, the outbox badge seeded
- * from a real `outboxVisits` row, Plus tard rows that carry no link, and the
- * empty state — all offline, against the real Dexie table `useRound.ts` reads.
+ * The round screen (spec-gh-118, story 1.5 of #496): today's tournée in the
+ * swipe's numbers, single-open rows, a visited stop leaving the moment its visit
+ * is queued, and the all-done card — all offline, against the real Dexie tables
+ * `useRound.ts` reads.
  *
  * `useSyncState` is mocked (as `SyncIndicator.test.tsx` does) so nothing here
  * depends on the sync engine's timers; `useAgentPosition` runs for real and
  * reports "denied" under happy-dom (`test/setup-dom.ts`), which is the
- * position-denied state the matrix also covers.
+ * no-reading state: the same order, « Position inconnue », no notice.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { copy } from "../copy";
-import { formatDate } from "../format";
 import type { FieldProspect, Prospect, Visit } from "../../shared/schemas";
-import { brusselsMidnightDaysFromNow } from "../../shared/period";
 import { fieldDb } from "./db";
 import { TodayScreen } from "./TodayScreen";
+import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
 import type { SyncState } from "./useSync";
 
 const syncState = vi.hoisted(() => ({
@@ -64,7 +64,7 @@ const fieldProspect = (over: Partial<FieldProspect> = {}): FieldProspect => ({
 const visit = (over: Partial<Visit> = {}): Visit => ({
   id: crypto.randomUUID(),
   prospectId: crypto.randomUUID(),
-  visitedAt: Date.now(),
+  visitedAt: TOURNEE_NOW,
   lat: null,
   lng: null,
   flyerGiven: false,
@@ -85,7 +85,7 @@ function renderScreen() {
 }
 
 beforeEach(() => {
-  syncState.current = { lastSyncAt: 1_700_000_000_000, identity: "agent@example.com" };
+  syncState.current = { lastSyncAt: TOURNEE_NOW, identity: "agent@example.com" };
 });
 
 afterEach(async () => {
@@ -94,37 +94,65 @@ afterEach(async () => {
     fieldDb.outboxProspects.clear(),
     fieldDb.outboxVisits.clear(),
     fieldDb.sentVisits.clear(),
+    clearTourneeTables(),
   ]);
 });
 
+const IDS = [1, 2, 3, 4, 5, 6].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+
+/** Six stops named after their number, so a row's name says which stop it is. */
+const six = () => IDS.map((id, i) => prospect({ id, name: `Stop ${i + 1}` }));
+
+/** `noUncheckedIndexedAccess`: a missing fixture is a test bug, not a `undefined` to carry. */
+const nth = <T,>(items: readonly T[], i: number): T => {
+  const item = items[i];
+  if (item === undefined) throw new Error(`no fixture at ${i}`);
+  return item;
+};
+
+const cardOf = async () => {
+  const card = (await screen.findByText(copy.today.nextStop)).closest("article");
+  if (!card) throw new Error("no next-stop card");
+  return card;
+};
+
 describe("TodayScreen", () => {
-  it("invites the agent to sync when the round is empty", async () => {
+  it("says every stop is done when the tournée has nothing left", async () => {
     renderScreen();
 
-    expect(await screen.findByText(copy.today.empty)).toBeTruthy();
+    expect(await screen.findByText(copy.today.allDone)).toBeTruthy();
+    expect(screen.queryByText(copy.today.nextStop)).toBeNull();
   });
 
-  it("shows the next stop as a card and the rest as rows, only one row open at a time", async () => {
-    await fieldDb.prospects.bulkAdd([
-      prospect({ name: "Curry House" }),
-      prospect({ name: "Bar des Marolles" }),
-      prospect({ name: "Chez Léa" }),
+  it("walked in order: the card reads Arrêt 4 and the rows 5 and 6", async () => {
+    const stops = six();
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.bulkAdd(stops.slice(0, 3).map((p) => visit({ prospectId: p.id })));
+
+    renderScreen();
+
+    const card = await cardOf();
+    expect(card.getAttribute("aria-label")).toBe(copy.carte.pinLabel(4, "Stop 4"));
+    expect(within(card).getByText("4")).toBeTruthy();
+    expect(within(card).getByRole("link", { name: copy.today.visit })).toBeTruthy();
+
+    const rows = screen
+      .getAllByRole("button")
+      .filter((button) => button.hasAttribute("aria-controls"));
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+      copy.carte.pinLabel(5, "Stop 5"),
+      copy.carte.pinLabel(6, "Stop 6"),
     ]);
+    expect(screen.getByText(copy.today.remaining(3))).toBeTruthy();
+  });
+
+  it("opens one row at a time and writes nothing (invariant 2)", async () => {
+    await seedPulledTournee(six().slice(0, 3));
 
     const user = userEvent.setup();
     renderScreen();
+    await cardOf();
 
-    // The next stop's actions are already on screen, card-style, with no tap.
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(card).not.toBeNull();
-    // The card is stop 1 in the walking order, with both actions and no tap.
-    // `as HTMLElement`: asserted non-null on the line above.
-    expect(within(card as HTMLElement).getByText("1")).toBeTruthy();
-    expect(within(card as HTMLElement).getByRole("link", { name: copy.today.visit })).toBeTruthy();
-
-    // The rows are whichever two stops are not the card (with no position,
-    // `fieldDb.prospects.toArray()` orders by id, not insertion — so the
-    // pairing of name to row is not asserted here, only the row behaviour).
     const rows = screen
       .getAllByRole("button")
       .filter((button) => button.hasAttribute("aria-controls"));
@@ -134,190 +162,130 @@ describe("TodayScreen", () => {
 
     await user.click(rowTwo);
     expect(rowTwo.getAttribute("aria-expanded")).toBe("true");
-
-    // Opening the third row closes the second (CAP-6: one row at a time).
     await user.click(rowThree);
     expect(rowThree.getAttribute("aria-expanded")).toBe("true");
     expect(rowTwo.getAttribute("aria-expanded")).toBe("false");
 
-    // Expanding is display only: no outbox row, no prospect touched (invariant 2).
     expect(await fieldDb.outboxVisits.count()).toBe(0);
     expect(await fieldDb.outboxProspects.count()).toBe(0);
     expect((await fieldDb.prospects.toArray()).every((p) => p.status === "assigned")).toBe(true);
   });
 
-  it("marks the next stop's card « Pas encore envoyé » from a seeded outboxVisits row kept for today", async () => {
-    const solo = prospect({ name: "Curry House" });
-    await fieldDb.prospects.add(solo);
-    // A when-step outcome keeps the stop on the round (round-placement.md);
-    // a closed one would take it off, which is exactly what the test below
-    // covers.
-    const now = syncState.current.lastSyncAt ?? Date.now();
-    await fieldDb.outboxVisits.add(
-      visit({ prospectId: solo.id, outcome: "no_contact", followUpAt: now }),
-    );
+  it("a queued visit takes the stop off Tournée whatever its outcome, with no Plus tard", async () => {
+    const stops = six().slice(0, 4);
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.bulkAdd([
+      visit({ prospectId: nth(stops, 0).id, outcome: "converted" }),
+      visit({ prospectId: nth(stops, 1).id, outcome: "follow_up", followUpAt: TOURNEE_NOW }),
+      visit({
+        prospectId: nth(stops, 2).id,
+        outcome: "no_contact",
+        followUpAt: TOURNEE_NOW + 3 * 86_400_000,
+      }),
+    ]);
 
     renderScreen();
 
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText(copy.today.notSynced)).toBeTruthy();
-  });
-
-  /** GH #239, epic #117 retro F1–F3: Flow 1's climax — "Curry House is gone". */
-  it("a queued closed outcome leaves the round: the next-stop card names a different stop", async () => {
-    // Fixed ids, not random: with no position the round falls back to
-    // `fieldDb.prospects.toArray()`'s own order, which is primary-key (id)
-    // order — so a known id ordering pins which stop is visited.
-    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
-    const second = prospect({
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "Bar des Marolles",
-    });
-    await fieldDb.prospects.bulkAdd([first, second]);
-    await fieldDb.outboxVisits.add(visit({ prospectId: first.id, outcome: "interested" }));
-
-    renderScreen();
-
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(card).not.toBeNull();
-    // Curry House left the round before the sync even ran (round-placement.md).
-    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
-    expect(screen.queryByText("Curry House")).toBeNull();
+    const card = await cardOf();
+    expect(within(card).getByText("Stop 4")).toBeTruthy();
+    for (const gone of ["Stop 1", "Stop 2", "Stop 3"]) expect(screen.queryByText(gone)).toBeNull();
+    expect(screen.queryByText("Plus tard")).toBeNull();
     expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
   });
 
-  it("keeps the visited stop absent once the pull omits it and the outbox row is accepted", async () => {
-    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
-    const second = prospect({
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "Bar des Marolles",
-    });
-    await fieldDb.prospects.bulkAdd([first, second]);
-    const queued = visit({ prospectId: first.id, outcome: "interested" });
+  it("keeps a stop off the list once the pull lists it as visited and the outbox row is gone", async () => {
+    const stops = six().slice(0, 2);
+    await seedPulledTournee(stops);
+    const queued = visit({ prospectId: nth(stops, 0).id });
     await fieldDb.outboxVisits.add(queued);
 
     renderScreen();
     expect(await screen.findByText(copy.today.remaining(1))).toBeTruthy();
 
-    // The sync: the server accepts the visit and its pull no longer lists the
-    // prospect (`interested` is closed, ADR-0027).
+    // The sync: the server accepts the visit and lists the stop as visited today.
+    await fieldDb.visitedStops.put({
+      prospectId: nth(stops, 0).id,
+      outcome: "interested",
+      visitedAt: TOURNEE_NOW,
+      flyerGiven: false,
+      visitIds: [queued.id],
+      name: "Stop 1",
+      type: "restaurant",
+      address: null,
+    });
     await fieldDb.outboxVisits.delete(queued.id);
-    await fieldDb.prospects.delete(first.id);
 
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
-    expect(screen.queryByText("Curry House")).toBeNull();
+    const card = await cardOf();
+    expect(within(card).getByText("Stop 2")).toBeTruthy();
+    expect(screen.queryByText("Stop 1")).toBeNull();
     expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
   });
 
-  it("sorts a pulled stop kept for today (lastVisitAt and nextVisitAt today) last", async () => {
-    const now = syncState.current.lastSyncAt ?? Date.now();
-    // The lower id would be the card in id order; kept for today moves it last.
-    const kept = prospect({
-      id: "00000000-0000-4000-8000-000000000001",
-      name: "Curry House",
-      status: "follow_up",
-      lastVisitAt: now,
-      nextVisitAt: brusselsMidnightDaysFromNow(now, 0),
+  it("another agent's outbox visit leaves the stop on the list", async () => {
+    const stops = six().slice(0, 2);
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.add({
+      ...visit({ prospectId: nth(stops, 0).id }),
+      writtenBy: "autre@example.com",
     });
-    const fresh = prospect({
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "Bar des Marolles",
-    });
-    await fieldDb.prospects.bulkAdd([kept, fresh]);
 
     renderScreen();
 
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Curry House/ })).toBeTruthy();
-    expect(screen.getByText(copy.today.remaining(2))).toBeTruthy();
+    expect(await screen.findByText(copy.today.remaining(2))).toBeTruthy();
   });
 
-  it("moves a stop queued with a date after today under Plus tard, off the next-stop card", async () => {
-    const now = syncState.current.lastSyncAt ?? Date.now();
-    const first = prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" });
-    const second = prospect({
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "Bar des Marolles",
-    });
-    await fieldDb.prospects.bulkAdd([first, second]);
-    await fieldDb.outboxVisits.add(
-      visit({
-        prospectId: first.id,
-        outcome: "follow_up",
-        followUpAt: brusselsMidnightDaysFromNow(now, 3),
-      }),
-    );
+  it("a follow-up kept for today stays in its number, never sorted last", async () => {
+    const stops = six();
+    await seedPulledTournee([
+      { ...nth(stops, 0), status: "follow_up", lastVisitAt: TOURNEE_NOW, nextVisitAt: TOURNEE_NOW },
+      nth(stops, 1),
+    ]);
 
     renderScreen();
 
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(within(card as HTMLElement).getByText("Bar des Marolles")).toBeTruthy();
-    const later = screen.getByText(copy.today.later).parentElement;
-    expect(within(later as HTMLElement).getByText("Curry House")).toBeTruthy();
+    expect((await cardOf()).getAttribute("aria-label")).toBe(copy.carte.pinLabel(1, "Stop 1"));
   });
 
-  it("marks a field prospect not yet accepted the same way", async () => {
-    await fieldDb.outboxProspects.add(fieldProspect({ name: "Camion à tacos" }));
+  it("marks a field prospect not yet accepted", async () => {
+    const field = fieldProspect({ name: "Camion à tacos" });
+    await fieldDb.outboxProspects.add(field);
+    const tourneeId = crypto.randomUUID();
+    await fieldDb.tournees.put({ id: tourneeId, dayStart: 0, startedAt: TOURNEE_NOW });
+    await fieldDb.outboxTournees.add({ id: tourneeId, startedAt: TOURNEE_NOW });
+    await fieldDb.outboxStops.add({
+      id: crypto.randomUUID(),
+      tourneeId,
+      prospectId: field.id,
+      number: 3,
+      addedAt: TOURNEE_NOW,
+    });
 
     renderScreen();
 
-    expect(await screen.findByText(copy.today.nextStop)).toBeTruthy();
-    expect(screen.getByText(copy.today.notSynced)).toBeTruthy();
+    const card = await cardOf();
+    expect(within(card).getByText("3")).toBeTruthy();
+    expect(within(card).getByText(copy.today.notSynced)).toBeTruthy();
   });
 
-  it("lists a future follow-up under Plus tard with no link or button", async () => {
-    const now = syncState.current.lastSyncAt ?? Date.now();
-    const dueLater = prospect({
-      name: "Sushi Sablon",
-      status: "follow_up",
-      nextVisitAt: now + 7 * 86_400_000,
-    });
-    await fieldDb.prospects.add(dueLater);
+  it("keeps the numbers and the order with no position, and shows no notice", async () => {
+    await seedPulledTournee(six().slice(0, 3), { numbers: [4, 2, 9] });
 
     renderScreen();
 
-    expect(await screen.findByText(copy.today.later)).toBeTruthy();
-    const name = screen.getByText("Sushi Sablon");
-    expect(name.closest("a")).toBeNull();
-    expect(name.closest("button")).toBeNull();
-    expect(screen.getByText(copy.today.dueOn(formatDate(dueLater.nextVisitAt ?? 0)))).toBeTruthy();
-  });
-
-  it("shows the next-stop card and Plus tard together when both apply", async () => {
-    const now = syncState.current.lastSyncAt ?? Date.now();
-    const dueToday = prospect({ name: "Curry House" });
-    const dueLater = prospect({
-      name: "Sushi Sablon",
-      status: "follow_up",
-      nextVisitAt: now + 7 * 86_400_000,
-    });
-    await fieldDb.prospects.bulkAdd([dueToday, dueLater]);
-
-    renderScreen();
-
-    const card = (await screen.findByText(copy.today.nextStop)).closest("article");
-    expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("Curry House")).toBeTruthy();
-    expect(await screen.findByText(copy.today.later)).toBeTruthy();
-    expect(screen.getByText("Sushi Sablon")).toBeTruthy();
+    expect((await cardOf()).getAttribute("aria-label")).toBe(copy.carte.pinLabel(2, "Stop 2"));
+    expect(await screen.findAllByText(copy.today.distanceUnknown)).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Réessayer" })).toBeNull();
+    expect(screen.queryByText(/triée par distance/)).toBeNull();
   });
 
   it("expands a row from the keyboard, with either Enter or Space", async () => {
-    // Fixed ids so the round's fallback (primary-key) order is deterministic:
-    // "Curry House" is the card, "Bar des Marolles" the one row.
-    await fieldDb.prospects.bulkAdd([
-      prospect({ id: "00000000-0000-4000-8000-000000000001", name: "Curry House" }),
-      prospect({ id: "00000000-0000-4000-8000-000000000002", name: "Bar des Marolles" }),
-    ]);
+    await seedPulledTournee(six().slice(0, 2));
 
     const user = userEvent.setup();
     renderScreen();
 
-    await screen.findByText(copy.today.nextStop);
-    const row = screen.getByRole("button", { name: /Bar des Marolles/ });
+    await cardOf();
+    const row = screen.getByRole("button", { name: copy.carte.pinLabel(2, "Stop 2") });
 
     row.focus();
     expect(document.activeElement).toBe(row);
@@ -328,23 +296,10 @@ describe("TodayScreen", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("tells the agent their position was refused and offers to retry", async () => {
-    await fieldDb.prospects.add(prospect());
-
-    renderScreen();
-
-    expect(await screen.findByText(copy.today.positionDenied)).toBeTruthy();
-    expect(screen.getByRole("button", { name: copy.today.retryPosition })).toBeTruthy();
-    // With no position, the card's distance says so instead of a number.
-    expect(await screen.findByText(copy.today.distanceUnknown)).toBeTruthy();
-  });
-
   it("reads n portes sur total, denominator held to the round's own size, across a real re-render", async () => {
-    const stops = Array.from({ length: 5 }, (_, i) =>
-      prospect({ id: `00000000-0000-4000-8000-00000000000${i}`, name: `Stop ${i}` }),
-    );
+    const stops = six().slice(0, 5);
     const [first, second, third] = stops as [Prospect, Prospect, Prospect, Prospect, Prospect];
-    await fieldDb.prospects.bulkAdd(stops);
+    await seedPulledTournee(stops);
     await fieldDb.sentVisits.bulkAdd([
       {
         id: crypto.randomUUID(),
@@ -364,57 +319,33 @@ describe("TodayScreen", () => {
 
     expect(await screen.findByText(copy.today.progress(2, 5))).toBeTruthy();
 
-    // A visit queued for a third stop, absent from the log — the outbox side
-    // of the union still counts it, so n rises to 3 with the denominator
-    // unmoved.
-    const thirdVisit = visit({ prospectId: third.id });
+    // A visit queued for a third stop, absent from the log: the outbox side of
+    // the union still counts it, so n rises to 3 with the denominator unmoved.
+    // The counter still bounds its day by the real clock (entry 7 of #496).
+    const thirdVisit = visit({ prospectId: third.id, visitedAt: Date.now() });
     await fieldDb.outboxVisits.add(thirdVisit);
     expect(await screen.findByText(copy.today.progress(3, 5))).toBeTruthy();
 
-    // The sync accepted it and its outbox row is gone: the line must fall
-    // back to n = 2, a real re-render rather than the DOM the line above
-    // already satisfies (both "2 portes sur 5" and "3 portes sur 5" are
-    // distinct strings, so this assertion can only pass if the count moved).
     await fieldDb.outboxVisits.delete(thirdVisit.id);
     expect(await screen.findByText(copy.today.progress(2, 5))).toBeTruthy();
-  });
-
-  it("singularises the day's first visit", async () => {
-    const [first, secondStop] = [prospect({ name: "Curry House" }), prospect({ name: "Chez Léa" })];
-    await fieldDb.prospects.bulkAdd([first, secondStop]);
-    await fieldDb.sentVisits.add({
-      id: crypto.randomUUID(),
-      prospectId: first.id,
-      sentAt: Date.now(),
-      writtenBy: "agent@example.com",
-    });
-
-    renderScreen();
-
-    expect(await screen.findByText(copy.today.progress(1, 2))).toBeTruthy();
   });
 
   it("shows no progress line on an empty round", async () => {
     renderScreen();
 
-    await screen.findByText(copy.today.empty);
+    await screen.findByText(copy.today.allDone);
     expect(screen.queryByLabelText(copy.today.progressLabel)).toBeNull();
   });
 
-  it("reads n portes sur n on a finished round", async () => {
-    const stops = [prospect({ name: "Curry House" }), prospect({ name: "Chez Léa" })];
-    await fieldDb.prospects.bulkAdd(stops);
-    await fieldDb.sentVisits.bulkAdd(
-      stops.map((s) => ({
-        id: crypto.randomUUID(),
-        prospectId: s.id,
-        sentAt: Date.now(),
-        writtenBy: "agent@example.com",
-      })),
-    );
+  it("shows the all-done card, not a card of stops, when every stop has a visit today", async () => {
+    const stops = six().slice(0, 2);
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.bulkAdd(stops.map((p) => visit({ prospectId: p.id })));
 
     renderScreen();
 
-    expect(await screen.findByText(copy.today.progress(2, 2))).toBeTruthy();
+    expect(await screen.findByText(copy.today.allDone)).toBeTruthy();
+    expect(screen.queryByText(copy.today.nextStop)).toBeNull();
+    expect(screen.queryByRole("link", { name: copy.today.visit })).toBeNull();
   });
 });

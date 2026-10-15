@@ -20,12 +20,12 @@ import { formatDistance } from "../format";
 import { cn } from "../lib/utils";
 import { STATUS_EDGE } from "../admin/status";
 import { StopNumber } from "./StopNumber";
-import type { TodayItem } from "../../shared/today";
 import { navigationUrl, visitPath } from "./today";
+import type { TourneeItem } from "./tournee-stops";
 import { useSwipe } from "./useSwipe";
 
 /** A pending prospect has no server status to key an edge off yet. */
-export function edgeFor(item: Pick<TodayItem, "status">): string {
+export function edgeFor(item: Pick<TourneeItem, "status">): string {
   return item.status ? STATUS_EDGE[item.status] : STATUS_EDGE.new;
 }
 
@@ -34,7 +34,7 @@ export function Distance({
   item,
   className,
 }: {
-  item: Pick<TodayItem, "distanceM">;
+  item: Pick<TourneeItem, "distanceM">;
   className?: string;
 }) {
   if (item.distanceM === null) {
@@ -44,12 +44,12 @@ export function Distance({
 }
 
 /**
- * "Pas encore envoyé": read-only knowledge of the outbox, never a reason to
- * hide or reorder a stop (invariants 2, 3; docs/design.md, "Next-stop card").
- * Shared by the card and every row so the two can never drift apart.
+ * "Pas encore envoyé": a field prospect still in the outbox. A visited stop has
+ * left Tournée, so a queued visit no longer marks a row here (ADR-0036; invariants
+ * 2, 3). Shared by the card and every row so the two can never drift apart.
  */
-export function NotSyncedBadge({ item }: { item: Pick<TodayItem, "pending" | "visitQueued"> }) {
-  if (!item.pending && !item.visitQueued) return null;
+export function NotSyncedBadge({ item }: { item: Pick<TourneeItem, "pending"> }) {
+  if (!item.pending) return null;
   return (
     <Badge className="bg-tint-warn text-warn mt-1 rounded-sm border-transparent">
       {copy.today.notSynced}
@@ -66,7 +66,7 @@ export function StopActions({
   item,
   className,
 }: {
-  item: Pick<TodayItem, "id" | "lat" | "lng" | "name">;
+  item: Pick<TourneeItem, "id" | "lat" | "lng" | "name">;
   className?: string;
 }) {
   const url = navigationUrl(item);
@@ -95,16 +95,16 @@ export function StopActions({
 
 export function StopRow({
   item,
-  index,
   expanded,
   onToggle,
 }: {
-  item: TodayItem;
-  index: number;
+  item: TourneeItem;
   expanded: boolean;
   onToggle: () => void;
 }) {
   const panelId = `stop-actions-${item.id}`;
+  const infoId = `stop-info-${item.id}`;
+  const distanceId = `stop-distance-${item.id}`;
   const navigate = useNavigate();
   const url = navigationUrl(item);
   const { offset, dragging, handlers } = useSwipe({
@@ -145,6 +145,9 @@ export function StopRow({
           type="button"
           aria-expanded={expanded}
           aria-controls={panelId}
+          // Named like the Carte pin; the rest of the header stays reachable as the description.
+          aria-label={copy.carte.pinLabel(item.number, item.name)}
+          aria-describedby={`${infoId} ${distanceId}`}
           onClick={onToggle}
           style={offset ? { transform: `translateX(${offset}px)` } : undefined}
           className={cn(
@@ -158,15 +161,15 @@ export function StopRow({
           )}
           {...handlers}
         >
-          <StopNumber index={index} />
-          <span className="min-w-0 flex-1">
+          <StopNumber number={item.number} />
+          <span id={infoId} className="min-w-0 flex-1">
             <span className="block truncate text-base font-medium">{item.name}</span>
             <span className="text-muted-foreground text-meta block truncate">
               {copy.today.meta(TYPE_LABELS[item.type], item.address)}
             </span>
             <NotSyncedBadge item={item} />
           </span>
-          <span className="shrink-0 text-right">
+          <span id={distanceId} className="shrink-0 text-right">
             <Distance item={item} className="font-medium" />
           </span>
         </button>

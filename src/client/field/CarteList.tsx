@@ -3,35 +3,35 @@
  * The map's own two-pane sibling: `CarteScreen` renders this instead of
  * `CarteSheet` above that width, never both (no duplicate "Visiter" link in
  * the DOM). Reuses `NextStopCard` and `StopRow` verbatim, so the round reads
- * the same way here as it does on Tournée.
- *
- * "Plus tard" is not listed: a follow-up not yet due has no pin and is not
- * walkable from Carte either (docs/design.md, "Plus tard").
+ * the same way here as it does on Tournée, in the swipe's numbers.
  */
 import { useEffect, useRef } from "react";
 import { copy } from "../copy/field";
 import { NextStopCard } from "./NextStopCard";
 import { StopRow } from "./StopRow";
-import type { TodayList } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 
 export function CarteList({
-  list,
+  stops,
+  loaded,
   selectedId,
   onToggle,
 }: {
-  list: TodayList;
+  stops: readonly TourneeItem[];
+  /** False while the tables are read: no sentence yet, not "all done". */
+  loaded: boolean;
   /** `CarteScreen`'s own selection: null means "the next stop", which is
    * already open on the card — no row matches it, so none expands. */
   selectedId: string | null;
   onToggle: (id: string) => void;
 }) {
-  const [next, ...rest] = list.now;
+  const [next, ...rest] = stops;
   const cardRef = useRef<HTMLDivElement | null>(null);
   const rowsRef = useRef<HTMLUListElement | null>(null);
 
   // Read fresh in the effect below rather than listed as a dependency: `next`
-  // and `rest` are new array/object identities on every render (`list.now`
-  // reshuffling on a sync), and scrolling on every one of those — not just an
+  // and `rest` are new array/object identities on every render (`stops`
+  // recomputed on a sync), and scrolling on every one of those — not just an
   // actual selection change — would fight the agent's own scroll position.
   const latestNext = useRef(next);
   const latestRest = useRef(rest);
@@ -57,7 +57,7 @@ export function CarteList({
   return (
     <section aria-label={copy.carte.listLabel} className="space-y-4 p-4">
       {!next ? (
-        <p className="text-muted-foreground">{copy.today.empty}</p>
+        loaded && <p className="text-muted-foreground">{copy.today.allDone}</p>
       ) : (
         <>
           <div ref={cardRef}>
@@ -66,11 +66,10 @@ export function CarteList({
 
           {rest.length > 0 && (
             <ul ref={rowsRef} className="space-y-2">
-              {rest.map((item, i) => (
+              {rest.map((item) => (
                 <StopRow
                   key={item.id}
                   item={item}
-                  index={i + 2}
                   expanded={selectedId === item.id}
                   onToggle={() => onToggle(item.id)}
                 />

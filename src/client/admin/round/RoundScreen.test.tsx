@@ -322,8 +322,8 @@ describe("RoundScreen", () => {
       await screen.findAllByRole("listitem");
       const props = lastMapProps();
       expect(props.pins).toEqual([
-        expect.objectContaining({ name: "Madeleine", index: 1, next: true }),
-        expect.objectContaining({ name: "Zeste", index: 2, next: false }),
+        expect.objectContaining({ name: "Madeleine", number: 1, next: true }),
+        expect.objectContaining({ name: "Zeste", number: 2, next: false }),
       ]);
       expect(props.path).toEqual([
         [50.8501, 4.3501],
@@ -340,8 +340,8 @@ describe("RoundScreen", () => {
       await screen.findAllByRole("listitem");
       const props = lastMapProps();
       expect(props.pins).toEqual([
-        expect.objectContaining({ name: "Madeleine", index: 2, next: false }),
-        expect.objectContaining({ name: "Zeste", index: 3, next: false }),
+        expect.objectContaining({ name: "Madeleine", number: 2, next: false }),
+        expect.objectContaining({ name: "Zeste", number: 3, next: false }),
       ]);
       expect(props.path).toEqual([]);
       expect(props.position).toBeNull();
@@ -355,8 +355,8 @@ describe("RoundScreen", () => {
       view(`/admin/tournee?agent=${EMAIL}`);
       await screen.findAllByRole("listitem");
       expect(lastMapProps().pins).toEqual([
-        expect.objectContaining({ name: "Alpha", index: 1, next: false }),
-        expect.objectContaining({ name: "Zeste", index: 2, next: false }),
+        expect.objectContaining({ name: "Alpha", number: 1, next: false }),
+        expect.objectContaining({ name: "Zeste", number: 2, next: false }),
       ]);
     });
 

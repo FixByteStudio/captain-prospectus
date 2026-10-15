@@ -30,7 +30,7 @@ export function roundMap(
   stops: readonly TodayItem[],
   position: Point | null,
 ): { pins: MapPin[]; path: [number, number][]; point: Point | null } {
-  const pins = mapPins(stops);
+  const pins = mapPins(stops.map((stop, i) => ({ ...stop, number: i + 1 })));
   if (!position) {
     return { pins: pins.map((pin) => ({ ...pin, next: false })), path: [], point: null };
   }

@@ -14,33 +14,35 @@ import { copy } from "../copy";
 import { STATUS_EDGE } from "../admin/status";
 import { SWIPE_COMMIT } from "./swipe";
 import { edgeFor, StopRow } from "./StopRow";
-import type { TodayItem } from "../../shared/today";
+import type { TourneeItem } from "./tournee-stops";
 
-const item = (over: Partial<TodayItem> = {}): TodayItem => ({
+const item = (over: Partial<TourneeItem> = {}): TourneeItem => ({
   id: "11111111-1111-1111-1111-111111111111",
+  number: 7,
   name: "Le Bouchon",
   type: "restaurant",
   lat: 50.8467,
   lng: 4.3525,
   address: "Rue du Midi 42",
   status: "assigned",
-  nextVisitAt: null,
-  lastVisitAt: null,
   pending: false,
   distanceM: 120,
-  visitQueued: false,
   ...over,
 });
 
 /** A row owns no state of its own (shared with Carte and the admin view). */
-function ControlledRow({ initial = false, item: theItem }: { initial?: boolean; item: TodayItem }) {
+function ControlledRow({
+  initial = false,
+  item: theItem,
+}: {
+  initial?: boolean;
+  item: TourneeItem;
+}) {
   const [expanded, setExpanded] = useState(initial);
-  return (
-    <StopRow item={theItem} index={2} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
-  );
+  return <StopRow item={theItem} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />;
 }
 
-function renderRow(theItem: TodayItem, initial = false) {
+function renderRow(theItem: TourneeItem, initial = false) {
   return render(
     <MemoryRouter>
       <ul>
@@ -51,7 +53,7 @@ function renderRow(theItem: TodayItem, initial = false) {
 }
 
 /** For the swipe-left tests: a real route to observe `useNavigate` landing. */
-function renderRowWithRoute(theItem: TodayItem) {
+function renderRowWithRoute(theItem: TourneeItem) {
   return render(
     <MemoryRouter initialEntries={["/"]}>
       <Routes>
@@ -92,8 +94,8 @@ describe("StopRow", () => {
     const button = screen.getByRole("button", { name: /Le Bouchon/ });
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("link", { name: copy.today.visit })).toBeNull();
-    // Collapsed, the row still carries its walking-order number and distance.
-    expect(within(button).getByText("2")).toBeTruthy();
+    // Collapsed, the row still carries the stop's own number and distance.
+    expect(within(button).getByText("7")).toBeTruthy();
     expect(within(button).getByText("120 m")).toBeTruthy();
   });
 
@@ -136,10 +138,12 @@ describe("StopRow", () => {
     expect(visit.parentElement?.className).toContain("grid-cols-1");
   });
 
-  it("shows « Pas encore envoyé » for a stop with a queued visit", () => {
-    renderRow(item({ visitQueued: true }));
+  it("is named « Arrêt {n} · {name} », whatever its position in the list", () => {
+    renderRow(item({ number: 19 }));
 
-    expect(screen.getByText(copy.today.notSynced)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: copy.carte.pinLabel(19, "Le Bouchon") }),
+    ).toBeTruthy();
   });
 
   it("shows « Pas encore envoyé » for a field prospect not yet accepted", () => {
