@@ -12,7 +12,7 @@ Every `/tournee/*` route sits behind a gate ([ADR-0036](../adr/0036-a-swipe-free
 ## Today list
 - Tournée and Carte list **today's tournée** in the numbers the swipe gave its stops ([ADR-0036](../adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)), in number order. `src/client/field/tournee-stops.ts` reads the pulled tournée (else this identity's queued one), joins each stop with its prospect from the cache or the outbox, and drops the stops with a visit today and the stops the server marks `left`. The number is the stop's own: it never changes and a missing number is a gap, with no placeholder row.
 - **A stop leaves the moment it has a visit today**, whatever the outcome: the server's visited stops for the day, unioned with this identity's outbox visits. Placement reads the outbox, never a status (invariants 2, 3). There is no "Plus tard" section and no end-of-round rows; a follow-up due on a later day comes back as a stop in that day's tournée.
-- The next stop is the lowest-numbered stop left. When none is left, Tournée shows the all-done card and Carte's sheet the same sentence, unless the day holds no stop at all (`total` is 0, every stop having left unvisited), which reads « Plus aucun arrêt dans votre tournée aujourd'hui. » instead. `useRound` exposes that `total` (`tourneeTotal`: the distinct prospects among today's stops, minus those the pull marks `left`).
+- The next stop is the lowest-numbered stop left. When none is left, Tournée shows the all-done card and Carte's sheet the same sentence, unless the day holds no stop at all (`total` is 0, every stop having left unvisited), which reads « Plus aucun arrêt dans votre tournée aujourd'hui. » instead. `useRound` exposes that `total` (`tourneeCounter`'s `total`, below).
 - **Leavers.** A stop the server marks `left` (reassigned, closed by an admin or merged, and not visited today) is not drawn on Tournée or Carte, leaves the total, and leaves a gap: nothing renumbers, so the next stop is still the lowest number left. `left` comes from the server only (`isStopLeft`); the phone writes it nowhere. If the prospect comes back, the next pull clears `left` and the stop returns under its first number.
 - **Joiners.** A prospect that becomes open for the agent after the swipe, or a field prospect they add (Ajouter), is appended to today's tournée as a stop numbered after the highest number ever given, left and queued stops included, so a number is never reused. `appendJoiners` (`db.ts`) does it in one transaction at two points: at the end of each pull, and together with the queued field prospect (`queueFieldProspect`). It compares the swipe's set (`snapshotProspects`: open prospects, follow-ups due today or earlier, the identity's queued field prospects) with the tournée's stops, pulled and queued, and `joinersFor` (`tournee-joiners.ts`) numbers the missing ones nearest-next from the last stop the phone can place, else by name. A prospect already among the stops, left ones included, never joins again, so one that comes back keeps its first number. Nothing is appended before the swipe or on a day with no tournée. A joiner is an ordinary `outboxStops` row, stamped like the swipe's and never updated; a stop is a joiner when its `addedAt` is after the tournée's `startedAt`, and shows « Nouveau » (an outline badge) on its row, the card and Carte's sheet.
 - **Two phones, one joiner number.** If two phones of one agent append different joiners under the same number, the server keeps the first stored: the other stop is listed in `accepted` and not stored, and that phone's next pull re-appends the prospect as the next number. An unsynced joiner can therefore renumber, the second exception to "the numbers are the swipe's" ([design](../design.md#next-stop-card)).
@@ -87,39 +87,39 @@ identity opens the field screens only, never `/admin/*`.
 | `outboxTournees` | The swipe's tournée (`id`, `startedAt`) until the server lists it in `accepted`, stamped `writtenBy` / `unconfirmed` like a visit |
 | `outboxStops` | The swipe's numbered stops (`id`, `tourneeId`, `prospectId`, `number`, `addedAt`), stamped the same way; indexed by `tourneeId` and `prospectId` |
 | `tournees`, `tourneeStops` | Today's tournée and its stops as the last pull returned them (a stop keeps its `tourneeId` and `left`), replaced wholesale on each successful sync; cleared by `clearAgentCache` |
-| `visitedStops` | Today's door-days from the last pull, replaced wholesale; cleared by `clearAgentCache`. Carnet and the counter read it in later stories |
+| `visitedStops` | Today's door-days from the last pull, replaced wholesale; cleared by `clearAgentCache`. The counter reads it, and Carnet will |
 | `meta` | active script, last sync time, the last identity `/api/me` returned |
-| `sentVisits` | A log of the visit ids queued today (id, `prospectId`, `sentAt`, `writtenBy`, `unconfirmed`), written by `queueVisit` on the same write as the outbox row |
 
-**"{n} portes sur {total} aujourd'hui" (GH #119, server-gap G8; doors since
-GH #492).** `n` counts doors: each prospect visited today once, however many
-visits it got, so a stop revisited after an À relancer "Aujourd'hui" never
-reads as a second one and `n <= total` always holds. The prospects come from
-`sentVisits` unioned with the pending `outboxVisits` — the union, not the log
-alone, is what still counts a visit an older build queued with no log entry.
-Both sides are bound to the same Brussels calendar day: the log is already
-bound by `todaysSentVisits`, and the outbox side is filtered by each visit's
-own `visitedAt`, so a visit queued yesterday and still unsent this morning
-does not read as today's. The line counts the agent's doors, not the admin's
-"Visites aujourd'hui" visits, so the two can differ by design. `total` is the
-union of every prospect counted in `n` and the stops still on today's
-list, not `n` plus the stops left: a visit's stop stays on today's list
-after it is logged (invariant 3 — status is the server's to derive), so
-adding the two would double-count it, and a stop that has since left the
-list (moved to "Plus tard", or dropped by a pull) still holds its place in
-`total` because it is still counted in `n`. A visit is **counted, never
-deleted**: unlike the outbox, `sentVisits` rows survive a sync, and only a
-housekeeping prune below the day boundary removes them — never in response
-to the server. "Today" is a Europe/Brussels calendar day,
-`brusselsPeriod(now, 1).from` (`src/shared/period.ts`), the same boundary the
-admin dashboard counts "Visites aujourd'hui" with, so the two can never
-disagree. Both sides of the union are filtered through `writtenByOrUnstamped`
-(`src/client/field/outbox-stamp.ts`): on a shared phone, the line is the
-signed-in agent's own progress, and an unstamped row from before Dexie v3
-counts for whoever syncs it first. A row still `unconfirmed`
-(docs/backlog/013) still counts here — it is this agent's own queued visit,
-only not yet sendable, which is a narrower predicate (`sendableBy`) that only
-`runSync` needs.
+**The counter « {n} sur {total} » (GH #119; ADR-0036 › The counter).** Tournée
+shows how many of today's stops the agent has been to, in arrêts. It is computed
+in `useRound` from its one snapshot, by `tourneeCounter` in
+`src/client/field/tournee-stops.ts`, so it reads the same tournée and the same
+day as the list.
+
+- **Door-days.** `doorDaysToday` joins the server's `visitedStops` with this
+  identity's `outboxVisits` by visit id into one door-day per prospect for
+  today: every visit of the day, the latest one's outcome, and `pending` while
+  an outbox visit is not yet listed by the server. A visit seen on both sides
+  counts once. Carnet reuses it.
+- **`n`** is the tournée's stops that have a door-day today, each once: a second
+  visit to a stop never moves it.
+- **`total`** is the tournée's stops the server has not marked `left`, plus any
+  `left` stop that has a door-day today (a visit still in the outbox keeps its
+  stop). So a visited stop is always in `total` and `n <= total`. Joiners add
+  one; a stop reassigned unvisited removes one. With no stop (or all left
+  unvisited), `total` is 0 and no counter shows.
+- **A door-day outside the tournée** (no stop for that prospect) counts in
+  neither `n` nor `total`.
+- **Today** is the Brussels calendar day `stopsOfToday` uses,
+  `brusselsPeriod(now, 1)` with `useRound`'s `now` (the last sync, else the
+  moment the screens opened). A visit from another day never counts. Midnight is
+  not watched yet.
+- **Mine** is `writtenByOrUnstamped` (`src/client/field/outbox-stamp.ts`): on a
+  shared phone the outbox side is the signed-in agent's own, and a row still
+  `unconfirmed` (docs/backlog/013) counts, being their own queued visit.
+- Nothing about the counter lives only on the phone: after a cache wipe or a
+  reinstall, the next sync pulls the visited stops and the counter reads the same
+  again. The admin's door-day figures follow the same unit (later stories of #496).
 
 The today list itself is built from `prospects` **and** `outboxProspects`
 together: a field prospect the server has not accepted yet still has to be

@@ -221,12 +221,6 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
       nextVisitAt: null,
     });
     await setMeta(db, "identity", { email: AGENT, role: "agent" });
-    await db.sentVisits.put({
-      id: crypto.randomUUID(),
-      prospectId: crypto.randomUUID(),
-      sentAt: 1_700_000_000_000,
-      writtenBy: AGENT,
-    });
   };
 
   it.each([
@@ -244,7 +238,6 @@ describe("runSync — an auth refusal drops the cached round (GH #35)", () => {
 
       expect(result.status).toBe("unauthorized");
       expect(await db.prospects.count()).toBe(0);
-      expect(await db.sentVisits.count()).toBe(0);
       expect(await getMeta(db, "identity")).toBeUndefined();
       expect(await db.outboxVisits.count()).toBe(1);
       expect(result.remaining).toBe(1);

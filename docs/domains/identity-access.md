@@ -169,8 +169,8 @@ row can be left `unconfirmed` by a launch that ends (network lost, app
 killed) before its own confirmation lands; the next launch, even one whose
 first answer comes back live immediately, must still pick it up, or
 `sendableBy` refuses it from every identity for good. So `confirmOutbox`
-(`src/client/field/db.ts`) runs on every live, non-cached answer — outbox and
-the `sentVisits` log alike, in one transaction, re-stamping to the email that
+(`src/client/field/db.ts`) runs on every live, non-cached answer — every outbox
+table, in one transaction, re-stamping to the email that
 answer names and dropping the flag — before `SyncProvider` is told the
 identity is confirmed; it is a no-op once nothing is left flagged, so calling
 it unconditionally costs nothing. `SyncProvider` runs it once more itself,
@@ -184,9 +184,4 @@ back over, held back from anyone else exactly like an ordinary confirmed row
 (backlog 005). **Residual:** a phone that changes hands again while still
 unconfirmed — offline from one launch to the next — re-stamps both sessions'
 queued rows to whoever confirms first; narrower than before this task, since
-nothing sends until some launch confirms, but not closed. An identity switch
-(`identitySwitched`, above) also clears `sentVisits` before confirming, so a
-row the new agent queued while still unconfirmed loses its progress-count
-entry even though the outbox row itself survives untouched (INVARIANT 5) —
-the log is read-only rendering, not a queued write, so nothing is lost that
-matters to sync.
+nothing sends until some launch confirms, but not closed.

@@ -234,10 +234,6 @@ afterEach(async () => {
     fieldDb.outboxVisits.clear(),
     fieldDb.outboxProspects.clear(),
     fieldDb.visitHistory.clear(),
-    // Saving goes through `queueVisit`, which writes the daily-progress log
-    // beside the outbox row (GH #119), so this table needs clearing too or
-    // one test's visits are still counted in the next one's.
-    fieldDb.sentVisits.clear(),
     fieldDb.meta.clear(),
   ]);
 });
@@ -1003,36 +999,12 @@ describe("VisitScreen — step 2 (Questions)", () => {
   });
 
   /**
-   * The daily-progress count (GH #119) is only ever fed by this one save, so
-   * without this the log write could vanish — the outbox assertions above all
-   * still pass — and the count would silently fall back to zero the moment a
-   * sync accepted the visit and deleted its outbox row.
-   */
-  it("logs the visit for the day's progress count beside the outbox row", async () => {
-    const user = userEvent.setup();
-    await renderVisit({ expectContinue: false });
-
-    await user.click(outcomeRadio("interested"));
-    await confirmSave(user);
-
-    await screen.findByText(ROUND_MARKER);
-    const [queued] = await fieldDb.outboxVisits.toArray();
-    const [loggedVisit] = await fieldDb.sentVisits.toArray();
-    expect(queued).toBeTruthy();
-    // Same visit id on both, so the union in `dailyProgress` counts it once,
-    // and the stop it belongs to so the denominator can exclude it.
-    expect(loggedVisit?.id).toBe(queued?.id);
-    expect(loggedVisit?.prospectId).toBe(queued?.prospectId);
-    expect(loggedVisit?.writtenBy).toBe(queued?.writtenBy);
-  });
-
-  /**
    * docs/backlog/013: while the identity is cache-sourced, the session cookie
-   * the next request carries may not match it, so the outbox row and its
-   * daily-progress log entry are stamped `unconfirmed` — held back by
+   * the next request carries may not match it, so the outbox row is stamped
+   * `unconfirmed` — held back by
    * `sendableBy` until a live `/api/me` re-stamps them (`confirmOutbox`).
    */
-  it("stamps the outbox row and the log entry unconfirmed while the identity is cache-sourced", async () => {
+  it("stamps the outbox row unconfirmed while the identity is cache-sourced", async () => {
     syncState.confirmed = false;
     const user = userEvent.setup();
     await renderVisit({ expectContinue: false });
@@ -1042,17 +1014,15 @@ describe("VisitScreen — step 2 (Questions)", () => {
 
     await screen.findByText(ROUND_MARKER);
     const [queued] = await fieldDb.outboxVisits.toArray();
-    const [logged] = await fieldDb.sentVisits.toArray();
     expect(queued?.unconfirmed).toBe(true);
-    expect(logged?.unconfirmed).toBe(true);
     expect(queued?.writtenBy).toBe("agent@example.com");
   });
 });
 
 /**
  * The save confirmation (GH #125): « Enregistrer la visite » validates and
- * asks once; only the confirmation's « Enregistrer » queues, through the same
- * `queueVisit` the daily-progress count reads (#119).
+ * asks once; only the confirmation's « Enregistrer » queues, through
+ * `queueVisit`.
  */
 describe("VisitScreen — save confirmation", () => {
   /** Step 2 of SCRIPT2 with every question answered, the flyer ticked and a note. */
@@ -1090,7 +1060,6 @@ describe("VisitScreen — save confirmation", () => {
       expect(el.getAttribute("class") ?? "").not.toMatch(/outcome-|status/);
     }
     expect(await fieldDb.outboxVisits.count()).toBe(0);
-    expect(await fieldDb.sentVisits.count()).toBe(0);
   });
 
   it("does not open on an invalid draft", async () => {
@@ -1103,7 +1072,7 @@ describe("VisitScreen — save confirmation", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("Enregistrer queues exactly one visit with its answers and script, logs it, and returns to the round", async () => {
+  it("Enregistrer queues exactly one visit with its answers and script, and returns to the round", async () => {
     const user = userEvent.setup();
     await fillWholeVisit(user);
 
@@ -1121,8 +1090,6 @@ describe("VisitScreen — save confirmation", () => {
     expect(visits[0]?.scriptId).toBe(SCRIPT2.id);
     expect(visits[0]?.flyerGiven).toBe(true);
     expect(visits[0]?.notes).toBe("Repasser jeudi");
-    const logged = await fieldDb.sentVisits.toArray();
-    expect(logged.map((row) => row.id)).toEqual([visits[0]?.id]);
   });
 
   it("a double tap on Enregistrer still queues one visit and reports no failure", async () => {
@@ -1147,7 +1114,6 @@ describe("VisitScreen — save confirmation", () => {
     // failed save for a visit that was queued. So the write itself runs once.
     expect(add).toHaveBeenCalledTimes(1);
     expect(await fieldDb.outboxVisits.count()).toBe(1);
-    expect(await fieldDb.sentVisits.count()).toBe(1);
   });
 
   it("Modifier closes it with every answer, the flyer, the outcome and the note intact", async () => {
@@ -1251,7 +1217,6 @@ describe("VisitScreen — save confirmation", () => {
     );
     expect(screen.queryByText(ROUND_MARKER)).toBeNull();
     expect(await fieldDb.outboxVisits.count()).toBe(0);
-    expect(await fieldDb.sentVisits.count()).toBe(0);
 
     add.mockRestore();
     await user.click(within(dialog).getByRole("button", { name: copy.visit.confirm.save }));

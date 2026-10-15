@@ -93,7 +93,6 @@ afterEach(async () => {
     fieldDb.prospects.clear(),
     fieldDb.outboxProspects.clear(),
     fieldDb.outboxVisits.clear(),
-    fieldDb.sentVisits.clear(),
     clearTourneeTables(),
   ]);
 });
@@ -144,7 +143,8 @@ describe("TodayScreen", () => {
       copy.carte.pinLabel(5, "Stop 5"),
       copy.carte.pinLabel(6, "Stop 6"),
     ]);
-    expect(screen.getByText(copy.today.remaining(3))).toBeTruthy();
+    expect(screen.getByLabelText(copy.today.progressLabel(3, 6))).toBeTruthy();
+    expect(screen.queryByText(copy.today.remaining(3))).toBeNull();
   });
 
   it("opens one row at a time and writes nothing (invariant 2)", async () => {
@@ -191,7 +191,7 @@ describe("TodayScreen", () => {
     expect(within(card).getByText("Stop 4")).toBeTruthy();
     for (const gone of ["Stop 1", "Stop 2", "Stop 3"]) expect(screen.queryByText(gone)).toBeNull();
     expect(screen.queryByText("Plus tard")).toBeNull();
-    expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
+    expect(screen.getByLabelText(copy.today.progressLabel(3, 4))).toBeTruthy();
   });
 
   it("keeps a stop off the list once the pull lists it as visited and the outbox row is gone", async () => {
@@ -201,7 +201,7 @@ describe("TodayScreen", () => {
     await fieldDb.outboxVisits.add(queued);
 
     renderScreen();
-    expect(await screen.findByText(copy.today.remaining(1))).toBeTruthy();
+    expect(await screen.findByLabelText(copy.today.progressLabel(1, 2))).toBeTruthy();
 
     // The sync: the server accepts the visit and lists the stop as visited today.
     await fieldDb.visitedStops.put({
@@ -219,7 +219,8 @@ describe("TodayScreen", () => {
     const card = await cardOf();
     expect(within(card).getByText("Stop 2")).toBeTruthy();
     expect(screen.queryByText("Stop 1")).toBeNull();
-    expect(screen.getByText(copy.today.remaining(1))).toBeTruthy();
+    // The same visit on both sides, then on the server alone: still one arrêt.
+    expect(screen.getByLabelText(copy.today.progressLabel(1, 2))).toBeTruthy();
   });
 
   it("another agent's outbox visit leaves the stop on the list", async () => {
@@ -232,7 +233,7 @@ describe("TodayScreen", () => {
 
     renderScreen();
 
-    expect(await screen.findByText(copy.today.remaining(2))).toBeTruthy();
+    expect(await screen.findByLabelText(copy.today.progressLabel(0, 2))).toBeTruthy();
   });
 
   it("a follow-up kept for today stays in its number, never sorted last", async () => {
@@ -297,45 +298,77 @@ describe("TodayScreen", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("reads n portes sur total, denominator held to the round's own size, across a real re-render", async () => {
-    const stops = six().slice(0, 5);
-    const [first, second, third] = stops as [Prospect, Prospect, Prospect, Prospect, Prospect];
+  /** The server's door-days for the first `count` prospects, as a pull leaves them. */
+  const pullVisited = (stops: readonly Prospect[], count: number) =>
+    fieldDb.visitedStops.bulkPut(
+      stops.slice(0, count).map((p) => ({
+        prospectId: p.id,
+        outcome: "interested" as const,
+        visitedAt: TOURNEE_NOW,
+        flyerGiven: false,
+        visitIds: [crypto.randomUUID()],
+        name: p.name,
+        type: p.type,
+        address: null,
+      })),
+    );
+
+  const twenty = () =>
+    Array.from({ length: 20 }, (_, i) =>
+      prospect({
+        id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`,
+        name: `Stop ${i + 1}`,
+      }),
+    );
+
+  it("reads 15 sur 20 from the pulled visits, and a second visit does not move it", async () => {
+    const stops = twenty();
     await seedPulledTournee(stops);
-    await fieldDb.sentVisits.bulkAdd([
-      {
-        id: crypto.randomUUID(),
-        prospectId: first.id,
-        sentAt: Date.now(),
-        writtenBy: "agent@example.com",
-      },
-      {
-        id: crypto.randomUUID(),
-        prospectId: second.id,
-        sentAt: Date.now(),
-        writtenBy: "agent@example.com",
-      },
-    ]);
+    await pullVisited(stops, 15);
 
     renderScreen();
 
-    expect(await screen.findByText(copy.today.progress(2, 5))).toBeTruthy();
+    expect(await screen.findByText("15")).toBeTruthy();
+    expect(screen.getByText(copy.today.progressOf(20))).toBeTruthy();
+    const bar = screen.getByLabelText(copy.today.progressLabel(15, 20));
+    expect(bar.getAttribute("aria-valuenow")).toBe("75");
+    expect(screen.queryByText(/portes/)).toBeNull();
 
-    // A visit queued for a third stop, absent from the log: the outbox side of
-    // the union still counts it, so n rises to 3 with the denominator unmoved.
-    // The counter still bounds its day by the real clock (entry 7 of #496).
-    const thirdVisit = visit({ prospectId: third.id, visitedAt: Date.now() });
-    await fieldDb.outboxVisits.add(thirdVisit);
-    expect(await screen.findByText(copy.today.progress(3, 5))).toBeTruthy();
+    // A second visit to stop 3: the counter stays.
+    await fieldDb.outboxVisits.add(visit({ prospectId: nth(stops, 2).id }));
+    // A first visit to stop 16: it rises.
+    await fieldDb.outboxVisits.add(visit({ prospectId: nth(stops, 15).id }));
+    expect(await screen.findByLabelText(copy.today.progressLabel(16, 20))).toBeTruthy();
+  });
 
-    await fieldDb.outboxVisits.delete(thirdVisit.id);
-    expect(await screen.findByText(copy.today.progress(2, 5))).toBeTruthy();
+  it("reads 15 sur 20 again after a cache wipe once a sync pulls the visited stops", async () => {
+    const stops = twenty();
+    await seedPulledTournee(stops);
+
+    renderScreen();
+    expect(await screen.findByLabelText(copy.today.progressLabel(0, 20))).toBeTruthy();
+
+    await pullVisited(stops, 15);
+    expect(await screen.findByLabelText(copy.today.progressLabel(15, 20))).toBeTruthy();
+  });
+
+  it("counts an unsent visit before any sync and drops it with the outbox row", async () => {
+    const stops = six().slice(0, 5);
+    await seedPulledTournee(stops);
+
+    renderScreen();
+    expect(await screen.findByLabelText(copy.today.progressLabel(0, 5))).toBeTruthy();
+
+    const queued = visit({ prospectId: nth(stops, 2).id });
+    await fieldDb.outboxVisits.add(queued);
+    expect(await screen.findByLabelText(copy.today.progressLabel(1, 5))).toBeTruthy();
   });
 
   it("shows no progress line on an empty round", async () => {
     renderScreen();
 
     await screen.findByText(copy.today.nothingLeft);
-    expect(screen.queryByLabelText(copy.today.progressLabel)).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("drops a stop the server marks left, and the count falls by one", async () => {
@@ -350,7 +383,7 @@ describe("TodayScreen", () => {
     const card = await cardOf();
     expect(card.getAttribute("aria-label")).toBe(copy.carte.pinLabel(1, "Stop 1"));
     expect(screen.queryByText("Stop 6")).toBeNull();
-    expect(screen.getByText(copy.today.remaining(5))).toBeTruthy();
+    expect(screen.getByLabelText(copy.today.progressLabel(0, 5))).toBeTruthy();
   });
 
   it("keeps the card on Arrêt 4 when stop 7 leaves a walked tournée", async () => {
@@ -368,7 +401,7 @@ describe("TodayScreen", () => {
     const card = await cardOf();
     expect(card.getAttribute("aria-label")).toBe(copy.carte.pinLabel(4, "Stop 4"));
     expect(screen.queryByText("Stop 7")).toBeNull();
-    expect(screen.getByText(copy.today.remaining(3))).toBeTruthy();
+    expect(screen.getByLabelText(copy.today.progressLabel(3, 6))).toBeTruthy();
   });
 
   it("says nothing is left when every stop left unvisited", async () => {

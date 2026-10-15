@@ -8,17 +8,12 @@
  */
 import { useState } from "react";
 import { useLocation } from "react-router";
-import { useLiveQuery } from "dexie-react-hooks";
 import { copy } from "../copy/field";
-import { brusselsPeriod } from "../../shared/period";
 import { AllDoneCard } from "./AllDoneCard";
 import { DailyProgress } from "./DailyProgress";
-import { fieldDb, todaysSentVisits, type SentVisit } from "./db";
 import { NextStopCard } from "./NextStopCard";
-import { dailyProgress } from "./progress";
 import { StopRow } from "./StopRow";
 import { useRound } from "./useRound";
-import { useSyncState } from "./useSync";
 
 /**
  * What the visit form and the add-prospect form left in the router state.
@@ -30,44 +25,11 @@ import { useSyncState } from "./useSync";
 type RoundState = { saved?: boolean; added?: boolean };
 
 export function TodayScreen() {
-  const { stops, loaded, total, now, outboxVisits } = useRound();
-  const { identity } = useSyncState();
+  const { stops, loaded, total, progress } = useRound();
   const { state } = useLocation();
   const justSaved = (state as RoundState | null) ?? null;
 
-  /**
-   * `Date.now()` inside the query, not `now`: `now` is `lastSyncAt ??
-   * openedAt`, deliberately stale for deciding follow-ups, and days stale
-   * offline would put yesterday's rows inside "today"'s window. `[now]`
-   * stays as the refresh trigger — a sync or a freshly queued visit re-runs
-   * this the same way it already re-runs everything else on this screen.
-   *
-   * `period` rides along in the same query rather than a second `Date.now()`
-   * read in the render body (a React Compiler purity violation): it is the
-   * same Brussels day `todaysSentVisits` bounds the log by, and `dailyProgress`
-   * uses it to bound the outbox half the same way.
-   */
-  const { sentToday, period } = useLiveQuery(
-    async () => {
-      const today = Date.now();
-      return {
-        sentToday: await todaysSentVisits(fieldDb, today),
-        period: brusselsPeriod(today, 1),
-      };
-    },
-    [now],
-    { sentToday: [] as SentVisit[], period: brusselsPeriod(now, 1) },
-  );
-
   const [next, ...rest] = stops;
-
-  const progress = dailyProgress({
-    logged: sentToday,
-    outboxVisits,
-    identity,
-    stops,
-    period,
-  });
 
   // One row expanded at a time (CAP-6): expanding row 3 collapses row 2.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -77,11 +39,6 @@ export function TodayScreen() {
     <section>
       <header>
         <h2 className="text-title">{copy.today.title}</h2>
-        {stops.length > 0 && (
-          <p className="tnum text-muted-foreground text-base">
-            {copy.today.remaining(stops.length)}
-          </p>
-        )}
       </header>
 
       <DailyProgress progress={progress} />

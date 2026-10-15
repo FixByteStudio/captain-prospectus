@@ -48,15 +48,13 @@ export const copy = {
     distanceUnknown: "Position inconnue",
     navigate: "Y aller",
     visit: "Visiter",
-    /** The stops are a walking order, so the round states its own length. */
+    /** The stops are a walking order, so the start screen states its own length. */
     remaining: (n: number) => (n === 1 ? "1 arrêt" : `${n} arrêts`),
-    /** GH #119: how much of today's round is done. `total` never repeats the
-     * unit — "n portes sur total aujourd'hui", singularising like `remaining`.
-     * Doors, not visits: a stop revisited today counts once (GH #492). */
-    progress: (n: number, total: number) =>
-      n <= 1 ? `${n} porte sur ${total} aujourd'hui` : `${n} portes sur ${total} aujourd'hui`,
-    /** The progress bar's own accessible name (Radix gives the root none). */
-    progressLabel: "Progression de la tournée du jour",
+    /** The counter's second half, after `{n}` in display size (docs/design.md › Next-stop card). */
+    progressOf: (total: number) => `sur ${total}`,
+    /** The bar's accessible name; 0 and 1 are singular in French. Arrêts, never visites. */
+    progressLabel: (n: number, total: number) =>
+      n <= 1 ? `${n} arrêt fait sur ${total}` : `${n} arrêts faits sur ${total}`,
     nextStop: "Prochain arrêt",
     /** Two cases, one message: a field prospect the server has not accepted
      * yet, or a stop whose visit is still sitting in the outbox. Either way
@@ -163,7 +161,7 @@ export const copy = {
       title: "Enregistrer cette visite ?",
       place: "Établissement",
       flyer: "Flyer",
-      /** 0 and 1 are singular in French, as `today.progress` does for 1. */
+      /** 0 and 1 are singular in French, as `today.progressLabel` does for 1. */
       answers: (n: number) => `${n} ${n <= 1 ? "réponse" : "réponses"}`,
       reassurance: "La visite reste sur ce téléphone jusqu'à la prochaine synchronisation.",
       save: "Enregistrer",
