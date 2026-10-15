@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import Dexie from "dexie";
 import { copy, OUTCOME_HINTS, REFUSAL_REASON_LABELS, STATUS_LABELS } from "../copy";
 import type { Prospect, Script } from "../../shared/schemas";
@@ -234,6 +234,7 @@ afterEach(async () => {
     fieldDb.outboxVisits.clear(),
     fieldDb.outboxProspects.clear(),
     fieldDb.visitHistory.clear(),
+    fieldDb.visitedStops.clear(),
     fieldDb.meta.clear(),
   ]);
 });
@@ -1604,5 +1605,92 @@ describe("VisitScreen — the cached round dropped under an open form (GH #35)",
     const [visit] = await fieldDb.outboxVisits.toArray();
     expect(visit?.prospectId).toBe(PROSPECT.id);
     expect(visit?.notes).toBe("gérant absent");
+  });
+});
+
+/** Stands in for Carnet and shows the router state a save leaves there. */
+function CarnetMarker() {
+  const { state } = useLocation();
+  return <p>{`carnet (test) saved=${String((state as { saved?: boolean } | null)?.saved)}`}</p>;
+}
+
+function renderFromCarnet(prospectId: string = PROSPECT.id) {
+  return render(
+    <MemoryRouter
+      initialEntries={[{ pathname: `/tournee/${prospectId}`, state: { from: "carnet" } }]}
+    >
+      <Routes>
+        <Route path="/tournee/:id" element={<VisitScreen />} />
+        <Route path="/tournee" element={<p>{ROUND_MARKER}</p>} />
+        <Route path="/tournee/carnet" element={<CarnetMarker />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("VisitScreen — reopened from Carnet (#504)", () => {
+  it("says « Retour au carnet » and links back to Carnet", async () => {
+    renderFromCarnet();
+
+    const back = await screen.findByRole("link", { name: copy.visit.backToCarnet });
+    expect(back.getAttribute("href")).toBe("/tournee/carnet");
+    expect(screen.queryByRole("link", { name: copy.visit.back })).toBeNull();
+  });
+
+  it("keeps « Retour à la tournée » when opened from Tournée", async () => {
+    await renderVisit({ expectContinue: false });
+
+    expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
+      "/tournee",
+    );
+    expect(screen.queryByRole("link", { name: copy.visit.backToCarnet })).toBeNull();
+  });
+
+  it("saves a new visit and returns to Carnet with the saved line's state", async () => {
+    const user = userEvent.setup();
+    renderFromCarnet();
+    await screen.findByRole("heading", { name: PROSPECT.name });
+
+    await user.click(outcomeRadio("interested"));
+    await confirmSave(user);
+
+    await screen.findByText("carnet (test) saved=true");
+    expect(await fieldDb.outboxVisits.count()).toBe(1);
+  });
+
+  it("opens a closed prospect by its visited stop's name and type, and saves", async () => {
+    const user = userEvent.setup();
+    const closedId = "44444444-4444-4444-8444-444444444444";
+    await fieldDb.visitedStops.add({
+      prospectId: closedId,
+      outcome: "converted",
+      visitedAt: Date.now(),
+      flyerGiven: false,
+      visitIds: [crypto.randomUUID()],
+      name: "Chez Marie",
+      type: "bar",
+      address: null,
+    });
+    renderFromCarnet(closedId);
+
+    expect(await screen.findByRole("heading", { name: "Chez Marie" })).toBeTruthy();
+    expect(screen.queryByText(copy.errors.notFound)).toBeNull();
+
+    await user.click(outcomeRadio("follow_up"));
+    await user.click(screen.getByRole("radio", { name: copy.visit.whenToday }));
+    await confirmSave(user);
+
+    await screen.findByText("carnet (test) saved=true");
+    const [visit] = await fieldDb.outboxVisits.toArray();
+    expect(visit?.prospectId).toBe(closedId);
+  });
+
+  it("sends the not-found link back to Carnet", async () => {
+    renderFromCarnet("55555555-5555-4555-8555-555555555555");
+
+    // The form's own back link is also named so until the lookups settle.
+    await screen.findByText(copy.errors.notFound);
+    const link = screen.getByRole("link", { name: copy.visit.backToCarnet });
+    expect(link.getAttribute("href")).toBe("/tournee/carnet");
   });
 });

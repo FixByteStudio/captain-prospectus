@@ -1,5 +1,5 @@
 /**
- * « Retour à la tournée ».
+ * « Retour à la tournée », or « Retour au carnet » from a Carnet row.
  *
  * Lucide, not a hand-rolled path: the field entry chunk already carries it
  * for `App.tsx`'s empty-state icons and `SyncIndicator.tsx`'s sync icons, so
@@ -14,11 +14,12 @@ import { copy } from "../copy/field";
 export const BACK_LINK_CLASS =
   "text-muted-foreground hover:text-foreground inline-flex min-h-touch items-center gap-2 text-sm";
 
-export function BackLink() {
+/** `fromCarnet`: the form was opened from a Carnet row, so it goes back there. */
+export function BackLink({ fromCarnet = false }: { fromCarnet?: boolean }) {
   return (
-    <Link to="/tournee" className={BACK_LINK_CLASS}>
+    <Link to={fromCarnet ? "/tournee/carnet" : "/tournee"} className={BACK_LINK_CLASS}>
       <ArrowLeftIcon aria-hidden className="size-4" />
-      {copy.visit.back}
+      {fromCarnet ? copy.visit.backToCarnet : copy.visit.back}
     </Link>
   );
 }

@@ -18,7 +18,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { ArrowLeftIcon } from "lucide-react";
 import { BACK_LINK_CLASS, BackLink } from "./BackLink";
@@ -74,6 +74,11 @@ const REFUSAL_REASON_FIRST_ID = "visit-refusal-reason-first";
 export function VisitScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // A Carnet row opened this form (router state, like `saved`): back and save go
+  // there. Lost on a reload, which falls back to the tournée — harmless, the row
+  // is on Carnet either way.
+  const fromCarnet = (useLocation().state as { from?: string } | null)?.from === "carnet";
+  const backTo = fromCarnet ? "/tournee/carnet" : "/tournee";
   const { syncNow, identity, confirmed } = useSyncState();
   const { point } = useAgentPosition();
   // Below 768px one column; from 768px the form left and `VisitSidePane`
@@ -459,6 +464,13 @@ export function VisitScreen() {
     [id],
     undefined,
   );
+  // A closed prospect is gone from `prospects` but stays a Carnet row, so
+  // today's visited stop names it (the last fallback).
+  const visitedStop = useLiveQuery(
+    async () => (id ? ((await fieldDb.visitedStops.get(id)) ?? null) : null),
+    [id],
+    undefined,
+  );
   const history = useLiveQuery(
     async () =>
       id
@@ -530,9 +542,9 @@ export function VisitScreen() {
       }
 
       void syncNow();
-      await navigate("/tournee", { replace: true, state: { saved: true } });
+      await navigate(backTo, { replace: true, state: { saved: true } });
     },
-    [confirmed, id, identity, navigate, point, script, syncNow, visitId],
+    [backTo, confirmed, id, identity, navigate, point, script, syncNow, visitId],
   );
 
   // A sync the server refuses drops the cached round (GH #35), and it can land
@@ -540,8 +552,8 @@ export function VisitScreen() {
   // so the visit being typed can still be saved rather than turning into
   // "not found" — INVARIANT 5. Adjusted during render, React's pattern for
   // state derived from a changing value.
-  const liveName = prospect?.name ?? pendingProspect?.name;
-  const liveType = prospect?.type ?? pendingProspect?.type;
+  const liveName = prospect?.name ?? pendingProspect?.name ?? visitedStop?.name;
+  const liveType = prospect?.type ?? pendingProspect?.type ?? visitedStop?.type;
   const [shown, setShown] = useState({ id, name: liveName, type: liveType });
   if (liveName && (shown.id !== id || shown.name !== liveName || shown.type !== liveType)) {
     setShown({ id, name: liveName, type: liveType });
@@ -576,16 +588,17 @@ export function VisitScreen() {
 
   // useLiveQuery returns undefined until its first read resolves; null means
   // "looked and found nothing". Only the latter is a missing prospect.
-  const settled = prospect !== undefined && pendingProspect !== undefined;
+  const settled =
+    prospect !== undefined && pendingProspect !== undefined && visitedStop !== undefined;
   if (settled && !name) {
     return (
       <section>
         <p className="text-muted-foreground">{copy.errors.notFound}</p>
         <Link
-          to="/tournee"
+          to={backTo}
           className={cn(buttonVariants({ variant: "outline", size: "touch" }), "mt-4")}
         >
-          {copy.visit.back}
+          {fromCarnet ? copy.visit.backToCarnet : copy.visit.back}
         </Link>
       </section>
     );
@@ -609,7 +622,7 @@ export function VisitScreen() {
         <div className={cn(!isMobile && "col-span-3")}>
           <header>
             {step === "outcome" ? (
-              <BackLink />
+              <BackLink fromCarnet={fromCarnet} />
             ) : (
               /* Back to step 1 with the draft intact — leaving the visit is one
                step further out, never a single stray tap (design.md). Same

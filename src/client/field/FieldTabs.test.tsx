@@ -74,12 +74,13 @@ describe("FieldTabs", () => {
     ).toBeNull();
   });
 
-  it("lists Tournée, Carte, Ajouter in order and marks Carte current on /tournee/carte", () => {
+  it("lists Tournée, Carte, Carnet, Ajouter in order and marks Carte current on /tournee/carte", () => {
     renderTabs({ path: "/tournee/carte" });
 
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
       copy.nav.tabs.today,
       copy.nav.tabs.map,
+      copy.nav.tabs.carnet,
       copy.nav.tabs.add,
     ]);
     expect(screen.getByRole("link", { name: copy.nav.tabs.map }).getAttribute("aria-current")).toBe(

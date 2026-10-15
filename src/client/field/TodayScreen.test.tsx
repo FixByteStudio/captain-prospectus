@@ -122,6 +122,9 @@ describe("TodayScreen", () => {
     expect(await screen.findByText(copy.today.nothingLeft)).toBeTruthy();
     expect(screen.queryByText(copy.today.allDone)).toBeNull();
     expect(screen.queryByText(copy.today.nextStop)).toBeNull();
+    // No « Retrouvez-les » for a day with nothing visited, but Carnet stays one tap away.
+    expect(screen.queryByText(copy.today.findInCarnet)).toBeNull();
+    expect(screen.getByRole("link", { name: copy.today.openCarnet })).toBeTruthy();
   });
 
   it("walked in order: the card reads Arrêt 4 and the rows 5 and 6", async () => {
@@ -472,6 +475,10 @@ describe("TodayScreen", () => {
     renderScreen();
 
     expect(await screen.findByText(copy.today.allDone)).toBeTruthy();
+    expect(screen.getByText(copy.today.findInCarnet)).toBeTruthy();
+    expect(screen.getByRole("link", { name: copy.today.openCarnet }).getAttribute("href")).toBe(
+      "/tournee/carnet",
+    );
     expect(screen.queryByText(copy.today.nextStop)).toBeNull();
     expect(screen.queryByRole("link", { name: copy.today.visit })).toBeNull();
   });

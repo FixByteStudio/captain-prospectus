@@ -5,7 +5,7 @@
  * project, GH #83).
  */
 import type { ComponentType } from "react";
-import { LayoutGrid, Map as MapIcon, MapPinPlus, Route } from "lucide-react";
+import { LayoutGrid, Map as MapIcon, MapPinPlus, NotebookPen, Route } from "lucide-react";
 import { copy } from "../copy/field";
 
 export type FieldTab = {
@@ -25,7 +25,7 @@ export type FieldTab = {
 };
 
 /**
- * Tournée, Carte and Ajouter for every role; Tableau de bord last, only when
+ * Tournée, Carte, Carnet and Ajouter for every role; Tableau de bord last, only when
  * the caller's `adminOnline` is true — `adminAccess(...).entry` from
  * `field/identity.ts` (spec-gh-115), the tab-and-redirect gate layered on top
  * of the admin-screens one, never a second signal of its own.
@@ -44,6 +44,13 @@ export function fieldTabs({ adminOnline }: { adminOnline: boolean }): readonly F
       label: copy.nav.tabs.map,
       ariaLabel: copy.nav.tabs.map,
       icon: MapIcon,
+      end: false,
+    },
+    {
+      path: "/tournee/carnet",
+      label: copy.nav.tabs.carnet,
+      ariaLabel: copy.nav.tabs.carnet,
+      icon: NotebookPen,
       end: false,
     },
     {

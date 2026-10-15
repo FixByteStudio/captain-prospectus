@@ -61,9 +61,10 @@ export function CarteList({
     <section aria-label={copy.carte.listLabel} className="space-y-4 p-4">
       {!next ? (
         loaded && (
-          <p className="text-muted-foreground">
-            {total === 0 ? copy.today.nothingLeft : copy.today.allDone}
-          </p>
+          <div className="text-muted-foreground">
+            <p>{total === 0 ? copy.today.nothingLeft : copy.today.allDone}</p>
+            {total > 0 && <p>{copy.today.findInCarnet}</p>}
+          </div>
         )
       ) : (
         <>

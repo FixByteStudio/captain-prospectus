@@ -72,7 +72,7 @@ export class FieldDb extends Dexie {
   /** Today's tournée as the last pull returned it: a cache, replaced wholesale. */
   tournees!: Table<PulledTournee, string>;
   tourneeStops!: Table<PulledStop, string>;
-  /** Today's door-days from the last pull: the counter reads them, and Carnet will. */
+  /** Today's door-days from the last pull: the counter and Carnet read them. */
   visitedStops!: Table<VisitedStop, string>;
 
   constructor(name = "captain-prospectus") {

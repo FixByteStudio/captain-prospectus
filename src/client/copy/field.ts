@@ -39,10 +39,13 @@ export const copy = {
 
   today: {
     title: "Tournée du jour",
-    /** Every stop has a visit today. Carnet's line and button arrive with entry 8 of #496. */
+    /** Every stop has a visit today. */
     allDone: "Tous les arrêts sont faits.",
     /** Every stop left unvisited: the day holds none, which is not « all done ». */
     nothingLeft: "Plus aucun arrêt dans votre tournée aujourd'hui.",
+    /** The visited stops live in Carnet: the muted line and the button under both done states. */
+    findInCarnet: "Retrouvez-les dans Carnet.",
+    openCarnet: "Ouvrir le carnet",
     /** A prospect that joined the tournée after the swipe. */
     joiner: "Nouveau",
     distanceUnknown: "Position inconnue",
@@ -63,6 +66,18 @@ export const copy = {
     /** "type · address", or the type alone when there is no address. */
     meta: (type: string, address: string | null) => (address ? `${type} · ${address}` : type),
     locating: "Recherche de votre position…",
+  },
+
+  /** Carnet: today's visited stops (docs/design.md › Carnet, ADR-0036). */
+  carnet: {
+    title: "Carnet",
+    empty: "Aucun arrêt fait aujourd'hui.",
+    emptyHint: "Chaque arrêt enregistré arrive ici, avec son résultat.",
+    /** Shown from the second visit of the day on. */
+    visits: (n: number) => `${n} visites`,
+    /** The row's one link: stop number when it has one, outcome and time, then the action. */
+    rowLabel: (n: number | null, name: string, outcome: string, time: string) =>
+      `${n === null ? "" : `Arrêt ${n} · `}${name} · ${outcome}, à ${time}. Rouvrir`,
   },
 
   /** Before the swipe (docs/design.md › Before the swipe, ADR-0036). */
@@ -111,6 +126,8 @@ export const copy = {
     followUpRequired: "Indiquez une date de relance pour ce résultat.",
     previousVisits: "Visites précédentes",
     back: "Retour à la tournée",
+    /** Step 1's back link when the form was opened from Carnet. */
+    backToCarnet: "Retour au carnet",
     outcomeRequired: "Choisissez un résultat.",
     /** The when step, shared by À relancer and Personne sur place
      * (when-step.md, CAP-2). */

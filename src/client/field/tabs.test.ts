@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { fieldTabs, isCurrentTab } from "./tabs";
 
 describe("fieldTabs", () => {
-  it("gives an agent three tabs, in order: Tournée, Carte, Ajouter", () => {
+  it("gives an agent four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
     expect(fieldTabs({ adminOnline: false }).map((t) => t.path)).toEqual([
       "/tournee",
       "/tournee/carte",
+      "/tournee/carnet",
       "/tournee/nouveau",
     ]);
   });
@@ -14,13 +15,14 @@ describe("fieldTabs", () => {
     expect(fieldTabs({ adminOnline: true }).map((t) => t.path)).toEqual([
       "/tournee",
       "/tournee/carte",
+      "/tournee/carnet",
       "/tournee/nouveau",
       "/admin",
     ]);
   });
 
-  it("never adds a fifth tab", () => {
-    expect(fieldTabs({ adminOnline: true })).toHaveLength(4);
+  it("never adds a sixth tab", () => {
+    expect(fieldTabs({ adminOnline: true })).toHaveLength(5);
   });
 
   it("gives every tab a non-empty label and aria-label", () => {
@@ -34,6 +36,7 @@ describe("fieldTabs", () => {
     expect(fieldTabs({ adminOnline: true }).map((t) => [t.path, t.end])).toEqual([
       ["/tournee", true],
       ["/tournee/carte", false],
+      ["/tournee/carnet", false],
       ["/tournee/nouveau", false],
       ["/admin", false],
     ]);
@@ -68,6 +71,11 @@ describe("isCurrentTab", () => {
   it("On Carte: /tournee/carte is Carte current, Tournée is not (spec-gh-121)", () => {
     expect(isCurrentTab("/tournee/carte", "/tournee/carte")).toBe(true);
     expect(isCurrentTab("/tournee/carte", "/tournee")).toBe(false);
+  });
+
+  it("On Carnet: /tournee/carnet is Carnet current, Tournée is not", () => {
+    expect(isCurrentTab("/tournee/carnet", "/tournee/carnet")).toBe(true);
+    expect(isCurrentTab("/tournee/carnet", "/tournee")).toBe(false);
   });
 
   it("does not let a sibling prefix pass, same rule as admin/nav.ts", () => {

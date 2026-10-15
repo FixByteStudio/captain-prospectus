@@ -902,6 +902,15 @@ describe("App band header", () => {
       onlineSpy.mockRestore();
     }
   });
+
+  it("names Carnet in the band subtitle on /tournee/carnet and renders CarnetScreen, not :id (#504)", async () => {
+    const { container } = renderApp("/tournee/carnet");
+
+    await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+    const band = bandHeader(container);
+    expect(band?.querySelector(".text-band-muted")?.textContent).toBe(copy.nav.subtitle.carnet);
+    expect(await screen.findByRole("heading", { name: copy.carnet.title })).toBeTruthy();
+  });
 });
 
 describe("App update prompt", () => {

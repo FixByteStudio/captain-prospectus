@@ -8,7 +8,14 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Point } from "../../shared/geo";
 import { fieldDb } from "./db";
-import { todaysStops, tourneeCounter, type RoundProgress, type TourneeItem } from "./tournee-stops";
+import {
+  carnetEntries,
+  todaysStops,
+  tourneeCounter,
+  type CarnetEntry,
+  type RoundProgress,
+  type TourneeItem,
+} from "./tournee-stops";
 import { useAgentPosition } from "./useAgentPosition";
 import { useSyncState } from "./useSync";
 
@@ -26,6 +33,8 @@ export type RoundState = {
   refresh: () => void;
   /** The tournée's counter, « {n} sur {total} »: from this one snapshot, like `stops`. */
   progress: RoundProgress;
+  /** Today's door-days, newest first: Carnet's rows, from this same snapshot and clock. */
+  carnet: CarnetEntry[];
   /** The deliberately stale "now" the stops were built with (see below). */
   now: number;
 };
@@ -90,8 +99,14 @@ export function useRound(): RoundState {
     return tourneeCounter({ ...stored, identity, now });
   }, [stored, identity, now]);
 
+  const carnet = useMemo(
+    () => (stored ? carnetEntries({ ...stored, identity, now }) : []),
+    [stored, identity, now],
+  );
+
   return {
     stops,
+    carnet,
     total: progress.total,
     progress,
     loaded: stored !== undefined,

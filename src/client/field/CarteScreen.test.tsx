@@ -22,6 +22,7 @@ const round = vi.hoisted(() => ({
     refresh: vi.fn(),
     now: 0,
     progress: { n: 0, total: 1, percent: 0 },
+    carnet: [],
   } as RoundState,
 }));
 vi.mock("./useRound", () => ({ useRound: () => round.current }));
@@ -150,6 +151,7 @@ afterEach(() => {
     refresh: vi.fn(),
     now: 0,
     progress: { n: 0, total: 1, percent: 0 },
+    carnet: [],
   };
 });
 
@@ -236,6 +238,7 @@ describe("CarteScreen, phone (< 768px)", () => {
 
     const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
     expect(within(sheet).getByText(copy.today.allDone)).toBeTruthy();
+    expect(within(sheet).getByText(copy.today.findInCarnet)).toBeTruthy();
     expect(within(sheet).queryByRole("link", { name: copy.today.visit })).toBeNull();
   });
 
@@ -247,6 +250,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
     expect(within(sheet).getByText(copy.today.nothingLeft)).toBeTruthy();
     expect(within(sheet).queryByText(copy.today.allDone)).toBeNull();
+    expect(within(sheet).queryByText(copy.today.findInCarnet)).toBeNull();
   });
 
   it("marks a joiner « Nouveau » in the sheet", () => {
@@ -464,6 +468,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
 
     const list = screen.getByRole("region", { name: copy.carte.listLabel });
     expect(within(list).getByText(copy.today.allDone)).toBeTruthy();
+    expect(within(list).getByText(copy.today.findInCarnet)).toBeTruthy();
 
     round.current = { ...round.current, loaded: false };
     rerender(
@@ -482,6 +487,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     const list = screen.getByRole("region", { name: copy.carte.listLabel });
     expect(within(list).getByText(copy.today.nothingLeft)).toBeTruthy();
     expect(within(list).queryByText(copy.today.allDone)).toBeNull();
+    expect(within(list).queryByText(copy.today.findInCarnet)).toBeNull();
   });
 
   it("renders an empty map with no pins for an empty round", () => {

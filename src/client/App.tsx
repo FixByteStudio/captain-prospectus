@@ -92,6 +92,14 @@ const CarteScreen = lazy(() =>
   import("./field/CarteScreen").then((module) => ({ default: module.CarteScreen })),
 );
 
+/**
+ * Carnet, lazy like Carte: the agent only opens it after the first stop, so the
+ * entry chunk does not carry it (ADR-0026).
+ */
+const CarnetScreen = lazy(() =>
+  import("./field/CarnetScreen").then((module) => ({ default: module.CarnetScreen })),
+);
+
 /** What `FieldFrame` hands the routes under it: the gate it already decided. */
 type FieldContext = { gate: TourneeGate; adminOnline: boolean };
 
@@ -116,14 +124,22 @@ function FieldRoutes() {
 
   return (
     <Routes>
-      {/* Relative to the parent's /tournee/*. "carte" and "nouveau" come
-          before ":id" so neither is ever read as a prospect id. */}
+      {/* Relative to the parent's /tournee/*. "carte", "carnet" and "nouveau"
+          come before ":id" so neither is ever read as a prospect id. */}
       <Route index element={<TodayScreen />} />
       <Route
         path="carte"
         element={
           <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
             <CarteScreen />
+          </Suspense>
+        }
+      />
+      <Route
+        path="carnet"
+        element={
+          <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
+            <CarnetScreen />
           </Suspense>
         }
       />
@@ -170,6 +186,7 @@ function FieldFrame({
   const onTournee = useMatch("/tournee/*");
   const onAddProspect = useMatch("/tournee/nouveau/*");
   const onCarte = useMatch("/tournee/carte/*");
+  const onCarnet = useMatch("/tournee/carnet/*");
   // No tab subtitle while a gate screen stands in for the tab: a deep link to
   // Carte must not read « Carte » over the start screen.
   const subtitle = !gateOpen
@@ -178,9 +195,11 @@ function FieldFrame({
       ? copy.nav.subtitle.add
       : onCarte
         ? copy.nav.subtitle.map
-        : onTournee
-          ? copy.nav.subtitle.today
-          : undefined;
+        : onCarnet
+          ? copy.nav.subtitle.carnet
+          : onTournee
+            ? copy.nav.subtitle.today
+            : undefined;
 
   // The update-needed strip already says a build is waiting; the banner
   // would repeat it (hidesUpdateBanner, sync-view.ts).
