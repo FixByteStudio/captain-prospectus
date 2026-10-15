@@ -1973,7 +1973,7 @@ never come.
 
 ### Carnet
 
-*Built by entry 8 of the numbered-tournée epic (#496).* Mockup:
+*Built by entry 8 of the numbered-tournée epic (#496, shipped in #504).* Mockup:
 [`key-t3-carnet.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t3-carnet.png),
 frames 1, 2 and 4.
 
@@ -2020,10 +2020,10 @@ summary's badge, and the row has no status edge. On the phone an outcome never
 takes a status colour: that would preview the status the server derives
 (invariant 3, EXPERIENCE.md › Rejected on principle), the reason the visit
 form's history shows the outcome as plain text. « Pas encore envoyé » (`warn`)
-follows while the latest visit sits in the outbox, and the muted « {2} visites »
-when the stop was visited more than once today. A closed prospect (Converti,
-Intéressé, Pas intéressé) stays listed: the sync carries today's visited stops
-whatever their status. The header is the date and « Carnet »; there is no
+follows while a visit of the day sits in the outbox, and the muted
+« {2} visites » when the stop was visited more than once today. A closed
+prospect (Converti, Intéressé, Pas intéressé) stays listed: the sync carries
+today's visited stops whatever their status. The header is the date and « Carnet »; there is no
 count here, because the counter lives on Tournée and a second one would
 disagree with it the moment a door-day falls outside the tournée (below).
 
@@ -2569,11 +2569,11 @@ inset again — on the visit, as a bar sticky in the form's own column (see
 one that has one — both `calc()`'d off `--spacing-tab-bar-height` and the
 safe-area inset rather than a guessed pixel figure.
 
-**Five possible slots, four or five ship now** (Carnet's slot: entry 8, owner's
-decision 2026-10-14). Tournée, Carte, Carnet and Ajouter for every role, in
-the order of the day (what is left, where it is, what is done, and the odd one
-out), Tableau de bord last for an admin. Five tabs at 390px are about 78px
-each, well above the 48px minimum; the labels stay whole, and « Tableau de
+**Five possible slots, four or five ship now** (Carnet's slot shipped with entry
+8, #504; owner's decision 2026-10-14). Tournée, Carte, Carnet and Ajouter for
+every role, in the order of the day (what is left, where it is, what is done,
+and the odd one out), Tableau de bord last for an admin. Five tabs at 390px
+are about 78px each, well above the 48px minimum; the labels stay whole, and « Tableau de
 bord » may wrap onto two lines. The tab bar exists only after the swipe
 ("Before the swipe", above). Two gates, not one, decide
 that last slot (spec-gh-115, `field/identity.ts`'s `adminAccess`). `screens` is

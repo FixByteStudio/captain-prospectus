@@ -10,6 +10,7 @@ import type {
   StoredVisit,
 } from "./db";
 import {
+  carnetEntries,
   doorDaysToday,
   stopsOfToday,
   todaysStops,
@@ -806,5 +807,158 @@ describe("leavers, joiners and the total", () => {
 
     expect(day?.tourneeId).toBe(QUEUED_ID);
     expect(day?.stops.map((s) => s.number)).toEqual([1]);
+  });
+});
+
+describe("carnetEntries", () => {
+  const LATER = TODAY + 3_600_000;
+  const swiped = (ps: Prospect[], over: Partial<Parameters<typeof carnetEntries>[0]> = {}) => ({
+    pulledTournees: [pulledTournee()],
+    pulledStops: ps.map((p, i) => pulledStop(p.id, i + 1)),
+    outboxTournees: [],
+    outboxStops: [],
+    prospects: ps,
+    outboxProspects: [],
+    visitedStops: [],
+    outboxVisits: [],
+    identity: ME,
+    now: NOW,
+    ...over,
+  });
+  const three = () => [0, 1, 2].map((i) => prospect({ name: `P${i + 1}` }));
+
+  it("lists converted then no contact, newest first, with their numbers", () => {
+    const ps = [...three(), prospect({ name: "P4" })];
+    const entries = carnetEntries(
+      swiped(ps, {
+        visitedStops: [
+          visited(nth(ps, 3).id, { outcome: "converted", visitedAt: TODAY, name: "P4" }),
+          visited(nth(ps, 1).id, { outcome: "no_contact", visitedAt: LATER, name: "P2" }),
+        ],
+      }),
+    );
+    expect(entries.map((e) => [e.number, e.outcome, e.pending, e.visitCount])).toEqual([
+      [2, "no_contact", false, 1],
+      [4, "converted", false, 1],
+    ]);
+  });
+
+  it("a reopened door-day moves to the top, pending, with two visits", () => {
+    const ps = three();
+    const first = visited(nth(ps, 0).id, { outcome: "converted", visitedAt: TODAY });
+    const other = visited(nth(ps, 1).id, { outcome: "interested", visitedAt: TODAY + 1000 });
+    const entries = carnetEntries(
+      swiped(ps, {
+        visitedStops: [first, other],
+        outboxVisits: [visit(nth(ps, 0).id, { outcome: "follow_up", visitedAt: LATER })],
+      }),
+    );
+    expect(entries[0]).toMatchObject({
+      number: 1,
+      outcome: "follow_up",
+      pending: true,
+      visitCount: 2,
+    });
+  });
+
+  it("an outbox-only visit shows, pending", () => {
+    const ps = three();
+    const entries = carnetEntries(swiped(ps, { outboxVisits: [visit(nth(ps, 2).id)] }));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ number: 3, pending: true, visitCount: 1 });
+  });
+
+  it("the same visit on both sides is one visit and not pending", () => {
+    const ps = three();
+    const queued = visit(nth(ps, 0).id);
+    const entries = carnetEntries(
+      swiped(ps, {
+        visitedStops: [visited(queued.prospectId, { visitIds: [queued.id] })],
+        outboxVisits: [queued],
+      }),
+    );
+    expect(entries[0]).toMatchObject({ pending: false, visitCount: 1 });
+  });
+
+  it("a door-day the server lists with three visits counts three and is not pending", () => {
+    const ps = three();
+    const entries = carnetEntries(
+      swiped(ps, {
+        visitedStops: [
+          visited(nth(ps, 0).id, {
+            visitIds: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()],
+          }),
+        ],
+      }),
+    );
+    expect(entries[0]).toMatchObject({ visitCount: 3, pending: false });
+  });
+
+  it("a prospect with no stop today has a null number", () => {
+    const ps = three();
+    const stranger = prospect({ name: "Hors tournée" });
+    const entries = carnetEntries(
+      swiped(ps, {
+        prospects: [...ps, stranger],
+        outboxVisits: [visit(stranger.id)],
+      }),
+    );
+    expect(entries[0]).toMatchObject({ number: null, name: "Hors tournée" });
+  });
+
+  it("a stop marked left keeps its number once visited", () => {
+    const ps = three();
+    const entries = carnetEntries(
+      swiped(ps, {
+        pulledStops: ps.map((p, i) => pulledStop(p.id, i + 1, { left: i === 1 })),
+        outboxVisits: [visit(nth(ps, 1).id)],
+      }),
+    );
+    expect(entries[0]?.number).toBe(2);
+  });
+
+  it("a closed prospect gone from prospects is named by its visited stop", () => {
+    const ps = three();
+    const gone = visited(nth(ps, 0).id, { outcome: "converted", name: "Chez Marie", type: "bar" });
+    const entries = carnetEntries(swiped(ps, { prospects: [], visitedStops: [gone] }));
+    expect(entries[0]).toMatchObject({ name: "Chez Marie", type: "bar", number: 1 });
+  });
+
+  it("names an outbox-only field prospect from outboxProspects", () => {
+    const field = fieldProspect({ name: "Camion neuf" });
+    const entries = carnetEntries(
+      swiped([], {
+        pulledTournees: [],
+        outboxProspects: [field],
+        outboxVisits: [visit(field.id)],
+      }),
+    );
+    expect(entries[0]).toMatchObject({ name: "Camion neuf", number: null });
+  });
+
+  it("does not draw a door-day nothing can name", () => {
+    const ps = three();
+    expect(carnetEntries(swiped(ps, { outboxVisits: [visit(crypto.randomUUID())] }))).toEqual([]);
+  });
+
+  it("skips another identity's outbox visit and yesterday's", () => {
+    const ps = three();
+    const entries = carnetEntries(
+      swiped(ps, {
+        outboxVisits: [
+          visit(nth(ps, 0).id, { writtenBy: "b@example.com" }),
+          visit(nth(ps, 1).id, { visitedAt: YESTERDAY }),
+        ],
+        visitedStops: [visited(nth(ps, 2).id, { visitedAt: YESTERDAY })],
+      }),
+    );
+    expect(entries).toEqual([]);
+  });
+
+  it("is empty with no door-day today, and rebuilt from a pull after a cache wipe", () => {
+    const ps = three();
+    expect(carnetEntries(swiped(ps))).toEqual([]);
+    const pulled = ps.map((p) => visited(p.id, { name: p.name }));
+    expect(carnetEntries(swiped([], { pulledTournees: [], visitedStops: pulled }))).toHaveLength(3);
   });
 });

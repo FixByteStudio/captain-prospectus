@@ -11,9 +11,21 @@ export function StopNumber({
   number,
   variant = "default",
 }: {
-  number: number;
+  /** Null for a door-day with no stop in today's tournée: an empty ring. */
+  number: number | null;
   variant?: "default" | "next";
 }) {
+  if (number === null) {
+    // Carnet's row label carries the number (or its absence), so the ring is decoration.
+    return (
+      <span
+        aria-hidden="true"
+        className="tnum text-muted-foreground ring-border flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-inset"
+      >
+        –
+      </span>
+    );
+  }
   return (
     <span
       className={cn(

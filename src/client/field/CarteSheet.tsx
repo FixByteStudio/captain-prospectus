@@ -50,9 +50,10 @@ export function CarteSheet({
 
       {!item ? (
         loaded && (
-          <p className="text-muted-foreground py-2 text-center">
-            {total === 0 ? copy.today.nothingLeft : copy.today.allDone}
-          </p>
+          <div className="text-muted-foreground py-2 text-center">
+            <p>{total === 0 ? copy.today.nothingLeft : copy.today.allDone}</p>
+            {total > 0 && <p>{copy.today.findInCarnet}</p>}
+          </div>
         )
       ) : (
         <>

@@ -45,6 +45,7 @@ export const sharedCopy = {
       today: "Tournée",
       add: "Ajouter",
       map: "Carte",
+      carnet: "Carnet",
     },
 
     /** The field tab bar's labels (spec-gh-66), bottom on a phone, in the band
@@ -52,6 +53,7 @@ export const sharedCopy = {
     tabs: {
       today: "Tournée",
       map: "Carte",
+      carnet: "Carnet",
       add: "Ajouter",
       dashboard: "Tableau de bord",
     },

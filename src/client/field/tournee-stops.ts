@@ -274,3 +274,64 @@ export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
 
   return items.sort((a, b) => a.number - b.number);
 }
+
+/** One row of Carnet: a door-day, its stop's number and its latest outcome. */
+export type CarnetEntry = {
+  prospectId: string;
+  /** The swipe's number, `left` stops included. Null for a prospect with no stop today. */
+  number: number | null;
+  name: string;
+  type: Prospect["type"];
+  address: string | null;
+  outcome: VisitedStop["outcome"];
+  visitedAt: number;
+  /** Today's visits to this prospect, each once whichever side lists it. */
+  visitCount: number;
+  /** Something of this door-day is in the outbox and the server has not listed it. */
+  pending: boolean;
+};
+
+/**
+ * Today's door-days, newest first — docs/design.md › Carnet. Same inputs and
+ * period as `tourneeCounter`, so the rows and the counter agree. A door-day whose
+ * prospect no table can name is not drawn: the form could not open it either.
+ * `pending` is any unsent visit of the day, not strictly the latest (Design Notes).
+ */
+export function carnetEntries(input: Omit<TodaysStopsInput, "point">): CarnetEntry[] {
+  const period = brusselsPeriod(input.now, 1);
+  const days = doorDaysToday({
+    visitedStops: input.visitedStops,
+    outboxVisits: input.outboxVisits,
+    identity: input.identity,
+    period,
+  });
+  if (days.size === 0) return [];
+
+  const numbers = new Map<string, number>();
+  for (const stop of stopsOfToday(input, period)?.stops ?? []) {
+    if (!numbers.has(stop.prospectId)) numbers.set(stop.prospectId, stop.number);
+  }
+  const mine = writtenByOrUnstamped(input.identity);
+  const pulled = new Map(input.visitedStops.map((s) => [s.prospectId, s]));
+  const server = new Map(input.prospects.map((p) => [p.id, p]));
+  const field = new Map(input.outboxProspects.filter(mine).map((p) => [p.id, p]));
+
+  const entries: CarnetEntry[] = [];
+  for (const day of days.values()) {
+    const source =
+      pulled.get(day.prospectId) ?? server.get(day.prospectId) ?? field.get(day.prospectId);
+    if (!source) continue;
+    entries.push({
+      prospectId: day.prospectId,
+      number: numbers.get(day.prospectId) ?? null,
+      name: source.name,
+      type: source.type,
+      address: source.address ?? null,
+      outcome: day.outcome,
+      visitedAt: day.visitedAt,
+      visitCount: day.visitIds.length,
+      pending: day.pending,
+    });
+  }
+  return entries.sort((a, b) => b.visitedAt - a.visitedAt);
+}

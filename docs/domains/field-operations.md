@@ -87,7 +87,7 @@ identity opens the field screens only, never `/admin/*`.
 | `outboxTournees` | The swipe's tournée (`id`, `startedAt`) until the server lists it in `accepted`, stamped `writtenBy` / `unconfirmed` like a visit |
 | `outboxStops` | The swipe's numbered stops (`id`, `tourneeId`, `prospectId`, `number`, `addedAt`), stamped the same way; indexed by `tourneeId` and `prospectId` |
 | `tournees`, `tourneeStops` | Today's tournée and its stops as the last pull returned them (a stop keeps its `tourneeId` and `left`), replaced wholesale on each successful sync; cleared by `clearAgentCache` |
-| `visitedStops` | Today's door-days from the last pull, replaced wholesale; cleared by `clearAgentCache`. The counter reads it, and Carnet will |
+| `visitedStops` | Today's door-days from the last pull, replaced wholesale; cleared by `clearAgentCache`. The counter and Carnet read it |
 | `meta` | active script, last sync time, the last identity `/api/me` returned |
 
 **The counter « {n} sur {total} » (GH #119; ADR-0036 › The counter).** Tournée
@@ -100,7 +100,7 @@ day as the list.
   identity's `outboxVisits` by visit id into one door-day per prospect for
   today: every visit of the day, the latest one's outcome, and `pending` while
   an outbox visit is not yet listed by the server. A visit seen on both sides
-  counts once. Carnet reuses it.
+  counts once. Carnet reuses it (below).
 - **`n`** is the tournée's stops that have a door-day today, each once: a second
   visit to a stop never moves it.
 - **`total`** is the tournée's stops the server has not marked `left`, plus any
@@ -120,6 +120,31 @@ day as the list.
 - Nothing about the counter lives only on the phone: after a cache wipe or a
   reinstall, the next sync pulls the visited stops and the counter reads the same
   again. The admin's door-day figures follow the same unit (later stories of #496).
+
+**Carnet (GH #504; ADR-0036 › Placement and Carnet).** The third tab,
+`/tournee/carnet`, lists today's door-days newest first: what is done, where
+Tournée shows what is left. `carnetEntries` in `tournee-stops.ts` builds the rows
+from the same inputs and period as the counter, and `useRound` exposes them from
+its one snapshot, so the two cannot disagree.
+
+- **A row** is one prospect's day: the number from `stopsOfToday` (`left` stops
+  keep theirs; a prospect with no stop today shows a dash ring), its name, type
+  and address, the latest outcome as a neutral badge (never a status colour,
+  invariant 3), the latest visit's time, and « Pas encore envoyé » while any of
+  the day's visits is unsent. From the second visit of the day it adds
+  « {n} visites ».
+- **Naming.** The row takes its name, type and address from the `visitedStops`
+  row, then `prospects`, then this identity's `outboxProspects`. A door-day none
+  of them can name is not drawn. A closed prospect (converted, gone from
+  `prospects`) stays listed.
+- **Reopening** is a link to the visit form with `state.from = "carnet"`. The form
+  says « Retour au carnet », and saving returns to Carnet. It adds a **new visit**
+  through `queueVisit` (invariants 2, 4), so the row rises with « 2 visites » and
+  the counter does not move. A closed prospect opens by its `visitedStops` name
+  and type. The signal lives in router state, so a reload of the form falls back
+  to Tournée.
+- **Today only**, with no count and no swipe on rows. The all-done cards on
+  Tournée and Carte point here.
 
 The today list itself is built from `prospects` **and** `outboxProspects`
 together: a field prospect the server has not accepted yet still has to be
