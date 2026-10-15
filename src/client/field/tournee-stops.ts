@@ -35,6 +35,8 @@ export type TourneeItem = {
   status: Prospect["status"] | null;
   /** A field prospect still in the outbox. */
   pending: boolean;
+  /** Joined after the swipe: « Nouveau » (ADR-0036 › Numbers). */
+  joiner: boolean;
   /** Metres from the latest reading, or null when either end has no position. */
   distanceM: number | null;
 };
@@ -84,26 +86,78 @@ export type TodaysStopsInput = {
   point: Point | null;
 };
 
-/** The stops of today's tournée: the pulled one wins, else this identity's queued one. */
-function stopsOfToday(
-  input: TodaysStopsInput,
-  period: Period,
-): { number: number; prospectId: string }[] {
+/** One stop of today's tournée, wherever it is held: the last pull or the outbox. */
+export type DayStop = {
+  id: string;
+  prospectId: string;
+  number: number;
+  addedAt: number;
+  /** Only the server decides it, so a queued stop is never left. */
+  left: boolean;
+};
+
+export type DayStops = {
+  tourneeId: string;
+  startedAt: number;
+  stops: DayStop[];
+};
+
+type StopSources = Pick<
+  TodaysStopsInput,
+  "pulledTournees" | "pulledStops" | "outboxTournees" | "outboxStops" | "identity"
+>;
+
+/**
+ * The stops of today's tournée: the pulled one wins, else this identity's queued
+ * one. A stop still in the outbox for that tournée (a joiner not yet sent, or the
+ * rest of a swipe over 250 stops) counts with the pulled ones, unless the pull
+ * already holds the prospect.
+ */
+export function stopsOfToday(input: StopSources, period: Period): DayStops | null {
+  const mine = writtenByOrUnstamped(input.identity);
+  const queued = (tourneeId: string): DayStop[] =>
+    input.outboxStops
+      .filter((s) => s.tourneeId === tourneeId && mine(s))
+      .map((s) => ({
+        id: s.id,
+        prospectId: s.prospectId,
+        number: s.number,
+        addedAt: s.addedAt,
+        left: false,
+      }));
+
   const pulled = input.pulledTournees.find((t) => t.dayStart === period.from);
   if (pulled) {
-    return input.pulledStops.filter((s) => s.tourneeId === pulled.id);
+    const stops: DayStop[] = input.pulledStops.filter((s) => s.tourneeId === pulled.id);
+    const held = new Set(stops.map((s) => s.prospectId));
+    for (const stop of queued(pulled.id)) {
+      if (!held.has(stop.prospectId)) stops.push(stop);
+    }
+    return { tourneeId: pulled.id, startedAt: pulled.startedAt, stops };
   }
-  const mine = writtenByOrUnstamped(input.identity);
-  const queued = input.outboxTournees.find(
+
+  const own = input.outboxTournees.find(
     (t) => mine(t) && t.startedAt >= period.from && t.startedAt < period.to,
   );
-  if (!queued) return [];
-  return input.outboxStops.filter((s) => s.tourneeId === queued.id && mine(s));
+  if (!own) return null;
+  return { tourneeId: own.id, startedAt: own.startedAt, stops: queued(own.id) };
+}
+
+/**
+ * How many stops the agent's day holds: the snapshot plus the joiners, minus the
+ * stops the server says left. A visited stop stays in (it is never left). Each
+ * prospect counts once.
+ */
+export function tourneeTotal(input: StopSources & { now: number }): number {
+  const today = stopsOfToday(input, brusselsPeriod(input.now, 1));
+  if (!today) return 0;
+  return new Set(today.stops.filter((s) => !s.left).map((s) => s.prospectId)).size;
 }
 
 /**
  * Today's tournée stops without a visit today, in number order. A stop whose
  * prospect the phone does not hold is not drawn: its number is simply missing.
+ * Nor is a stop the server marks `left`: it leaves a gap, and nothing renumbers.
  */
 export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
   const period = brusselsPeriod(input.now, 1);
@@ -118,9 +172,10 @@ export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
   const server = new Map(input.prospects.map((p) => [p.id, p]));
   const field = new Map(input.outboxProspects.filter(mine).map((p) => [p.id, p]));
 
+  const today = stopsOfToday(input, period);
   const items: TourneeItem[] = [];
-  for (const stop of stopsOfToday(input, period)) {
-    if (visited.has(stop.prospectId)) continue;
+  for (const stop of today?.stops ?? []) {
+    if (stop.left || visited.has(stop.prospectId)) continue;
 
     const known = server.get(stop.prospectId);
     const queued = known ? undefined : field.get(stop.prospectId);
@@ -139,6 +194,8 @@ export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
       lng,
       status: known ? known.status : null,
       pending: !known,
+      // `addedAt = startedAt` at the swipe, so only a later stop is a joiner.
+      joiner: today !== null && stop.addedAt > today.startedAt,
       distanceM:
         input.point && lat !== null && lng !== null
           ? distanceMeters(input.point, { lat, lng })

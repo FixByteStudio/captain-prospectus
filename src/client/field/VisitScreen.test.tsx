@@ -1385,6 +1385,7 @@ function onRound(over: Partial<TourneeItem> = {}) {
       address: null,
       status: "assigned",
       pending: false,
+      joiner: false,
       distanceM: null,
       ...over,
     },

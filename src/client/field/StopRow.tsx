@@ -58,6 +58,20 @@ export function NotSyncedBadge({ item }: { item: Pick<TourneeItem, "pending"> })
 }
 
 /**
+ * « Nouveau »: a stop that joined the tournée after the swipe. Neutral, so it
+ * never reads as a status (invariant 3); it sits beside `NotSyncedBadge` in the
+ * card, every row and Carte's sheet.
+ */
+export function JoinerBadge({ item }: { item: Pick<TourneeItem, "joiner"> }) {
+  if (!item.joiner) return null;
+  return (
+    <Badge variant="outline" className="mt-1 mr-1.5 rounded-sm">
+      {copy.today.joiner}
+    </Badge>
+  );
+}
+
+/**
  * "Y aller" (secondary) and "Visiter" (primary), equal columns. Without
  * coordinates there is nowhere to send "Y aller", so "Visiter" alone takes the
  * full width rather than leaving an empty column.
@@ -167,6 +181,7 @@ export function StopRow({
             <span className="text-muted-foreground text-meta block truncate">
               {copy.today.meta(TYPE_LABELS[item.type], item.address)}
             </span>
+            <JoinerBadge item={item} />
             <NotSyncedBadge item={item} />
           </span>
           <span id={distanceId} className="shrink-0 text-right">

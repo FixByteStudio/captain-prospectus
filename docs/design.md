@@ -1775,11 +1775,15 @@ counter's, from the server's visits joined with the outbox, so the number
 never exceeds the total, never resets on a cache wipe, and a second visit to a
 stop leaves it where it was. Right after the swipe it reads « 0 sur {20} ».
 
-**The numbers are the swipe's, and the list keeps them.** One exception, and
-it happens only before a phone's first sync of the day: when two phones of one
-agent both swipe offline, the first swipe the server receives wins, and the
-other phone takes its numbers from the next pull, with no message (ADR-0036,
-epic decision of 2026-10-14). The card shows the
+**The numbers are the swipe's, and the list keeps them.** Two exceptions, both
+a phone adopting the server's numbering after it lost a race, with no message.
+First, when two phones of one agent both swipe offline, the first swipe the
+server receives wins, and the other phone takes its numbers from the next pull
+(ADR-0036, epic decision of 2026-10-14). Second, when two phones of one agent
+append different joiners under the same number, the server keeps the first
+stored, and the other phone re-appends its prospect as the next number on its
+next pull (entry 6, owner decision of 2026-10-15): only a joiner not yet synced
+can be renumbered. The card shows the
 lowest-numbered stop with no visit today; the rows follow in number order.
 Distances still show, from the latest reading, as information: they never
 reorder anything. `StopNumber` is a 32px tabular disc with the stop's own

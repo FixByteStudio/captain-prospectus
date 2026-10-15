@@ -117,10 +117,11 @@ const cardOf = async () => {
 };
 
 describe("TodayScreen", () => {
-  it("says every stop is done when the tournée has nothing left", async () => {
+  it("says nothing is left, not that every stop is done, when the day holds no stop", async () => {
     renderScreen();
 
-    expect(await screen.findByText(copy.today.allDone)).toBeTruthy();
+    expect(await screen.findByText(copy.today.nothingLeft)).toBeTruthy();
+    expect(screen.queryByText(copy.today.allDone)).toBeNull();
     expect(screen.queryByText(copy.today.nextStop)).toBeNull();
   });
 
@@ -333,8 +334,101 @@ describe("TodayScreen", () => {
   it("shows no progress line on an empty round", async () => {
     renderScreen();
 
-    await screen.findByText(copy.today.allDone);
+    await screen.findByText(copy.today.nothingLeft);
     expect(screen.queryByLabelText(copy.today.progressLabel)).toBeNull();
+  });
+
+  it("drops a stop the server marks left, and the count falls by one", async () => {
+    const stops = six();
+    await seedPulledTournee(stops);
+    await fieldDb.tourneeStops
+      .filter((s) => s.prospectId === nth(stops, 6 - 1).id)
+      .modify({ left: true });
+
+    renderScreen();
+
+    const card = await cardOf();
+    expect(card.getAttribute("aria-label")).toBe(copy.carte.pinLabel(1, "Stop 1"));
+    expect(screen.queryByText("Stop 6")).toBeNull();
+    expect(screen.getByText(copy.today.remaining(5))).toBeTruthy();
+  });
+
+  it("keeps the card on Arrêt 4 when stop 7 leaves a walked tournée", async () => {
+    const stops = Array.from({ length: 7 }, (_, i) =>
+      prospect({ id: `00000000-0000-4000-8000-0000000001${i}0`, name: `Stop ${i + 1}` }),
+    );
+    await seedPulledTournee(stops);
+    await fieldDb.outboxVisits.bulkAdd(stops.slice(0, 3).map((p) => visit({ prospectId: p.id })));
+    await fieldDb.tourneeStops
+      .filter((s) => s.prospectId === nth(stops, 6).id)
+      .modify({ left: true });
+
+    renderScreen();
+
+    const card = await cardOf();
+    expect(card.getAttribute("aria-label")).toBe(copy.carte.pinLabel(4, "Stop 4"));
+    expect(screen.queryByText("Stop 7")).toBeNull();
+    expect(screen.getByText(copy.today.remaining(3))).toBeTruthy();
+  });
+
+  it("says nothing is left when every stop left unvisited", async () => {
+    const stops = six().slice(0, 2);
+    await seedPulledTournee(stops);
+    await fieldDb.tourneeStops.toCollection().modify({ left: true });
+
+    renderScreen();
+
+    expect(await screen.findByText(copy.today.nothingLeft)).toBeTruthy();
+    expect(screen.queryByText(copy.today.allDone)).toBeNull();
+  });
+
+  it("marks a stop that joined after the swipe « Nouveau », on the row and on the card", async () => {
+    const stops = six().slice(0, 3);
+    await seedPulledTournee(stops);
+    await fieldDb.tourneeStops
+      .filter((s) => s.prospectId === nth(stops, 0).id)
+      .modify({
+        addedAt: 1_700_000_000_000 + 1_000_000,
+      });
+    await fieldDb.tourneeStops
+      .filter((s) => s.prospectId === nth(stops, 2).id)
+      .modify({
+        addedAt: 1_700_000_000_000 + 1_000_000,
+      });
+
+    renderScreen();
+
+    const card = await cardOf();
+    expect(within(card).getByText(copy.today.joiner)).toBeTruthy();
+    const rows = screen
+      .getAllByRole("button")
+      .filter((button) => button.hasAttribute("aria-controls"));
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0] as HTMLElement).queryByText(copy.today.joiner)).toBeNull();
+    expect(within(rows[1] as HTMLElement).getByText(copy.today.joiner)).toBeTruthy();
+  });
+
+  it("shows a joiner still in the outbox next to the pulled stops, with Pas encore envoyé", async () => {
+    const stops = six().slice(0, 2);
+    await seedPulledTournee(stops);
+    const [tournee] = await fieldDb.tournees.toArray();
+    const queued = fieldProspect({ name: "Friterie des Minimes" });
+    await fieldDb.outboxProspects.add({ ...queued, writtenBy: "agent@example.com" });
+    await fieldDb.outboxStops.add({
+      id: crypto.randomUUID(),
+      tourneeId: tournee?.id ?? "",
+      prospectId: queued.id,
+      number: 3,
+      addedAt: (tournee?.startedAt ?? 0) + 1,
+      writtenBy: "agent@example.com",
+    });
+
+    renderScreen();
+
+    const row = (await screen.findByText("Friterie des Minimes")).closest("li");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText(copy.today.joiner)).toBeTruthy();
+    expect(within(row as HTMLElement).getByText(copy.today.notSynced)).toBeTruthy();
   });
 
   it("shows the all-done card, not a card of stops, when every stop has a visit today", async () => {

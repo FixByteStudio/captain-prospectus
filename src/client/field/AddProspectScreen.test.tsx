@@ -1,8 +1,9 @@
 /**
  * Ajouter un prospect (GH #127): the two-column type chips, the tile-free
  * position card, the missing-name error, and Flow 4's climax — the new place
- * is queued at once, offline, and the agent lands back on Tournée du jour. It
- * joins the tournée's numbers with entry 6 of #496, not before.
+ * is queued at once, offline, and the agent lands back on Tournée du jour. Once
+ * the day has started it joins the tournée in the same transaction, as the next
+ * number and « Nouveau ».
  *
  * `useSync` is mocked (as `VisitScreen.test.tsx` does) and `../api` rejects
  * every call, so nothing here can reach a network. The Tournée route is the
@@ -22,7 +23,7 @@ import type { Prospect } from "../../shared/schemas";
 import { fieldDb } from "./db";
 import { AddProspectScreen } from "./AddProspectScreen";
 import { TodayScreen } from "./TodayScreen";
-import { clearTourneeTables, seedPulledTournee } from "./tournee-test-helpers";
+import { clearTourneeTables, seedPulledTournee, TOURNEE_NOW } from "./tournee-test-helpers";
 
 const syncState = vi.hoisted(() => ({ confirmed: true }));
 
@@ -227,6 +228,61 @@ describe("AddProspectScreen", () => {
     expect(row).not.toHaveProperty("assignedTo");
   });
 
+  it("queues the place and appends it to today's tournée as the next number, « Nouveau »", async () => {
+    grantPosition();
+    // The phone's clock is on the tournée's day: the screen test's own `lastSyncAt`.
+    vi.spyOn(Date, "now").mockReturnValue(TOURNEE_NOW + 60_000);
+    const lea = {
+      id: "44444444-4444-4444-8444-444444444444",
+      name: "Chez Léa",
+      type: "restaurant",
+      lat: 50.88,
+      lng: 4.4,
+      address: null,
+      phone: null,
+      website: null,
+      cuisine: null,
+      source: "csv",
+      status: "assigned",
+      assignedTo: "agent@example.com",
+      lastVisitAt: null,
+      nextVisitAt: null,
+    } satisfies Prospect;
+    await seedPulledTournee([lea], { numbers: [12] });
+    const user = userEvent.setup();
+    renderAdd();
+    await screen.findByText("50,8466 · 4,3528");
+
+    await user.type(nameInput(), "Friterie des Minimes");
+    await user.click(addButton());
+
+    expect(await screen.findByText(copy.fieldProspect.saved)).toBeTruthy();
+    const [prospect] = await fieldDb.outboxProspects.toArray();
+    const [stop] = await fieldDb.outboxStops.toArray();
+    expect(stop).toMatchObject({
+      prospectId: prospect?.id,
+      number: 13,
+      writtenBy: "agent@example.com",
+    });
+    const row = (await screen.findByText("Friterie des Minimes")).closest("li");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText(copy.today.joiner)).toBeTruthy();
+    expect(within(row as HTMLElement).getByText(copy.today.notSynced)).toBeTruthy();
+  });
+
+  it("appends nothing before the swipe", async () => {
+    grantPosition();
+    const user = userEvent.setup();
+    renderAdd();
+    await screen.findByText("50,8466 · 4,3528");
+
+    await user.type(nameInput(), "Friterie des Minimes");
+    await user.click(addButton());
+
+    expect(await screen.findByText(copy.fieldProspect.saved)).toBeTruthy();
+    expect(await fieldDb.outboxStops.count()).toBe(0);
+  });
+
   /**
    * docs/backlog/013: the same cache-sourced-identity stamp `VisitScreen`
    * writes on a visit, here on the field prospect the outbox row carries.
@@ -252,10 +308,14 @@ describe("AddProspectScreen", () => {
     const user = userEvent.setup();
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => (release = resolve));
-    // Dexie's own promise, so the held write still settles in its transaction.
-    const add = vi
-      .spyOn(fieldDb.outboxProspects, "add")
-      .mockImplementation(() => Dexie.Promise.resolve(gate).then(() => "held"));
+    // The write is one transaction (the prospect and its stop), so it is held
+    // before it opens: a transaction kept waiting on a promise IndexedDB cannot
+    // see would commit early. Dexie's own promise, so it settles in its zone.
+    const open = fieldDb.transaction.bind(fieldDb) as (...args: unknown[]) => PromiseLike<unknown>;
+    const write = vi
+      .spyOn(fieldDb, "transaction")
+      .mockImplementationOnce(((...args: unknown[]) =>
+        Dexie.Promise.resolve(gate).then(() => open(...args))) as never);
     renderAdd();
 
     await user.type(nameInput(), "Friterie des Minimes");
@@ -263,7 +323,7 @@ describe("AddProspectScreen", () => {
 
     const busy = await screen.findByRole("button", { name: copy.fieldProspect.saving });
     expect((busy as HTMLButtonElement).disabled).toBe(true);
-    expect(add).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledTimes(1);
     release();
     expect(await screen.findByText(copy.fieldProspect.saved)).toBeTruthy();
   });
