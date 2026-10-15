@@ -5,7 +5,8 @@
  * freeze now, with no number (numbers do not exist yet) and nothing to tap. The
  * swipe numbers them nearest-next from the reading, queues the tournée and its
  * stops in the outbox, and opens Tournée. The sync stays on: the band, the dot
- * and the strip are the frame's, not this screen's.
+ * and the strip are the frame's, not this screen's. Until a reading is precise
+ * enough, the location dialog holds the screen (`useLocationGate`).
  */
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -15,8 +16,9 @@ import { buttonVariants } from "@/ui/button-variants";
 import type { SnapshotProspect } from "../../shared/tournee";
 import { numberStops } from "../../shared/tournee";
 import { fieldDb, startTournee } from "./db";
+import { LocationDialog } from "./LocationDialog";
 import { StartSwipe } from "./StartSwipe";
-import { useAgentPosition } from "./useAgentPosition";
+import { useLocationGate } from "./useLocationGate";
 import { useSyncState } from "./useSync";
 
 /** The preview shows this many stops, then « et {n} autres arrêts ». */
@@ -29,7 +31,8 @@ export function StartScreen({
   snapshot: readonly SnapshotProspect[];
   adminOnline: boolean;
 }) {
-  const { point, denied, refresh } = useAgentPosition();
+  const { status, point, activate } = useLocationGate();
+  const swipeRef = useRef<HTMLButtonElement | null>(null);
   const { identity, confirmed, syncNow } = useSyncState();
   const navigate = useNavigate();
   const [today] = useState(() => Date.now());
@@ -118,23 +121,27 @@ export function StartScreen({
               {copy.nav.tabs.dashboard}
             </Link>
           )}
-          <StartSwipe ready={point !== null} starting={starting} onStart={() => void start()} />
+          <StartSwipe
+            ref={swipeRef}
+            ready={point !== null}
+            starting={starting}
+            onStart={() => void start()}
+          />
           {failed && (
             <p role="alert" className="text-destructive text-sm">
               {copy.start.storageError}
             </p>
           )}
-          {point === null && denied && (
-            <button
-              type="button"
-              onClick={refresh}
-              className="text-foreground min-h-touch self-center text-sm underline"
-            >
-              {copy.today.retryPosition}
-            </button>
-          )}
         </div>
       </div>
+
+      <LocationDialog
+        open={point === null}
+        status={status}
+        onActivate={activate}
+        adminOnline={adminOnline}
+        swipeRef={swipeRef}
+      />
     </>
   );
 }

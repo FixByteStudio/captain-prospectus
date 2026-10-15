@@ -314,7 +314,10 @@ describe("The tournée gate", () => {
     await fieldDb.prospects.bulkPut([assigned(), assigned({ name: "Chez Marcel" })]);
     renderApp("/tournee");
 
-    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    // `hidden`: the location dialog is open over the start screen, so the page behind it is aria-hidden.
+    expect(
+      await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
+    ).toBeTruthy();
     expect(screen.getByText("2 arrêts")).toBeTruthy();
     expect(fieldBand()).toBeNull();
   });
@@ -323,7 +326,9 @@ describe("The tournée gate", () => {
     await fieldDb.prospects.put(assigned());
     renderApp("/tournee/carte");
 
-    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
+    ).toBeTruthy();
     // Neither the Carte subtitle nor the tabs speak for a screen that stands in for the tab.
     expect(screen.queryByText(copy.nav.subtitle.map)).toBeNull();
     expect(fieldBand()).toBeNull();
@@ -347,7 +352,7 @@ describe("The tournée gate", () => {
     renderApp("/tournee");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
   });
 
   it("keeps the unsent-visits strip on the start screen: the sync is never gated", async () => {
@@ -356,7 +361,9 @@ describe("The tournée gate", () => {
     stub.sync = { status: "ok", running: false, pending: 1 };
     renderApp("/tournee");
 
-    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
+    ).toBeTruthy();
     expect(screen.getAllByText(copy.sync.pending(1)).length).toBeGreaterThan(0);
     await fieldDb.outboxVisits.clear();
   });
@@ -371,7 +378,7 @@ describe("The tournée gate", () => {
     renderApp("/tournee");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
   });
 
   it("opens the app when a pull returns today's tournée, as a second phone does", async () => {
@@ -379,7 +386,7 @@ describe("The tournée gate", () => {
     renderApp("/tournee");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: copy.start.swipeName })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
   });
 
   it("does not open on another agent's queued tournée", async () => {
@@ -391,7 +398,9 @@ describe("The tournée gate", () => {
     });
     renderApp("/tournee");
 
-    expect(await screen.findByRole("button", { name: copy.start.swipeName })).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
+    ).toBeTruthy();
     expect(fieldBand()).toBeNull();
   });
 

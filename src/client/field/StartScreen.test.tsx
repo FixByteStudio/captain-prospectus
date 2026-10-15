@@ -1,19 +1,22 @@
 /**
  * The start screen and its swipe (docs/design.md › Before the swipe, ADR-0036):
  * the preview, the disabled state, the keyboard path, the drag path, the failed
- * write. `useSyncState` is mocked; Dexie and `useAgentPosition` run for real
- * (geolocation is faked by `test/geolocation.ts`).
+ * write, and the location dialog that holds the swipe until a reading is
+ * precise (docs/design.md › The location dialog). `useSyncState` is mocked;
+ * Dexie and the location gate run for real (geolocation and the permission are
+ * faked by `test/geolocation.ts`).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
-import { setGeolocation } from "../../../test/geolocation";
+import { setGeolocation, setGeolocationPermission } from "../../../test/geolocation";
 import { copy } from "../copy";
 import type { SnapshotProspect } from "../../shared/tournee";
 import { dropReading, setReadingIdentity } from "./last-reading";
 import * as db from "./db";
 import { fieldDb } from "./db";
+import { LOCATION_GATE_ACCURACY_M, LOCATION_GATE_RETRY_MS } from "./location-gate";
 import { StartScreen } from "./StartScreen";
 
 const sync = vi.hoisted(() => ({ syncNow: vi.fn(async () => {}), confirmed: true }));
@@ -53,7 +56,9 @@ function renderStart(snapshot: SnapshotProspect[], adminOnline = false, from = "
   );
 }
 
-const swipe = () => screen.getByRole("button", { name: copy.start.swipeName });
+// `hidden`: while the location dialog is open the page behind it is aria-hidden.
+const swipe = () => screen.getByRole("button", { name: copy.start.swipeName, hidden: true });
+const activate = () => screen.getByRole("button", { name: copy.location.activate });
 
 /** happy-dom lays nothing out: give the track the 358px the design is drawn on. */
 function sizeTrack() {
@@ -88,10 +93,12 @@ describe("the preview", () => {
     const snapshot = Array.from({ length: 20 }, (_, i) => stop(20 - i));
     renderStart(snapshot);
 
-    expect(screen.getByRole("heading", { name: copy.today.title })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: copy.today.title, hidden: true })).toBeTruthy();
     expect(screen.getByText("20 arrêts")).toBeTruthy();
     expect(screen.getByText(copy.start.explainer)).toBeTruthy();
-    const names = screen.getAllByRole("listitem").map((li) => li.querySelector("p")?.textContent);
+    const names = screen
+      .getAllByRole("listitem", { hidden: true })
+      .map((li) => li.querySelector("p")?.textContent);
     expect(names).toEqual(
       Array.from({ length: 7 }, (_, i) => `Arrêt ${String(i + 1).padStart(2, "0")}`),
     );
@@ -107,34 +114,117 @@ describe("the preview", () => {
     expect(screen.queryByText(/autre/)).toBeNull();
   });
 
-  it("offers an admin the way back, and an agent nothing", () => {
+  it("offers an admin the way back, above the track and inside the dialog, and an agent nothing", () => {
     const { unmount } = renderStart([stop(1)], true);
-    expect(screen.getByRole("link", { name: copy.nav.tabs.dashboard }).getAttribute("href")).toBe(
-      "/admin",
-    );
+    const links = screen.getAllByRole("link", { name: copy.nav.tabs.dashboard, hidden: true });
+    expect(links).toHaveLength(2);
+    expect(links.every((link) => link.getAttribute("href") === "/admin")).toBe(true);
+    // The one the agent can reach is inside the dialog, which covers the other.
+    expect(screen.getByRole("alertdialog").contains(screen.getByRole("link"))).toBe(true);
     unmount();
     renderStart([stop(1)], false);
-    expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+    expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard, hidden: true })).toBeNull();
   });
 });
 
-describe("without a position", () => {
-  it("is aria-disabled, says why, offers « Réessayer » and starts nothing", async () => {
+describe("the location dialog", () => {
+  const dialog = () => screen.getByRole("alertdialog");
+
+  afterEach(() => vi.useRealTimers());
+
+  it("opens over the swipe with no status, and the swipe is aria-disabled and starts nothing", async () => {
     renderStart([stop(1)]);
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: copy.today.retryPosition })).toBeTruthy(),
-    );
+    expect(dialog().textContent).toContain(copy.location.title);
+    expect(screen.getByRole("status").textContent).toBe("");
     expect(swipe().getAttribute("aria-disabled")).toBe("true");
     expect(swipe().textContent).toContain(copy.start.waiting);
+    expect(screen.queryByRole("button", { name: copy.today.retryPosition })).toBeNull();
 
-    fireEvent.click(swipe());
+    fireEvent.click(swipe(), { detail: 0 });
     expect(await fieldDb.outboxTournees.count()).toBe(0);
+  });
+
+  it("stays open on Escape and on a tap on the overlay", async () => {
+    renderStart([stop(1)]);
+
+    await userEvent.keyboard("{Escape}");
+    const overlay = document.querySelector("[data-slot=alert-dialog-overlay]");
+    expect(overlay).not.toBeNull();
+    if (overlay) fireEvent.pointerDown(overlay);
+    if (overlay) fireEvent.click(overlay);
+
+    expect(dialog()).toBeTruthy();
+    expect(swipe().getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("shows refused, then too coarse, then closes on a precise reading and numbers from it", async () => {
+    // Real timers, a 2 s cadence: the test rides one repeat.
+    const snapshot = [stop(3), stop(1), stop(2)];
+    renderStart(snapshot);
+    setGeolocation("denied");
+
+    await userEvent.click(activate());
+    expect((await screen.findByRole("status")).textContent).toBe(copy.location.refused);
+    expect(dialog()).toBeTruthy();
+
+    setGeolocation({ ...HERE, accuracy: 350 });
+    await userEvent.click(activate());
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain(copy.location.coarse(350)),
+    );
+    expect(dialog()).toBeTruthy();
+    expect(swipe().getAttribute("aria-disabled")).toBe("true");
+
+    setGeolocation({ ...HERE, accuracy: LOCATION_GATE_ACCURACY_M });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull(), {
+      timeout: LOCATION_GATE_RETRY_MS + 1_500,
+    });
+    expect(swipe().getAttribute("aria-disabled")).toBeNull();
+    // Focus lands on the swipe, not on whatever had it before the dialog.
+    await waitFor(() => expect(document.activeElement).toBe(swipe()));
+
+    fireEvent.click(swipe(), { detail: 0 });
+    await waitFor(() => expect(syncNow).toHaveBeenCalled());
+    const stops = (await fieldDb.outboxStops.toArray()).sort((a, b) => a.number - b.number);
+    expect(stops.map((s) => s.prospectId)).toEqual(
+      [snapshot[1], snapshot[2], snapshot[0]].map((s) => s?.id),
+    );
+  }, 10_000);
+
+  it("takes no further reading after a refusal until « Activer » is touched again", async () => {
+    const reading = vi.spyOn(navigator.geolocation, "getCurrentPosition");
+    renderStart([stop(1)]);
+
+    await userEvent.click(activate());
+    await screen.findByText(copy.location.refused);
+    expect(reading).toHaveBeenCalledTimes(1);
+
+    await new Promise((resolve) => setTimeout(resolve, LOCATION_GATE_RETRY_MS + 500));
+    expect(reading).toHaveBeenCalledTimes(1);
+
+    setGeolocation(HERE);
+    await userEvent.click(activate());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(reading).toHaveBeenCalledTimes(2);
+  }, 10_000);
+
+  it("starts reading as it opens when the permission is already granted", async () => {
+    setGeolocationPermission("granted");
+    setGeolocation(HERE);
+    renderStart([stop(1)]);
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(swipe().getAttribute("aria-disabled")).toBeNull();
   });
 });
 
 describe("with a position", () => {
-  beforeEach(() => setGeolocation(HERE));
+  // A granted permission and a precise fix: the dialog opens and closes on its own.
+  beforeEach(() => {
+    setGeolocation(HERE);
+    setGeolocationPermission("granted");
+  });
 
   it("starts at once on a keyboard activation: one tournée, stops numbered nearest-next, Tournée opens", async () => {
     const snapshot = [stop(3), stop(1), stop(2)];

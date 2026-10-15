@@ -7,7 +7,7 @@
  * quarters of the track commits (`swipe.ts`). The component owns the gesture
  * only: what starting does lives in `StartScreen`.
  */
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ChevronsRightIcon, MapPinIcon } from "lucide-react";
 import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
@@ -24,7 +24,10 @@ export function StartSwipe({
   ready,
   starting,
   onStart,
+  ref,
 }: {
+  /** The track, so the location dialog can hand focus back to it. */
+  ref?: React.Ref<HTMLButtonElement>;
   /** False until a position reading exists. */
   ready: boolean;
   /** The write is running: the thumb stays at the end and nothing else starts. */
@@ -33,7 +36,15 @@ export function StartSwipe({
 }) {
   const inactive = !ready || starting;
   const labelId = useId();
-  const track = useRef<HTMLButtonElement>(null);
+  const track = useRef<HTMLButtonElement | null>(null);
+  const setTrack = useCallback(
+    (node: HTMLButtonElement | null) => {
+      track.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
   const gesture = useRef<{ x: number; y: number; id: number; travel: number } | null>(null);
   const axis = useRef<SwipeAxis>(null);
   /** A drag moved past the slop, so the click that follows it is not a tap. */
@@ -137,7 +148,7 @@ export function StartSwipe({
 
   return (
     <button
-      ref={track}
+      ref={setTrack}
       type="button"
       aria-label={copy.start.swipeName}
       aria-describedby={labelId}

@@ -89,6 +89,18 @@ export const copy = {
       "Impossible de commencer la tournée sur cet appareil. Libérez de l'espace de stockage, puis réessayez.",
   },
 
+  /** The location dialog over the start screen (docs/design.md › The location dialog). */
+  location: {
+    title: "Activez la localisation",
+    description: "Votre position fixe l'ordre des arrêts pour la journée.",
+    activate: "Activer",
+    /** The web app cannot open the phone's settings, so the line names them. */
+    settings: "Refusée ? Ouvrez Réglages › Localisation, puis revenez ici.",
+    coarse: (meters: number) => `Précision : ${meters} m. On affine…`,
+    refused: "La localisation est refusée sur ce téléphone.",
+    unavailable: "Position introuvable. Sortez à découvert si possible, puis touchez Activer.",
+  },
+
   visit: {
     title: "Nouvelle visite",
     flyerGiven: "Flyer remis",

@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { currentGeolocation, resetGeolocation } from "./geolocation";
+import { currentGeolocation, currentGeolocationPermission, resetGeolocation } from "./geolocation";
 
 /**
  * happy-dom declares `navigator.geolocation` but leaves it `null`, so
@@ -21,8 +21,9 @@ Object.defineProperty(navigator, "geolocation", {
     getCurrentPosition: (ok: PositionCallback, fail?: PositionErrorCallback) => {
       const fix = currentGeolocation();
       queueMicrotask(() => {
-        if (fix === "denied") {
-          fail?.({ code: 1, message: "denied" } as GeolocationPositionError);
+        if (fix === "denied" || fix === "unavailable") {
+          const code = fix === "denied" ? 1 : 2;
+          fail?.({ code, message: fix } as GeolocationPositionError);
           return;
         }
         ok({
@@ -33,6 +34,19 @@ Object.defineProperty(navigator, "geolocation", {
     },
     watchPosition: () => 0,
     clearWatch: () => {},
+  },
+});
+
+/**
+ * The Permissions API, as far as the location gate reads it: absent unless a
+ * test calls `setGeolocationPermission`, then a `query` that answers it. A
+ * getter, so the answer is read at call time like the fix is.
+ */
+Object.defineProperty(navigator, "permissions", {
+  configurable: true,
+  get: () => {
+    const state = currentGeolocationPermission();
+    return state === null ? undefined : { query: async () => ({ state }) };
   },
 });
 

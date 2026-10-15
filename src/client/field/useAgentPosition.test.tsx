@@ -92,4 +92,57 @@ describe("useAgentPosition", () => {
 
     expect(readingToSend("a@example.com", Date.now())).toMatchObject(HERE);
   });
+
+  it("reports the accuracy of the reading and that a refusal is a refusal", async () => {
+    setGeolocation({ ...HERE, accuracy: 350 });
+    const { result } = renderHook(() => useAgentPosition());
+    await waitFor(() => expect(result.current.accuracy).toBe(350));
+    expect(result.current.refused).toBe(false);
+
+    setGeolocation("denied");
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.refused).toBe(true));
+    expect(result.current.denied).toBe(true);
+  });
+
+  it("keeps a lost fix apart from a refusal: denied, but not refused", async () => {
+    setGeolocation("unavailable");
+    const { result } = renderHook(() => useAgentPosition());
+
+    await waitFor(() => expect(result.current.denied).toBe(true));
+    expect(result.current.refused).toBe(false);
+  });
+
+  it("takes no reading on mount when lazy, and the first one on refresh()", async () => {
+    setGeolocation(HERE);
+    const reading = vi.spyOn(navigator.geolocation, "getCurrentPosition");
+    const { result } = renderHook(() => useAgentPosition({ lazy: true }));
+    await act(() => Promise.resolve());
+
+    expect(reading).not.toHaveBeenCalled();
+    expect(result.current.locating).toBe(false);
+
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.point).toEqual(HERE));
+    expect(reading).toHaveBeenCalledTimes(1);
+    reading.mockRestore();
+  });
+
+  it("asks for a fresh reading only when told to, and for high accuracy only when told to", async () => {
+    const reading = vi.spyOn(navigator.geolocation, "getCurrentPosition");
+    setGeolocation(HERE);
+
+    const plain = renderHook(() => useAgentPosition());
+    await waitFor(() => expect(plain.result.current.locating).toBe(false));
+    expect(reading.mock.lastCall?.[2]).toMatchObject({
+      maximumAge: 120_000,
+      enableHighAccuracy: false,
+    });
+    plain.unmount();
+
+    const gate = renderHook(() => useAgentPosition({ fresh: true, highAccuracy: true }));
+    await waitFor(() => expect(gate.result.current.locating).toBe(false));
+    expect(reading.mock.lastCall?.[2]).toMatchObject({ maximumAge: 0, enableHighAccuracy: true });
+    reading.mockRestore();
+  });
 });

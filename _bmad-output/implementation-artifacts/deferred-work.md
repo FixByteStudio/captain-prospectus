@@ -403,3 +403,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-499-swipe-freezes-day.md`
   summary: The swipe numbers the stops from the latest `useAgentPosition` reading, which can be minutes old (taken at mount, `maximumAge` 120 s) if the agent waits before swiping; entry 4 (#500) should make the reading the swipe uses a recent one.
   evidence: StartScreen reads `point` once from `useAgentPosition` and numbers from it at commit with no freshness check. ADR-0036 says nearest-next "from the swipe position"; #500 owns repeated readings and the accuracy threshold.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-500-location-dialog.md`
+  summary: The swipe numbers from the location gate's passing reading, which is fresh when the dialog closes but ages if the agent waits before swiping.
+  evidence: `useLocationGate` latches `passedPoint` at the pass and takes no further readings (ADR-0036: the gate ends there); a re-read at swipe time would need its own wait state on the track.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-500-location-dialog.md`
+  summary: The field precache is at 998.62 of 1,000 KiB after story 1.4, leaving 1.38 KiB for entries 5–9 of epic #496.
+  evidence: `pnpm check:precache` on the story 1.4 branch; story 1.3 ended at 995.33 KiB. Entries 5–9 add screens (Carnet) and will need a trim or a split chunk first.
