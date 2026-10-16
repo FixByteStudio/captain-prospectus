@@ -1014,7 +1014,7 @@ export const dashboardResponseSchema = z.object({
   agents: z.array(
     z.object({
       email: emailSchema,
-      /** Their rows in `visits` in the period; same rows as `visits.value`. */
+      /** Their door-days in the period; same rows as `visits.value`. */
       visits: countSchema,
       /** Distinct prospects they visited with outcome `converted` in the period. */
       converted: countSchema,
@@ -1030,7 +1030,7 @@ export const dashboardResponseSchema = z.object({
    * null `next_visit_at` is not due.
    */
   followUpsDue: countSchema,
-  /** Flyers remis: the period's Visites with `flyer_given` (docs/api.md › The dashboard). */
+  /** Flyers remis: the period's door-days where any visit gave a flyer (docs/api.md › The dashboard). */
   flyersGiven: countSchema,
   /** Agents en tournée: roster members who started today's tournée (docs/api.md › The dashboard). */
   agentsActiveToday: countSchema,

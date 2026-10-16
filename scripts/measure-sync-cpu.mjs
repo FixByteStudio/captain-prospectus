@@ -16,7 +16,8 @@
  * Usage: pnpm db:migrate:local && (pnpm dev, then pnpm db:seed:local:full)
  *        node scripts/measure-sync-cpu.mjs
  * Env:   D1_SQLITE (the local D1 file; found under .wrangler/state),
- *        SIZES (1,25,50,100,200), ROUNDS (3), RUNS per size and round (50), WARMUP (20).
+ *        SIZES (1,25,50,100,200), ROUNDS (3), RUNS per size and round (50), WARMUP (20),
+ *        TOURNEE (unset; "pull" seeds today's 200-stop tournée, "swipe" sends one with 200 stops).
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +30,9 @@ const ROUNDS = Number(process.env.ROUNDS ?? 3);
 const RUNS = Number(process.env.RUNS ?? 50);
 const WARMUP = Number(process.env.WARMUP ?? 20);
 const AGENT = "agent@example.com";
+const TOURNEE = process.env.TOURNEE;
+if (TOURNEE !== undefined && TOURNEE !== "pull" && TOURNEE !== "swipe")
+  throw new Error(`TOURNEE must be "pull" or "swipe", got "${TOURNEE}"`);
 
 const work = mkdtempSync(join(tmpdir(), "sync-cpu-"));
 try {
@@ -56,21 +60,43 @@ try {
     insert.run(id, `Mesure ${i}`, `measure:${id}`, AGENT, now, now);
   }
   const seeded = `(${ids.map((id) => `'${id}'`).join(",")})`;
+  // Run on the temporary copy only: a tournée the agent already has would win the
+  // unique (agent, day) over the one a swipe sends.
+  const clearTournees = `delete from tournee_stops where tournee_id in
+    (select id from tournees where agent_email = '${AGENT}');
+    delete from tournees where agent_email = '${AGENT}';`;
+  sqlite.exec(clearTournees);
   const reset = () =>
     sqlite.exec(
       `delete from visits where prospect_id in ${seeded};
        update prospects set status = 'assigned', last_visit_at = null, next_visit_at = null,
-         status_set_at = null where id in ${seeded};`,
+         status_set_at = null where id in ${seeded};
+       ${TOURNEE === "swipe" ? clearTournees : ""}`,
     );
 
-  const request = (size) =>
-    new Request("http://localhost/api/agent/sync", {
+  // The morning pass: a new tournée and a stop per seeded prospect beside the visits.
+  const request = (size, withSwipe) => {
+    const tourneeId = crypto.randomUUID();
+    const swipe = withSwipe
+      ? {
+          tournees: [{ id: tourneeId, startedAt: Date.now() }],
+          stops: ids.map((prospectId, i) => ({
+            id: crypto.randomUUID(),
+            tourneeId,
+            prospectId,
+            number: i + 1,
+            addedAt: Date.now(),
+          })),
+        }
+      : {};
+    return new Request("http://localhost/api/agent/sync", {
       method: "POST",
       // The Worker refuses a write without a same-origin Origin (src/worker/origin.ts).
       headers: { "Content-Type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify({
         clientVersion: 2,
         prospects: [],
+        ...swipe,
         visits: ids.slice(0, size).map((prospectId, i) => ({
           id: crypto.randomUUID(),
           prospectId,
@@ -81,18 +107,40 @@ try {
         })),
       }),
     });
+  };
 
   const once = async (worker, size) => {
-    const r = await timeRequest(worker, request(size), env, shim);
+    const r = await timeRequest(worker, request(size, TOURNEE === "swipe"), env, shim);
     // A 200 alone could be the quarantine path (identity or assignment drifted),
     // which skips the inserts this is meant to time.
     const { n } = sqlite
       .prepare(`select count(*) as n from visits where prospect_id in ${seeded}`)
       .get();
     if (n !== size) throw new Error(`expected ${size} visits stored, found ${n}`);
+    if (TOURNEE === "swipe") assertTournee();
     reset();
     return r.total - r.sql;
   };
+
+  const assertTournee = () => {
+    const t = sqlite
+      .prepare(`select count(*) as n from tournees where agent_email = ?`)
+      .get(AGENT).n;
+    const stops = sqlite
+      .prepare(`select count(*) as n from tournee_stops where prospect_id in ${seeded}`)
+      .get().n;
+    if (t !== 1 || stops !== SEEDED)
+      throw new Error(`expected 1 tournée and ${SEEDED} stops stored, found ${t} and ${stops}`);
+  };
+
+  // "pull": one untimed swipe stores today's tournée, which every timed pull then reads.
+  // The Worker computes its Brussels day, so the script needs no copy of period.ts.
+  if (TOURNEE === "pull") {
+    const url = pathToFileURL(join(work, "worker/worker.mjs"));
+    url.search = "?seed";
+    await timeRequest((await import(url.href)).default, request(0, true), env, shim);
+    assertTournee();
+  }
 
   const cold = new Map(SIZES.map((s) => [s, []]));
   const warm = new Map(SIZES.map((s) => [s, []]));

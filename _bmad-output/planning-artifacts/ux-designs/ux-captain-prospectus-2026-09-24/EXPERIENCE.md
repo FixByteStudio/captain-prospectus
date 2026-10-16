@@ -270,13 +270,13 @@ Each figure is defined once here, and the Worker computes it. "Period" is the da
 | Figure | Definition |
 |---|---|
 | Prospects ouverts | Live (non-merged) prospects whose status is new, assigned or follow_up. A snapshot, so it has no delta. |
-| Visites | Visits whose `visited_at` falls in the period (clamped per invariant 12). *Pending ADR-0036 (numbered-tournée epic #496, entry 10):* door-days (one agent, one prospect, one Brussels day) instead. |
+| Visites | Door-days (one agent, one prospect, one Brussels day of the clamped `visited_at`, invariant 12) whose day falls in the period. A door-day's outcome is its latest visit's (ADR-0036). |
 | Convertis | Prospects that became converted during the period. |
 | **Taux de conversion** | Prospects that became Converti during the period ÷ distinct prospects visited during the period. |
 | Pipeline par statut | Count and share of live prospects in each status. A snapshot. |
-| Activité par agent | Per agent: visits in the period, conversions in the period, follow_up prospects assigned to them now, open prospects assigned to them now. |
+| Activité par agent | Per agent: door-days in the period, conversions in the period, follow_up prospects assigned to them now, open prospects assigned to them now. |
 | Relances dues | follow_up prospects whose `next_visit_at` is today or earlier. |
-| Flyers remis | Visits in the period with `flyer_given`. *Pending ADR-0036 (numbered-tournée epic #496, entry 10):* door-days where any visit gave one. |
+| Flyers remis | Door-days in the period where any of the day's visits gave a flyer (ADR-0036). |
 | Relances dues sous 7 jours | follow_up prospects whose `next_visit_at` falls within the next 7 days. |
 | Agents en tournée | Roster members who started today's tournée (ADR-0036): the swipe counts, with no visit needed. |
 | Delta | (period − previous period of the same length) ÷ previous period. Shows "—" when the previous period is 0. |

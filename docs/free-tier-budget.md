@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm, ~6 ms with today's tournée in the pull and ~9 ms on the morning swipe pass (Watch-outs) (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -49,7 +49,26 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 
 ## Watch-outs
 
-- **The sync pull also reads today's door-days and tournée each pass** (`doorDaysOn`, `todayTournee`, ADR-0036), and a request may carry tournées and stops. Not yet measured; `scripts/measure-sync-cpu.mjs` now sends `clientVersion` 2, re-run it before the swipe ships.
+- **The sync pull also reads today's door-days and tournée each pass** (`doorDaysOn`, `todayTournee`,
+  ADR-0036), and a request may carry tournées and stops. Measured 2026-10-16 with
+  `TOURNEE=pull|swipe node scripts/measure-sync-cpu.mjs` on a Ryzen 9 7900 (`lscpu`: AMD Ryzen 9 7900
+  12-Core), as in the table under « So the phone sends 50 visits a pass »: two runs, the second in
+  brackets. `pull` finds today's tournée with 200 stops already stored; `swipe` also sends that tournée
+  and its 200 stops (the morning pass). `none` is the same script without `TOURNEE`:
+
+  | mode | visits | warm median ms | warm max ms | cold ms (3 rounds) |
+  |---|---|---|---|---|
+  | none | 1 | 1.34 (1.30) | 3.70 (7.34) | 9.0–15.9 |
+  | none | 50 | 2.74 (2.76) | 4.70 (4.70) | 12.9–15.5 |
+  | pull | 1 | 1.54 (1.57) | 3.43 (3.17) | 9.6–18.1 |
+  | pull | 50 | 3.12 (3.05) | 6.11 (5.49) | 13.6–37.1 |
+  | swipe | 1 | 4.40 (4.42) | 8.02 (7.33) | 18.0–33.9 |
+  | swipe | 50 | 5.59 (5.74) | 8.00 (7.89) | 20.8–23.8 |
+
+  The warm figures stay under 10 ms in every mode, the swipe pass included (8.6 ms at worst over a
+  third run, after the script took its tournée from a real swipe instead of a seeded row), so
+  INVARIANT 13 holds for the warm case. A cold isolate's first request runs past 10 ms in every mode,
+  `none` included, and the swipe's reaches 33.9 ms: the cold case stays with #404.
 - **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
   Each call reads about the day's received visits plus the `users` rows, so the cost grows
@@ -186,7 +205,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (a covering index for Visites), with each joined prospect found by primary key. Prospects
   ouverts and Relances dues search `prospects_status_idx`; the pipeline and the agents'
   assignments search `prospects_merged_idx`. GH #177 adds one statement, `agentsActiveToday`,
-  searching `visits_received_idx (received_at>? AND received_at<?)`. GH #308 adds one statement
+  which searched `visits_received_idx (received_at>? AND received_at<?)`; ADR-0036 replaced it with
+  `agentsStartedOn`, an `EXISTS` into `tournees_agent_day_idx` per active user (read from the code, not
+  re-run with `EXPLAIN=1`). GH #308 adds one statement
   (thirteen in all), `inactiveAgentProspects`, which searches `prospects_merged_idx
   (merged_into=?)` with a correlated subquery that searches `users` by primary key
   (`sqlite_autoindex_users_1 (email=?)`).

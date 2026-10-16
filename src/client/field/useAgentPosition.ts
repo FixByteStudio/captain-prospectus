@@ -8,7 +8,7 @@
  * itself never reads the position (ADR-0028, `last-reading.ts`).
  *
  * Once the day has started every failure is survivable: a denied permission
- * orders the list by nothing and labels distances « Position inconnue », and it
+ * labels distances « Position inconnue », changes no stop's number or order, and
  * never blocks a visit. Before the swipe the location gate holds instead — it
  * takes fresh readings through this hook until one is precise enough
  * (`useLocationGate`, ADR-0036).
@@ -94,8 +94,8 @@ export function useAgentPosition({
       },
       {
         // A pavement fix, not a survey. Ten seconds is longer than an agent
-        // will wait, and a two-minute-old reading is fine for ordering doors
-        // by distance. The gate wants a fresh one: the cache would hand back
+        // will wait, and a two-minute-old reading is fine for the distances
+        // a row shows. The gate wants a fresh one: the cache would hand back
         // the same coarse fix on every repeat.
         enableHighAccuracy: highAccuracy,
         timeout: 10_000,
