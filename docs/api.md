@@ -30,7 +30,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | Route | Purpose |
 |---|---|
 | `GET /api/admin/dashboard?period=7\|30\|90` | Tableau de bord's figures, `dashboardResponseSchema`: `{period, from, to, visits: {value, previous, delta, byDay}, openProspects, openProspectsByStatus: {new, assigned, follow_up}, converted: {value, previous, delta, byDay}, conversionRate: {value, previous, delta, visitedProspects: {value, previous}}, visitsByDay: [{date, counts: {<outcome>: n}}], pipeline: {<status>: n}, agents: [{email, visits, converted, followUp, openProspects}], followUpsDue, flyersGiven, agentsActiveToday, followUpsDueSoon: {value, dueBefore}, inactiveAgentProspects}`. `period` defaults to 30; any other value is **400**. Read-only. See [The dashboard](#the-dashboard) |
-| `GET /api/admin/agents/:email/round` | `agentRoundResponseSchema` `{prospects, position}`: the agent's open prospects (the sync pull's query) and their latest reading `{lat, lng, accuracy, capturedAt}` (`capturedAt` clamped to receipt) or `null` when none from today. An admin's email answers 200 with `position: null`, since admins' positions are never stored. **404** for an email that is not assignable, **400** for a malformed one. `Cache-Control: no-store` ([ADR-0028](adr/0028-agent-position-at-sync.md)) |
+| `GET /api/admin/agents/:email/round` | `agentRoundResponseSchema` `{tournee, position}`: `tournee` is `{startedAt, stops: [{number, prospect}]}` or `null` before the agent's swipe today. `stops` are today's tournée stops still to do, in number order with the swipe's numbers and gaps left as gaps: those with no visit today (a door-day) that `isStopLeft` does not mark left (reassigned, closed or merged), each with its wire prospect. `position` is the latest reading `{lat, lng, accuracy, capturedAt}` (`capturedAt` clamped to receipt) or `null` when none from today; it only places the marker and the distances, never the order ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md), [ADR-0028](adr/0028-agent-position-at-sync.md)). `tournee: null` has no fallback to open prospects. An admin's email answers 200 with `position: null`, since admins' positions are never stored. **404** for an email that is not assignable, **400** for a malformed one. `Cache-Control: no-store` ([ADR-0028](adr/0028-agent-position-at-sync.md)) |
 | `GET /api/admin/agents` | `{agents: [{email, role}]}` — everyone a prospect can be assigned to |
 | `GET /api/admin/recap` | The sidebar's recap card, `recapResponseSchema` `{date, activeAgents, rosterSize, visitsToday, lastReceivedAt, serverTime}`: today's Brussels date and what arrived since its midnight. `lastReceivedAt` is `null` on a day with no visit. Read-only, `no-store`, polled every 15 s. See [The recap card](#the-recap-card) |
 | `GET /api/admin/users` | `usersResponseSchema` `{users: [{email, name, role, active, sessions, openProspects, devices}]}` — every user, active or not, ordered by name then email; names compare ignoring case and accents (French collation), unnamed rows last. `sessions` counts unexpired sessions; `openProspects` counts prospects assigned to them with status `new`, `assigned` or `follow_up` and not merged. `devices` `[{id, label, createdAt, lastSeenAt, current}]` lists the unexpired sessions, newest `lastSeenAt` first; `label` is null when the User-Agent gave no summary, `current` marks the caller's own session. The token hash is never sent ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)) |
@@ -269,11 +269,14 @@ the same response, additively.
 - **Flyers remis** (`flyersGiven`, GH #177): the period's door-days — same rows
   as `visits.value` — with a flyer given on any of their visits. Folded into that statement's `sum`,
   so it follows `period` and costs no extra statement.
-- **Agents en tournée** (`agentsActiveToday`, GH #177, settling G6): distinct
-  `agent_email` over `visits` whose `received_at` falls today, Brussels
-  midnight to Brussels midnight tomorrow. A snapshot of now, like
-  `openProspects`; it ignores `period`. There is no sync timestamp and none is
-  stored (G6). Served by `visits_received_idx`.
+- **Agents en tournée** (`agentsActiveToday`, ADR-0036): roster members (active
+  `users`) with a `tournees` row whose `day_start` is today's Brussels midnight.
+  The swipe alone counts, with no visit needed; a visit without a swipe, a
+  yesterday's tournée and a deactivated user's tournée do not. A snapshot of now,
+  like `openProspects`; it ignores `period`. One Worker helper (`agentsStartedOn`)
+  serves it and the recap's `activeAgents`, so they are the same figure. It
+  drives from the active `users` rows through an `EXISTS` into
+  `tournees_agent_day_idx`, never a scan of `tournees`.
 - **Relances dues sous 7 jours** (`followUpsDueSoon`, GH #177): live
   `follow_up` prospects whose `next_visit_at` is before `dueBefore`, the
   Brussels midnight seven days from today (today's midnight + 7 days,
@@ -306,13 +309,15 @@ the same response, additively.
 agents sent rather than a sync. Every figure reads `received_at` over one
 Brussels day, midnight to midnight tomorrow (`brusselsMidnightDaysFromNow`),
 so a visit made offline yesterday and synced this morning counts as seen today
-by `activeAgents` and `lastReceivedAt`, though not in `visitsToday`.
+by `lastReceivedAt`, though not in `visitsToday`. `activeAgents` reads `tournees.day_start`
+instead (below).
 
 - `date`: that day, `YYYY-MM-DD`. The client never works out which day it is.
 - `rosterSize`: the roster, the active `users` rows, admins included.
-- `activeAgents`: roster members with a visit received that day. Unlike
-  `agentsActiveToday` on the dashboard, a sender off the roster (deactivated)
-  is left out, so it never exceeds `rosterSize`.
+- `activeAgents`: roster members who started that day's tournée (ADR-0036), the
+  dashboard's `agentsActiveToday` figure from the same helper. A swipe with no
+  visit counts; a visit with no swipe does not; a user off the roster
+  (deactivated) is left out, so it never exceeds `rosterSize`.
 - `visitsToday`: today's door-days (ADR-0036), off-roster senders included: one
   per agent, prospect and visit made that Brussels day (`visited_at`), among the
   visits received so far (the clamp gives `visited_at ≤ received_at`). It equals
@@ -321,9 +326,10 @@ by `activeAgents` and `lastReceivedAt`, though not in `visitsToday`.
 - `lastReceivedAt`: the latest `received_at` that day, or `null`.
 - `serverTime`: the Worker's clock. The card's age is `serverTime −
   lastReceivedAt`, never the device's clock.
-- **Cost.** Two statements: the roster, and one grouped read of the day's
+- **Cost.** Three statements: the roster, one grouped read of the day's
   visits on `visits_received_idx`, one row per sender, whose count is distinct
-  prospects among the rows made today. Each call reads about the
+  prospects among the rows made today, and `agentsStartedOn` (a count over the
+  active `users` rows, each probing `tournees_agent_day_idx`). Each call reads about the
   day's visits plus the `users` rows; polled every 15 s from each visible admin
   tab (ADR-0010), see [free-tier-budget](free-tier-budget.md#watch-outs).
 

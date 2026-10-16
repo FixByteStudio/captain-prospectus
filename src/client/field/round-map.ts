@@ -5,7 +5,7 @@
  * only draws what this computes, and never re-derives the order or the
  * numbering itself. The items are `useRound().stops`, the same array
  * `TodayScreen` renders — one source, shared through `useRound`. The admin
- * round view passes list positions as numbers.
+ * round view passes the server's stops with the same swipe numbers (ADR-0036).
  */
 export type MapPin = {
   id: string;
@@ -22,7 +22,7 @@ export type MapPin = {
   name: string;
 };
 
-/** What a pin needs of a stop: `TourneeItem` on the phone, a list position on the admin side. */
+/** What a pin needs of a stop: `TourneeItem` on the phone, a `RoundStop` on the admin side. */
 export type NumberedItem = {
   id: string;
   number: number;

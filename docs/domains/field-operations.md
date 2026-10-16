@@ -20,7 +20,7 @@ Every `/tournee/*` route sits behind a gate ([ADR-0036](../adr/0036-a-swipe-free
 - A stop whose prospect the phone does not hold has no row, no pin and a missing number. A stop without coordinates keeps its row and number and draws no pin. A field prospect still in `outboxProspects` shows « Pas encore envoyé ».
 - Distances come from the latest reading and are information only: they never reorder anything. With no reading they read « Position inconnue », with no notice and no « Réessayer » on Tournée or Carte; each screen takes one reading when it opens.
 - Each item links to the phone's maps app for navigation.
-- `buildTodayList` in `src/shared/today.ts` (nearest-next order, "later" group, queued-visit placement) now serves the admin round view only, where list positions are the numbers. It goes with the last caller (entry 12 of #496). With epic 5, the latest reading the phone took today goes with each sync ([ADR-0028](../adr/0028-agent-position-at-sync.md)); sync never takes a reading itself.
+- The phone's order and numbers are the tournée's alone: `buildTodayList` is gone. The admin's round view lists the same stops from the server (`GET /api/admin/agents/:email/round`: today's tournée stops with no visit today and not left, in the swipe's numbers), and the stored reading only places its marker and distances. With epic 5, the latest reading the phone took today goes with each sync ([ADR-0028](../adr/0028-agent-position-at-sync.md)); sync never takes a reading itself.
 
 ## Visit
 Captured fields: check-in position (one reading, if permitted), `flyer_given`, script answers, `outcome`, optional `follow_up_at`, optional notes.

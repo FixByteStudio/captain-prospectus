@@ -54,7 +54,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
   Each call reads about the day's received visits plus the `users` rows, so the cost grows
   through the day: an estimate, not a measurement, of 240 × 8 h × ~100 rows ≈ 200,000 rows a
-  day for one tab open all day on a 100-visit day. If D1 reads ever get tight, lengthen this
+  day for one tab open all day on a 100-visit day. « Actifs aujourd'hui » adds a third
+  statement (`agentsStartedOn`): one index probe on `tournees_agent_day_idx` per active user,
+  a handful of rows, which does not grow through the day. If D1 reads ever get tight, lengthen this
   poll first; the card's figures do not need 15 s.
 - **Google Places is the one line here that can actually bill us** (ADR-0020), and the only
   one whose free allowance this file does not state a number for. Per-SKU allowances changed

@@ -48,7 +48,7 @@ The sidebar has three groups. A count badge shows the number waiting in a queue.
 | **Terrain** | Visites | Live feed of what agents have synced, one row per door-day with its visits behind it, with a KPI strip and a date range. |
 | | À rattacher *(badge)* | Quarantined visits waiting to be attached to a prospect (ADR-0022). |
 | | Scripts | The versioned questionnaire. |
-| | Tournée du jour | **New.** A read-only view of any agent's round, ordered from their last synced position. *Pending ADR-0036 (numbered-tournée epic #496, entry 12):* in the phone's stop numbers; the position only places the marker. |
+| | Tournée du jour | **New.** A read-only view of any agent's tournée: the stops still to do, in the phone's stop numbers (ADR-0036); the last synced position only places the marker and the distances. |
 
 - **Top bar, on every admin surface.** Sidebar toggle · breadcrumb · search · notifications · theme · avatar.
   - Search looks up prospects by name and opens the matching row in Prospects.
@@ -128,7 +128,7 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Visites (door-days) | "Une ligne par prospect et par jour, avec son dernier résultat. Ouvrez une ligne pour voir chaque visite." · "{2} visites" · "Visites de la journée" |
 | Outcome hints | Personne sur place: "Fermé ou personne pour répondre. On repassera." · Intéressé: "Ouvert à la discussion, pas encore inscrit sur la liste d'attente." · Pas intéressé: "Refus clair." · À relancer: "Un rendez-vous à reprendre." · Converti: "Déjà inscrit sur la liste d'attente." |
 | Visit | Step indicators "Étape 1 sur 2 · Résultat" / "Étape 2 sur 2 · Questions" · stepper aria "Diminuer" / "Augmenter" |
-| Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui. La tournée est triée par nom." · "{17} arrêts" |
+| Admin round view | "Agent" · "Choisir un agent" · "Position du {24/09/2026 15:24}" · "Aucune position reçue aujourd'hui." · "{email} n'a pas encore commencé sa tournée aujourd'hui." · "{17} arrêts" |
 | Import › Stepper | Steps "Source" · "Fichier & colonnes" · "Aperçu & validation" · "Zone" · overlines "Étape {1}" / "En cours" · visually hidden "(terminée)" |
 | Import › Source, CSV card | "Un fichier CSV" · tag "Navigateur" · ".csv" · "Un export de tableur, lu dans votre navigateur. Idéal pour vos listes existantes." · "Colonnes reconnues automatiquement" · "Aperçu avant tout enregistrement" · "Lignes rejetées expliquées" · "Réimport sans doublon" · "Flux direct : 3 étapes" · "Importer un fichier" |
 | Import › Source, map card | "Une zone sur la carte" · tag "StreetMap" · "Les commerces répertoriés sur OpenStreetMap ou Google Places." · "Zone tracée à main levée" · "Adresse et type de commerce" · "Lieux déjà listés écartés" · "Lieux sans nom ignorés" · "Flux rapide : 2 étapes" · "Dessiner une zone" |
@@ -219,7 +219,7 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | When choice missing | Visite, step 2 (or the single screen) | "Choisissez quand relancer : aujourd'hui ou une date." under the when radios, for À relancer or Personne sur place. |
 | Missing name | Ajouter | "Indiquez le nom de l'établissement." under Nom. |
 | Not found / offline sign-in | Field | "Page introuvable." with "Retour à la tournée". "Impossible de vous identifier hors ligne. Connectez-vous une fois avec du réseau." |
-| No agent position | Admin Tournée du jour | The list is ordered by name, with the notice "Aucune position reçue aujourd'hui…". Every position shows its age. |
+| No agent position | Admin Tournée du jour | The list keeps the swipe's numbers, with no distances and the notice "Aucune position reçue aujourd'hui.". Every position shows its age. |
 
 ## Interaction Primitives
 
@@ -278,7 +278,7 @@ Each figure is defined once here, and the Worker computes it. "Period" is the da
 | Relances dues | follow_up prospects whose `next_visit_at` is today or earlier. |
 | Flyers remis | Visits in the period with `flyer_given`. *Pending ADR-0036 (numbered-tournée epic #496, entry 10):* door-days where any visit gave one. |
 | Relances dues sous 7 jours | follow_up prospects whose `next_visit_at` falls within the next 7 days. |
-| Agents en tournée | Agents who synced at least once today. *Pending ADR-0036 (numbered-tournée epic #496, entry 12):* agents who started today's tournée. |
+| Agents en tournée | Roster members who started today's tournée (ADR-0036): the swipe counts, with no visit needed. |
 | Delta | (period − previous period of the same length) ÷ previous period. Shows "—" when the previous period is 0. |
 
 ## Inspiration & Anti-patterns
@@ -339,10 +339,10 @@ Failure: the signal drops. The strip says "Hors ligne…", and everything above 
 → See [`mockups/key-admin-round.html`](mockups/key-admin-round.html).
 
 1. From the sidebar, the admin opens Terrain › Tournée du jour and picks Léa.
-2. The list is ordered from Léa's last synced position ("Position du 24/09/2026 15:24"), with the remaining stops as numbered pins on the map.
+2. The list shows Léa's remaining stops under the numbers her swipe gave them, the same as on her phone (stops she visited or lost leave gaps), with the same numbers as pins on the map. Her last synced position ("Position du 24/09/2026 15:24") places the marker and the distances.
 3. **Climax:** without calling Léa, the admin sees 11 stops left around the Marolles, and decides the 6 follow-ups due tomorrow can go to François instead.
 
-Failure: Léa hasn't synced today. The list is ordered by name, with the no-position notice.
+Failure: Léa hasn't sent a position today. The list keeps its numbers, with the no-position notice. If she hasn't swiped yet, the screen says so and the map shows her position only.
 
 ### Flow 4 — A place that isn't on the list (François, field agent)
 

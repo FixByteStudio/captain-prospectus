@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "./db/client";
 import { eq, sql } from "drizzle-orm";
-import { prospects, scripts, visits, visitsOrphaned } from "./db/schema";
+import { prospects, scripts, tourneeStops, tournees, visits, visitsOrphaned } from "./db/schema";
 import { doorDaysBetween } from "./door-days";
 import {
   DASHBOARD_PERIODS,
@@ -15,6 +15,7 @@ import {
 import { brusselsMidnightDaysFromNow, brusselsPeriod, periodDates } from "../shared/period";
 import type { DashboardResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
+import { seedTournee } from "../../test/tournees";
 import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
@@ -115,7 +116,9 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   const db = getDb(env.DB);
-  // Order matters: visits reference prospects by foreign key.
+  // Order matters: visits and stops reference prospects by foreign key.
+  await db.delete(tourneeStops);
+  await db.delete(tournees);
   await db.delete(visits);
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
@@ -985,19 +988,36 @@ describe("The Visites strip's flyers, agents and due-soon figures (GH #177)", ()
   });
 
   describe("agentsActiveToday", () => {
-    it("counts distinct agents with a visit received today, not yesterday, once each", async () => {
+    it("counts roster members who started today's tournée, once each, visit or not (ADR-0036)", async () => {
       // Not `to - DAY_MS`: a clock-change day is 23 h or 25 h.
       const todayStart = brusselsMidnightDaysFromNow(Date.now(), 0);
-      const a = await seedProspect("assigned");
-      const b = await seedProspect("assigned");
-      const c = await seedProspect("assigned");
-      // A: received today, visited yesterday.
-      await insertVisit(a, todayStart - 1, todayStart + 1, false, "a@example.com");
-      // A again today: still counts once.
-      await insertVisit(a, todayStart + 10, todayStart + 10, false, "a@example.com");
-      await insertVisit(b, todayStart + 5, todayStart + 5, false, "b@example.com");
-      // C: received yesterday.
-      await insertVisit(c, todayStart - 5, todayStart - 5, false, "c@example.com");
+      await seedUser("b@example.com", "agent");
+      await seedUser("c@example.com", "agent");
+      await seedUser("d@example.com", "agent");
+      await seedUser("gone@example.com", "agent", false);
+      // The agent swiped and sent no visit.
+      await seedTournee(AGENT, todayStart + 1_000);
+      // B swiped today, and visited too: still one.
+      await seedTournee("b@example.com", todayStart + 2_000);
+      await insertVisit(
+        await seedProspect("assigned"),
+        todayStart + 10,
+        todayStart + 10,
+        false,
+        "b@example.com",
+      );
+      // C swiped yesterday.
+      await seedTournee("c@example.com", todayStart - 1_000);
+      // D sent a visit today and never swiped.
+      await insertVisit(
+        await seedProspect("assigned"),
+        todayStart + 5,
+        todayStart + 5,
+        false,
+        "d@example.com",
+      );
+      // Off the roster.
+      await seedTournee("gone@example.com", todayStart + 3_000);
 
       const body = await dashboard();
       expect(body.agentsActiveToday).toBe(2);

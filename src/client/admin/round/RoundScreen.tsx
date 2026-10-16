@@ -5,7 +5,6 @@ import { cn } from "../../lib/utils";
 import { edgeFor } from "../../field/StopRow";
 import { StopNumber } from "../../field/StopNumber";
 import type { AgentRoundResponse } from "../../../shared/schemas";
-import type { TodayItem } from "../../../shared/today";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { Label } from "../../ui/label";
 import { Skeleton } from "../../ui/skeleton";
@@ -16,7 +15,7 @@ import { BADGE_SHAPE, STATUS_BADGE } from "../status";
 import { useAgentRound, useAgents } from "../queries";
 import { RoundMap } from "../../field/RoundMap";
 import { readRememberedAgent, rememberAgent } from "./remembered-agent";
-import { roundMap, roundStops } from "./round-list";
+import { roundMap, roundStops, type RoundStop } from "./round-list";
 
 const t = copy.round;
 
@@ -37,10 +36,10 @@ export function RoundScreen() {
   // A linked agent waits for the roster under the skeleton, not the "choose" prompt.
   const waitingForRoster = asked !== null && agents.isPending;
 
-  // The fetch time stands for "now": stable across renders, and the day the rule reads.
-  const stops = round.data && agent ? roundStops(round.data, round.dataUpdatedAt) : null;
+  // Null before the agent's swipe: no rows, and the map holds the marker only.
+  const stops = round.data && agent ? roundStops(round.data) : null;
   const position = round.data?.position ?? null;
-  const drawn = stops ? roundMap(stops, position) : null;
+  const drawn = round.data && agent ? roundMap(stops ?? [], position) : null;
 
   return (
     <section>
@@ -120,12 +119,14 @@ export function RoundScreen() {
               )}
               <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
                 <Surface className="overflow-hidden md:col-start-1 md:row-start-1">
-                  {stops && stops.length === 0 ? (
+                  {stops === null ? (
+                    <p className="text-muted-foreground p-4">{t.notStarted(agent ?? "")}</p>
+                  ) : stops.length === 0 ? (
                     <p className="text-muted-foreground p-4">{t.empty}</p>
                   ) : (
                     <ul className="divide-border divide-y">
-                      {stops?.map((stop, i) => (
-                        <RoundRow key={stop.id} stop={stop} index={i + 1} />
+                      {stops.map((stop) => (
+                        <RoundRow key={stop.id} stop={stop} />
                       ))}
                     </ul>
                   )}
@@ -151,10 +152,10 @@ export function RoundScreen() {
   );
 }
 
-function RoundRow({ stop, index }: { stop: TodayItem; index: number }) {
+function RoundRow({ stop }: { stop: RoundStop }) {
   return (
     <li className={cn("flex items-center gap-3 px-3 py-2.5", edgeFor(stop))}>
-      <StopNumber number={index} />
+      <StopNumber number={stop.number} />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{stop.name}</span>
         <span className="text-muted-foreground text-meta block truncate">

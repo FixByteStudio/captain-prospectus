@@ -536,7 +536,7 @@ export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
 export const recapResponseSchema = z.object({
   /** The Brussels calendar date, `YYYY-MM-DD`. */
   date: z.iso.date(),
-  /** Roster members with a visit received that day, so never above `rosterSize`. */
+  /** Roster members with a tournée started that day, so never above `rosterSize` (ADR-0036). */
   activeAgents: countSchema,
   rosterSize: countSchema,
   visitsToday: countSchema,
@@ -621,9 +621,22 @@ export const passphraseResponseSchema = z.object({
 });
 export type PassphraseResponse = z.infer<typeof passphraseResponseSchema>;
 
-/** GET /api/admin/agents/:email/round (ADR-0028). `capturedAt` is served clamped. */
+/** A stop's number, fixed at the swipe: gaps stay gaps (ADR-0036). */
+const tourneeStopNumberSchema = z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX));
+
+/**
+ * GET /api/admin/agents/:email/round (ADR-0036, ADR-0028). `tournee` is null before
+ * the agent's swipe; otherwise its stops still to do (no visit today, not left), in
+ * number order with the swipe's numbers and gaps. `position` only places the marker
+ * and the distances, and `capturedAt` is served clamped.
+ */
 export const agentRoundResponseSchema = z.object({
-  prospects: z.array(prospectSchema),
+  tournee: z.nullable(
+    z.object({
+      startedAt: epochMsSchema,
+      stops: z.array(z.object({ number: tourneeStopNumberSchema, prospect: prospectSchema })),
+    }),
+  ),
   position: z.nullable(agentPositionSchema),
 });
 export type AgentRoundResponse = z.infer<typeof agentRoundResponseSchema>;
@@ -708,7 +721,7 @@ export type SyncRequest = z.infer<typeof syncRequestSchema>;
 export const tourneeStopSchema = z.object({
   id: uuidSchema,
   prospectId: uuidSchema,
-  number: z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX)),
+  number: tourneeStopNumberSchema,
   addedAt: epochMsSchema,
   /** Left the agent's open work unvisited: reassigned, closed or merged (ADR-0036). */
   left: z.boolean(),
@@ -1019,7 +1032,7 @@ export const dashboardResponseSchema = z.object({
   followUpsDue: countSchema,
   /** Flyers remis: the period's Visites with `flyer_given` (docs/api.md › The dashboard). */
   flyersGiven: countSchema,
-  /** Agents en tournée: distinct agents with a visit received today (docs/api.md › The dashboard). */
+  /** Agents en tournée: roster members who started today's tournée (docs/api.md › The dashboard). */
   agentsActiveToday: countSchema,
   /** Relances dues sous 7 jours (docs/api.md › The dashboard). */
   followUpsDueSoon: z.object({
