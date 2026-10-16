@@ -482,6 +482,9 @@ describe("TodayScreen", () => {
     renderScreen();
 
     expect(await screen.findByText(copy.today.allDone)).toBeTruthy();
+    // The counter stays above the card and reads the finished day in full.
+    expect(screen.getByLabelText(copy.today.progressLabel(2, 2))).toBeTruthy();
+    expect(screen.getByText(copy.today.progressOf(2))).toBeTruthy();
     expect(screen.getByText(copy.today.findInCarnet)).toBeTruthy();
     expect(screen.getByRole("link", { name: copy.today.openCarnet }).getAttribute("href")).toBe(
       "/tournee/carnet",

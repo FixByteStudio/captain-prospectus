@@ -18,7 +18,7 @@ Everything runs in **one Cloudflare Worker**, one deploy ([ADR-0003](adr/0003-si
 | Static assets | Vite build served by Workers Static Assets | The SPA/PWA shell. SPA fallback for unknown paths |
 | API | Hono, routes under `/api/*` (`run_worker_first`) | Auth, validation, business rules |
 | Database | D1 (SQLite) via Drizzle | System of record |
-| Client store | Dexie (IndexedDB) on the phone | Offline copy of the today list, outbox of pending writes |
+| Client store | Dexie (IndexedDB) on the phone | Offline copy of the agent's prospects, today's tournée and visited stops; outbox of pending writes |
 | Service worker | vite-plugin-pwa (Workbox) | Caches the app shell. **Never caches `/api`** |
 | Identity | Our own login, sessions in D1 | A session cookie looked up on every `/api` request outside `/api/auth/*` and the local-only `/api/dev/*` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md); [ADR-0034](adr/0034-launch-on-our-own-login-alone.md)) |
 
@@ -82,13 +82,15 @@ sequenceDiagram
   participant D as D1
   A->>L: log visit (status=pending, id=UUID)
   Note over A,L: works with no network
-  A->>W: POST /api/agent/sync {clientVersion, prospects[], visits[]}
+  A->>W: POST /api/agent/sync {clientVersion, prospects[], visits[], tournees[], stops[], position?}
   W->>D: insert field prospects ON CONFLICT DO NOTHING
+  W->>D: insert tournées, then stops ON CONFLICT DO NOTHING
   W->>D: insert visits ON CONFLICT(id) DO NOTHING RETURNING id
   W->>D: update prospect status from newly inserted visits
   W->>D: select open prospects assigned to agent + active script
-  W-->>A: {accepted ids, idMap, prospects, script, serverTime}
-  A->>L: mark accepted as synced, replace today list
+  W->>D: select today's tournée and door-days
+  W-->>A: {accepted ids, idMap, prospects, script, tournee, visitedStops, serverTime}
+  A->>L: delete accepted outbox rows, replace prospects, tournée and visited stops
 ```
 
 Triggers: app start, `online` event, after each visit, every 60 s while open. Details: [domains/field-operations.md](domains/field-operations.md).
