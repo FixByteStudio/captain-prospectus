@@ -1,7 +1,7 @@
 ---
 tracker_id: "508"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/508"
-tracker_status: backlog
+tracker_status: done
 id: 12
 type: story
 title: "The admin sees who started and the phone's numbers"

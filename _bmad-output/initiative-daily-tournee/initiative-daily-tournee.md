@@ -9,6 +9,7 @@ covers: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16]
 after: []
 assignee: ""
 risk: high
+status: done
 ---
 
 # Each agent's day runs on a numbered tournée
@@ -51,3 +52,4 @@ The field app's day (gates, swipe, Tournée, Carte, Carnet), the sync contract a
 
 - Decision (2026-10-14): one initiative with one epic. The owner called this the T1 epic in the ADR-0036 party session.
 - Parked: admin-built tournées for a date (T2). ADR-0036 leaves them to a later decision, on the same tables.
+- Decision (2026-10-16): the initiative is closed. Its one epic, #496, is done and retro'd (`implementation-artifacts/epic-496-retro-2026-10-16.md`, accepted with open items). The initiative folder is archived: it is in git history before the archiving commit. Open items carry over in the retro's action items and #527–#530.

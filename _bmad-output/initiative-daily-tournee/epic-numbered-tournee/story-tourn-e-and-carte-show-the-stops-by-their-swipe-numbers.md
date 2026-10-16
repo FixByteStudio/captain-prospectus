@@ -1,7 +1,7 @@
 ---
 tracker_id: "501"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/501"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Tournée and Carte show the stops by their swipe numbers"

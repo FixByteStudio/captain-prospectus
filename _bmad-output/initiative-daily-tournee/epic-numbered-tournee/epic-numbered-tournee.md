@@ -1,7 +1,7 @@
 ---
 tracker_id: "496"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/496"
-tracker_status: backlog
+tracker_status: done
 type: epic
 title: "Each agent's day runs on a numbered tournée"
 parent: initiative-daily-tournee
@@ -9,6 +9,7 @@ covers: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16]
 after: []
 assignee: ""
 risk: high
+status: done
 ---
 
 # Each agent's day runs on a numbered tournée
@@ -85,3 +86,4 @@ Capability boundary: one agent's day, from the swipe to Carnet, and the admin fi
 - Decision (2026-10-14): a closing refactor sweep (13).
 - Source conflict: R6 — ADR-0036 said the swipe position is "never sent or stored", but every reading `useAgentPosition` takes is remembered and sent at the next sync as the ADR-0028 marker (`useAgentPosition.ts:6`, `sync.ts:141`). Decision (2026-10-14): the swipe reading is an ordinary ADR-0028 reading, and the tournée rows hold no position. ADR-0036 is reworded to say so.
 - Decision (2026-10-14): when two phones of one agent swipe offline on the same day, the first swipe wins. The server lists the losing phone's tournée and stop ids in `accepted`, so its outbox clears, but keeps none of them. That phone adopts the winning tournée and its numbers on its next pull. One numbering per agent and day.
+- Decision (2026-10-16): the epic is closed. All 13 stories (#497–#509) are closed as completed, and the retro accepted it with open items (`implementation-artifacts/epic-496-retro-2026-10-16.md`, actions 1–6 and 8 carry them).

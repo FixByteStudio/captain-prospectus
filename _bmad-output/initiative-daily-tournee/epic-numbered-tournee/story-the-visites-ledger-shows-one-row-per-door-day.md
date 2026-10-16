@@ -1,7 +1,7 @@
 ---
 tracker_id: "507"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/507"
-tracker_status: backlog
+tracker_status: done
 id: 11
 type: story
 title: "The Visites ledger shows one row per door-day"

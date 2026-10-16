@@ -1,7 +1,7 @@
 ---
 tracker_id: "500"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/500"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "A location dialog holds the start screen until a fix is precise"

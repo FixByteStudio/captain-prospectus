@@ -1,7 +1,7 @@
 ---
 tracker_id: "497"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/497"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "docs/design.md decides the tournée screens"

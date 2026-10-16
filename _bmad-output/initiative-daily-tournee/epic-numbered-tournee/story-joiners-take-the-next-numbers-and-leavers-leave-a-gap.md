@@ -1,7 +1,7 @@
 ---
 tracker_id: "502"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/502"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Joiners take the next numbers and leavers leave a gap"

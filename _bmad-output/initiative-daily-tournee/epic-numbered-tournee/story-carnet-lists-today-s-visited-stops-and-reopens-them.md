@@ -1,7 +1,7 @@
 ---
 tracker_id: "504"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/504"
-tracker_status: backlog
+tracker_status: done
 id: 8
 type: story
 title: "Carnet lists today's visited stops and reopens them"

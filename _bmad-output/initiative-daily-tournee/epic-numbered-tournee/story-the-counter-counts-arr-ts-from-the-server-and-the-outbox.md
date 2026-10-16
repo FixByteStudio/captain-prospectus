@@ -1,7 +1,7 @@
 ---
 tracker_id: "503"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/503"
-tracker_status: backlog
+tracker_status: done
 id: 7
 type: story
 title: "The counter counts arrêts from the server and the outbox"

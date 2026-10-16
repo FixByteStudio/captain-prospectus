@@ -1,7 +1,7 @@
 ---
 tracker_id: "505"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/505"
-tracker_status: backlog
+tracker_status: done
 id: 9
 type: story
 title: "Midnight brings the gates back"

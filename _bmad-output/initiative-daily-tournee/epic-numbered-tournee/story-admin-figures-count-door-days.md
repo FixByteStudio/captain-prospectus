@@ -1,7 +1,7 @@
 ---
 tracker_id: "506"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/506"
-tracker_status: backlog
+tracker_status: done
 id: 10
 type: story
 title: "Admin figures count door-days"
