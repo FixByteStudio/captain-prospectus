@@ -144,7 +144,8 @@ function VisitsScreenBody({
     }
   }
 
-  const count = feed.visits.length;
+  // Door-days, the same unit as Tableau de bord's Visites (ADR-0036).
+  const count = feed.doorDays.length;
 
   return (
     <section className="flex flex-col gap-6">

@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { OUTCOME_LABELS, copy } from "../../copy";
-import type { AdminVisit, DashboardResponse } from "../../../shared/schemas";
+import type { AdminDoorDay, DashboardResponse } from "../../../shared/schemas";
 import { adminKeys } from "../queries";
 import { createAdminQueryClient } from "../query-client";
 import { DashboardScreen } from "./DashboardScreen";
@@ -125,7 +125,7 @@ function stubFetch(respond: (period: number) => Response | Promise<Response>, ot
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), "http://localhost").pathname;
       if (path === "/api/admin/visits")
-        return (others.feed ?? (() => json({ visits: [], serverTime: 0 })))();
+        return (others.feed ?? (() => json({ doorDays: [], truncated: false, serverTime: 0 })))();
       if (path === "/api/admin/visits/orphaned")
         return (others.orphans ?? (() => json({ visits: [], remaining: 0 })))();
       if (path === "/api/admin/prospects/duplicates")
@@ -635,20 +635,38 @@ function todoRow(label: string): HTMLElement {
   return row;
 }
 
-function visit(n: number, over: Partial<AdminVisit> = {}): AdminVisit {
-  return {
-    id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+/** A one-visit door-day keyed by `n`, as the feed sends it (ADR-0036 R13). */
+function doorDay(n: number, over: Partial<AdminDoorDay> = {}): AdminDoorDay {
+  const row = {
+    key: `lea@example.com|${n}|0`,
     prospectId: "11111111-1111-4111-8111-111111111111",
     prospectName: `Prospect ${n}`,
     agentEmail: "lea@example.com",
+    dayStart: 0,
     visitedAt: n * 1000,
     receivedAt: n * 1000,
     flyerGiven: false,
-    outcome: "interested",
+    outcome: "interested" as const,
     followUpAt: null,
     notes: null,
     refusalReason: null,
     ...over,
+  };
+  return {
+    ...row,
+    visits: [
+      {
+        id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+        visitedAt: row.visitedAt,
+        receivedAt: row.receivedAt,
+        outcome: row.outcome,
+        refusalReason: row.refusalReason,
+        flyerGiven: row.flyerGiven,
+        followUpAt: row.followUpAt,
+        notes: row.notes,
+        answerCount: 0,
+      },
+    ],
   };
 }
 
@@ -752,9 +770,9 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
   }
 
   it("shows the newest 5 of the opening page, with no wash and no announcement (I/O matrix, opening page)", async () => {
-    const page = Array.from({ length: 500 }, (_, i) => visit(i + 1));
+    const page = Array.from({ length: 500 }, (_, i) => doorDay(i + 1));
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ visits: page, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
     });
     renderScreen();
 
@@ -765,15 +783,15 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     expect(announcement()).toBe("");
   });
 
-  it("puts a polled visit on top with a wash and one announcement (I/O matrix, new visit)", async () => {
-    let page = [visit(1), visit(2)];
+  it("puts a polled door-day on top with a wash and one announcement (I/O matrix, new visit)", async () => {
+    let page = [doorDay(1), doorDay(2)];
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ visits: page, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(2));
 
-    page = [visit(3, { outcome: "converted", flyerGiven: true })];
+    page = [doorDay(3, { outcome: "converted", flyerGiven: true })];
     await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
 
     await waitFor(() => expect(rows()).toHaveLength(3));
@@ -801,7 +819,8 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     const user = userEvent.setup();
     let fail = true;
     stubFetch((period) => json(answer(period)), {
-      feed: () => (fail ? json({}, 500) : json({ visits: [visit(1)], serverTime: 0 })),
+      feed: () =>
+        fail ? json({}, 500) : json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }),
     });
     renderScreen();
 
@@ -833,7 +852,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     });
     observer.observe(recent, { childList: true, subtree: true, characterData: true });
 
-    release(json({ visits: [visit(1)], serverTime: 0 }));
+    release(json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }));
     await waitFor(() => expect(rows()).toHaveLength(1));
     observer.disconnect();
     expect(added.some((text) => text.includes(copy.visits.empty))).toBe(false);
@@ -848,15 +867,15 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
   });
 
   it("announces only the arrivals among the rows shown", async () => {
-    let page = Array.from({ length: 5 }, (_, i) => visit(i + 10));
+    let page = Array.from({ length: 5 }, (_, i) => doorDay(i + 10));
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ visits: page, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(5));
 
     // One newer than all five, two older than all five: only one is shown.
-    page = [visit(20), visit(1), visit(2)];
+    page = [doorDay(20), doorDay(1), doorDay(2)];
     await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
 
     await waitFor(() => expect(rows()[0]?.textContent).toContain("Prospect 20"));
@@ -866,12 +885,16 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
 
   it("treats a page cached by an earlier mount as nothing new (I/O matrix, opening page)", async () => {
     // What Visites leaves in the shared entry: its last delta page.
-    const page = [visit(1), visit(2), visit(3)];
+    const page = [doorDay(1), doorDay(2), doorDay(3)];
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ visits: page, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
     });
     renderScreen((client) =>
-      client.setQueryData(adminKeys.visitsFeed(), { visits: [visit(3)], serverTime: 0 }),
+      client.setQueryData(adminKeys.visitsFeed(), {
+        doorDays: [doorDay(3)],
+        truncated: false,
+        serverTime: 0,
+      }),
     );
 
     await waitFor(() => expect(rows()).toHaveLength(3));
@@ -883,7 +906,9 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     let fail = false;
     stubFetch((period) => json(answer(period)), {
       feed: () =>
-        fail ? json({ error: "boom" }, 500) : json({ visits: [visit(1)], serverTime: 0 }),
+        fail
+          ? json({ error: "boom" }, 500)
+          : json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(1));

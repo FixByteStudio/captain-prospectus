@@ -12,7 +12,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
 import { ADMIN_VISITS_PAGE_SIZE, EXPORT_ROWS } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
-import type { AdminVisit, DashboardResponse } from "../../shared/schemas";
+import type { AdminDoorDay, AdminDoorDayVisit, DashboardResponse } from "../../shared/schemas";
 import { OUTCOME_LABELS, REFUSAL_REASON_LABELS, copy } from "../copy";
 import { Toaster } from "../ui/sonner";
 import { adminKeys } from "./queries";
@@ -42,22 +42,65 @@ function opaqueRedirect(): Response {
  * a handful of milliseconds apart is enough to keep every test's relative
  * ordering while staying well within even a 7-day window.
  */
-function visit(id: string, receivedAt: number, over: Partial<AdminVisit> = {}): AdminVisit {
-  const at = NOW - 10_000_000 + receivedAt;
+const at = (offset: number) => NOW - 10_000_000 + offset;
+
+/** One visit of a door-day, `offset` placing it as `doorDay`'s rows are placed. */
+function dayVisit(
+  id: string,
+  offset: number,
+  over: Partial<AdminDoorDayVisit> = {},
+): AdminDoorDayVisit {
   return {
     id,
+    visitedAt: at(offset),
+    receivedAt: at(offset),
+    outcome: "interested",
+    refusalReason: null,
+    flyerGiven: false,
+    followUpAt: null,
+    notes: null,
+    answerCount: 0,
+    ...over,
+  };
+}
+
+/**
+ * A door-day row keyed `id`. Its one visit mirrors the row unless `visits` is
+ * given, in which case the row reads its latest (the last).
+ */
+function doorDay(id: string, receivedAt: number, over: Partial<AdminDoorDay> = {}): AdminDoorDay {
+  const row: AdminDoorDay = {
+    key: id,
     prospectId: "00000000-0000-4000-8000-000000000000",
     prospectName: `Place ${id}`,
     agentEmail: "agent@example.com",
-    visitedAt: at,
-    receivedAt: at,
+    dayStart: 0,
+    visitedAt: at(receivedAt),
+    receivedAt: at(receivedAt),
     flyerGiven: false,
     outcome: "interested",
     followUpAt: null,
     notes: null,
     refusalReason: null,
+    visits: [],
     ...over,
   };
+  if (row.visits.length === 0) {
+    row.visits = [
+      dayVisit(`${id}-1`, receivedAt, {
+        outcome: row.outcome,
+        refusalReason: row.refusalReason,
+        flyerGiven: row.flyerGiven,
+        notes: row.notes,
+      }),
+    ];
+  }
+  return row;
+}
+
+/** The feed's answer: door-days, newest first as the server sends them. */
+function feedAnswer(doorDays: AdminDoorDay[], serverTime: number, truncated = false): Response {
+  return json({ doorDays, truncated, serverTime });
 }
 
 function dashboardAnswer(period: number): DashboardResponse {
@@ -113,7 +156,7 @@ function stubFetch({ visits, dashboard, exportCsv }: Stub) {
         return (exportCsv ?? (() => json({}, 500)))(url);
       }
       if (url.pathname === "/api/admin/visits") {
-        return (visits ?? (() => json({ visits: [], serverTime: 0 })))(url);
+        return (visits ?? (() => feedAnswer([], 0)))(url);
       }
       throw new Error(`unexpected fetch: ${url}`);
     }),
@@ -165,7 +208,7 @@ afterEach(() => {
 
 describe("VisitsScreen", () => {
   it("defaults to 30 jours: the feed asks for exactly brusselsPeriod(now, 30)", async () => {
-    const asked = stubFetch({ visits: () => json({ visits: [visit("a", 1)], serverTime: 2 }) });
+    const asked = stubFetch({ visits: () => feedAnswer([doorDay("a", 1)], 2) });
     renderScreen();
 
     await screen.findByText(copy.visits.strip.flyersGiven);
@@ -192,8 +235,7 @@ describe("VisitsScreen", () => {
 
   it("re-seeds the feed from since=0 under the new period's own bounds, with no arrival announcement (I/O matrix)", async () => {
     const asked = stubFetch({
-      visits: (url) =>
-        json({ visits: [visit(url.searchParams.get("from") ?? "x", 1)], serverTime: 2 }),
+      visits: (url) => feedAnswer([doorDay(url.searchParams.get("from") ?? "x", 1)], 2),
     });
     renderScreen();
     const period30 = brusselsPeriod(NOW, 30);
@@ -218,15 +260,15 @@ describe("VisitsScreen", () => {
   });
 
   it("shows the empty-feed copy and no pager for an empty window", async () => {
-    stubFetch({ visits: () => json({ visits: [], serverTime: 0 }) });
+    stubFetch({ visits: () => feedAnswer([], 0) });
     renderScreen();
     expect(await screen.findByText(copy.visits.empty)).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: copy.visits.pager.nav })).toBeNull();
   });
 
-  it("pages 60 held visits 25 at a time, Précédent/Suivant disabled at the edges", async () => {
-    const visits = Array.from({ length: 60 }, (_, i) => visit(String(i), i + 1));
-    stubFetch({ visits: () => json({ visits, serverTime: 61 }) });
+  it("pages 60 held door-days 25 at a time, Précédent/Suivant disabled at the edges", async () => {
+    const visits = Array.from({ length: 60 }, (_, i) => doorDay(String(i), i + 1));
+    stubFetch({ visits: () => feedAnswer(visits, 61) });
     renderScreen();
 
     await screen.findByText(copy.visits.count(60));
@@ -251,9 +293,9 @@ describe("VisitsScreen", () => {
       visits: (url) => {
         const isSeven = url.searchParams.get("from") === String(period7.from);
         const rows = Array.from({ length: isSeven ? 30 : 60 }, (_, i) =>
-          visit(`${isSeven ? "s" : "t"}${i}`, i + 1),
+          doorDay(`${isSeven ? "s" : "t"}${i}`, i + 1),
         );
-        return json({ visits: rows, serverTime: 61 });
+        return feedAnswer(rows, 61);
       },
     });
     renderScreen();
@@ -274,13 +316,22 @@ describe("VisitsScreen", () => {
     ).toBe("page");
   });
 
-  it("reads the count as capped at the feed's own cap (I/O matrix)", async () => {
-    const visits = Array.from({ length: ADMIN_VISITS_PAGE_SIZE }, (_, i) =>
-      visit(String(i), i + 1),
-    );
-    stubFetch({ visits: () => json({ visits, serverTime: ADMIN_VISITS_PAGE_SIZE + 1 }) });
+  it("reads the count as capped when the server cut the window, however few rows (I/O matrix)", async () => {
+    // 500 visits can be fewer door-days: `truncated` decides, never the length.
+    const rows = Array.from({ length: 320 }, (_, i) => doorDay(String(i), i + 1));
+    stubFetch({ visits: () => feedAnswer(rows, 321, true) });
     renderScreen();
-    expect(await screen.findByText(copy.visits.countCapped(ADMIN_VISITS_PAGE_SIZE))).toBeTruthy();
+    expect(await screen.findByText(copy.visits.countCapped(320))).toBeTruthy();
+  });
+
+  it("reads 500 door-days as exact when the server did not cut the window", async () => {
+    const rows = Array.from({ length: ADMIN_VISITS_PAGE_SIZE }, (_, i) =>
+      doorDay(String(i), i + 1),
+    );
+    stubFetch({ visits: () => feedAnswer(rows, ADMIN_VISITS_PAGE_SIZE + 1, false) });
+    renderScreen();
+    expect(await screen.findByText(copy.visits.count(ADMIN_VISITS_PAGE_SIZE))).toBeTruthy();
+    expect(screen.queryByText(copy.visits.countCapped(ADMIN_VISITS_PAGE_SIZE))).toBeNull();
   });
 
   it("shows each strip card's figure and link target", async () => {
@@ -313,7 +364,7 @@ describe("VisitsScreen", () => {
         dashboardCalls += 1;
         return dashboardCalls === 1 ? json({}, 500) : json(dashboardAnswer(30));
       },
-      visits: () => json({ visits: [visit("a", 1)], serverTime: 2 }),
+      visits: () => feedAnswer([doorDay("a", 1)], 2),
     });
     renderScreen();
 
@@ -338,7 +389,7 @@ describe("VisitsScreen", () => {
   it("shows the ledger's load-failed Alert and refetches on « Réessayer », with no empty copy (#208)", async () => {
     let fail = true;
     stubFetch({
-      visits: () => (fail ? json({}, 500) : json({ visits: [visit("a", 1)], serverTime: 2 })),
+      visits: () => (fail ? json({}, 500) : feedAnswer([doorDay("a", 1)], 2)),
     });
     renderScreen();
 
@@ -358,7 +409,7 @@ describe("VisitsScreen", () => {
   it("keeps held rows under loadFailed when a later poll fails", async () => {
     let fail = false;
     stubFetch({
-      visits: () => (fail ? json({}, 500) : json({ visits: [visit("a", 1)], serverTime: 2 })),
+      visits: () => (fail ? json({}, 500) : feedAnswer([doorDay("a", 1)], 2)),
     });
     const client = renderScreen();
     await screen.findByText("Place a");
@@ -370,14 +421,14 @@ describe("VisitsScreen", () => {
     expect(screen.getByText("Place a")).toBeTruthy();
   });
 
-  it("stays on page 2 when a visit arrives, and announces it once (I/O matrix)", async () => {
-    let visits = Array.from({ length: 60 }, (_, i) => visit(String(i), i + 1));
-    stubFetch({ visits: () => json({ visits, serverTime: 61 }) });
+  it("stays on page 2 when a door-day arrives, and announces it once (I/O matrix)", async () => {
+    let visits = Array.from({ length: 60 }, (_, i) => doorDay(String(i), i + 1));
+    stubFetch({ visits: () => feedAnswer(visits, 61) });
     const client = renderScreen();
     await screen.findByText(copy.visits.count(60));
 
     await userEvent.click(screen.getByRole("button", { name: copy.visits.pager.pageLabel(2) }));
-    visits = [visit("new", 100)];
+    visits = [doorDay("new", 100)];
     await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
 
     await screen.findByText(copy.visits.count(61));
@@ -390,14 +441,14 @@ describe("VisitsScreen", () => {
   });
 
   it("re-announces the live region on each poll, even with unchanged text (#160)", async () => {
-    let visits = [visit("a", 1)];
-    stubFetch({ visits: () => json({ visits, serverTime: 2 }) });
+    let visits = [doorDay("a", 1)];
+    stubFetch({ visits: () => feedAnswer(visits, 2) });
     const client = renderScreen();
     await screen.findByText("Place a");
     const before = document.querySelector('[aria-live="polite"]');
     expect(before).not.toBeNull();
 
-    visits = [visit("a", 1), visit("b", 3)];
+    visits = [doorDay("a", 1), doorDay("b", 3)];
     // The pinned clock must move between polls, or `dataUpdatedAt` — the
     // live-region's own key — lands on the same millisecond twice.
     vi.setSystemTime(NOW + 1);
@@ -410,7 +461,7 @@ describe("VisitsScreen", () => {
   });
 
   it("keeps transition-colors on a row that is not newly arrived (#162)", async () => {
-    stubFetch({ visits: () => json({ visits: [visit("a", 1)], serverTime: 2 }) });
+    stubFetch({ visits: () => feedAnswer([doorDay("a", 1)], 2) });
     renderScreen();
     const row = (await screen.findByText("Place a")).closest("li");
     expect(row?.className).toContain("transition-colors");
@@ -483,37 +534,35 @@ describe("VisitsScreen", () => {
 });
 
 describe("VisitsScreen › live feed rows (#185)", () => {
-  it("quotes a visit's notes on a second line, and a visit without notes has none", async () => {
+  it("quotes a row's notes on a second line, and a row without notes has none", async () => {
     stubFetch({
       visits: () =>
-        json({
-          visits: [{ ...visit("a", 2), notes: "Rappeler lundi" }, visit("b", 1)],
-          serverTime: 3,
-        }),
+        feedAnswer([{ ...doorDay("a", 2), notes: "Rappeler lundi" }, doorDay("b", 1)], 3),
     });
     renderScreen();
 
     const quoted = await screen.findByText("« Rappeler lundi »");
     const row = quoted.closest("li");
     expect(row?.textContent).toContain("Place a");
-    // Its own line: a direct child of the row, outside the first line that
-    // holds the name.
-    expect(quoted.parentElement).toBe(row);
+    // Its own line: a direct child of the row's button, outside the first line
+    // that holds the name.
+    expect(quoted.parentElement?.tagName).toBe("BUTTON");
+    expect(quoted.parentElement?.closest("li")).toBe(row);
     expect(screen.getByText("Place a").parentElement?.contains(quoted)).toBe(false);
     expect(screen.getByText("Place b").closest("li")?.textContent).not.toContain("«");
   });
 
-  it("shows a visit to a merged prospect under the name it was made against", async () => {
+  it("shows a door-day of a merged prospect under the name it was made against", async () => {
     const survivor = "11111111-1111-4111-8111-111111111111";
     stubFetch({
       visits: () =>
-        json({
-          visits: [
-            { ...visit("new", 2), prospectId: survivor, prospectName: "Le Bouchon des Filles" },
-            { ...visit("old", 1), prospectId: survivor, prospectName: "Le Bouchon" },
+        feedAnswer(
+          [
+            { ...doorDay("new", 2), prospectId: survivor, prospectName: "Le Bouchon des Filles" },
+            { ...doorDay("old", 1), prospectId: survivor, prospectName: "Le Bouchon" },
           ],
-          serverTime: 3,
-        }),
+          3,
+        ),
     });
     renderScreen();
 
@@ -522,12 +571,12 @@ describe("VisitsScreen › live feed rows (#185)", () => {
   });
 
   it("announces an arrival in the live region, never as a toast", async () => {
-    let visits = [visit("a", 1)];
-    stubFetch({ visits: () => json({ visits, serverTime: 2 }) });
+    let visits = [doorDay("a", 1)];
+    stubFetch({ visits: () => feedAnswer(visits, 2) });
     const client = renderScreen();
     await screen.findByText("Place a");
 
-    visits = [visit("a", 1), visit("b", 3)];
+    visits = [doorDay("a", 1), doorDay("b", 3)];
     vi.setSystemTime(NOW + 1);
     await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
 
@@ -549,24 +598,24 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
   function byReason(url: URL): Response {
     const reason = url.searchParams.get("reason");
     const all = [
-      visit("a", 3, { outcome: "not_interested", refusalReason: "no_need" }),
-      visit("b", 2, { outcome: "not_interested", refusalReason: "fee_distrust" }),
-      visit("c", 1, { outcome: "converted" }),
+      doorDay("a", 3, { outcome: "not_interested", refusalReason: "no_need" }),
+      doorDay("b", 2, { outcome: "not_interested", refusalReason: "fee_distrust" }),
+      doorDay("c", 1, { outcome: "converted" }),
     ];
     const visits = reason === null ? all : all.filter((v) => v.refusalReason === reason);
-    return json({ visits, serverTime: 4 });
+    return feedAnswer(visits, 4);
   }
 
-  it("shows the reason's label beside Pas intéressé, and nothing on a visit without one", async () => {
+  it("shows the reason's label beside Pas intéressé, and nothing on a row without one", async () => {
     stubFetch({
       visits: () =>
-        json({
-          visits: [
-            visit("a", 2, { outcome: "not_interested", refusalReason: "too_many_devices" }),
-            visit("b", 1, { outcome: "not_interested" }),
+        feedAnswer(
+          [
+            doorDay("a", 2, { outcome: "not_interested", refusalReason: "too_many_devices" }),
+            doorDay("b", 1, { outcome: "not_interested" }),
           ],
-          serverTime: 3,
-        }),
+          3,
+        ),
     });
     renderScreen();
 
@@ -689,5 +738,150 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
     const feedCall = asked.find((u) => u.startsWith("/api/admin/visits?"));
     expect(param(exportCall, "reason")).toBe("fee_distrust");
     expect(bounds(exportCall)).toEqual(bounds(feedCall));
+  });
+});
+
+describe("VisitsScreen › door-day rows (ADR-0036 R13)", () => {
+  /** A correction: Personne sur place, then Converti, one row. */
+  function corrected(over: Partial<AdminDoorDay> = {}): AdminDoorDay {
+    return doorDay("roma", 5, {
+      prospectName: "Pizza Roma",
+      outcome: "converted",
+      flyerGiven: true,
+      visits: [
+        dayVisit("v1", 1, { outcome: "no_contact", notes: "Fermé, repasser" }),
+        dayVisit("v2", 5, { outcome: "converted", flyerGiven: true, answerCount: 4 }),
+      ],
+      ...over,
+    });
+  }
+
+  const opener = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name},`) });
+
+  it("shows a two-visit door-day as one row with « 2 visites », closed", async () => {
+    stubFetch({ visits: () => feedAnswer([corrected(), doorDay("b", 1)], 6) });
+    renderScreen();
+    await screen.findByText("Pizza Roma");
+
+    const button = opener("Pizza Roma");
+    expect(button.getAttribute("aria-label")).toBe(
+      copy.visits.openRow("Pizza Roma", OUTCOME_LABELS.converted, 2),
+    );
+    expect(within(button).getByText(copy.visits.visitCount(2))).toBeTruthy();
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(copy.visits.history)).toBeNull();
+    // One visit: no count on the row, and its name says none.
+    expect(within(opener("Place b")).queryByText(/visites$/)).toBeNull();
+    expect(opener("Place b").getAttribute("aria-label")).toBe(
+      copy.visits.openRow("Place b", OUTCOME_LABELS.interested, 1),
+    );
+  });
+
+  it("opens in place onto every visit, oldest first, with what each carried", async () => {
+    stubFetch({ visits: () => feedAnswer([corrected()], 6) });
+    renderScreen();
+    await screen.findByText("Pizza Roma");
+
+    const button = opener("Pizza Roma");
+    await userEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    const panel = document.getElementById(button.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getByText(copy.visits.history)).toBeTruthy();
+
+    const lines = within(panel as HTMLElement).getAllByRole("listitem");
+    expect(lines.map((line) => line.textContent)).toEqual([
+      expect.stringContaining(OUTCOME_LABELS.no_contact),
+      expect.stringContaining(OUTCOME_LABELS.converted),
+    ]);
+    expect(lines[0]?.textContent).toContain("« Fermé, repasser »");
+    expect(lines[0]?.textContent).not.toContain(copy.visits.flyer);
+    expect(lines[1]?.textContent).toContain(copy.visits.flyer);
+    expect(lines[1]?.textContent).toContain(copy.visits.answers(4));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await userEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(copy.visits.history)).toBeNull();
+  });
+
+  it("shows each history line's own refusal reason", async () => {
+    const row = doorDay("roma", 5, {
+      prospectName: "Pizza Roma",
+      outcome: "converted",
+      visits: [
+        dayVisit("v1", 1, { outcome: "not_interested", refusalReason: "no_need" }),
+        dayVisit("v2", 5, { outcome: "converted" }),
+      ],
+    });
+    stubFetch({ visits: () => feedAnswer([row], 6) });
+    renderScreen();
+    await screen.findByText("Pizza Roma");
+
+    const button = opener("Pizza Roma");
+    await userEvent.click(button);
+    const panel = document.getElementById(button.getAttribute("aria-controls") ?? "");
+    const lines = within(panel as HTMLElement).getAllByRole("listitem");
+    expect(lines[0]?.textContent).toContain(REFUSAL_REASON_LABELS.no_need);
+    expect(lines[1]?.textContent).not.toContain(REFUSAL_REASON_LABELS.no_need);
+  });
+
+  it("keeps at most one row open", async () => {
+    stubFetch({ visits: () => feedAnswer([corrected(), doorDay("b", 1)], 6) });
+    renderScreen();
+    await screen.findByText("Pizza Roma");
+
+    await userEvent.click(opener("Pizza Roma"));
+    await userEvent.click(opener("Place b"));
+    expect(opener("Pizza Roma").getAttribute("aria-expanded")).toBe("false");
+    expect(opener("Place b").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getAllByText(copy.visits.history)).toHaveLength(1);
+  });
+
+  it("keeps the open row open across a poll and adds the arriving visit to its history", async () => {
+    let rows = [
+      corrected({
+        receivedAt: at(2),
+        outcome: "no_contact",
+        visits: [dayVisit("v1", 1, { outcome: "no_contact" })],
+      }),
+      doorDay("b", 3),
+    ];
+    stubFetch({ visits: () => feedAnswer(rows, 4) });
+    const client = renderScreen();
+    await screen.findByText("Pizza Roma");
+    expect(screen.getAllByRole("button", { name: /Voir les visites$/ })[1]).toBe(
+      opener("Pizza Roma"),
+    );
+    await userEvent.click(opener("Pizza Roma"));
+
+    rows = [corrected({ receivedAt: at(9) })];
+    vi.setSystemTime(NOW + 1);
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed() });
+
+    const button = opener("Pizza Roma");
+    await waitFor(() => expect(within(button).getByText(copy.visits.visitCount(2))).toBeTruthy());
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    const panel = document.getElementById(button.getAttribute("aria-controls") ?? "");
+    expect(within(panel as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
+    // Replaced, moved to the top, washed and announced once: still one row.
+    expect(screen.getAllByText("Pizza Roma")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Voir les visites$/ })[0]).toBe(button);
+    expect(button.closest("li")?.className).toContain("bg-accent");
+    expect(screen.getByText(copy.visits.arrived(1))).toBeTruthy();
+  });
+
+  it("closes the open row on a page change", async () => {
+    const rows = Array.from({ length: 30 }, (_, i) => doorDay(String(i), 30 - i));
+    stubFetch({ visits: () => feedAnswer(rows, 31) });
+    renderScreen();
+    await screen.findByText(copy.visits.count(30));
+
+    await userEvent.click(opener("Place 0"));
+    expect(screen.getByText(copy.visits.history)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: copy.visits.pager.pageLabel(2) }));
+    await userEvent.click(screen.getByRole("button", { name: copy.visits.pager.pageLabel(1) }));
+    expect(opener("Place 0").getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(copy.visits.history)).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "./db/client";
+import { brusselsMidnightDaysFromNow } from "../shared/period";
 import {
   ADMIN_VISITS_PAGE_SIZE,
   CLIENT_VERSION,
@@ -24,6 +25,7 @@ import type {
   ScriptsResponse,
 } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
+import { beforeStatement } from "../../test/d1-hook";
 import { resetTestUsers, seedUser } from "../../test/users";
 
 /**
@@ -1698,7 +1700,7 @@ describe("GET /api/admin/visits", () => {
   /**
    * Written straight to D1 rather than through /api/agent/sync: the feed is
    * about `received_at`, and only a direct insert lets a test place two visits
-   * on either side of a known cursor.
+   * on either side of a known cursor. One prospect each, so one door-day each.
    */
   async function seedVisit(
     name: string,
@@ -1719,30 +1721,65 @@ describe("GET /api/admin/visits", () => {
       createdAt: receivedAt,
       updatedAt: receivedAt,
     });
-    await db.insert(visits).values({
-      id: crypto.randomUUID(),
-      prospectId,
-      agentEmail: AGENT,
-      visitedAt: receivedAt,
-      clientVisitedAt: receivedAt,
-      receivedAt,
-      flyerGiven: true,
-      outcome: outcome as "interested",
-      refusalReason,
-      clientVersion: 1,
-    });
+    await addVisit(prospectId, { receivedAt, outcome, refusalReason });
     return prospectId;
+  }
+
+  /** Another visit on an existing prospect: a door-day with more than one. */
+  async function addVisit(
+    prospectId: string,
+    over: {
+      receivedAt: number;
+      visitedAt?: number;
+      outcome?: string;
+      refusalReason?: RefusalReason | null;
+      flyerGiven?: boolean;
+      agentEmail?: string;
+      notes?: string | null;
+      answers?: Record<string, unknown>;
+    },
+  ) {
+    const visitedAt = over.visitedAt ?? over.receivedAt;
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(visits)
+      .values({
+        id,
+        prospectId,
+        agentEmail: over.agentEmail ?? AGENT,
+        visitedAt,
+        clientVisitedAt: visitedAt,
+        receivedAt: over.receivedAt,
+        flyerGiven: over.flyerGiven ?? true,
+        outcome: (over.outcome ?? "interested") as "interested",
+        refusalReason: over.refusalReason ?? null,
+        notes: over.notes ?? null,
+        answers: over.answers ?? {},
+        clientVersion: 1,
+      });
+    return id;
   }
 
   async function feed(query = ""): Promise<AdminVisitsResponse> {
     const response = await call(`/api/admin/visits${query}`);
     expect(response.status).toBe(200);
-    return (await response.json()) as AdminVisitsResponse;
+    const body = (await response.json()) as AdminVisitsResponse;
+    // Every answer: each door-day whole, oldest first, its last visit the row's.
+    for (const d of body.doorDays) {
+      expect(d.visits.length).toBeGreaterThan(0);
+      const order = d.visits.map((v) => v.visitedAt);
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+      expect(d.visits.at(-1)?.outcome).toBe(d.outcome);
+    }
+    return body;
   }
+
+  const names = (body: AdminVisitsResponse) => body.doorDays.map((d) => d.prospectName);
 
   it("returns an empty list rather than an error before anyone has visited", async () => {
     const body = await feed();
-    expect(body.visits).toEqual([]);
+    expect(body.doorDays).toEqual([]);
+    expect(body.truncated).toBe(false);
     expect(body.serverTime).toBeGreaterThan(0);
   });
 
@@ -1751,37 +1788,32 @@ describe("GET /api/admin/visits", () => {
     await seedVisit("Chez Marcel", 3_000);
     await seedVisit("Pizza Vera", 2_000);
 
-    const body = await feed();
-    expect(body.visits.map((v) => v.prospectName)).toEqual([
-      "Chez Marcel",
-      "Pizza Vera",
-      "Le Bouchon",
-    ]);
+    expect(names(await feed())).toEqual(["Chez Marcel", "Pizza Vera", "Le Bouchon"]);
   });
 
   it("joins the prospect name, which is the whole point of the feed", async () => {
     await seedVisit("Le Comptoir", 5_000, "converted");
-    const [visit] = (await feed()).visits;
-    expect(visit).toMatchObject({
+    const [row] = (await feed()).doorDays;
+    expect(row).toMatchObject({
       prospectName: "Le Comptoir",
       agentEmail: AGENT,
       outcome: "converted",
       flyerGiven: true,
       receivedAt: 5_000,
     });
+    expect(row?.visits).toHaveLength(1);
   });
 
   it("treats `since` as exclusive, so polling returns only what is new", async () => {
     await seedVisit("Ancienne", 1_000);
     await seedVisit("Nouvelle", 2_000);
 
-    const body = await feed("?since=1000");
-    expect(body.visits.map((v) => v.prospectName)).toEqual(["Nouvelle"]);
+    expect(names(await feed("?since=1000"))).toEqual(["Nouvelle"]);
   });
 
   it("returns everything when `since` is absent, so a fresh tab is not empty", async () => {
     await seedVisit("Le Bouchon", 1_000);
-    expect((await feed()).visits).toHaveLength(1);
+    expect((await feed()).doorDays).toHaveLength(1);
   });
 
   it("still shows a visit whose prospect was merged away afterwards", async () => {
@@ -1794,24 +1826,26 @@ describe("GET /api/admin/visits", () => {
     // Every other admin list filters merged_into IS NULL. This one must not:
     // no visit is ever repointed, so filtering would delete history from the
     // feed because an admin tidied a duplicate (docs/domains/prospecting.md).
-    expect((await feed()).visits).toHaveLength(2);
+    expect(names(await feed())).toEqual(["Le Bouchon (ancien)", "Le Bouchon"]);
   });
 
-  it("caps the page, and refuses a limit above it", async () => {
+  it("caps the page, says so, and refuses a limit above it", async () => {
     await seedVisit("Le Bouchon", 1_000);
     await seedVisit("Chez Marcel", 2_000);
 
-    expect((await feed("?limit=1")).visits).toHaveLength(1);
+    const capped = await feed("?limit=1");
+    expect(names(capped)).toEqual(["Chez Marcel"]);
+    expect(capped.truncated).toBe(true);
+    expect((await feed("?limit=2")).truncated).toBe(false);
     expect((await call(`/api/admin/visits?limit=${ADMIN_VISITS_PAGE_SIZE + 1}`)).status).toBe(400);
   });
 
-  it("keeps only visits whose received_at is within [from, to]", async () => {
+  it("keeps only door-days with a visit whose received_at is within [from, to]", async () => {
     await seedVisit("Trop tot", 1_000);
     await seedVisit("Dans la fenetre", 2_000);
     await seedVisit("Trop tard", 3_000);
 
-    const body = await feed("?from=1500&to=2500");
-    expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+    expect(names(await feed("?from=1500&to=2500"))).toEqual(["Dans la fenetre"]);
   });
 
   it("includes a visit whose received_at equals from or to, the range is inclusive", async () => {
@@ -1819,8 +1853,7 @@ describe("GET /api/admin/visits", () => {
     await seedVisit("Dans la fenetre", 1_500);
     await seedVisit("Egale a to", 2_000);
 
-    const body = await feed("?from=1000&to=2000");
-    expect(body.visits.map((v) => v.prospectName).sort()).toEqual([
+    expect(names(await feed("?from=1000&to=2000")).sort()).toEqual([
       "Dans la fenetre",
       "Egale a from",
       "Egale a to",
@@ -1847,8 +1880,7 @@ describe("GET /api/admin/visits", () => {
     await seedVisit("Dans la fenetre", 2_000);
     await seedVisit("Apres la fenetre", 4_000);
 
-    const body = await feed("?since=1000&from=1500&to=3000");
-    expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+    expect(names(await feed("?since=1000&from=1500&to=3000"))).toEqual(["Dans la fenetre"]);
   });
 
   it("rejects a `since` that is not a non-negative integer", async () => {
@@ -1861,22 +1893,216 @@ describe("GET /api/admin/visits", () => {
     expect((await call("/api/admin/visits")).status).toBe(403);
   });
 
+  /** ADR-0036 R13, the story's I/O matrix: one row per agent, prospect and Brussels day. */
+  describe("door-days (ADR-0036)", () => {
+    const HOUR = 3_600_000;
+    // A Brussels midnight in summer time, so a UTC day would split it.
+    const DAY = brusselsMidnightDaysFromNow(Date.UTC(2026, 9, 14, 12), 0);
+    const NEXT_DAY = brusselsMidnightDaysFromNow(DAY, 1);
+    const at = (hours: number, day = DAY) => day + hours * HOUR;
+
+    it("lists a correction as one row: the latest outcome, both visits oldest first", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), outcome: "converted", notes: "signé" });
+
+      const body = await feed();
+      expect(body.doorDays).toHaveLength(1);
+      const [row] = body.doorDays;
+      expect(row).toMatchObject({
+        prospectId: id,
+        prospectName: "Pizza Roma",
+        agentEmail: AGENT,
+        dayStart: DAY,
+        outcome: "converted",
+        visitedAt: at(16),
+        receivedAt: at(16),
+        notes: "signé",
+      });
+      expect(row?.visits.map((v) => v.outcome)).toEqual(["no_contact", "converted"]);
+    });
+
+    it("answers a poll after the seed with the whole door-day, under the same key", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      const [held] = (await feed()).doorDays;
+
+      await addVisit(id, { receivedAt: at(16), outcome: "converted" });
+      const poll = await feed(`?since=${held?.receivedAt}`);
+      expect(poll.doorDays).toHaveLength(1);
+      expect(poll.doorDays[0]?.key).toBe(held?.key);
+      expect(poll.doorDays[0]?.receivedAt).toBe(at(16));
+      expect(poll.doorDays[0]?.visits.map((v) => v.outcome)).toEqual(["no_contact", "converted"]);
+    });
+
+    it("lists a door-day whole when only one of its visits is within the bounds", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), outcome: "converted" });
+
+      const body = await feed(`?from=${at(12)}&to=${at(20)}`);
+      expect(body.doorDays[0]?.visits).toHaveLength(2);
+    });
+
+    it("shows the flyer when any visit gave one, and each visit its own", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), outcome: "interested", flyerGiven: false });
+
+      const [row] = (await feed()).doorDays;
+      expect(row?.flyerGiven).toBe(true);
+      expect(row?.visits.map((v) => v.flyerGiven)).toEqual([true, false]);
+    });
+
+    it("counts each visit's answers", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), answers: { q1: "oui", q2: 3, q3: ["a", "b"] } });
+
+      const [row] = (await feed()).doorDays;
+      expect(row?.visits.map((v) => v.answerCount)).toEqual([0, 3]);
+    });
+
+    it("splits the same door over two Brussels days, and over two agents", async () => {
+      const id = await seedVisit("Pizza Roma", at(23.5), "no_contact");
+      // 00:30 the next Brussels day, though still the same UTC day in summer.
+      await addVisit(id, { receivedAt: at(0.5, NEXT_DAY), outcome: "converted" });
+      await addVisit(id, { receivedAt: at(12), agentEmail: "autre@example.com" });
+
+      const body = await feed();
+      expect(body.doorDays.map((d) => [d.agentEmail, d.dayStart, d.visits.length])).toEqual([
+        [AGENT, NEXT_DAY, 1],
+        [AGENT, DAY, 1],
+        ["autre@example.com", DAY, 1],
+      ]);
+      expect(new Set(body.doorDays.map((d) => d.key)).size).toBe(3);
+    });
+
+    it("lists a late sync under the day it was made, at the top by arrival", async () => {
+      await seedVisit("Arrivee plus tot", at(11, NEXT_DAY));
+      const id = await seedVisit("Le Bouchon", at(12, NEXT_DAY));
+      await getDb(env.DB)
+        .update(visits)
+        .set({ visitedAt: at(14) })
+        .where(eq(visits.prospectId, id));
+
+      const [top] = (await feed()).doorDays;
+      expect(top).toMatchObject({ prospectName: "Le Bouchon", dayStart: DAY });
+    });
+
+    it("keeps a door-day with reason= only when its latest visit has the reason", async () => {
+      const corrected = await seedVisit("Corrige", at(10), "not_interested", "no_need");
+      await addVisit(corrected, { receivedAt: at(16), outcome: "converted" });
+      const refused = await seedVisit("Refuse ensuite", at(10), "converted");
+      await addVisit(refused, {
+        receivedAt: at(16),
+        outcome: "not_interested",
+        refusalReason: "no_need",
+      });
+
+      const body = await feed("?reason=no_need");
+      expect(names(body)).toEqual(["Refuse ensuite"]);
+      expect(body.doorDays[0]?.visits).toHaveLength(2);
+    });
+
+    it("cuts at the limit in touched visits, never more rows than that", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), outcome: "converted" });
+      await seedVisit("Le Bouchon", at(12));
+
+      const body = await feed("?limit=2");
+      expect(body.truncated).toBe(true);
+      expect(body.doorDays.length).toBeLessThanOrEqual(2);
+      expect(names(body)).toEqual(["Pizza Roma", "Le Bouchon"]);
+    });
+
+    it("orders a door-day by its latest arrival, while its answer stays the latest visit's", async () => {
+      // B made 16:00 and received at once; A made 10:00 but synced late, at 20:00.
+      const id = await seedVisit("Pizza Roma", at(16), "converted");
+      await addVisit(id, { visitedAt: at(10), receivedAt: at(20), outcome: "no_contact" });
+      await seedVisit("Le Bouchon", at(18));
+
+      const body = await feed();
+      expect(names(body)).toEqual(["Pizza Roma", "Le Bouchon"]);
+      expect(body.doorDays[0]).toMatchObject({
+        receivedAt: at(20),
+        outcome: "converted",
+        visitedAt: at(16),
+      });
+      expect((await feed(`?since=${at(20)}`)).doorDays).toEqual([]);
+    });
+
+    it("leaves a visit synced between its two reads to the next poll", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      const DB = beforeStatement(env.DB, /json_each\(\?\)/, async () => {
+        await addVisit(id, { receivedAt: at(16), outcome: "converted" });
+      });
+      const response = await workerFetch("http://localhost/api/admin/visits", undefined, { DB });
+      const [held] = ((await response.json()) as AdminVisitsResponse).doorDays;
+      expect(held).toMatchObject({ receivedAt: at(10), outcome: "no_contact" });
+
+      const [next] = (await feed(`?since=${held?.receivedAt}`)).doorDays;
+      expect(next).toMatchObject({ key: held?.key, receivedAt: at(16), outcome: "converted" });
+    });
+
+    it("keeps the 25-hour day of a clock change as one Brussels day", async () => {
+      // 25 Oct 2026: Brussels goes back from UTC+2 to UTC+1 at 03:00.
+      const day = brusselsMidnightDaysFromNow(Date.UTC(2026, 9, 25, 12), 0);
+      const next = brusselsMidnightDaysFromNow(day, 1);
+      expect(next - day).toBe(25 * HOUR);
+
+      const id = await seedVisit("Pizza Roma", day + 0.5 * HOUR, "no_contact");
+      await addVisit(id, { receivedAt: day + 24.5 * HOUR, outcome: "interested" }); // 23:30
+      await addVisit(id, { receivedAt: next + 0.5 * HOUR, outcome: "converted" }); // 00:30 on the 26th
+
+      const body = await feed();
+      expect(body.doorDays.map((d) => [d.dayStart, d.visits.length])).toEqual([
+        [next, 1],
+        [day, 2],
+      ]);
+    });
+
+    it("reads every door-day's visits in one statement, by index, with two bound parameters", async () => {
+      const id = await seedVisit("Pizza Roma", at(10), "no_contact");
+      await addVisit(id, { receivedAt: at(16), outcome: "converted" });
+
+      const seen: string[] = [];
+      const recording = new Proxy(env.DB, {
+        get(target, prop) {
+          if (prop === "prepare") {
+            return (query: string) => (seen.push(query), target.prepare(query));
+          }
+          const value: unknown = Reflect.get(target, prop);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      const response = await workerFetch("http://localhost/api/admin/visits", undefined, {
+        DB: recording,
+      });
+      expect(response.status).toBe(200);
+
+      const siblings = seen.filter((q) => q.includes("json_each(?)"));
+      expect(siblings).toHaveLength(1);
+      const [query = ""] = siblings;
+      // The JSON array of door-days, and the greatest touched arrival.
+      expect((query.match(/\?/g) ?? []).length).toBe(2);
+      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query}`)
+        .bind(JSON.stringify([[AGENT, id, DAY, NEXT_DAY]]), at(16))
+        .all<{ detail: string }>();
+      expect(results.some((r) => r.detail.includes("visits_prospect_visited_idx"))).toBe(true);
+    });
+  });
+
   describe("refusal reasons (GH #249)", () => {
     it("returns refusalReason, null where the visit has none", async () => {
       await seedVisit("Refus", 1_000, "not_interested", "no_need");
       await seedVisit("Ancien refus", 2_000, "not_interested");
-      const byName = new Map((await feed()).visits.map((v) => [v.prospectName, v]));
+      const byName = new Map((await feed()).doorDays.map((d) => [d.prospectName, d]));
       expect(byName.get("Refus")?.refusalReason).toBe("no_need");
       expect(byName.get("Ancien refus")?.refusalReason).toBeNull();
     });
 
-    it("keeps only the visits with the reason asked for", async () => {
+    it("keeps only the door-days with the reason asked for", async () => {
       await seedVisit("Trop d'applis", 1_000, "not_interested", "too_many_devices");
       await seedVisit("Pas besoin", 2_000, "not_interested", "no_need");
       await seedVisit("Converti", 3_000, "converted");
 
-      const body = await feed("?reason=too_many_devices");
-      expect(body.visits.map((v) => v.prospectName)).toEqual(["Trop d'applis"]);
+      expect(names(await feed("?reason=too_many_devices"))).toEqual(["Trop d'applis"]);
     });
 
     it("applies reason alongside since, from and to", async () => {
@@ -1886,8 +2112,9 @@ describe("GET /api/admin/visits", () => {
       await seedVisit("Dans la fenetre", 2_500, "not_interested", "no_need");
       await seedVisit("Apres la fenetre", 4_000, "not_interested", "no_need");
 
-      const body = await feed("?reason=no_need&since=600&from=1500&to=3000");
-      expect(body.visits.map((v) => v.prospectName)).toEqual(["Dans la fenetre"]);
+      expect(names(await feed("?reason=no_need&since=600&from=1500&to=3000"))).toEqual([
+        "Dans la fenetre",
+      ]);
     });
 
     it.each(["reason=bogus", "reason=", "reason=NONE", "reason=none"])(

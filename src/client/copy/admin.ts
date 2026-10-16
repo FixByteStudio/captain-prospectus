@@ -672,15 +672,27 @@ export const adminCopy = {
 
   visits: {
     title: "Visites",
-    lede: "Les visites arrivent ici dès qu'un agent synchronise.",
+    /** The unit, said once: a row is a door-day (ADR-0036 R13, design.md › The live feed). */
+    lede: "Une ligne par prospect et par jour, avec son dernier résultat. Ouvrez une ligne pour voir chaque visite.",
     count: (n: number) => (n === 1 ? "1 visite" : `${n} visites`),
-    /** The opening page filled the feed's cap (ADMIN_VISITS_PAGE_SIZE), so more may exist. */
+    /** The server cut the window (`truncated`), so more door-days may exist than the n held. */
     countCapped: (n: number) => `${n} visites ou plus`,
     // An empty screen is an invitation, not a shrug (design.md).
     empty: "Aucune visite reçue. Les visites apparaissent ici dès qu'un agent synchronise.",
     loading: "Chargement des visites…",
     loadFailed: "Impossible de charger les visites. Réessayez.",
     flyer: "Flyer remis",
+    /** A door-day's visits, shown on its row when there is more than one. */
+    visitCount: (n: number) => `${n} visites`,
+    /** The overline of an opened row's history. */
+    history: "Visites de la journée",
+    /** The row's disclosure button, named without the count for one visit. */
+    openRow: (name: string, outcome: string, n: number) =>
+      n > 1
+        ? `${name}, ${outcome}, ${n} visites. Voir les visites`
+        : `${name}, ${outcome}. Voir les visites`,
+    /** A history line's answer count; French keeps 0 and 1 singular, as on the phone. */
+    answers: (n: number) => `${n} ${n <= 1 ? "réponse" : "réponses"}`,
     /** Announced when rows arrive, for a reader that cannot see the highlight. */
     arrived: (n: number) => (n === 1 ? "1 nouvelle visite" : `${n} nouvelles visites`),
 

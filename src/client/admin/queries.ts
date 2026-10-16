@@ -8,7 +8,7 @@ import { useNavigate } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch, authError, isWorkerUnauthorized, redirectError } from "../api";
 import { copy } from "../copy";
-import { ADMIN_VISITS_PAGE_SIZE, IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
+import { IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
 import {
   dueBeforeSchema,
@@ -18,11 +18,11 @@ import {
   sourceSchema,
   statusListSchema,
 } from "../../shared/schemas";
-import { arrivedIds, mergeVisits, nextSince } from "./visits/feed";
+import { arrivedKeys, mergeDoorDays, nextSince } from "./visits/feed";
 import { batched } from "./import/csv";
 import { PAGE_SIZE } from "./pagination";
 import type {
-  AdminVisit,
+  AdminDoorDay,
   AdminVisitsResponse,
   AgentRoundResponse,
   AgentsResponse,
@@ -493,7 +493,10 @@ export function useRecap() {
 }
 
 /**
- * Visits as they arrive — ADR-0010.
+ * Door-days as they arrive — ADR-0010, ADR-0036 R13: each row one agent, one
+ * prospect and one Brussels day, carrying its visits. A poll answers the
+ * door-days touched since the cursor, each whole, so a held row is replaced
+ * rather than added to (`mergeDoorDays`).
  *
  * The cursor lives in a ref, not in the query key. Putting a moving `since` in
  * the key would mint a fresh cache entry every 15 s and grow without bound; a
@@ -522,19 +525,20 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
   /**
    * Whether a first answer has landed. Without this the opening page arrives
    * all at once and every row highlights — the screen announces eighteen new
-   * visits when nothing is new, which is precisely the noise the ambient rule
+   * rows when nothing is new, which is precisely the noise the ambient rule
    * exists to avoid. A visit arriving into an empty feed while it is open is
    * still new; a feed being filled for the first time is not.
    */
   const seeded = useRef(false);
   /** The list as the effect last folded it, so the fold never reads stale state. */
-  const held = useRef<AdminVisit[]>([]);
-  const [visits, setVisits] = useState<AdminVisit[]>([]);
+  const held = useRef<AdminDoorDay[]>([]);
+  const [doorDays, setDoorDays] = useState<AdminDoorDay[]>([]);
+  /** Door-day keys this poll added or moved (`arrivedKeys`). */
   const [arrived, setArrived] = useState<string[]>([]);
-  /** The opening page filled the server's cap, so the window may hold more than we do. */
+  /** The opening page was cut at the server's cap, so the window may hold more than we do. */
   const [capped, setCapped] = useState(false);
   /**
-   * `seeded`, but as state: set in the same render as the first `visits`, so
+   * `seeded`, but as state: set in the same render as the first `doorDays`, so
    * `isPending` never drops a render before the rows land — which flashed the
    * empty copy between the skeleton and the rows (GH #223).
    */
@@ -577,27 +581,27 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
     if (!page || !fresh) return;
 
     /**
-     * Folded here rather than inside a `setVisits` updater, with the list
+     * Folded here rather than inside a `setDoorDays` updater, with the list
      * mirrored in a ref.
      *
      * An updater must be pure, and StrictMode double-invokes it in development
      * to prove it: doing this work in there ran the merge twice against the
      * same stale list and marked the whole opening page as new. Running it in
      * the effect body is safe under the same double-invocation because
-     * `mergeVisits` is idempotent — a second pass over the same answer is a
+     * `mergeDoorDays` is idempotent — a second pass over the same answer is a
      * no-op, which `feed.test.ts` pins.
      */
-    const merged = mergeVisits(held.current, page.visits);
+    const merged = mergeDoorDays(held.current, page.doorDays);
     // A scoped window's `from` moves at Brussels midnight while the tab stays
     // open, so a row this poll would no longer ask for is trimmed out here —
-    // otherwise a visit received the day the window rolled past it would sit
-    // in the ledger for ever, since `since` only ever grows.
+    // otherwise a door-day last reached the day the window rolled past it would
+    // sit in the ledger for ever, since `since` only ever grows.
     const inWindow =
       period !== undefined
-        ? merged.filter((visit) => visit.receivedAt >= brusselsPeriod(Date.now(), period).from)
+        ? merged.filter((row) => row.receivedAt >= brusselsPeriod(Date.now(), period).from)
         : merged;
-    setArrived(seeded.current ? arrivedIds(held.current, page.visits) : []);
-    if (!seeded.current) setCapped(page.visits.length >= ADMIN_VISITS_PAGE_SIZE);
+    setArrived(seeded.current ? arrivedKeys(held.current, page.doorDays) : []);
+    if (!seeded.current) setCapped(page.truncated);
     held.current = inWindow;
     seeded.current = true;
     setTaken(true);
@@ -605,13 +609,13 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
     // written between the query and its answer is then delivered next poll
     // rather than skipped for good.
     since.current = nextSince(inWindow);
-    setVisits(inWindow);
+    setDoorDays(inWindow);
     // `answeredAt` too: a refetch whose answer is unchanged keeps `page`'s
     // reference (structural sharing) but may be this mount's first.
   }, [page, fresh, answeredAt]);
 
   return {
-    visits,
+    doorDays,
     arrived,
     // Still pending while only an older mount's answer is cached, or until
     // the effect has taken this mount's first answer in.

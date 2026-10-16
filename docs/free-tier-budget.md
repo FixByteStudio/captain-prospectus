@@ -164,6 +164,17 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   90 days on this machine (the script prints it, "not billed"). The rows read are the same range
   reads as before, so the D1 daily read quota is unchanged; the extra is query time, and the
   dashboard still is not polled.
+- **The Visites feed reads door-days** (ADR-0036 R13, #507: `doorDaysTouched`, two statements,
+  the largest with 5 bound parameters; the second reads every visit of up to 500 door-days through
+  `json_each` over one bound JSON array, each door-day a `visits_prospect_visited_idx` search).
+  Timed with `worker-cpu-shim.mjs` as above, on the local seed (303 prospects, 1,690 visits), an
+  unscoped `GET /api/admin/visits` (500 visits, 499 door-days over 36 Brussels days, a 325 KB
+  answer), alternating the pre-change build (64a718c) and this one seven times: cold first request
+  median 9.01 ms after vs 8.62 ms before (8.72–9.47 vs 8.29–10.18), warm median 2.2 ms vs 0.81 ms,
+  warm worst 6.0 ms vs 4.0 ms. A 30- or 90-day seed is 2.1–2.2 ms warm median, and a poll with
+  nothing new 0.09 ms. The warm extra is the larger answer (every visit of each door-day) and the
+  Brussels day of each visit, computed in the Worker. Inside the budget, but the cold first request
+  leaves about 1 ms of headroom on local hardware, as on other routes (GH #404).
 - **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
   GH #113, eleven since GH #177, the
   largest with 11 bound parameters (20 since ADR-0036; the plans below are the pre-door-day ones, each range read

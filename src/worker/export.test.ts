@@ -322,7 +322,36 @@ describe("GET /api/admin/visits/export.csv", () => {
     expect(byName.get("Ancien refus")?.slice(4, 6)).toEqual(["not_interested", ""]);
   });
 
-  /** One reason= rule for both routes (GH #249): the export lists what the feed lists. */
+  /**
+   * ADR-0036 R13: the ledger shows a door-day as one row, but the export is the
+   * raw history, so a correction is two lines in the file.
+   */
+  it("keeps one line per visit where the feed shows one door-day", async () => {
+    const id = await seedProspect({ name: "Pizza Roma" });
+    const now = Date.now();
+    // One Brussels day whatever the hour the test runs: 10:00 and 16:00 there.
+    const visitedAt = (hourUtc: number) => Date.UTC(2026, 9, 14, hourUtc);
+    await seedVisit(id, {
+      outcome: "no_contact",
+      visitedAt: visitedAt(8),
+      receivedAt: now - 1_000,
+    });
+    await seedVisit(id, { outcome: "converted", visitedAt: visitedAt(14) });
+    const query = `from=${now - 60_000}&to=${now + 60_000}`;
+
+    const feed = (await (await call(`/api/admin/visits?${query}`)).json()) as {
+      doorDays: { visits: unknown[] }[];
+    };
+    const csv = records(await (await call(`/api/admin/visits/export.csv?${query}`)).text());
+    expect(feed.doorDays).toHaveLength(1);
+    expect(feed.doorDays[0]?.visits).toHaveLength(2);
+    expect(csv.slice(1, -1).map((row) => row.split(",")[4])).toEqual(["converted", "no_contact"]);
+  });
+
+  /**
+   * One reason= parameter for both routes (GH #249): with one visit per door,
+   * the export lists what the feed lists.
+   */
   it.each(["no_need", "fee_distrust"])(
     "lists the same visits as the feed for reason=%s and the same range",
     async (reason) => {
@@ -344,13 +373,13 @@ describe("GET /api/admin/visits/export.csv", () => {
       const query = `reason=${reason}&from=${now - 60_000}&to=${now + 60_000}`;
 
       const feed = (await (await call(`/api/admin/visits?${query}`)).json()) as {
-        visits: { prospectName: string }[];
+        doorDays: { prospectName: string }[];
       };
       const csv = records(await (await call(`/api/admin/visits/export.csv?${query}`)).text());
       const exported = csv.slice(1, -1).map((row) => row.split(",")[3]);
 
       const expected = reason === "fee_distrust" ? ["Mefiance"] : ["Pas besoin"];
-      expect(feed.visits.map((v) => v.prospectName)).toEqual(expected);
+      expect(feed.doorDays.map((d) => d.prospectName)).toEqual(expected);
       expect(exported).toEqual(expected);
     },
   );

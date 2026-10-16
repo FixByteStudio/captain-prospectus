@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { Check, ChevronRight } from "lucide-react";
 import { OUTCOME_TO_STATUS } from "../../../shared/constants";
-import type { AdminVisit } from "../../../shared/schemas";
+import type { AdminDoorDay } from "../../../shared/schemas";
 import { OUTCOME_LABELS, copy } from "../../copy";
 import { formatDateTime } from "../../format";
 import { cn } from "../../lib/utils";
@@ -14,7 +14,7 @@ import { ScreenState } from "../ScreenState";
 import { OUTCOME_BADGE } from "../outcome-badge";
 import { BADGE_SHAPE, STATUS_EDGE } from "../status";
 
-/** EXPERIENCE.md › Dernières visites: the last 5 by `received_at`. */
+/** EXPERIENCE.md › Dernières visites: the last 5 door-days by `received_at`. */
 const SHOWN = 5;
 
 const HEAD = "text-overline text-muted-foreground h-auto px-3 py-2.5 uppercase";
@@ -24,16 +24,17 @@ const HEAD = "text-overline text-muted-foreground h-auto px-3 py-2.5 uppercase";
  *
  * The same 15 s poll as Visites (ADR-0010), through `useVisitsFeed`'s own
  * unscoped call — Visites (GH #178) reads a period-scoped one instead, its own
- * cache entry under the same key prefix. Cut to its newest rows; only arrivals
- * among the rows shown wash and are announced: a visit that lands sixth is not
- * news on this screen.
+ * cache entry under the same key prefix. Cut to its newest door-days (ADR-0036
+ * R13), each showing its latest visit; only arrivals among the rows shown wash
+ * and are announced: a visit that lands sixth is not news on this screen.
  */
 export function RecentVisits() {
-  const { visits, arrived, isPending, isError, isFetching, refetch, answeredAt } = useVisitsFeed();
+  const { doorDays, arrived, isPending, isError, isFetching, refetch, answeredAt } =
+    useVisitsFeed();
   const t = copy.dashboard.recent;
-  const shown = visits.slice(0, SHOWN);
+  const shown = doorDays.slice(0, SHOWN);
   const fresh = new Set(arrived);
-  const arrivedShown = shown.filter((v) => fresh.has(v.id)).length;
+  const arrivedShown = shown.filter((d) => fresh.has(d.key)).length;
 
   return (
     <Card className="min-w-0 gap-3 overflow-hidden pt-4.5 pb-1.5">
@@ -111,8 +112,8 @@ export function RecentVisits() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {shown.map((visit) => (
-              <RecentVisitRow key={visit.id} visit={visit} isNew={fresh.has(visit.id)} />
+            {shown.map((row) => (
+              <RecentVisitRow key={row.key} row={row} isNew={fresh.has(row.key)} />
             ))}
           </TableBody>
         </Table>
@@ -125,7 +126,7 @@ export function RecentVisits() {
  * The row's edge is the outcome's consequence, as on Visites; the badge says
  * the outcome itself.
  */
-function RecentVisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean }) {
+function RecentVisitRow({ row, isNew }: { row: AdminDoorDay; isNew: boolean }) {
   const t = copy.dashboard.recent;
   return (
     <TableRow
@@ -138,19 +139,19 @@ function RecentVisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean })
         isNew && "bg-accent hover:bg-accent",
       )}
     >
-      <TableCell className={cn("tnum px-3", STATUS_EDGE[OUTCOME_TO_STATUS[visit.outcome]])}>
-        {formatDateTime(visit.receivedAt)}
+      <TableCell className={cn("tnum px-3", STATUS_EDGE[OUTCOME_TO_STATUS[row.outcome]])}>
+        {formatDateTime(row.receivedAt)}
       </TableCell>
       <TableHead scope="row" className="px-3 font-medium">
-        {visit.prospectName}
+        {row.prospectName}
       </TableHead>
       <TableCell className="px-3">
-        <Badge variant="ghost" className={cn(BADGE_SHAPE, OUTCOME_BADGE[visit.outcome])}>
-          {OUTCOME_LABELS[visit.outcome]}
+        <Badge variant="ghost" className={cn(BADGE_SHAPE, OUTCOME_BADGE[row.outcome])}>
+          {OUTCOME_LABELS[row.outcome]}
         </Badge>
       </TableCell>
       <TableCell className="px-3">
-        {visit.flyerGiven ? (
+        {row.flyerGiven ? (
           <Badge variant="ghost" className={cn(BADGE_SHAPE, "bg-secondary text-foreground")}>
             <Check aria-hidden="true" />
             {copy.visits.flyer}
@@ -159,7 +160,7 @@ function RecentVisitRow({ visit, isNew }: { visit: AdminVisit; isNew: boolean })
           <span className="text-muted-foreground">{t.noFlyer}</span>
         )}
       </TableCell>
-      <TableCell className="px-3">{visit.agentEmail}</TableCell>
+      <TableCell className="px-3">{row.agentEmail}</TableCell>
     </TableRow>
   );
 }

@@ -796,34 +796,69 @@ export type VisitHistoryResponse = z.infer<typeof visitHistoryResponseSchema>;
 /* --------------------------------------------------------------------- admin */
 
 /**
- * One visit as the live feed shows it — ADR-0010.
- *
- * Carries `prospectName`, so this is a join rather than a row echo: a feed that
- * said "a visit arrived" without saying where would be useless. `receivedAt` is
- * here and is what the feed orders by — the server's clock, because a phone's
- * can be wrong (INVARIANT 12) and the feed's promise is "what has reached me".
- *
- * `clientVisitedAt` and `clientVersion` stay out, for the same reason the agent
- * history leaves them out: they are skew and upgrade diagnostics, not content.
+ * What a visit says, shared by a door-day's row (its latest visit) and each
+ * line of its history. One shape, written once, also because this module is
+ * precached on the field and sits at its ceiling (ADR-0026).
  */
-export const adminVisitSchema = z.object({
-  id: uuidSchema,
-  prospectId: uuidSchema,
-  prospectName: shortTextRequired,
-  agentEmail: emailSchema,
+const doorDayVisitShape = {
   visitedAt: epochMsSchema,
   receivedAt: epochMsSchema,
-  flyerGiven: z.boolean(),
   outcome: outcomeSchema,
-  followUpAt: z.nullable(epochMsSchema),
-  notes: z.nullable(longText),
   /** Null on every outcome but `not_interested`, and on refusals before #247. */
   refusalReason: z.nullable(refusalReasonSchema),
+  flyerGiven: z.boolean(),
+  followUpAt: z.nullable(epochMsSchema),
+  notes: z.nullable(longText),
+};
+
+/**
+ * One visit of a door-day, as the ledger's history shows it — ADR-0036 R13.
+ *
+ * Carries what that visit itself said, so a correction's history reads both
+ * answers. `answerCount` stands in for the answers: the ledger names how many
+ * there were, never their content. `clientVisitedAt` and `clientVersion` stay
+ * out, for the same reason the agent history leaves them out: they are skew and
+ * upgrade diagnostics, not content.
+ */
+export const adminDoorDayVisitSchema = z.object({
+  id: uuidSchema,
+  ...doorDayVisitShape,
+  answerCount: countSchema,
 });
-export type AdminVisit = z.infer<typeof adminVisitSchema>;
+export type AdminDoorDayVisit = z.infer<typeof adminDoorDayVisitSchema>;
+
+/**
+ * One door-day as the live feed shows it — ADR-0036 R13, docs/design.md
+ * › The live feed: one agent, one prospect, one Brussels day.
+ *
+ * `visitedAt`, `outcome`, `refusalReason`, `notes` and `followUpAt` are the
+ * latest visit's (the one rule in `src/worker/door-days.ts`), `flyerGiven` is
+ * true when any visit gave one, and `receivedAt` is the greatest among the
+ * visits: the server's clock, which the feed orders by and pages on, because a
+ * phone's can be wrong (INVARIANT 12). `visits` is the whole day, oldest first,
+ * so its last entry is the row's latest visit.
+ *
+ * `key` is the door-day's identity as the server joins it (agent, prospect and
+ * day start), so the client keys and merges rows without rebuilding the day.
+ * `prospectName` is the name the visits were made against, merged or not.
+ */
+export const adminDoorDaySchema = z.object({
+  key: z.string(),
+  prospectId: uuidSchema,
+  prospectName: shortTextRequired,
+  /** Two agents share a round; whose door-day this was is worth showing. */
+  agentEmail: emailSchema,
+  /** The Brussels midnight that starts the door-day. */
+  dayStart: epochMsSchema,
+  ...doorDayVisitShape,
+  visits: z.array(adminDoorDayVisitSchema).check(z.minLength(1)),
+});
+export type AdminDoorDay = z.infer<typeof adminDoorDaySchema>;
 
 export const adminVisitsResponseSchema = z.object({
-  visits: z.array(adminVisitSchema).check(z.maxLength(ADMIN_VISITS_PAGE_SIZE)),
+  doorDays: z.array(adminDoorDaySchema).check(z.maxLength(ADMIN_VISITS_PAGE_SIZE)),
+  /** More visits matched than `limit`, so the window may hold door-days not listed. */
+  truncated: z.boolean(),
   /** The server's clock as it answered, so the client never derives one. */
   serverTime: epochMsSchema,
 });
@@ -850,8 +885,12 @@ const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
  * already deployed to clients, and tightening it to `epochMsQuerySchema`
  * would not be additive (docs/api.md › Conventions).
  *
- * `reason` is one `refusalReasonSchema` value, optional like the export's, so
- * both list the same visits; an empty or unknown value is a 400 like any bad param.
+ * `reason` is one `refusalReasonSchema` value, optional like the export's: the
+ * feed keeps the door-days whose latest visit has it (R12), the export the
+ * visits that have it. An empty or unknown value is a 400 like any bad param.
+ *
+ * `limit` caps the visits the bounds touch, so it caps the door-days listed too:
+ * each touched visit belongs to one of them.
  */
 export const visitsSinceQuerySchema = z
   .object({
