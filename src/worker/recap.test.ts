@@ -1,10 +1,11 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "./db/client";
-import { prospects, visits, visitsOrphaned } from "./db/schema";
+import { prospects, tourneeStops, tournees, visits, visitsOrphaned } from "./db/schema";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
 import type { DashboardResponse, RecapResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
+import { seedTournee } from "../../test/tournees";
 import { TEST_ADMIN, TEST_AGENT, resetTestUsers, seedUser } from "../../test/users";
 
 /**
@@ -63,6 +64,8 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   const db = getDb(env.DB);
+  await db.delete(tourneeStops);
+  await db.delete(tournees);
   await db.delete(visits);
   await db.delete(visitsOrphaned);
   await db.delete(prospects);
@@ -137,16 +140,18 @@ describe("GET /api/admin/recap", () => {
     const { body } = await recap();
 
     expect(body.visitsToday).toBe(1);
-    // Received today still makes the agent active (entry 12 changes that).
-    expect(body.activeAgents).toBe(1);
+    // Visits alone never make an agent active: only the swipe does (ADR-0036).
+    expect(body.activeAgents).toBe(0);
     expect(body.lastReceivedAt).toBe(NOW - 4 * 60_000);
   });
 
-  it("counts each roster member once, and a sender off the roster as a door-day only", async () => {
+  it("counts a roster member once, and a sender off the roster as a door-day only", async () => {
     const prospectId = await seedProspect();
     await seedUser("gone@example.com", "agent", false);
+    await seedTournee(TEST_AGENT, NOW - 2 * 3_600_000);
     await receive(prospectId, NOW - 60_000, TEST_AGENT);
     await receive(prospectId, NOW - 30_000, TEST_AGENT);
+    await seedTournee("gone@example.com", NOW - 3_600_000);
     await receive(prospectId, NOW - 10_000, "gone@example.com");
 
     const { body } = await recap();
@@ -160,14 +165,59 @@ describe("GET /api/admin/recap", () => {
 
   it("never reports more active agents than the roster holds", async () => {
     const prospectId = await seedProspect();
+    await seedTournee(TEST_AGENT, NOW - 3_600_000);
     await receive(prospectId, NOW - 60_000, TEST_AGENT);
+    await seedTournee(TEST_ADMIN, NOW - 3_000_000);
     await receive(prospectId, NOW - 50_000, TEST_ADMIN);
     await seedUser("gone@example.com", "agent", false);
+    await seedTournee("gone@example.com", NOW - 2_000_000);
     await receive(prospectId, NOW - 40_000, "gone@example.com");
 
     const { body } = await recap();
 
     expect(body.activeAgents).toBe(2);
     expect(body.activeAgents).toBeLessThanOrEqual(body.rosterSize);
+  });
+});
+
+describe("GET /api/admin/recap › actifs aujourd'hui (ADR-0036)", () => {
+  it("counts an agent who swiped and sent nothing", async () => {
+    await seedTournee(TEST_AGENT, NOW - 3_600_000);
+
+    const { body } = await recap();
+
+    expect(body.activeAgents).toBe(1);
+    expect(body.visitsToday).toBe(0);
+  });
+
+  it("counts neither an agent with visits and no swipe, nor yesterday's tournée", async () => {
+    const dayStart = brusselsMidnightDaysFromNow(NOW, 0);
+    await receive(await seedProspect(), NOW - 60_000, TEST_AGENT);
+    await seedTournee(TEST_ADMIN, dayStart - 1);
+
+    const { body } = await recap();
+
+    expect(body.activeAgents).toBe(0);
+  });
+
+  it("counts a deactivated user's tournée in neither", async () => {
+    await seedUser("gone@example.com", "agent", false);
+    await seedTournee("gone@example.com", NOW - 3_600_000);
+
+    const { body } = await recap();
+
+    expect(body.activeAgents).toBe(0);
+  });
+
+  it("is the dashboard's « Agents en tournée »", async () => {
+    await seedTournee(TEST_AGENT, NOW - 3_600_000);
+    await seedTournee(TEST_ADMIN, NOW - 1_000);
+
+    const dashboard = await workerFetch("http://localhost/api/admin/dashboard");
+    const { agentsActiveToday } = (await dashboard.json()) as DashboardResponse;
+    const { body } = await recap();
+
+    expect(body.activeAgents).toBe(2);
+    expect(agentsActiveToday).toBe(body.activeAgents);
   });
 });

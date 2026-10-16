@@ -257,8 +257,9 @@ of their own, so it never says "synchronisé"; it reports what the agents sent
 (forge `admin-sync-status-meaning`). The Brussels day heads it in the overline
 style ("MARDI 14 OCTOBRE"), then three `text-xs` lines on `band-accent`: a dot
 and "1 / 2 agents actifs", "12 visites", and in `band-muted` "Dernière visite
-reçue il y a 4 min". Actif means an agent on the roster with a visit received
-that day, so the figure never passes the roster; the visits are the day's
+reçue il y a 4 min". Actif means an agent on the roster who started that day's tournée
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)), the swipe alone
+counting, so the figure never passes the roster; the visits are the day's
 door-days (one per agent, prospect and visit made that Brussels day, the
 dashboard's Visites for one day, [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md));
 the agents and the last visit read `received_at`, the server's clock. The dot is
@@ -1219,16 +1220,14 @@ Visites.
 
 ### The admin round view
 
-`/admin/tournee`, last in Terrain: where an agent's round stands today, without
+`/admin/tournee`, last in Terrain: where an agent's tournée stands today, without
 phoning them. An agent `Select` (kept in `?agent=`, which wins; without one, the
 agent last chosen on this browser is restored from `localStorage`, and the URL
-stays plain), then a read-only list of that agent's stops from the stored position
-([ADR-0028](adr/0028-agent-position-at-sync.md)).
-
-*Pending:* [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)
-replaces this order with the phone's stop numbers, the stored position placing
-only the agent's marker. Entry 12 of the numbered-tournée epic (#496) rewrites
-this section when it builds that.
+stays plain), then a read-only list of that agent's stops still to do, under the
+numbers the swipe gave them
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)). The stored
+position ([ADR-0028](adr/0028-agent-position-at-sync.md)) only places the marker
+and the distances.
 
 ```
 Tournée du jour                                   12 arrêts
@@ -1236,7 +1235,7 @@ Agent [lea@example.com v]  Position du 24/09/2026 15:24
 +---------------------------------------------------------+
 |#1 Pizza Roma                [Assigné]              120 m |
 |   Restaurant · 4 rue Neuve                               |
-|#2 Chez Marcel              [À relancer]            340 m |
+|#3 Chez Marcel              [À relancer]            340 m |
 +---------------------------------------------------------+
 ```
 
@@ -1245,29 +1244,38 @@ From `md` the list and the map sit side by side:
 ```
 +----------------------------+ +----------------------------+
 |#1 Pizza Roma     120 m     | |  (map, sticky)             |
-|#2 Chez Marcel    340 m     | |   (1)--(2)   (o)           |
+|#3 Chez Marcel    340 m     | |   (1)--(3)   (o)           |
 +----------------------------+ +----------------------------+
 ```
 
-- Rows follow `buildTodayList(...).now` as it comes (`src/shared/today.ts`);
-  no second sort. Only today's stops: no Plus tard group.
+- Rows are the server's stops still to do, in number order: no visit today and
+  not left (reassigned, closed or merged), as the phone's Tournée and Carte list
+  them. Numbers are the swipe's, so a visited stop 2 and a reassigned stop 4
+  read 1, 3, 5. `round-map.ts` builds the pins and the path as Carte does; no
+  re-sort, no Plus tard group. The header counts the rows. A stop leaves this
+  list once its visit has synced: while the visit sits in the phone's outbox, the
+  server cannot see it and the list lags the phone.
 - Read-only: no Visiter, Y aller, swipe, expand or link on a row. Rows reuse
-  `StopNumber`, the status leading edge and the ledger status badge.
-- No position today: the same stops sorted by name, no distances, and the
-  notice « Aucune position reçue aujourd'hui. La tournée est triée par nom. »
-- With a position, a stop without coordinates is listed last with no distance.
+  `StopNumber`, the status leading edge and the ledger status badge. No
+  « Nouveau » badge or counter.
+- Before the swipe: « {email} n'a pas encore commencé sa tournée aujourd'hui. »,
+  no rows, no count, and the map holding the position marker only. Open prospects
+  are not listed in its place. A tournée whose stops are all done or left shows
+  « Aucun arrêt dans la tournée du jour de cet agent. »
+- No position today: the same rows and numbers, no distances, and the notice
+  « Aucune position reçue aujourd'hui. » (not shown on an empty list).
+- A stop without coordinates keeps its number and draws no pin.
 - The map pane sits beside the list (the field's `RoundMap`, no re-centre
-  button, pins decorative). Pins carry the list's numbers; a stop without
-  coordinates keeps its number and draws no pin. With a stored position: pin 1
-  gold, the dashed path and the position marker. Without one: card-coloured
-  pins only, no path, no marker, so the map implies no next step it cannot
-  know. The map fits the stops, not the position, so a reading far from them
-  never shrinks them: the marker is drawn wherever it falls. It mounts for any
-  loaded round (zero pins: the Brussels view, or centred on the position when
-  there is one) and remounts, so refits, when
-  another agent is chosen. Below `md` it comes first at a fixed 280 px, then
-  the list; from `md` the list is on the left and the map on the right, 80 % of
-  the viewport tall and sticky.
+  button, pins decorative). The next stop's pin (the lowest number) is gold when that
+  stop has coordinates, and the dashed path runs through the pins in number
+  order, with or without a position; the
+  position marker is drawn only when a reading exists. The map fits the stops,
+  not the position, so a reading far from them never shrinks them: the marker
+  is drawn wherever it falls. It mounts for any loaded round (zero pins: the
+  Brussels view, or centred on the position when there is one) and remounts, so
+  refits, when another agent is chosen. Below `md` it comes first at a fixed
+  280 px, then the list; from `md` the list is on the left and the map on the
+  right, 80 % of the viewport tall and sticky.
 
 ### Agents
 

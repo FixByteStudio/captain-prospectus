@@ -2,14 +2,14 @@
  * The tournée at sync (ADR-0036): write what the phone sends, read back today's.
  * Insert-only and idempotent (INVARIANTS 2 and 4); nothing here updates a row.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { chunk } from "../shared/chunk";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
 import type { TodayTournee, TourneeStopSync, TourneeSync } from "../shared/schemas";
 import { isStopLeft } from "../shared/tournee";
 import { boundParamsPerRow } from "./db/client";
 import type { Db } from "./db/client";
-import { prospects, tourneeStops, tournees } from "./db/schema";
+import { prospects, tourneeStops, tournees, users } from "./db/schema";
 import type { NewTourneeRow, NewTourneeStopRow } from "./db/schema";
 
 /**
@@ -195,4 +195,25 @@ export async function todayTournee(
       left: isStopLeft(r, email, visitedProspectIds.has(r.prospectId)),
     })),
   };
+}
+
+/**
+ * Roster members who started the tournée of the Brussels day `dayStart` begins:
+ * the swipe alone counts, with no visit needed. One helper serves « Agents en
+ * tournée » and the recap's « actifs aujourd'hui », so they are the same figure
+ * (ADR-0036). It drives from the handful of active `users` rows into the unique
+ * `(agent_email, day_start)` index; a bare `day_start = ?` would scan every
+ * tournée ever stored on each 15 s recap poll.
+ */
+export async function agentsStartedOn(db: Db, dayStart: number): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)`.mapWith(Number) })
+    .from(users)
+    .where(
+      and(
+        eq(users.active, true),
+        sql`exists (select 1 from ${tournees} where ${tournees.agentEmail} = ${users.email} and ${tournees.dayStart} = ${dayStart})`,
+      ),
+    );
+  return row?.n ?? 0;
 }

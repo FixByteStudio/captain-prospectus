@@ -101,8 +101,9 @@ import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
 import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
-import { doorDaysBetween, doorDaysTouched } from "../door-days";
+import { doorDaysBetween, doorDaysOn, doorDaysTouched } from "../door-days";
 import { openAssignedProspects } from "../round";
+import { agentsStartedOn, todayTournee } from "../tournee";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
 import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
 import { readMapCache, writeMapCache } from "../map-cache";
@@ -167,19 +168,35 @@ adminRoutes.get("/agents", async (c) => {
 });
 
 /**
- * One agent's remaining round and last reading (ADR-0028). Never cached: a
- * position is personal data and stale the minute it is served.
+ * One agent's stops still to do today, with the swipe's numbers (ADR-0036), and
+ * their last reading, which only places the marker. The same stops the phone's
+ * Tournée and Carte show: no visit today and not left. `tournee` is null before the
+ * swipe. Never cached: a position is personal data and stale the minute it is served.
  */
 adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema), async (c) => {
   const { email } = c.req.valid("param");
   const db = getDb(c.env.DB);
   if (!(await activeRosterMember(db, email))) return c.json({ error: "not_found" }, 404);
-  const [rows, position] = await Promise.all([
+  const now = Date.now();
+  const [open, visited, position] = await Promise.all([
     openAssignedProspects(db, email),
-    readAgentPosition(db, email, Date.now()),
+    doorDaysOn(db, { dayStart: brusselsMidnightDaysFromNow(now, 0), agentEmail: email }),
+    readAgentPosition(db, email, now),
   ]);
+  const visitedIds = new Set(visited.map((d) => d.prospectId));
+  const tournee = await todayTournee(db, email, now, visitedIds);
+  const openById = new Map(open.map((p) => [p.id, p]));
+  const stops = (tournee?.stops ?? []).flatMap((stop) => {
+    const prospect = openById.get(stop.prospectId);
+    // A visited stop has left Tournée, and a left one is not in the open map.
+    if (stop.left || visitedIds.has(stop.prospectId) || !prospect) return [];
+    return [{ number: stop.number, prospect: toWireProspect(prospect) }];
+  });
   c.header("Cache-Control", "no-store");
-  return c.json<AgentRoundResponse>({ prospects: rows.map(toWireProspect), position });
+  return c.json<AgentRoundResponse>({
+    tournee: tournee ? { startedAt: tournee.startedAt, stops } : null,
+    position,
+  });
 });
 
 /**
@@ -199,14 +216,14 @@ async function unknownAssignee(email: string | null, db: Db): Promise<boolean> {
 
 /**
  * The sidebar's recap card — docs/api.md › The recap card. Polled every 15 s
- * from every admin page, so it stays two statements beside the dashboard's
+ * from every admin page, so it stays three statements beside the dashboard's
  * thirteen rather than a figure added to them (free-tier-budget.md).
  */
 adminRoutes.get("/recap", async (c) => {
   const now = Date.now();
   const dayStart = brusselsMidnightDaysFromNow(now, 0);
   const db = getDb(c.env.DB);
-  const [roster, byAgent] = await Promise.all([
+  const [roster, byAgent, activeAgents] = await Promise.all([
     activeRoster(db),
     // One row per sender, on `visits_received_idx`: a day has a handful.
     // `n` is the sender's door-days of today (ADR-0036). `visited_at` is clamped
@@ -229,11 +246,12 @@ adminRoutes.get("/recap", async (c) => {
         ),
       )
       .groupBy(visits.agentEmail),
+    // « Actifs aujourd'hui » is « Agents en tournée »: the same helper (ADR-0036).
+    agentsStartedOn(db, dayStart),
   ]);
 
   // A sender off the roster still counts as a door-day, never as an active
-  // agent, so the card cannot read "3 / 2".
-  const onRoster = new Set(roster.map((r) => r.email));
+  // agent (`agentsStartedOn` counts the roster only), so the card cannot read "3 / 2".
   const lastReceivedAt = byAgent.length === 0 ? null : Math.max(...byAgent.map((r) => r.last));
   // One day asked for, so exactly one date comes back.
   const [date] = periodDates(dayStart, 1);
@@ -241,7 +259,7 @@ adminRoutes.get("/recap", async (c) => {
   c.header("Cache-Control", "no-store");
   return c.json<RecapResponse>({
     date,
-    activeAgents: byAgent.filter((r) => onRoster.has(r.email)).length,
+    activeAgents,
     rosterSize: roster.length,
     visitsToday: byAgent.reduce((n, r) => n + r.n, 0),
     lastReceivedAt,
@@ -370,12 +388,9 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
           lt(prospects.nextVisitAt, dueSoonBefore),
         ),
       ),
-    // Agents en tournée: distinct agents with a visit received today.
-    // Served by `visits_received_idx` (G6, docs/api.md › The dashboard).
-    db
-      .select({ n: sql<number>`count(distinct ${visits.agentEmail})`.mapWith(Number) })
-      .from(visits)
-      .where(and(gte(visits.receivedAt, todayStart), lt(visits.receivedAt, to))),
+    // Agents en tournée: roster members who started today's tournée, the recap's
+    // figure too (`agentsStartedOn`, ADR-0036).
+    agentsStartedOn(db, todayStart),
     activeRoster(db),
     // Prospects sans agent actif: a snapshot like `open`, on the same SQL as
     // the list's `inactiveAgent` filter, so the list totals it.
@@ -437,7 +452,7 @@ adminRoutes.get("/dashboard", validate("query", dashboardQuerySchema), async (c)
     ),
     followUpsDue: due[0]?.n ?? 0,
     flyersGiven: Number(visitCounts[0]?.flyersGiven ?? 0),
-    agentsActiveToday: agentsToday[0]?.n ?? 0,
+    agentsActiveToday: agentsToday,
     followUpsDueSoon: { value: due[0]?.dueSoon ?? 0, dueBefore: dueSoonBefore },
     inactiveAgentProspects: inactiveAgent[0]?.n ?? 0,
   });

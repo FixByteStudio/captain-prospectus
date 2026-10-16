@@ -9,7 +9,16 @@ import {
   IMPORT_STALE_MS,
   type RefusalReason,
 } from "../shared/constants";
-import { agentPositions, importBatches, imports, prospects, scripts, visits } from "./db/schema";
+import {
+  agentPositions,
+  importBatches,
+  imports,
+  prospects,
+  scripts,
+  tourneeStops,
+  tournees,
+  visits,
+} from "./db/schema";
 import type {
   AdminVisitsResponse,
   AgentRoundResponse,
@@ -75,7 +84,9 @@ function importRows(rows: Row[], source: "csv" | "osm" | "google" = "csv"): Prom
 
 beforeEach(async () => {
   const db = getDb(env.DB);
-  // Order matters: visits reference both of the others by foreign key.
+  // Order matters: visits and stops reference prospects by foreign key.
+  await db.delete(tourneeStops);
+  await db.delete(tournees);
   await db.delete(visits);
   await db.delete(prospects);
   await db.delete(scripts);
@@ -2147,7 +2158,49 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     await getDb(env.DB).delete(agentPositions);
   });
 
-  it("serves the position and the remaining prospects, uncached", async () => {
+  const base = (now: number) => ({
+    name: "Le Bistrot",
+    type: "restaurant" as const,
+    lat: 48.85,
+    lng: 2.35,
+    address: null,
+    phone: null,
+    website: null,
+    cuisine: null,
+    source: "csv" as const,
+    sourceRef: null,
+    createdBy: ADMIN,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  /** A tournée started `startedAt` for AGENT, one stop per [number, prospect id]. */
+  async function swipe(startedAt: number, stops: [number, string][], agent = AGENT) {
+    const db = getDb(env.DB);
+    const id = crypto.randomUUID();
+    await db.insert(tournees).values({
+      id,
+      agentEmail: agent,
+      dayStart: brusselsMidnightDaysFromNow(startedAt, 0),
+      startedAt,
+      clientStartedAt: startedAt,
+      receivedAt: startedAt,
+    });
+    if (stops.length === 0) return;
+    await db.insert(tourneeStops).values(
+      stops.map(([number, prospectId]) => ({
+        id: crypto.randomUUID(),
+        tourneeId: id,
+        prospectId,
+        number,
+        addedAt: startedAt,
+        clientAddedAt: startedAt,
+        receivedAt: startedAt,
+      })),
+    );
+  }
+
+  it("serves the position, uncached, and a null tournée before the swipe", async () => {
     const now = Date.now();
     await getDb(env.DB)
       .insert(agentPositions)
@@ -2156,11 +2209,75 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = (await response.json()) as AgentRoundResponse;
-    expect(body.prospects).toEqual([]);
+    expect(body.tournee).toBeNull();
     expect(body.position).toEqual({ lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: now - 1_000 });
   });
 
-  it("lists exactly the agent's open, unmerged prospects", async () => {
+  it("gives no rows before the swipe, whatever is assigned: no fallback to open prospects", async () => {
+    const now = Date.now();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({
+        ...base(now),
+        id: crypto.randomUUID(),
+        dedupeKey: "round:open",
+        status: "assigned",
+        assignedTo: AGENT,
+      });
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.tournee).toBeNull();
+  });
+
+  it("lists the stops still to do with their swipe numbers: visited and reassigned ones leave gaps", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const ids = [1, 2, 3, 4, 5].map(() => crypto.randomUUID());
+    const [one, two, three, four, five] = ids as [string, string, string, string, string];
+    await db.insert(prospects).values(
+      ids.map((id, i) => ({
+        ...base(now),
+        id,
+        name: `Stop ${i + 1}`,
+        dedupeKey: `round:${i + 1}`,
+        status: "assigned" as const,
+        assignedTo: AGENT,
+      })),
+    );
+    // Stop 4 is reassigned, stop 2 visited today.
+    await db.update(prospects).set({ assignedTo: ADMIN }).where(eqId(four));
+    await db.insert(visits).values({
+      id: crypto.randomUUID(),
+      prospectId: two,
+      agentEmail: AGENT,
+      outcome: "no_contact",
+      flyerGiven: false,
+      visitedAt: now,
+      clientVisitedAt: now,
+      receivedAt: now,
+      clientVersion: CLIENT_VERSION,
+    });
+    // Stored out of number order: the route sends them in number order.
+    await swipe(now - 3_600_000, [
+      [5, five],
+      [1, one],
+      [4, four],
+      [2, two],
+      [3, three],
+    ]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.tournee?.startedAt).toBe(now - 3_600_000);
+    expect(body.tournee?.stops.map((s) => [s.number, s.prospect.id])).toEqual([
+      [1, one],
+      [3, three],
+      [5, five],
+    ]);
+  });
+
+  it("leaves out a closed or merged stop, and one of another agent's tournée or day", async () => {
     const db = getDb(env.DB);
     const now = Date.now();
     const ids = {
@@ -2169,44 +2286,67 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       merged: crypto.randomUUID(),
       other: crypto.randomUUID(),
     };
-    const base = {
-      name: "Le Bistrot",
-      type: "restaurant" as const,
-      lat: 48.85,
-      lng: 2.35,
-      address: null,
-      phone: null,
-      website: null,
-      cuisine: null,
-      source: "csv" as const,
-      sourceRef: null,
-      createdBy: ADMIN,
-      createdAt: now,
-      updatedAt: now,
-    };
     await db.insert(prospects).values([
-      { ...base, id: ids.open, dedupeKey: "round:open", status: "assigned", assignedTo: AGENT },
+      { ...base(now), id: ids.open, dedupeKey: "r:open", status: "assigned", assignedTo: AGENT },
       {
-        ...base,
+        ...base(now),
         id: ids.converted,
-        dedupeKey: "round:conv",
+        dedupeKey: "r:conv",
         status: "converted",
         assignedTo: AGENT,
       },
       {
-        ...base,
+        ...base(now),
         id: ids.merged,
-        dedupeKey: "round:merged",
+        dedupeKey: "r:merged",
         status: "assigned",
         assignedTo: AGENT,
         mergedInto: ids.open,
       },
-      { ...base, id: ids.other, dedupeKey: "round:other", status: "assigned", assignedTo: ADMIN },
+      { ...base(now), id: ids.other, dedupeKey: "r:other", status: "assigned", assignedTo: ADMIN },
     ]);
+    await swipe(now, [
+      [1, ids.open],
+      [2, ids.converted],
+      [3, ids.merged],
+    ]);
+    await swipe(now, [[1, ids.other]], ADMIN);
     const body = (await (
       await call(`/api/admin/agents/${AGENT}/round`)
     ).json()) as AgentRoundResponse;
-    expect(body.prospects.map((p) => p.id)).toEqual([ids.open]);
+    expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([ids.open]);
+  });
+
+  it("reads yesterday's tournée as not started", async () => {
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({
+        ...base(now),
+        id,
+        dedupeKey: "round:y",
+        status: "assigned",
+        assignedTo: AGENT,
+      });
+    await swipe(brusselsMidnightDaysFromNow(now, 0) - 3_600_000, [[1, id]]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.tournee).toBeNull();
+  });
+
+  it("answers an empty tournée when every stop is visited or left", async () => {
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    await getDb(env.DB)
+      .insert(prospects)
+      .values({ ...base(now), id, dedupeKey: "round:left", status: "assigned", assignedTo: ADMIN });
+    await swipe(now - 1_000, [[1, id]]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.tournee).toEqual({ startedAt: now - 1_000, stops: [] });
   });
 
   it("answers 200 with a null position for an admin's email", async () => {

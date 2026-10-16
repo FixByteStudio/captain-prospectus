@@ -1,8 +1,4 @@
-/**
- * Field-only helpers for a stop on the round. The rule that builds the round
- * itself lives in src/shared/today.ts, so the admin round view uses the same one.
- */
-import type { TodayItem } from "../../shared/today";
+/** Field-only helpers for a stop on the round. */
 
 /**
  * A link that shows the agent where the door is.
@@ -12,7 +8,11 @@ import type { TodayItem } from "../../shared/today";
  * in use. An https link opens in whatever the agent has, and keeps the round on
  * OSM data, which is the source the map import uses too (ADR-0008).
  */
-export function navigationUrl(item: Pick<TodayItem, "lat" | "lng" | "name">): string | null {
+export function navigationUrl(item: {
+  lat: number | null;
+  lng: number | null;
+  name: string;
+}): string | null {
   if (item.lat === null || item.lng === null) return null;
   const lat = item.lat.toFixed(6);
   const lng = item.lng.toFixed(6);
