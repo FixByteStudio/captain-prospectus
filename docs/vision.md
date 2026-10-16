@@ -130,3 +130,9 @@ is tied to a city — moving is changing those three places, not a migration.
   439.88 kB, precache 981.06 KiB across 25 entries**, of which 29.49 KiB is the web-manifest icons and
   `manifest.webmanifest` that Workbox's printed 951.56 KiB leaves out. They were 65.76 KiB before
   being recompressed in the same change. Headroom is **18.94 KiB**.
+
+  **Measured on 2026-10-17 when Tailwind stopped scanning the whole repository (GH #529): entry
+  chunk 461.77 kB, precache 967.70 KiB across 25 entries**, down from 999.99 KiB after the
+  daily-tournée epic (#496). The stylesheet fell from 125.17 to 92.88 KiB: the mockup HTML under
+  `_bmad-output/` and the class names quoted in `docs/` had been emitting utilities no component
+  uses. Headroom is **32.30 KiB**.

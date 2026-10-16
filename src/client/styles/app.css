@@ -8,7 +8,12 @@
  * palette.test.ts asserts the token values behind its five colour rules in
  * every theme; whether a component uses them is up to the component.
  */
-@import "tailwindcss";
+/* source("..") scans src/client only. Left to its automatic detection, Tailwind
+   reads the whole repository: the mockup HTML under _bmad-output/ and the class
+   names quoted in docs/ added ~32 KiB of unused utilities to the precached
+   stylesheet (GH #529). index.html is outside the scan too, so a class put on
+   its markup needs an @source line here. */
+@import "tailwindcss" source("..");
 @import "tw-animate-css";
 
 /* Test files hold class-shaped fixture strings (palette.test.ts's revert
