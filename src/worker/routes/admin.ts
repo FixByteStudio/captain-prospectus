@@ -12,7 +12,6 @@ import {
   count,
   desc,
   eq,
-  gt,
   gte,
   inArray,
   isNotNull,
@@ -102,7 +101,7 @@ import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
 import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
-import { doorDaysBetween } from "../door-days";
+import { doorDaysBetween, doorDaysTouched } from "../door-days";
 import { openAssignedProspects } from "../round";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
 import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
@@ -1550,66 +1549,42 @@ adminRoutes.post("/import/places", validate("json", placesImportSchema), async (
 /* ---------------------------------------------------------------- live feed */
 
 /**
- * `reason=` as SQL, written once so the feed and its export can never list
- * different visits.
+ * The export's `reason=` as SQL: the visits that have it. The feed applies the
+ * same reason to a door-day's latest visit instead (`doorDaysTouched`, R12).
  */
 function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined {
   return reason === undefined ? undefined : eq(visits.refusalReason, reason);
 }
 
 /**
- * Visits as they arrive — ADR-0010, docs/design.md "The live feed".
+ * Door-days as they arrive — ADR-0010, ADR-0036 R13, docs/design.md "The live
+ * feed": one row per agent, prospect and Brussels day, each carrying its visits.
  *
- * Ordered by `received_at`, not `visited_at`: the feed answers "what has
- * reached me", and a phone that synced a three-day-old visit this minute is
- * news. `visits_received_idx` exists for exactly this ordering.
+ * Ordered by the door-day's greatest `received_at`, not `visited_at`: the feed
+ * answers "what has reached me", and a phone that synced a three-day-old visit
+ * this minute is news. `visits_received_idx` exists for exactly this ordering.
  *
- * `since` is exclusive, so the client can pass back the last `receivedAt` it
- * saw and get only what is new. Polling every 15 s makes that the difference
- * between 500 rows and none. `reason` narrows it like the export does.
+ * `since` is exclusive, so the client can pass back the greatest `receivedAt` it
+ * saw and get only the door-days touched since, each whole. Polling every 15 s
+ * makes that the difference between 500 rows and none.
+ *
+ * Deliberately NOT filtered on `merged_into IS NULL`, which every other admin
+ * list does. This one records what agents did, and an absorbed prospect keeps
+ * its own visits (docs/domains/prospecting.md): no visit is ever repointed, so
+ * filtering here would make a visit vanish from the feed because an admin
+ * merged a duplicate afterwards. The name shown is the one the visit was
+ * actually made against.
  */
 adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) => {
   const { since, from, to, reason, limit } = c.req.valid("query");
-  const db = getDb(c.env.DB);
-
-  const filters = [
-    since > 0 ? gt(visits.receivedAt, since) : undefined,
-    from !== undefined ? gte(visits.receivedAt, from) : undefined,
-    to !== undefined ? lte(visits.receivedAt, to) : undefined,
-    refusalReasonFilter(reason),
-  ].filter((f) => f !== undefined);
-
-  /**
-   * Joined to prospects for the name — and deliberately NOT filtered on
-   * `merged_into IS NULL`, which every other admin list does.
-   *
-   * This one records what agents did, and an absorbed prospect keeps its own
-   * visits (docs/domains/prospecting.md): no visit is ever repointed, so
-   * filtering here would make a visit vanish from the feed because an admin
-   * merged a duplicate afterwards. The name shown is the one the visit was
-   * actually made against.
-   */
-  const rows = await db
-    .select({
-      id: visits.id,
-      prospectId: visits.prospectId,
-      prospectName: prospects.name,
-      agentEmail: visits.agentEmail,
-      visitedAt: visits.visitedAt,
-      receivedAt: visits.receivedAt,
-      flyerGiven: visits.flyerGiven,
-      outcome: visits.outcome,
-      followUpAt: visits.followUpAt,
-      notes: visits.notes,
-      refusalReason: visits.refusalReason,
-    })
-    .from(visits)
-    .innerJoin(prospects, eq(visits.prospectId, prospects.id))
-    .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(desc(visits.receivedAt))
-    .limit(limit);
-
-  return c.json<AdminVisitsResponse>({ visits: rows, serverTime: Date.now() });
+  const { doorDays, truncated } = await doorDaysTouched(getDb(c.env.DB), {
+    since,
+    from,
+    to,
+    reason,
+    limit,
+  });
+  return c.json<AdminVisitsResponse>({ doorDays, truncated, serverTime: Date.now() });
 });
 
 /**

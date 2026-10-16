@@ -432,9 +432,11 @@ dashboard](api.md#the-dashboard), and the Worker computes it.
 - **Dernières visites** (GH #113). The last row, full width. A `Card` with
   "Tout voir ›" to Visites on the right of its title, then shadcn `Table`:
   Heure, Prospect, Résultat, Flyer, Agent, on a `secondary` head row in
-  `text-overline`. The five newest visits of the live feed (the same query,
-  cache entry and 15 s poll as Visites), by `received_at`. Each row's
-  leading 4px edge is the outcome's consequence, as on Visites
+  `text-overline`. The five newest door-days of the live feed (the same query,
+  cache entry and 15 s poll as Visites), by `received_at`, each showing its
+  latest visit
+  ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) R13).
+  Each row's leading 4px edge is the outcome's consequence, as on Visites
   (`STATUS_EDGE`); the outcome badge says the outcome itself: À relancer and
   Converti as their status badge, the other three in `foreground` ink on
   their tint (`secondary` for Personne sur place) with a 4px inner edge in
@@ -988,9 +990,9 @@ no status as a coloured pill. The feed is the prospect list with time as its
 spine, **one row per door-day**: one agent, one prospect, one Brussels day,
 showing that day's latest visit
 ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › Admin
-and stats count door-days). *The door-day rows and their history are built by
-entry 11 of the numbered-tournée epic (#496); the figures count door-days
-already (entry 10, [api](api.md#the-dashboard)).* Mockup:
+and stats count door-days). Shipped by entry 11 of the numbered-tournée epic
+(#507): the rows and their history read [api › The live feed](api.md#the-live-feed),
+and the figures count door-days since entry 10 ([api](api.md#the-dashboard)). Mockup:
 [`key-t4-visites-ledger.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t4-visites-ledger.png).
 
 ```
@@ -1068,14 +1070,16 @@ period selector, a four-card KPI strip and a 25-row pager, plus a CSV export.
 **A row is the door-day's latest visit**, the one with the greatest clamped
 `visited_at`, the same visit every door-day figure reads (ADR-0036); rows are
 ordered by the greatest `received_at` among the door-day's visits (the spine,
-below). Its time, outcome, refusal reason and note are the latest visit's; « flyer » shows when any visit of that door-day
-left one (R12); the agent is the door-day's own. A door-day with more than one
+below). Its time is the door-day's latest arrival, the spine it is sorted by;
+its outcome, refusal reason and note are the latest visit's; « flyer » shows
+when any visit of that door-day left one (R12); the agent is the door-day's own. A door-day with more than one
 visit adds a muted, tabular « {2} visites » before the chevron. The lede under
 the title says the unit once: « Une ligne par prospect et par jour, avec son
 dernier résultat. Ouvrez une ligne pour voir chaque visite. », replacing « Les
 visites arrivent ici dès qu'un agent synchronise. »; the header count
-(« {312} visites ») counts door-days, the same figure as Tableau de bord's
-Visites.
+(« {312} visites ») counts door-days, the same unit as Tableau de bord's
+Visites but not the same figure: the ledger picks door-days by their arrival in
+the window, the dashboard by the day they were made.
 
 **Opening a row shows every visit, in place.** The whole row is a disclosure
 button named « {name}, {outcome}, {2} visites. Voir les visites » (without
@@ -1108,8 +1112,8 @@ Six rules the ledger itself still encodes:
   "what does this leave me to do" — `À relancer` mustard, `Intéressé` faded
   green, `Converti` green, `Refusé` red. The outcome's own French label sits in its column, because
   colour never carries the information alone.
-- **Time is the spine.** The feed orders door-days by their latest visit's
-  `received_at`, not `visited_at` —
+- **Time is the spine.** The feed orders door-days by the greatest
+  `received_at` among their visits, not `visited_at` —
   the server's clock, not the phone's, because a phone's clock can be wrong
   (INVARIANT 12) and the feed's promise is "what has reached me". Times are
   `.tnum` and left, where the prospect list puts numbers right: this column is

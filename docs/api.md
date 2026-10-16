@@ -50,7 +50,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
 | `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached, cachedAt?}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
 | `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached, cachedAt?}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
-| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&reason=&limit=` | `{visits[], serverTime}` — visits with `received_at > since` and, if given, `received_at` within `[from, to]` and the refusal `reason` (see [The live feed](#the-live-feed)); all bounds apply together. Newest first, max 500. **400** when `from > to` or `reason` is unknown or empty. Each carries `prospectName` and `refusalReason` (null unless given on a `not_interested` visit) |
+| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&reason=&limit=` | `{doorDays[], truncated, serverTime}` — one row per door-day (agent, prospect, Brussels day) with a visit whose `received_at > since` and, if given, within `[from, to]`; all bounds apply together, and each door-day arrives whole (see [The live feed](#the-live-feed)). With `reason`, the door-days whose latest visit has it. Each row is `{key, prospectId, prospectName, agentEmail, dayStart}`, the latest visit's `visitedAt, outcome, refusalReason, notes, followUpAt`, the greatest `receivedAt`, `flyerGiven` when any visit gave one, and `visits[]` oldest first, each `{id, visitedAt, receivedAt, outcome, refusalReason, flyerGiven, followUpAt, notes, answerCount}`. Newest `receivedAt` first, max 500; `truncated` when more than `limit` visits matched. **400** when `from > to` or `reason` is unknown or empty |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, `hasPosition` (whether the visit recorded where it happened), and up to 5 `candidates` ranked by distance from there. `candidates` is also empty when the visit has a position but no live prospect has one |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
 | `POST /api/admin/visits/orphaned/:id/discard` | Deletes the row for good → `{discarded}`. Idempotent. The one place a visit is deliberately lost, behind a confirmation in the UI |
@@ -115,7 +115,7 @@ the export cap. It has no `limit` or `offset`: an export is not paged, it
 always exports the whole filtered set up to the cap, so a URL copied from
 page 2 of the list is not read as "page 2 of the export".
 
-`GET /api/admin/visits` filters `from`/`to` on `received_at` (when the visit
+`GET /api/admin/visits` filters `from`/`to` on `received_at` (when a visit
 reached the server), the same column `since` and the export use — never
 `visited_at` (INVARIANT 12): a phone can sync days late, and a range read
 against its own clock would silently drop exactly the visits worth looking at.
@@ -182,9 +182,9 @@ the same response, additively.
   is given if **any** of its visits gave one. Two agents at one door are two
   door-days. `doorDaysBetween` in `src/worker/door-days.ts` is the one SQL
   fragment; the statements below read through it, and the visits themselves stay
-  as they are (the ledger and the CSV export are not door-days yet). No
-  dashboard figure counts refusal reasons yet; the fragment carries the latest
-  visit's, for the ledger's `reason=` filter.
+  as they are. The Visites ledger lists door-days too, through `doorDaysTouched`
+  ([The live feed](#the-live-feed)); only the CSV export stays one row per visit.
+  No dashboard figure counts refusal reasons yet.
 - **Visites** (`visits`): door-days whose day falls in the period. Door-days of
   merged prospects count, because they still happened; quarantined visits do
   not, because they are in `visits_orphaned` until repaired. `previous` is the
@@ -346,15 +346,36 @@ A visit the server cannot take is written to `visits_orphaned` and still reporte
 ## The live feed
 
 `GET /api/admin/visits` backs the admin's live feed, polled every 15 s while the
-tab is visible (ADR-0010).
+tab is visible (ADR-0010). Its unit is the **door-day**: one agent, one prospect
+(the visit's own `prospect_id`) and one Brussels day of the clamped `visited_at`
+([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) R13), the
+same unit every dashboard figure counts.
 
-- Ordered by **`received_at`**, not `visited_at`. The feed answers "what has
-  reached me": a phone that syncs a three-day-old visit this minute is news, and
+- **A row is the door-day's latest visit**, by the one rule in
+  `src/worker/door-days.ts` (`visited_at`, then `received_at`, then `id`): its
+  `visitedAt`, `outcome`, `refusalReason`, `notes` and `followUpAt`. `flyerGiven`
+  is true when any visit of the day gave one. `visits[]` is the whole day, oldest
+  first, so its last entry is the row's own; `answerCount` counts each visit's
+  answers. `key` is the door-day's identity, joined by the server, for the client
+  to key and merge rows on.
+- **Ordered by the greatest `received_at`** among the door-day's visits, not
+  `visited_at`. The feed answers "what has reached me": a phone that syncs a
+  three-day-old visit this minute is news, listed under the day it was made, and
   `visited_at` comes from a clock that can be wrong (INVARIANT 12).
   `visits_received_idx` exists for this ordering.
 - **`since` is exclusive.** The client passes back the highest `receivedAt` it
-  has seen and gets only what is newer, which is what makes a 15 s poll cheap.
-  Omitted, it returns the most recent page — a freshly opened tab is not empty.
+  holds and gets only the door-days touched since, which is what makes a 15 s
+  poll cheap. Omitted, it returns the most recent page — a freshly opened tab is
+  not empty.
+- **A door-day always arrives whole.** It is listed when any of its visits falls
+  in `since`, `from` and `to`, and then with all its visits, those outside the
+  bounds included, up to the newest visit the request touched: one synced
+  while the request runs comes with the next poll, so the cursor never passes
+  a door-day the request did not read. A second visit to a door-day the client
+  holds returns it again under the same `key`, and the client replaces the row.
+- **`truncated`** says more than `limit` visits matched the bounds. `limit` caps
+  those visits, so it caps the door-days too; the client then reads its count as
+  "500 visites ou plus".
 - **Visits of merged prospects are included**, unlike every other admin list,
   which filters `merged_into IS NULL`. This one records what agents did, no
   visit is ever repointed on a merge (`prospecting.md`), and filtering here
@@ -362,9 +383,19 @@ tab is visible (ADR-0010).
   duplicate. The name shown is the one the visit was made against.
 - `serverTime` is the server's clock as it answered, so a client never has to
   derive a cursor from its own.
-- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value). The
-  export takes the same parameter, through the same schema and SQL, so both
-  list the same visits. Absent, nothing changes; empty or unknown is **400**.
+- **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value): the
+  door-days whose latest visit has it, the one a refusal count reads (R12).
+  Absent, nothing changes; empty or unknown is **400**. A poll only adds or
+  replaces rows, so a door-day already held whose later visit no longer has the
+  reason stays as held until the next reseed (a period or reason change, or a
+  reload). The export takes the same parameter and keeps the *visits* that have
+  it, one row per visit, as it always did.
+- **Cost.** Two statements: the touched visits (`limit + 1`, at most 5 bound
+  parameters), then every visit of those door-days in one statement driven by
+  `json_each` over one bound JSON array (2 parameters with the newest touched
+  `received_at`, each door-day found through `visits_prospect_visited_idx`). The Brussels day is computed in the
+  Worker, `Intl` running about twice a distinct day. The measured CPU is in
+  [free-tier-budget](free-tier-budget.md#watch-outs).
 
 ## The map import
 

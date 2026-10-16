@@ -416,3 +416,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-501-tournee-carte-swipe-numbers.md`
   summary: After a cache wipe the counter reads too low (e.g. « 0 portes sur 3 » on a 6-stop day), because `n` comes from the phone-only `sentVisits` log.
   evidence: Edge-case lens, story 1.5 review pass 1; pre-existing, fixed by entry 7's server-plus-outbox counter.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-507-visites-ledger-door-days.md`
+  summary: A repaired orphan keeps its original `received_at`, so the live feed's `since` poll never brings it into a door-day the admin already holds.
+  evidence: `POST /api/admin/visits/orphaned/:id/repair` inserts `receivedAt: held.receivedAt` (src/worker/routes/admin.ts). The per-visit feed had the same gap before #507; a reseed (reload, period or reason change) shows it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-507-visites-ledger-door-days.md`
+  summary: The field precache has about 10 bytes left under its 1,000 KiB ceiling, because admin-only response schemas live in the field-precached `src/shared/schemas.ts`.
+  evidence: `pnpm check:precache` reads 25 entries, 999.99 KiB after #507 (999.91 KiB before). The next shared-code change will likely break the ceiling; moving admin schemas to a module the field does not import, or revisiting ADR-0026/0031, would free room.

@@ -1,53 +1,75 @@
 import { describe, expect, it } from "vitest";
-import { arrivedIds, mergeVisits, nextSince } from "./feed";
-import type { AdminVisit } from "../../../shared/schemas";
+import { arrivedKeys, mergeDoorDays, nextSince } from "./feed";
+import type { AdminDoorDay } from "../../../shared/schemas";
 
-function visit(id: string, receivedAt: number): AdminVisit {
-  return {
-    id,
-    prospectId: "00000000-0000-4000-8000-000000000000",
-    prospectName: `Place ${id}`,
-    agentEmail: "agent@example.com",
+function doorDay(key: string, receivedAt: number, outcome = "interested"): AdminDoorDay {
+  const latest = {
+    id: "00000000-0000-4000-8000-000000000001",
     visitedAt: receivedAt,
     receivedAt,
+    outcome: outcome as AdminDoorDay["outcome"],
+    refusalReason: null,
     flyerGiven: true,
-    outcome: "interested",
     followUpAt: null,
     notes: null,
+    answerCount: 0,
+  };
+  return {
+    key,
+    prospectId: "00000000-0000-4000-8000-000000000000",
+    prospectName: `Place ${key}`,
+    agentEmail: "agent@example.com",
+    dayStart: 0,
+    visitedAt: receivedAt,
+    receivedAt,
+    outcome: latest.outcome,
     refusalReason: null,
+    flyerGiven: true,
+    followUpAt: null,
+    notes: null,
+    visits: [latest],
   };
 }
 
-describe("mergeVisits", () => {
-  it("keeps the newest first", () => {
-    const merged = mergeVisits([visit("a", 1)], [visit("b", 3), visit("c", 2)]);
-    expect(merged.map((v) => v.id)).toEqual(["b", "c", "a"]);
+describe("mergeDoorDays", () => {
+  it("keeps the newest arrival first", () => {
+    const merged = mergeDoorDays([doorDay("a", 1)], [doorDay("b", 3), doorDay("c", 2)]);
+    expect(merged.map((d) => d.key)).toEqual(["b", "c", "a"]);
   });
 
-  it("is idempotent, so a re-delivered visit never doubles", () => {
-    const first = mergeVisits([], [visit("a", 1), visit("b", 2)]);
-    const again = mergeVisits(first, [visit("b", 2)]);
+  it("is idempotent, so a re-delivered door-day never doubles", () => {
+    const first = mergeDoorDays([], [doorDay("a", 1), doorDay("b", 2)]);
+    const again = mergeDoorDays(first, [doorDay("b", 2)]);
     expect(again).toHaveLength(2);
-    expect(again.map((v) => v.id)).toEqual(["b", "a"]);
+    expect(again.map((d) => d.key)).toEqual(["b", "a"]);
+  });
+
+  it("replaces a held door-day with its newer self and moves it to the top", () => {
+    const held = mergeDoorDays([], [doorDay("a", 1, "no_contact"), doorDay("b", 2)]);
+    const merged = mergeDoorDays(held, [doorDay("a", 3, "converted")]);
+    expect(merged.map((d) => [d.key, d.outcome])).toEqual([
+      ["a", "converted"],
+      ["b", "interested"],
+    ]);
   });
 
   it("breaks a same-millisecond tie the same way every time", () => {
     // Two phones syncing at once land on the same receivedAt. Without the
     // tie-break the two rows would swap places on every poll.
-    const one = mergeVisits([], [visit("b", 5), visit("a", 5)]);
-    const two = mergeVisits([visit("a", 5)], [visit("b", 5)]);
-    expect(one.map((v) => v.id)).toEqual(two.map((v) => v.id));
+    const one = mergeDoorDays([], [doorDay("b", 5), doorDay("a", 5)]);
+    const two = mergeDoorDays([doorDay("a", 5)], [doorDay("b", 5)]);
+    expect(one.map((d) => d.key)).toEqual(two.map((d) => d.key));
   });
 
   it("returns what it was given when nothing arrived", () => {
-    const held = [visit("a", 1)];
-    expect(mergeVisits(held, [])).toBe(held);
+    const held = [doorDay("a", 1)];
+    expect(mergeDoorDays(held, [])).toBe(held);
   });
 });
 
 describe("nextSince", () => {
   it("is the highest receivedAt held, not the newest-first row", () => {
-    expect(nextSince([visit("a", 3), visit("b", 9), visit("c", 1)])).toBe(9);
+    expect(nextSince([doorDay("a", 3), doorDay("b", 9), doorDay("c", 1)])).toBe(9);
   });
 
   it("is 0 when nothing is held, which asks for everything", () => {
@@ -55,12 +77,16 @@ describe("nextSince", () => {
   });
 });
 
-describe("arrivedIds", () => {
+describe("arrivedKeys", () => {
   it("names only what this poll added", () => {
-    expect(arrivedIds([visit("a", 1)], [visit("a", 1), visit("b", 2)])).toEqual(["b"]);
+    expect(arrivedKeys([doorDay("a", 1)], [doorDay("a", 1), doorDay("b", 2)])).toEqual(["b"]);
   });
 
   it("names nothing when the poll re-delivered what we had", () => {
-    expect(arrivedIds([visit("a", 1)], [visit("a", 1)])).toEqual([]);
+    expect(arrivedKeys([doorDay("a", 1)], [doorDay("a", 1)])).toEqual([]);
+  });
+
+  it("names a held door-day that another visit reached", () => {
+    expect(arrivedKeys([doorDay("a", 1)], [doorDay("a", 4, "converted")])).toEqual(["a"]);
   });
 });
