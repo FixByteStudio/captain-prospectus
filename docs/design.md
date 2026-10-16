@@ -7,7 +7,8 @@ one built in M1.
 
 Tokens live in the `@theme` block of `src/client/styles/app.css`. That file is
 the implementation; this one is the reasoning. If they disagree, the CSS is
-right and this file needs updating.
+right and this file needs updating. Tailwind builds it from `src/client` only:
+a class name in a mockup, a doc or `index.html` gets no utility (GH #529).
 
 ## Grounding
 

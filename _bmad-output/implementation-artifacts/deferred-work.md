@@ -422,3 +422,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-507-visites-ledger-door-days.md`
   summary: The field precache has about 10 bytes left under its 1,000 KiB ceiling, because admin-only response schemas live in the field-precached `src/shared/schemas.ts`.
   evidence: `pnpm check:precache` reads 25 entries, 999.99 KiB after #507 (999.91 KiB before). The next shared-code change will likely break the ceiling; moving admin schemas to a module the field does not import, or revisiting ADR-0026/0031, would free room.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-529-field-precache-headroom.md`
+  summary: CarteScreen.tsx cites app.css by line numbers that have drifted (GH #534).
+  evidence: `src/client/field/CarteScreen.tsx:40,42` cite app.css:219/437-445; the tokens sit at 234 and 469/483.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-529-field-precache-headroom.md`
+  summary: app.css's test-file `@source not` globs only exclude tests under src/client/styles (GH #535).
+  evidence: The globs resolve against the stylesheet's folder; the reviewer counted 71 scanned test files. Prefixing them with `../` gives a byte-identical stylesheet today.
