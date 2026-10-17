@@ -21,6 +21,10 @@ export const LONG_TEXT_MAX = 2000;
 /** A question's `options`, and so the choices one multi answer can hold. */
 export const QUESTION_OPTIONS_MAX = 30;
 
+/** The bounds of a `rating` answer, an integer (docs/domains/scripts.md). */
+export const RATING_MIN = 1;
+export const RATING_MAX = 5;
+
 /** A question's `key`, and so an answer's: answers are keyed by question key. */
 export const QUESTION_KEY_MAX = 60;
 
