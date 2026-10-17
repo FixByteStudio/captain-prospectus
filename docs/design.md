@@ -1706,11 +1706,11 @@ commencer la tournée » in bold `text-base`. A 56px gold thumb (`primary`,
 stops read through it as the reason to go on. It has no cancel: Escape and the
 overlay do nothing, and T1 has no way past it without a position. Its content,
 top to bottom: a 48px gold disc with `MapPin`, the title « Activez la
-localisation », the description « Votre position fixe l'ordre des arrêts pour
-la journée. », a status line, the full-width 48px « Activer », and the muted
-line « Refusée ? Ouvrez Réglages › Localisation, puis revenez ici. » The web app
-cannot open the phone's settings (ADR-0036 › Context), so that line names them
-rather than linking.
+localisation », a status line, the full-width 48px « Activer », and the muted
+line « Ouvrez Réglages › Localisation, puis revenez ici. », which is also the
+dialog's description. The dialog does not explain why it needs the position:
+the agent only needs to know what to do. The web app cannot open the phone's
+settings (ADR-0036 › Context), so that line names them rather than linking.
 
 « Activer » takes the same one-off reading as the old « Réessayer »
 (`refresh()`), which brings up the browser's prompt the first time. When the
