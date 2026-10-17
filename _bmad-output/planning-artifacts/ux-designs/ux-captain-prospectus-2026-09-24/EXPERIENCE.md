@@ -10,7 +10,7 @@ sources:
   - docs/domains/field-operations.md
   - docs/domains/prospecting.md
   - docs/domains/identity-access.md
-  - docs/design.md (screen sections superseded by this file)
+  - docs/design.md (screen sections superseded by this file, except § Agents and § The login page, which this file does not specify)
 ---
 
 # Captain Prospectus — Experience Spine
@@ -29,7 +29,7 @@ This is one product with two surfaces, built on shadcn/ui + Tailwind CSS v4 (ADR
   |---|---|
   | Field map, swipe actions, daily progress | A new ADR that supersedes the 150 kB budget part of ADR-0015 |
   | Admin charts | Recharts via shadcn Chart in the admin chunk, justified in the PR that adds it |
-  | Admin round view | Agent position at sync: security review, data-model change, additive sync-contract change, and probably an ADR (agent-position retention is still undecided in field-operations.md) |
+  | Admin round view | Shipped. Agent position at sync and its retention are decided (ADR-0028); the stops come from the swipe's tournée (ADR-0036) |
   | Top-bar search and notifications | Designed now, built later, once their back end exists |
   | Import › Derniers imports | An import log the server writes: stored data, so an ADR and its own story first |
 
