@@ -266,8 +266,18 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
   await deriveProspectStatus(db, touchedProspectIds, now);
 
   // ---- 3b. Tournées, then their stops (ADR-0036). Stops reference prospects,
-  // including field ones from step 1, so they come after it.
-  const acceptedTournee = await writeTournees(db, email, now, body.tournees, body.stops, idMap);
+  // including field ones from step 1, so they come after it. Its own try, as the
+  // position write is (ADR-0028): the visits above are stored, so their
+  // acknowledgement must not hang on this write. On a throw none of this
+  // request's tournées or stops is listed, so the phone resends them, and every
+  // insert is `onConflictDoNothing`, so a partial write is harmless. Name only:
+  // a Drizzle message carries the bound values.
+  let acceptedTournee: Awaited<ReturnType<typeof writeTournees>> = { tournees: [], stops: [] };
+  try {
+    acceptedTournee = await writeTournees(db, email, now, body.tournees, body.stops, idMap);
+  } catch (err) {
+    console.error("tournee write failed", err instanceof Error ? err.name : "unknown");
+  }
 
   // ---- 3c. The agent's latest reading (ADR-0028). Agents only: an admin
   // walking a round from the field route stores nothing. A session or dev

@@ -428,3 +428,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-529-field-precache-headroom.md`
   summary: app.css's test-file `@source not` globs only exclude tests under src/client/styles (GH #535).
   evidence: The globs resolve against the stylesheet's folder; the reviewer counted 71 scanned test files. Prefixing them with `../` gives a byte-identical stylesheet today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-540-tournee-write-isolation.md`
+  summary: The Visites feed cursor can pass visits from a sync that stamped an earlier `received_at` but committed after a later one.
+  evidence: Sync stamps `received_at` with its request-start `now`; two concurrent syncs, or a repaired orphan keeping its old `received_at`, can land below a cursor already advanced. Pre-existing, found in the #540 review.

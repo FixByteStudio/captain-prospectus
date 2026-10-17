@@ -1424,6 +1424,23 @@ describe("agent position at sync (ADR-0028)", () => {
 describe("tournée at sync (ADR-0036)", () => {
   const OTHER = TEST_AGENT;
 
+  /**
+   * Noon in Brussels, clear of midnight and of a DST switch: these tests put
+   * visits and swipes a little before "now" and expect them today, which the
+   * real clock breaks between 00:00 and 01:00 Brussels (dashboard.test.ts sets
+   * the pattern).
+   */
+  const NOW = Date.parse("2026-06-17T10:00:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const tourneeOf = (startedAt = Date.now()) => ({ id: crypto.randomUUID(), startedAt });
   const stopOf = (tourneeId: string, prospectId: string, number: number) => ({
     id: crypto.randomUUID(),
@@ -1494,6 +1511,36 @@ describe("tournée at sync (ADR-0036)", () => {
     const db = getDb(env.DB);
     expect(await db.select().from(tournees)).toHaveLength(1);
     expect(await db.select().from(tourneeStops)).toHaveLength(20);
+  });
+
+  it("still acknowledges the visits when the tournée write throws, and lists none of its ids", async () => {
+    const { ids, t, stops } = await swipe(1);
+    const visit = visitOf(ids[0] ?? "", "interested");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await env.DB.exec(
+      "CREATE TRIGGER fail_tournee BEFORE INSERT ON tournees BEGIN SELECT RAISE(ABORT, 'tournee down'); END",
+    );
+    let response: Response;
+    let logged: unknown[][];
+    try {
+      response = await sync({ visits: [visit], tournees: [t], stops });
+    } finally {
+      await env.DB.exec("DROP TRIGGER fail_tournee");
+      logged = [...error.mock.calls];
+      error.mockRestore();
+    }
+
+    expect(response.status).toBe(200);
+    // The name alone: a Drizzle message carries the bound values.
+    expect(logged).toContainEqual(["tournee write failed", "Error"]);
+    const body = await bodyOf(response);
+    expect(body.accepted.visits).toEqual([visit.id]);
+    expect(body.accepted.tournees).toEqual([]);
+    expect(body.accepted.stops).toEqual([]);
+    // The phone resends them, and this time they land.
+    const again = await bodyOf(await sync({ tournees: [t], stops }));
+    expect(again.accepted.tournees).toEqual([t.id]);
+    expect(again.accepted.stops).toEqual(stops.map((s) => s.id));
   });
 
   it("gives a second session of the same agent the same tournée and numbers", async () => {

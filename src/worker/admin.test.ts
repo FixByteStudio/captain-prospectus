@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
@@ -1331,6 +1331,45 @@ describe("merging duplicates", () => {
     expect(renamedSide).toBe(0);
   });
 
+  it("counts door-days, not visits: one per agent and Brussels day", async () => {
+    const { original, renamed } = await renamedPair();
+    // Noon in Brussels, so both visits fall on one day whatever the real clock.
+    const noon = Date.parse("2026-06-17T10:00:00.000Z");
+    await getDb(env.DB)
+      .insert(visits)
+      .values(
+        // Two visits on one day count 1; another day, or another agent, adds one each.
+        (
+          [
+            [noon, AGENT],
+            [noon + 3_600_000, AGENT],
+            [noon + 86_400_000, AGENT],
+            [noon, ADMIN],
+          ] as const
+        ).map(([at, agentEmail]) => ({
+          id: crypto.randomUUID(),
+          prospectId: original,
+          agentEmail,
+          visitedAt: at,
+          clientVisitedAt: at,
+          receivedAt: at,
+          flyerGiven: false,
+          outcome: "no_contact" as const,
+          answers: {},
+          clientVersion: 1,
+        })),
+      );
+
+    const body = (await (
+      await call("/api/admin/prospects/duplicates")
+    ).json()) as DuplicatesResponse;
+    const pair = body.pairs[0];
+    if (!pair) throw new Error("expected a pair");
+
+    expect(pair.a.id === original ? pair.aVisits : pair.bVisits).toBe(3);
+    expect(pair.a.id === renamed ? pair.aVisits : pair.bVisits).toBe(0);
+  });
+
   it("merges, hides the absorbed prospect, and keeps every visit", async () => {
     const { original, renamed } = await renamedPair();
     const db = getDb(env.DB);
@@ -2022,6 +2061,30 @@ describe("GET /api/admin/visits", () => {
       expect(names(body)).toEqual(["Pizza Roma", "Le Bouchon"]);
     });
 
+    it("walks a truncated delta poll forward with no gap, a tie at the cut included", async () => {
+      await seedVisit("Avant", at(9));
+      await seedVisit("Un", at(10));
+      // One sync stamps one received_at: these two tie at the first page's cut.
+      await seedVisit("Deux", at(11));
+      await seedVisit("Trois", at(11));
+      await seedVisit("Quatre", at(12));
+      await seedVisit("Cinq", at(13));
+
+      const seen: string[] = [];
+      const pages: boolean[] = [];
+      let since = at(9);
+      for (let poll = 0; poll < 10; poll++) {
+        const body = await feed(`?since=${since}&limit=2`);
+        if (body.doorDays.length === 0) break;
+        pages.push(body.truncated);
+        seen.push(...names(body));
+        since = Math.max(...body.doorDays.map((d) => d.receivedAt));
+      }
+
+      expect(pages).toEqual([true, false]);
+      expect(seen.sort()).toEqual(["Cinq", "Deux", "Quatre", "Trois", "Un"]);
+    });
+
     it("orders a door-day by its latest arrival, while its answer stays the latest visit's", async () => {
       // B made 16:00 and received at once; A made 10:00 but synced late, at 20:00.
       const id = await seedVisit("Pizza Roma", at(16), "converted");
@@ -2154,8 +2217,21 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     receivedAt,
   });
 
+  /**
+   * Noon in Brussels, clear of midnight and of a DST switch: the tests place a
+   * swipe an hour before "now" and expect it today, which the real clock breaks
+   * between 00:00 and 01:00 Brussels (dashboard.test.ts sets the pattern).
+   */
+  const NOW = Date.parse("2026-06-17T10:00:00.000Z");
+
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
     await getDb(env.DB).delete(agentPositions);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const base = (now: number) => ({
