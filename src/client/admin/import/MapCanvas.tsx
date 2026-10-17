@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { copy } from "../../copy";
+import { addOsmTiles, motionOptions, readToken } from "../../leaflet-setup";
 import {
   CIRCLE_CENTER_HANDLE,
   CIRCLE_EDGE_HANDLE,
@@ -12,6 +13,9 @@ import {
   type Circle,
 } from "./map";
 import type { Vertex } from "../../../shared/schemas";
+
+/** The colour a shape falls back to when a --map-* token cannot be read. */
+const MAP_INK = "#1b2a4a";
 
 /** Which shape the canvas draws — a polygon for Overpass, a circle for Google. */
 export type DrawMode = "polygon" | "circle";
@@ -69,25 +73,12 @@ export function MapCanvas({
     const element = container.current;
     if (!element || map.current) return;
 
-    // design.md principle 5 and the reduced-motion block in app.css: motion
-    // only where something changed. A pan that animates is decoration here.
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
     const instance = L.map(element, {
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
-      zoomAnimation: !still,
-      fadeAnimation: !still,
-      markerZoomAnimation: !still,
+      ...motionOptions(),
     });
-
-    // INVARIANT 11: attribution on every map. Passing it to the tile layer
-    // rather than drawing our own line means it cannot be laid out away.
-    // The tiles are OSM whichever provider is searched (ADR-0020).
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: copy.attribution,
-      maxZoom: 19,
-    }).addTo(instance);
+    addOsmTiles(instance);
 
     instance.on("click", (event: L.LeafletMouseEvent) => {
       const current = handlers.current;
@@ -118,14 +109,14 @@ export function MapCanvas({
     // Theme-invariant tokens, not --color-ring/--color-primary (#27): the
     // tiles stay light in dark mode, so a shape that follows the theme goes
     // near-invisible over them. --map-* is declared once, in light :root only.
-    const stroke = { color: readToken("--map-stroke"), weight: 2 };
-    const fill = { fillColor: readToken("--map-fill"), fillOpacity: 0.18 };
+    const stroke = { color: readToken("--map-stroke", MAP_INK), weight: 2 };
+    const fill = { fillColor: readToken("--map-fill", MAP_INK), fillOpacity: 0.18 };
 
     const addHandle = (at: Vertex, index: number) => {
       const handle = L.circleMarker(at, {
         radius: 7,
-        color: readToken("--map-stroke"),
-        fillColor: readToken("--map-handle"),
+        color: readToken("--map-stroke", MAP_INK),
+        fillColor: readToken("--map-handle", MAP_INK),
         fillOpacity: 1,
         weight: 2,
         // Leaflet's own keyboard support does not extend to dragging a handle.
@@ -179,9 +170,4 @@ export function MapCanvas({
       aria-label={mode === "circle" ? copy.map.circle.lede : copy.map.lede}
     />
   );
-}
-
-/** A `@theme` token's computed value, so Leaflet's inline styles stay on-palette. */
-function readToken(token: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#1b2a4a";
 }
