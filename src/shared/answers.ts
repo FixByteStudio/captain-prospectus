@@ -9,7 +9,13 @@
  * Pure module: no DOM, no Worker APIs (CLAUDE.md).
  */
 import * as z from "zod/mini";
-import { LONG_TEXT_MAX, QUESTION_OPTIONS_MAX, QUESTION_TYPES } from "./constants";
+import {
+  LONG_TEXT_MAX,
+  QUESTION_OPTIONS_MAX,
+  QUESTION_TYPES,
+  RATING_MAX,
+  RATING_MIN,
+} from "./constants";
 import type { Question } from "./schemas";
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(QUESTION_TYPES);
@@ -64,8 +70,7 @@ function answerSchemaFor(question: Question, mustAnswer: boolean) {
     case "number":
       return z.number();
     case "rating":
-      // scripts.md: integer 1–5.
-      return z.int().check(z.gte(1), z.lte(5));
+      return z.int().check(z.gte(RATING_MIN), z.lte(RATING_MAX));
     default:
       // Unreachable: `answerableQuestions` filtered this out. Returning rather
       // than throwing keeps that true even if the filter is ever loosened.

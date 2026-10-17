@@ -14,6 +14,7 @@ import type {
   Source,
   Status,
 } from "../../shared/constants";
+import { RATING_MAX, RATING_MIN } from "../../shared/constants";
 
 export const sharedCopy = {
   appName: "Captain Prospectus",
@@ -172,7 +173,7 @@ export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
   multi: "Choix multiple",
   text: "Texte",
   number: "Nombre",
-  rating: "Note (1 à 5)",
+  rating: `Note (${RATING_MIN} à ${RATING_MAX})`,
 };
 
 export const TYPE_LABELS: Readonly<Record<ProspectType, string>> = {
