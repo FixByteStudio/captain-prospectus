@@ -37,6 +37,15 @@ export function isStopLeft(
   );
 }
 
+/**
+ * Whether a stop joined after the swipe. The swipe writes each stop's `addedAt`
+ * equal to the tournée's `startedAt` (StartScreen), both from the phone clock; a
+ * joiner's is written later, so an equality needs no clock comparison.
+ */
+export function isJoiner(addedAt: number, startedAt: number): boolean {
+  return addedAt !== startedAt;
+}
+
 /** What a swipe freezes about one prospect: enough to preview, order and number it. */
 export type SnapshotProspect = {
   id: string;

@@ -186,8 +186,8 @@ export const tournees = sqliteTable(
 
 /**
  * A numbered stop of a tournée. Insert-only: a stop that left the agent's work
- * is derived from the prospect, never written. No unique (tournée, number):
- * joiner collisions are decided later.
+ * is derived from the prospect, never written. Unique (tournée, number): of two
+ * joiners under one number the first stored keeps it (ADR-0036 › Numbers).
  */
 export const tourneeStops = sqliteTable(
   "tournee_stops",
@@ -207,6 +207,7 @@ export const tourneeStops = sqliteTable(
   },
   (t) => [
     uniqueIndex("tournee_stops_tournee_prospect_idx").on(t.tourneeId, t.prospectId),
+    uniqueIndex("tournee_stops_tournee_number_idx").on(t.tourneeId, t.number),
     index("tournee_stops_prospect_idx").on(t.prospectId),
   ],
 );

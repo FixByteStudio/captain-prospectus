@@ -941,11 +941,12 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
 
   it("stores the pulled tournée, its stops and the visited stops, replacing the last pull", async () => {
     const stale = day(1);
-    await db.tournees.put({ id: stale.tournee.id, dayStart: 1, startedAt: 1 });
+    await db.tournees.put({ id: stale.tournee.id, dayStart: 1, startedAt: 1, clientStartedAt: 1 });
     const tournee: TodayTournee = {
       id: crypto.randomUUID(),
       dayStart: 1_700_000_000_000,
       startedAt: 1_700_000_050_000,
+      clientStartedAt: 1_700_000_050_000,
       stops: [
         {
           id: crypto.randomUUID(),
@@ -953,6 +954,7 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
           number: 1,
           addedAt: 1_700_000_050_000,
           left: false,
+          joiner: false,
         },
       ],
     };
@@ -987,6 +989,7 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
       id: crypto.randomUUID(),
       dayStart: 1_700_000_000_000,
       startedAt: 1_699_999_000_000,
+      clientStartedAt: 1_699_999_000_000,
       stops: [],
     };
     const echo = acceptingServer();
@@ -1026,12 +1029,14 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
       id: crypto.randomUUID(),
       dayStart: brusselsPeriod(1_700_000_100_000, 1).from,
       startedAt: 1_700_000_000_000,
+      clientStartedAt: 1_700_000_000_000,
       stops: held.map((p, i) => ({
         id: crypto.randomUUID(),
         prospectId: p.id,
         number: i + 1,
         addedAt: 1_700_000_000_000,
         left: left.includes(i + 1),
+        joiner: false,
       })),
     });
 
@@ -1172,6 +1177,7 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
             number: 3,
             addedAt: 1_700_000_060_000,
             left: false,
+            joiner: false,
           },
         ],
       };
@@ -1195,7 +1201,12 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
   });
 
   it("clears the pulled tournée when the pull says there is none", async () => {
-    await db.tournees.put({ id: crypto.randomUUID(), dayStart: 1, startedAt: 1 });
+    await db.tournees.put({
+      id: crypto.randomUUID(),
+      dayStart: 1,
+      startedAt: 1,
+      clientStartedAt: 1,
+    });
     await runSync({ db, identity: AGENT, fetchFn: respondWith(okResponse({ tournee: null })) });
     expect(await db.tournees.count()).toBe(0);
   });

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `tournee_stops_tournee_number_idx` ON `tournee_stops` (`tournee_id`,`number`);

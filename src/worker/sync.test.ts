@@ -1856,6 +1856,64 @@ describe("tournée at sync (ADR-0036)", () => {
     });
   });
 
+  it("lets the database refuse a second stop under one number", async () => {
+    const { t, stops } = await swipe(1);
+    await sync({ tournees: [t], stops });
+    const x = crypto.randomUUID();
+    await seedProspect(x);
+
+    const refused = await getDb(env.DB)
+      .insert(tourneeStops)
+      .values({
+        id: crypto.randomUUID(),
+        tourneeId: t.id,
+        prospectId: x,
+        number: 1,
+        addedAt: NOW,
+        clientAddedAt: NOW,
+        receivedAt: NOW,
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    // Drizzle wraps the driver's error: the constraint is named in its cause.
+    expect(String((refused as { cause?: unknown } | null)?.cause)).toMatch(/UNIQUE/);
+  });
+
+  it("drains a stop whose prospect never came once the tournée's day has passed", async () => {
+    const t = tourneeOf();
+    const missing = stopOf(t.id, crypto.randomUUID(), 1);
+    const first = await bodyOf(await sync({ tournees: [t], stops: [missing] }));
+    expect(first.accepted.stops).toEqual([]);
+
+    vi.setSystemTime(NOW + 86_400_000);
+    const next = await bodyOf(await sync({ stops: [missing] }));
+
+    expect(next.accepted.stops).toEqual([missing.id]);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(0);
+  });
+
+  it("derives joiner and clientStartedAt, whatever the phone clock says", async () => {
+    // A phone two hours ahead: the server clamps the tournée to its own time.
+    const ahead = NOW + 2 * 3_600_000;
+    const t = tourneeOf(ahead);
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    await seedProspects(ids);
+    const snapshot = { ...stopOf(t.id, ids[0] ?? "", 1), addedAt: ahead };
+    // The joiner is stamped with the server's time, earlier than the phone's swipe.
+    const joiner = { ...stopOf(t.id, ids[1] ?? "", 2), addedAt: NOW };
+
+    const body = await bodyOf(await sync({ tournees: [t], stops: [snapshot, joiner] }));
+
+    expect(body.tournee?.clientStartedAt).toBe(ahead);
+    expect(body.tournee?.stops.map((s) => [s.number, s.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
   it("accepts and drops a stop for a tournée that is not the agent's", async () => {
     const id = crypto.randomUUID();
     await seedProspect(id, OTHER);

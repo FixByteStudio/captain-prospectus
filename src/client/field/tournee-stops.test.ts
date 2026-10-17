@@ -95,6 +95,7 @@ const pulledTournee = (over: Partial<PulledTournee> = {}): PulledTournee => ({
   id: TOURNEE_ID,
   dayStart: PERIOD.from,
   startedAt: TODAY,
+  clientStartedAt: TODAY,
   ...over,
 });
 const pulledStop = (
@@ -108,6 +109,7 @@ const pulledStop = (
   number,
   addedAt: TODAY,
   left: false,
+  joiner: false,
   ...over,
 });
 
@@ -705,7 +707,10 @@ describe("leavers, joiners and the total", () => {
     const items = todaysStops(
       input({
         pulledTournees: [pulledTournee()],
-        pulledStops: [pulledStop(a.id, 1), pulledStop(b.id, 2, { addedAt: TODAY + 1 })],
+        pulledStops: [
+          pulledStop(a.id, 1),
+          pulledStop(b.id, 2, { addedAt: TODAY + 1, joiner: true }),
+        ],
         prospects: [a, b],
       }),
     );
@@ -751,6 +756,69 @@ describe("leavers, joiners and the total", () => {
     expect(items.map((i) => [i.number, i.joiner])).toEqual([
       [1, false],
       [2, true],
+    ]);
+  });
+
+  it("keeps a pulled stop's joiner flag when the phone clock ran ahead of the server", () => {
+    const [a, b] = [prospect(), prospect()];
+    const ahead = TODAY + 7_200_000;
+    const items = todaysStops(
+      input({
+        // The server clamped `startedAt` to its own time; the phone's own value is `clientStartedAt`.
+        pulledTournees: [pulledTournee({ clientStartedAt: ahead })],
+        pulledStops: [
+          pulledStop(a.id, 1, { addedAt: TODAY }),
+          pulledStop(b.id, 2, { addedAt: TODAY, joiner: true }),
+        ],
+        prospects: [a, b],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("marks a queued joiner stamped with the server's earlier time on an unsent swipe", () => {
+    const [a, b] = [prospect(), prospect()];
+    const ahead = TODAY + 7_200_000;
+    const items = todaysStops(
+      input({
+        outboxTournees: [queuedTournee({ startedAt: ahead })],
+        outboxStops: [
+          queuedStop(a.id, 1, { addedAt: ahead }),
+          queuedStop(b.id, 2, { addedAt: TODAY }),
+        ],
+        prospects: [a, b],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("does not mark the queued rest of a big swipe on a pulled tournée, only a later joiner", () => {
+    const [a, b, c] = [prospect(), prospect(), prospect()];
+    const items = todaysStops(
+      input({
+        // Phone ahead: the server clamped `startedAt`, so only `clientStartedAt` is comparable.
+        pulledTournees: [pulledTournee({ startedAt: TODAY - 7_200_000, clientStartedAt: TODAY })],
+        pulledStops: [pulledStop(a.id, 1)],
+        outboxStops: [
+          queuedStop(b.id, 2, { tourneeId: TOURNEE_ID, addedAt: TODAY }),
+          queuedStop(c.id, 3, { tourneeId: TOURNEE_ID, addedAt: TODAY + 1 }),
+        ],
+        prospects: [a, b, c],
+      }),
+    );
+
+    expect(items.map((i) => [i.number, i.joiner])).toEqual([
+      [1, false],
+      [2, false],
+      [3, true],
     ]);
   });
 

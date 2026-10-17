@@ -10,6 +10,7 @@
 import { distanceMeters, type Point } from "../../shared/geo";
 import { brusselsPeriod } from "../../shared/period";
 import type { Prospect, VisitedStop } from "../../shared/schemas";
+import { isJoiner } from "../../shared/tournee";
 import type {
   PulledStop,
   PulledTournee,
@@ -136,6 +137,8 @@ export type DayStop = {
   addedAt: number;
   /** Only the server decides it, so a queued stop is never left. */
   left: boolean;
+  /** Joined after the swipe (`isJoiner`): the server's word for a pulled stop. */
+  joiner: boolean;
 };
 
 export type DayStops = {
@@ -157,7 +160,7 @@ type StopSources = Pick<
  */
 export function stopsOfToday(input: StopSources, period: Period): DayStops | null {
   const mine = writtenByOrUnstamped(input.identity);
-  const queued = (tourneeId: string): DayStop[] =>
+  const queued = (tourneeId: string, startedAt: number): DayStop[] =>
     input.outboxStops
       .filter((s) => s.tourneeId === tourneeId && mine(s))
       .map((s) => ({
@@ -166,13 +169,14 @@ export function stopsOfToday(input: StopSources, period: Period): DayStops | nul
         number: s.number,
         addedAt: s.addedAt,
         left: false,
+        joiner: isJoiner(s.addedAt, startedAt),
       }));
 
   const pulled = input.pulledTournees.find((t) => t.dayStart === period.from);
   if (pulled) {
     const stops: DayStop[] = input.pulledStops.filter((s) => s.tourneeId === pulled.id);
     const held = new Set(stops.map((s) => s.prospectId));
-    for (const stop of queued(pulled.id)) {
+    for (const stop of queued(pulled.id, pulled.clientStartedAt)) {
       if (!held.has(stop.prospectId)) stops.push(stop);
     }
     return { tourneeId: pulled.id, startedAt: pulled.startedAt, stops };
@@ -182,7 +186,7 @@ export function stopsOfToday(input: StopSources, period: Period): DayStops | nul
     (t) => mine(t) && t.startedAt >= period.from && t.startedAt < period.to,
   );
   if (!own) return null;
-  return { tourneeId: own.id, startedAt: own.startedAt, stops: queued(own.id) };
+  return { tourneeId: own.id, startedAt: own.startedAt, stops: queued(own.id, own.startedAt) };
 }
 
 /** What the counter shows: `percent` only fills the bar. */
@@ -263,8 +267,7 @@ export function todaysStops(input: TodaysStopsInput): TourneeItem[] {
       lng,
       status: known ? known.status : null,
       pending: !known,
-      // `addedAt = startedAt` at the swipe, so only a later stop is a joiner.
-      joiner: today !== null && stop.addedAt > today.startedAt,
+      joiner: stop.joiner,
       distanceM:
         input.point && lat !== null && lng !== null
           ? distanceMeters(input.point, { lat, lng })

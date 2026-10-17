@@ -262,7 +262,12 @@ describe("TodayScreen", () => {
     const field = fieldProspect({ name: "Camion à tacos" });
     await fieldDb.outboxProspects.add(field);
     const tourneeId = crypto.randomUUID();
-    await fieldDb.tournees.put({ id: tourneeId, dayStart: 0, startedAt: TOURNEE_NOW });
+    await fieldDb.tournees.put({
+      id: tourneeId,
+      dayStart: 0,
+      startedAt: TOURNEE_NOW,
+      clientStartedAt: TOURNEE_NOW,
+    });
     await fieldDb.outboxTournees.add({ id: tourneeId, startedAt: TOURNEE_NOW });
     await fieldDb.outboxStops.add({
       id: crypto.randomUUID(),
@@ -432,11 +437,13 @@ describe("TodayScreen", () => {
       .filter((s) => s.prospectId === nth(stops, 0).id)
       .modify({
         addedAt: 1_700_000_000_000 + 1_000_000,
+        joiner: true,
       });
     await fieldDb.tourneeStops
       .filter((s) => s.prospectId === nth(stops, 2).id)
       .modify({
         addedAt: 1_700_000_000_000 + 1_000_000,
+        joiner: true,
       });
 
     renderScreen();
