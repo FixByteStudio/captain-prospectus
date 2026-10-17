@@ -85,9 +85,9 @@ describe("Visites dans le temps' statement", () => {
 });
 
 describe("agentsStartedOn's statement", () => {
-  // Polled every 15 s by the recap card: it must probe the unique (agent, day)
+  // Polled every 15 s by the recap card: it must probe the (agent, day)
   // index per active user, never scan every tournée ever stored.
-  it("is served by tournees_agent_day_idx", async () => {
+  it("is served by tournees_agent_day_started_idx", async () => {
     const plan = await planOf(
       `SELECT count(*) FROM users WHERE active = 1 AND EXISTS (
         SELECT 1 FROM tournees WHERE agent_email = users.email AND day_start = ?1
@@ -95,7 +95,7 @@ describe("agentsStartedOn's statement", () => {
       Date.UTC(2026, 5, 17),
     );
 
-    expect(plan.some((detail) => detail.includes("tournees_agent_day_idx"))).toBe(true);
+    expect(plan.some((detail) => detail.includes("tournees_agent_day_started_idx"))).toBe(true);
     expect(plan.some((detail) => detail.startsWith("SCAN tournees"))).toBe(false);
   });
 });

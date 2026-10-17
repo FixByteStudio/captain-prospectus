@@ -18,6 +18,7 @@ import { brusselsPeriod } from "../../shared/period";
 import { clearAgentCache, FieldDb, getMeta, setMeta, startTournee } from "./db";
 import { dropReading, rememberReading, setReadingIdentity } from "./last-reading";
 import { backoffDelayMs, runSync } from "./sync";
+import { stopsOfToday } from "./tournee-stops";
 
 /**
  * INVARIANT 5: never lose a visit. Every test here is a way the outbox could be
@@ -1032,6 +1033,52 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
         addedAt: 1_700_000_000_000,
         left: left.includes(i + 1),
       })),
+    });
+
+    it("replaces a pulled later tournée and its queued joiner with the earliest swipe's stops", async () => {
+      const held = [prospectOf({ name: "H1" }), prospectOf({ name: "H2" })];
+      const joiner = prospectOf({ name: "J" });
+      const b = pulledDay(held);
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(okResponse({ prospects: [...held, joiner], tournee: b })),
+      });
+      const queued = await db.outboxStops.toArray();
+      expect(queued.map((q) => q.tourneeId)).toEqual([b.id]);
+
+      // The server now answers the earliest swipe, which does not hold the joiner.
+      const a: TodayTournee = { ...pulledDay([...held].reverse()), dayStart: b.dayStart };
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(okResponse({ prospects: [...held, joiner], tournee: a })),
+      });
+
+      const pulledTournees = await db.tournees.toArray();
+      const pulledStops = await db.tourneeStops.toArray();
+      expect(pulledTournees.map((t) => t.id)).toEqual([a.id]);
+      expect(pulledStops.every((st) => st.tourneeId === a.id)).toBe(true);
+      expect(pulledStops.map((st) => st.id).sort()).toEqual(a.stops.map((st) => st.id).sort());
+
+      const today = stopsOfToday(
+        {
+          pulledTournees,
+          pulledStops,
+          outboxTournees: await db.outboxTournees.toArray(),
+          outboxStops: await db.outboxStops.toArray(),
+          identity: AGENT,
+        },
+        brusselsPeriod(1_700_000_100_000, 1),
+      );
+      expect(today?.tourneeId).toBe(a.id);
+      // The joiner is re-derived against A, at the next number after A's.
+      const rederived = (await db.outboxStops.toArray()).filter((q) => q.tourneeId === a.id);
+      expect(rederived.map((q) => [q.prospectId, q.number])).toEqual([
+        [joiner.id, Math.max(...a.stops.map((st) => st.number)) + 1],
+      ]);
+      expect(today?.stops.map((st) => st.prospectId)).toContain(joiner.id);
+      expect(today?.stops).toHaveLength(a.stops.length + 1);
     });
 
     it("queues stops 21 and 22 for the two prospects a pull brings after a 20-stop swipe", async () => {

@@ -161,9 +161,9 @@ export const visits = sqliteTable(
 );
 
 /**
- * One agent's numbered stops for one Brussels day (ADR-0036). Insert-only: the
- * first swipe of the day wins the unique (agent, day), and a second phone's
- * tournée is accepted and dropped. Holds no position (ADR-0023 gains no table).
+ * One agent's numbered stops for one Brussels day (ADR-0036). Insert-only: every
+ * tournée is stored, and the earliest `client_started_at` of the day is the one
+ * read (`todayTournee`). Holds no position (ADR-0023 gains no table).
  */
 export const tournees = sqliteTable(
   "tournees",
@@ -179,7 +179,9 @@ export const tournees = sqliteTable(
     clientStartedAt: integer("client_started_at").notNull(),
     receivedAt: integer("received_at").notNull(),
   },
-  (t) => [uniqueIndex("tournees_agent_day_idx").on(t.agentEmail, t.dayStart)],
+  (t) => [
+    index("tournees_agent_day_started_idx").on(t.agentEmail, t.dayStart, t.clientStartedAt, t.id),
+  ],
 );
 
 /**

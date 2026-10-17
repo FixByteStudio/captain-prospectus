@@ -1563,21 +1563,97 @@ describe("tournée at sync (ADR-0036)", () => {
     expect(await db.select().from(tourneeStops)).toHaveLength(20);
   });
 
-  it("keeps the first swipe of the day and drains the losing phone", async () => {
-    const { ids, t, stops } = await swipe(3);
-    await sync({ tournees: [t], stops });
+  /** Two swipes of one agent's day: `later` over [3,2,1], `earlier` over [1,2,3]. */
+  async function twoSwipes(laterAt: number, earlierAt: number) {
+    const ids = Array.from({ length: 3 }, () => crypto.randomUUID());
+    await seedProspects(ids);
+    const later = tourneeOf(laterAt);
+    const earlier = tourneeOf(earlierAt);
+    return {
+      later,
+      earlier,
+      laterStops: ids.map((id, i) => stopOf(later.id, id, 3 - i)),
+      earlierStops: ids.map((id, i) => stopOf(earlier.id, id, i + 1)),
+    };
+  }
 
-    const t2 = tourneeOf();
-    const stops2 = ids.map((id, i) => stopOf(t2.id, id, 3 - i));
-    const body = await bodyOf(await sync({ tournees: [t2], stops: stops2 }));
-
-    expect(body.accepted.tournees).toEqual([t2.id]);
-    expect(body.accepted.stops).toEqual(stops2.map((s) => s.id));
-    expect(body.tournee?.id).toBe(t.id);
-    expect(body.tournee?.stops.map((s) => s.number)).toEqual([1, 2, 3]);
+  /** Both swipes stored, and the losing phone's next pull returns the earlier one. */
+  async function expectEarliestWins(earlier: { id: string }, earlierStops: { id: string }[]) {
     const db = getDb(env.DB);
-    expect(await db.select().from(tournees)).toHaveLength(1);
-    expect(await db.select().from(tourneeStops)).toHaveLength(3);
+    expect(await db.select().from(tournees)).toHaveLength(2);
+    expect(await db.select().from(tourneeStops)).toHaveLength(6);
+    const pull = await bodyOf(await sync({}));
+    expect(pull.tournee?.id).toBe(earlier.id);
+    expect(pull.tournee?.stops.map((s) => s.id)).toEqual(earlierStops.map((s) => s.id));
+    expect(pull.tournee?.stops.map((s) => s.number)).toEqual([1, 2, 3]);
+  }
+
+  it("keeps the earliest swipe whichever phone syncs first, and stores both", async () => {
+    const { later, earlier, laterStops, earlierStops } = await twoSwipes(
+      NOW - 5 * 60_000,
+      NOW - 10 * 60_000,
+    );
+    const first = await bodyOf(await sync({ tournees: [later], stops: laterStops }));
+    expect(first.tournee?.id).toBe(later.id);
+
+    const body = await bodyOf(await sync({ tournees: [earlier], stops: earlierStops }));
+    expect(body.accepted.tournees).toEqual([earlier.id]);
+    expect(body.accepted.stops).toEqual(earlierStops.map((s) => s.id));
+    expect(body.tournee?.id).toBe(earlier.id);
+    expect(body.tournee?.stops.map((s) => s.number)).toEqual([1, 2, 3]);
+    await expectEarliestWins(earlier, earlierStops);
+
+    // The losing phone's own stops are still taken, never read.
+    const again = await bodyOf(await sync({ tournees: [later], stops: laterStops }));
+    expect(again.accepted.tournees).toEqual([later.id]);
+    expect(again.accepted.stops).toEqual(laterStops.map((s) => s.id));
+    expect(again.tournee?.id).toBe(earlier.id);
+  });
+
+  it("keeps the earliest swipe when both clocks run two hours ahead", async () => {
+    const twoHours = 2 * 3_600_000;
+    const { later, earlier, laterStops, earlierStops } = await twoSwipes(
+      NOW + twoHours,
+      NOW + twoHours - 10 * 60_000,
+    );
+    await sync({ tournees: [later], stops: laterStops });
+    vi.setSystemTime(NOW + 5 * 60_000);
+    const body = await bodyOf(await sync({ tournees: [earlier], stops: earlierStops }));
+
+    expect(body.tournee?.id).toBe(earlier.id);
+    await expectEarliestWins(earlier, earlierStops);
+  });
+
+  it("accepts both swipes again on a resend and stores nothing new", async () => {
+    const { later, earlier, laterStops, earlierStops } = await twoSwipes(
+      NOW - 5 * 60_000,
+      NOW - 10 * 60_000,
+    );
+    await sync({ tournees: [later], stops: laterStops });
+    await sync({ tournees: [earlier], stops: earlierStops });
+    const body = await bodyOf(
+      await sync({ tournees: [later, earlier], stops: [...laterStops, ...earlierStops] }),
+    );
+
+    expect(body.accepted.tournees.sort()).toEqual([later.id, earlier.id].sort());
+    expect(body.accepted.stops).toHaveLength(6);
+    expect(body.tournee?.id).toBe(earlier.id);
+    const db = getDb(env.DB);
+    expect(await db.select().from(tournees)).toHaveLength(2);
+    expect(await db.select().from(tourneeStops)).toHaveLength(6);
+  });
+
+  it("breaks a tie on the swipe time with the lower id", async () => {
+    const { later, earlier, laterStops, earlierStops } = await twoSwipes(
+      NOW - 60_000,
+      NOW - 60_000,
+    );
+    const [low, high] = later.id < earlier.id ? [later, earlier] : [earlier, later];
+    const highStops = high === later ? laterStops : earlierStops;
+    const lowStops = low === later ? laterStops : earlierStops;
+    await sync({ tournees: [high], stops: highStops });
+    const body = await bodyOf(await sync({ tournees: [low], stops: lowStops }));
+    expect(body.tournee?.id).toBe(low.id);
   });
 
   it("stores a stop on a prospect reassigned since, flagged left", async () => {

@@ -15,10 +15,11 @@ import type { NewTourneeRow, NewTourneeStopRow } from "./db/schema";
 /**
  * Stores the tournées and stops of one sync and reports every id the phone may
  * forget. A phone sends a stop in the same request as its tournée or after that
- * tournée was accepted. Tournées are always accepted, stored or not: one that lost
- * its day to the agent's other phone is drained, with its stops, and so is a stop
- * whose tournée is not the agent's or not stored, since it can never be attached
- * later and an outbox row kept for it would retry for ever (INVARIANT 5).
+ * tournée was accepted. Every tournée is stored and accepted, even one that will
+ * lose its day to the agent's other phone (the earliest swipe is read, not the
+ * first stored). A stop whose tournée is not the agent's or not stored is drained,
+ * since it can never be attached later and an outbox row kept for it would retry
+ * for ever (INVARIANT 5).
  * A stop whose prospect does not exist yet is NOT accepted: prospects are never
  * deleted, so it is a field prospect still on its way, and the phone resends the
  * stop once that prospect is accepted.
@@ -47,8 +48,7 @@ export async function writeTournees(
         receivedAt: now,
       };
     });
-    // No conflict target: it covers the id (a resend) and the unique (agent, day)
-    // (the first swipe wins) alike.
+    // No conflict target: only the id (a resend) can conflict.
     for (const batch of chunk(rows, boundParamsPerRow(tournees))) {
       await db.insert(tournees).values(batch).onConflictDoNothing();
     }
@@ -56,7 +56,7 @@ export async function writeTournees(
 
   if (newStops.length > 0) {
     // The agent's own tournées among those named, found after the insert so a
-    // tournée stored a moment ago counts and one that lost its day does not.
+    // tournée stored a moment ago counts, one that will lose its day included.
     const owned = new Set<string>();
     const named = [...new Set(newStops.map((s) => s.tourneeId))];
     // Each batch binds its ids plus the agent's email, hence 2 per id (50 ids, 51 params).
@@ -146,7 +146,8 @@ export async function writeTournees(
 }
 
 /**
- * The agent's tournée for the Brussels day `now` falls in, its stops in number
+ * The agent's tournée for the Brussels day `now` falls in (the earliest swipe by
+ * the phone's `client_started_at`, id breaking a tie), its stops in number
  * order, or null before the first swipe. `visitedProspectIds` is today's door-days,
  * read once by the caller (`doorDaysOn`).
  */
@@ -165,6 +166,7 @@ export async function todayTournee(
         eq(tournees.dayStart, brusselsMidnightDaysFromNow(now, 0)),
       ),
     )
+    .orderBy(asc(tournees.clientStartedAt), asc(tournees.id))
     .limit(1);
   if (!tournee) return null;
 
@@ -201,9 +203,9 @@ export async function todayTournee(
  * Roster members who started the tournée of the Brussels day `dayStart` begins:
  * the swipe alone counts, with no visit needed. One helper serves « Agents en
  * tournée » and the recap's « actifs aujourd'hui », so they are the same figure
- * (ADR-0036). It drives from the handful of active `users` rows into the unique
- * `(agent_email, day_start)` index; a bare `day_start = ?` would scan every
- * tournée ever stored on each 15 s recap poll.
+ * (ADR-0036). It drives from the handful of active `users` rows into
+ * `tournees_agent_day_started_idx`, led by `(agent_email, day_start)`; a bare
+ * `day_start = ?` would scan every tournée ever stored on each 15 s recap poll.
  */
 export async function agentsStartedOn(db: Db, dayStart: number): Promise<number> {
   const [row] = await db
