@@ -137,12 +137,17 @@ describe("useAgentPosition", () => {
     expect(reading.mock.lastCall?.[2]).toMatchObject({
       maximumAge: 120_000,
       enableHighAccuracy: false,
+      timeout: 10_000,
     });
     plain.unmount();
 
     const gate = renderHook(() => useAgentPosition({ fresh: true, highAccuracy: true }));
     await waitFor(() => expect(gate.result.current.locating).toBe(false));
-    expect(reading.mock.lastCall?.[2]).toMatchObject({ maximumAge: 0, enableHighAccuracy: true });
+    expect(reading.mock.lastCall?.[2]).toMatchObject({
+      maximumAge: 0,
+      enableHighAccuracy: true,
+      timeout: 10_000,
+    });
     reading.mockRestore();
   });
 });

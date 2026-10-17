@@ -1691,10 +1691,11 @@ commencer la tournée » in bold `text-base`. A 56px gold thumb (`primary`,
   and the button is `aria-disabled` rather than `disabled`, so a screen reader
   still finds it and hears why. In practice this state sits under the location
   dialog: the dialog only closes on a reading.
-- **On commit** the phone numbers the stops nearest-next from the reading, writes
-  the tournée and its stops to the outbox and opens Tournée, with no toast: the
-  numbered list is the confirmation. While the write runs the thumb stays at
-  the far end, the label reads « Démarrage… », and the button is
+- **On commit** the phone numbers the stops nearest-next from the reading taken
+  at the commit (see The location dialog), writes the tournée and its stops to
+  the outbox and opens Tournée, with no toast: the numbered list is the
+  confirmation. While the reading and the write run the thumb stays at the far
+  end, the label reads « Démarrage… », and the button is
   `aria-disabled` and ignores any further drag, key or click, so one day cannot
   start twice. A failed write snaps the
   thumb back and shows, under the track, « Impossible de commencer la tournée
@@ -1732,9 +1733,12 @@ the track. The status line (`role="status"`, polite) says where that stands:
 | Refused | « La localisation est refusée sur ce téléphone. » |
 | Unavailable or timed out | « Position introuvable. Sortez à découvert si possible, puis touchez Activer. » |
 
-A reading that passes closes the dialog and moves focus to the swipe. A phone
-that never gets one (no GPS indoors, a permission the browser will not ask for
-again) stays here: T1 has no way past, and the agent calls the admin
+A reading that passes closes the dialog and moves focus to the swipe. The swipe
+then takes one last fresh reading (`LOCATION_GATE_SWIPE_TIMEOUT_MS`) and numbers
+the stops from it when it passes the same threshold, else from the reading that
+passed; the track says « Démarrage… » for that wait and the dialog stays shut. A
+phone that never gets one (no GPS indoors, a permission the browser will not
+ask for again) stays here: T1 has no way past, and the agent calls the admin
 (ADR-0036 › Consequences). After the swipe the location gate is over: a phone
 that loses its position later in the day locks nothing.
 

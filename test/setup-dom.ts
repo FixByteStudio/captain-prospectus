@@ -21,8 +21,8 @@ Object.defineProperty(navigator, "geolocation", {
     getCurrentPosition: (ok: PositionCallback, fail?: PositionErrorCallback) => {
       const fix = currentGeolocation();
       queueMicrotask(() => {
-        if (fix === "denied" || fix === "unavailable") {
-          const code = fix === "denied" ? 1 : 2;
+        if (fix === "denied" || fix === "unavailable" || fix === "timeout") {
+          const code = fix === "denied" ? 1 : fix === "unavailable" ? 2 : 3;
           fail?.({ code, message: fix } as GeolocationPositionError);
           return;
         }

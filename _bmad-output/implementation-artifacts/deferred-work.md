@@ -436,3 +436,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-541-earliest-swipe-wins.md`
   summary: Pin `todayTournee`'s `ORDER BY client_started_at, id LIMIT 1` with a query-plan test that it uses `tournees_agent_day_started_idx` and no temp b-tree sort.
   evidence: Only `agentsStartedOn`'s plan is tested; entry 5 (R15, #543-lane) rewrites `indexes.test.ts` to plan the statements the code runs, so the test belongs there.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-527-swipe-numbers-from-a-fresh-reading.md`
+  summary: If a browser never calls back a `getCurrentPosition` at the swipe, `await swipePoint()` never settles and the track stays on « Démarrage… » until a reload (unverified, medium if true).
+  evidence: The swipe relies on the browser's own `timeout` (`LOCATION_GATE_SWIPE_TIMEOUT_MS`), as the #527 spec requires; the permission is already granted there. Settle by swiping on real iOS Safari and an Android WebView with GPS off and the page briefly hidden; if a hang shows, a backstop timer needs the owner to lift the spec's "no JS timer" rule.
