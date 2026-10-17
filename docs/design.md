@@ -1792,12 +1792,12 @@ stop leaves it where it was. Right after the swipe it reads « 0 sur {20} ».
 
 **The numbers are the swipe's, and the list keeps them.** Two exceptions, both
 a phone adopting the server's numbering after it lost a race, with no message.
-First, when two phones of one agent both swipe offline, the first swipe the
-server receives wins, and the other phone takes its numbers from the next pull
-(ADR-0036, epic decision of 2026-10-14). Second, when two phones of one agent
-append different joiners under the same number, the server keeps the first
-stored, and the other phone re-appends its prospect as the next number on its
-next pull (entry 6, owner decision of 2026-10-15): only a joiner not yet synced
+First, when two phones of one agent both swipe offline, the earliest swipe by
+the phones' start time wins, whichever syncs first, and the other phone takes
+its numbers from the next pull (ADR-0036, amended 2026-10-17). Second, when
+two phones of one agent append different joiners under the same number, the
+server keeps the first stored, and the other phone re-appends its prospect as
+the next number on its next pull (entry 6, owner decision of 2026-10-15): only a joiner not yet synced
 can be renumbered. The card shows the
 lowest-numbered stop with no visit today; the rows follow in number order.
 Distances still show, from the latest reading, as information: they never

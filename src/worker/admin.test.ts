@@ -2289,6 +2289,35 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     expect(body.position).toEqual({ lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: now - 1_000 });
   });
 
+  it("returns the earliest swipe of the day, whichever arrived first", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const ids = [1, 2].map(() => crypto.randomUUID());
+    const [one, two] = ids as [string, string];
+    await db.insert(prospects).values(
+      ids.map((id, i) => ({
+        ...base(now),
+        id,
+        name: `Stop ${i + 1}`,
+        dedupeKey: `round:earliest:${i + 1}`,
+        status: "assigned" as const,
+        assignedTo: AGENT,
+      })),
+    );
+    await swipe(now - 1_800_000, [
+      [1, two],
+      [2, one],
+    ]);
+    await swipe(now - 3_600_000, [
+      [1, one],
+      [2, two],
+    ]);
+    const body = (await (
+      await call(`/api/admin/agents/${AGENT}/round`)
+    ).json()) as AgentRoundResponse;
+    expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([one, two]);
+  });
+
   it("gives no rows before the swipe, whatever is assigned: no fallback to open prospects", async () => {
     const now = Date.now();
     await getDb(env.DB)

@@ -273,7 +273,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
       }
 
       // The tournée and the visited stops are caches too, replaced wholesale:
-      // a phone that lost the first-swipe race adopts the winner's numbering here.
+      // a phone that holds a later swipe adopts the earliest swipe's numbering here.
       await db.tournees.clear();
       await db.tourneeStops.clear();
       await db.visitedStops.clear();

@@ -61,8 +61,8 @@ server as inserts only, and count everything an agent or an admin sees by door a
 
 ### The tournée
 
-- A **tournée** is one agent's stops for one Brussels calendar day. There is at most one per
-  agent per day.
+- A **tournée** is one agent's stops for one Brussels calendar day. (amended 2026-10-17) One
+  is read per agent and day: the earliest swipe.
 - At the swipe it holds what is open for the agent that morning: assigned prospects with an
   open status, follow-ups due today or earlier, and field prospects still in the outbox.
   Follow-ups due on a later day are not in it. Admins keep assigning prospects as they do now.
@@ -93,11 +93,13 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
 
 - The phone numbers the stops **once, at the swipe**, nearest-next from the swipe position.
   The numbers never change after that.
-- (amended 2026-10-15) Two exceptions, both a phone adopting the server's numbers after it lost a
-  race. When two phones of one agent swipe offline, the first swipe wins and the losing phone
-  takes the winner's numbers on its next pull. When they append different joiners under one
-  number, the first stored keeps it and the other phone re-appends its prospect as the next
-  number. Only a number not yet synced can change.
+- (amended 2026-10-15, 2026-10-17) Two exceptions, both a phone adopting the server's numbers
+  after it lost a race. When two phones of one agent swipe offline, the earliest swipe by the
+  phone's start time wins (the id breaks a tie), whichever phone syncs first, and a phone
+  holding another tournée adopts the winner's numbers on its next pull even if its own were
+  synced. `client_started_at` is the phone's clock, so a skewed clock can win: accepted. When
+  they append different joiners under one number, the first stored keeps it and the other
+  phone re-appends its prospect as the next number.
 - Prospects that join the tournée after the swipe take the next numbers (21, 22…) at the end,
   marked "Nouveau".
 - An unvisited stop that leaves the agent's open work (reassigned, closed by the admin or
@@ -131,8 +133,9 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
 ### On the server, inserts only
 
 - A **tournée row** holds the agent (from the session), the Brussels day and the start time.
-  The start time is clamped to `received_at`, like `visited_at`. It is unique per agent and
-  day, and it is inserted with `onConflictDoNothing`.
+  The start time is clamped to `received_at`, like `visited_at`. (amended 2026-10-17) Every
+  tournée is inserted with `onConflictDoNothing` on its id, and the earliest `client_started_at`
+  of the day is read.
 - **Stop rows** hold the tournée, the prospect, the number and the time the stop was added.
   They are unique per tournée and prospect. The phone sends them through the outbox, the
   snapshot at the swipe and a joiner when it appears. Nothing is updated. A stop that left is

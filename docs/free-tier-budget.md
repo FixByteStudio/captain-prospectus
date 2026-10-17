@@ -74,7 +74,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   Each call reads about the day's received visits plus the `users` rows, so the cost grows
   through the day: an estimate, not a measurement, of 240 × 8 h × ~100 rows ≈ 200,000 rows a
   day for one tab open all day on a 100-visit day. « Actifs aujourd'hui » adds a third
-  statement (`agentsStartedOn`): one index probe on `tournees_agent_day_idx` per active user,
+  statement (`agentsStartedOn`): one index probe on `tournees_agent_day_started_idx` per active user,
   a handful of rows, which does not grow through the day. If D1 reads ever get tight, lengthen this
   poll first; the card's figures do not need 15 s.
 - **Google Places is the one line here that can actually bill us** (ADR-0020), and the only
@@ -206,7 +206,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   ouverts and Relances dues search `prospects_status_idx`; the pipeline and the agents'
   assignments search `prospects_merged_idx`. GH #177 adds one statement, `agentsActiveToday`,
   which searched `visits_received_idx (received_at>? AND received_at<?)`; ADR-0036 replaced it with
-  `agentsStartedOn`, an `EXISTS` into `tournees_agent_day_idx` per active user (read from the code, not
+  `agentsStartedOn`, an `EXISTS` into `tournees_agent_day_started_idx` per active user (read from the code, not
   re-run with `EXPLAIN=1`). GH #308 adds one statement
   (thirteen in all), `inactiveAgentProspects`, which searches `prospects_merged_idx
   (merged_into=?)` with a correlated subquery that searches `users` by primary key
