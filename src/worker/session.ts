@@ -5,7 +5,7 @@
  * Nothing here logs. A token, a hash or BREAK_GLASS in a log line would be a
  * credential in Workers observability (docs/security.md).
  */
-import { DAY_MS, HOUR_MS, type Role } from "../shared/constants";
+import { DAY_MS, HOUR_MS, MINUTE_MS, type Role } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
 import { toHex } from "./hex";
 
@@ -77,7 +77,7 @@ export function newSessionToken(): string {
 }
 
 /** How long a one-time code works once generated (identity-access.md). */
-export const LOGIN_CODE_TTL_MS = 15 * 60 * 1000;
+export const LOGIN_CODE_TTL_MS = 15 * MINUTE_MS;
 
 /**
  * `length` random Crockford characters, 5 bits each, read most significant

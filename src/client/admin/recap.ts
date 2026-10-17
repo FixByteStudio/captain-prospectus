@@ -1,9 +1,7 @@
-import { HOUR_MS } from "../../shared/constants";
+import { HOUR_MS, MINUTE_MS } from "../../shared/constants";
 import type { RecapResponse } from "../../shared/schemas";
 import { copy } from "../copy";
 import { formatDay } from "../format";
-
-const MINUTE_MS = 60_000;
 
 /**
  * The recap card's four lines (docs/design.md › Layout), shared by the full

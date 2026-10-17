@@ -5,7 +5,9 @@
  * the values below are the ones the domain docs describe, and the docs win.
  */
 
-export const HOUR_MS = 60 * 60 * 1000;
+export const MINUTE_MS = 60 * 1000;
+
+export const HOUR_MS = 60 * MINUTE_MS;
 
 /** A day in ms. Brussels days are not all this long, which is why `periodOffsets` exists (shared/period.ts). */
 export const DAY_MS = 24 * HOUR_MS;
@@ -275,11 +277,17 @@ export const MAP_CACHE_EVICT_BATCH = 500;
 export const AUTH_SWEEP_BATCH = 500;
 
 /**
+ * The fixed window failed logins are counted in (login-throttle.ts). The login
+ * screen waits it out when a 429 carries no usable Retry-After (docs/design.md).
+ */
+export const LOGIN_WINDOW_MS = 15 * MINUTE_MS;
+
+/**
  * The import log (ADR-0030). An import with batches missing and none received
  * for this long is read as « Interrompu »; a newer one is still running and is
  * not listed. Read-time only, so changing it needs no migration.
  */
-export const IMPORT_STALE_MS = 5 * 60 * 1000;
+export const IMPORT_STALE_MS = 5 * MINUTE_MS;
 
 /** Cap on `importLog.batchCount`: 10 000 batches of 250 rows is 2.5 M rows. */
 export const IMPORT_LOG_BATCH_COUNT_MAX = 10_000;
