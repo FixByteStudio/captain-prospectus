@@ -22,6 +22,7 @@ import {
   seedPulledTournee,
   setPhoneClockToTourneeDay,
   TOURNEE_NOW,
+  wipeAndPull,
 } from "./tournee-test-helpers";
 import type { SyncState } from "./useSync";
 
@@ -313,20 +314,18 @@ describe("TodayScreen", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
   });
 
-  /** The server's door-days for the first `count` prospects, as a pull leaves them. */
-  const pullVisited = (stops: readonly Prospect[], count: number) =>
-    fieldDb.visitedStops.bulkPut(
-      stops.slice(0, count).map((p) => ({
-        prospectId: p.id,
-        outcome: "interested" as const,
-        visitedAt: TOURNEE_NOW,
-        flyerGiven: false,
-        visitIds: [crypto.randomUUID()],
-        name: p.name,
-        type: p.type,
-        address: null,
-      })),
-    );
+  /** The server's door-days for the first `count` prospects, as a pull sends them. */
+  const visitedOf = (stops: readonly Prospect[], count: number) =>
+    stops.slice(0, count).map((p) => ({
+      prospectId: p.id,
+      outcome: "interested" as const,
+      visitedAt: TOURNEE_NOW,
+      flyerGiven: false,
+      visitIds: [crypto.randomUUID()],
+      name: p.name,
+      type: p.type,
+      address: null,
+    }));
 
   const twenty = () =>
     Array.from({ length: 20 }, (_, i) =>
@@ -338,8 +337,7 @@ describe("TodayScreen", () => {
 
   it("reads 15 sur 20 from the pulled visits, and a second visit does not move it", async () => {
     const stops = twenty();
-    await seedPulledTournee(stops);
-    await pullVisited(stops, 15);
+    await wipeAndPull("agent@example.com", stops, { visited: visitedOf(stops, 15) });
 
     renderScreen();
 
@@ -349,11 +347,14 @@ describe("TodayScreen", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("75");
     expect(screen.queryByText(/portes/)).toBeNull();
 
-    // A second visit to stop 3: the counter stays.
-    await fieldDb.outboxVisits.add(visit({ prospectId: nth(stops, 2).id }));
-    // A first visit to stop 16: it rises.
-    await fieldDb.outboxVisits.add(visit({ prospectId: nth(stops, 15).id }));
+    // A second visit to stop 3 and a first visit to stop 16, in one write: the
+    // counter rises by one, so no intermediate render can satisfy it.
+    await fieldDb.outboxVisits.bulkAdd([
+      visit({ prospectId: nth(stops, 2).id }),
+      visit({ prospectId: nth(stops, 15).id }),
+    ]);
     expect(await screen.findByLabelText(copy.today.progressLabel(16, 20))).toBeTruthy();
+    expect(screen.queryByLabelText(copy.today.progressLabel(17, 20))).toBeNull();
   });
 
   it("reads 15 sur 20 again after a cache wipe once a sync pulls the visited stops", async () => {
@@ -363,7 +364,7 @@ describe("TodayScreen", () => {
     renderScreen();
     expect(await screen.findByLabelText(copy.today.progressLabel(0, 20))).toBeTruthy();
 
-    await pullVisited(stops, 15);
+    await wipeAndPull("agent@example.com", stops, { visited: visitedOf(stops, 15) });
     expect(await screen.findByLabelText(copy.today.progressLabel(15, 20))).toBeTruthy();
   });
 

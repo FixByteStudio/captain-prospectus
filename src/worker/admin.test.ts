@@ -19,9 +19,9 @@ import {
   tournees,
   visits,
 } from "./db/schema";
+import { adminVisitsResponseSchema, agentRoundResponseSchema } from "../shared/schemas";
 import type {
   AdminVisitsResponse,
-  AgentRoundResponse,
   AgentsResponse,
   AssignResult,
   DuplicatesResponse,
@@ -1810,10 +1810,21 @@ describe("GET /api/admin/visits", () => {
     return id;
   }
 
+  const EPOCH_DAY = brusselsMidnightDaysFromNow(0, 0);
+
   async function feed(query = ""): Promise<AdminVisitsResponse> {
     const response = await call(`/api/admin/visits${query}`);
     expect(response.status).toBe(200);
-    const body = (await response.json()) as AdminVisitsResponse;
+    const raw: unknown = await response.json();
+    // Some fixtures sit in the first hours of 1970, whose Brussels midnight is
+    // an hour before the epoch; the schema (rightly) refuses that for real
+    // data, so only that one day is let through.
+    adminVisitsResponseSchema.parse(
+      JSON.parse(JSON.stringify(raw), (key, v: unknown) =>
+        key === "dayStart" && v === EPOCH_DAY ? 0 : v,
+      ),
+    );
+    const body = raw as AdminVisitsResponse;
     // Every answer: each door-day whole, oldest first, its last visit the row's.
     for (const d of body.doorDays) {
       expect(d.visits.length).toBeGreaterThan(0);
@@ -2284,7 +2295,7 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     const response = await call(`/api/admin/agents/${AGENT.toUpperCase()}/round`);
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    const body = (await response.json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(await response.json());
     expect(body.tournee).toBeNull();
     expect(body.position).toEqual({ lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: now - 1_000 });
   });
@@ -2312,9 +2323,9 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       [1, one],
       [2, two],
     ]);
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([one, two]);
   });
 
@@ -2329,9 +2340,9 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
         status: "assigned",
         assignedTo: AGENT,
       });
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee).toBeNull();
   });
 
@@ -2371,9 +2382,9 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       [2, two],
       [3, three],
     ]);
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee?.startedAt).toBe(now - 3_600_000);
     expect(body.tournee?.stops.map((s) => [s.number, s.prospect.id])).toEqual([
       [1, one],
@@ -2416,9 +2427,9 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       [3, ids.merged],
     ]);
     await swipe(now, [[1, ids.other]], ADMIN);
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([ids.open]);
   });
 
@@ -2435,9 +2446,9 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
         assignedTo: AGENT,
       });
     await swipe(brusselsMidnightDaysFromNow(now, 0) - 3_600_000, [[1, id]]);
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee).toBeNull();
   });
 
@@ -2448,16 +2459,16 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       .insert(prospects)
       .values({ ...base(now), id, dedupeKey: "round:left", status: "assigned", assignedTo: ADMIN });
     await swipe(now - 1_000, [[1, id]]);
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.tournee).toEqual({ startedAt: now - 1_000, stops: [] });
   });
 
   it("answers 200 with a null position for an admin's email", async () => {
-    const body = (await (
-      await call(`/api/admin/agents/${ADMIN}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${ADMIN}/round`)).json(),
+    );
     expect(body.position).toBeNull();
   });
 
@@ -2466,22 +2477,22 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     await getDb(env.DB)
       .insert(agentPositions)
       .values(position(now + 3_600_000, now));
-    const body = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(body.position?.capturedAt).toBe(now);
   });
 
   it("serves null when there is no row or the row is not from today", async () => {
-    const empty = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const empty = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(empty.position).toBeNull();
     const old = Date.now() - 48 * 3_600_000;
     await getDb(env.DB).insert(agentPositions).values(position(old, old));
-    const stale = (await (
-      await call(`/api/admin/agents/${AGENT}/round`)
-    ).json()) as AgentRoundResponse;
+    const stale = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
     expect(stale.position).toBeNull();
   });
 

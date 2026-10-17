@@ -70,6 +70,18 @@ describe("RoundMap", () => {
     expect(card?.style.width).toBe("28px");
   });
 
+  it("labels each pin with the swipe's own number, gaps included, never its position in the list", () => {
+    const pins = [
+      pin({ number: 4, lat: 1, lng: 2, next: true }),
+      pin({ number: 7, lat: 3, lng: 4, next: false }),
+    ];
+    const { container } = render(
+      <RoundMap pins={pins} path={[]} position={null} recentre={() => {}} />,
+    );
+
+    expect(markerIcons(container).map((el) => el.textContent)).toEqual(["4", "7"]);
+  });
+
   it("draws the dashed gold path through the stops", () => {
     const { container } = render(
       <RoundMap

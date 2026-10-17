@@ -862,6 +862,46 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
     expect(await db.outboxStops.count()).toBe(3);
   });
 
+  it("deletes only the stops the server listed, and keeps an unlisted tournée — INVARIANT 5", async () => {
+    const { tournee, stops } = day(3);
+    await startTournee(db, { tournee, stops }, AGENT);
+    const requests: SyncRequest[] = [];
+    const [listed] = stops;
+    if (!listed) throw new Error("day(3) seeds three stops");
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)) as SyncRequest);
+      const accepted = { prospects: [], visits: [], tournees: [], stops: [listed.id] };
+      return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await runSync({ db, identity: AGENT, fetchFn });
+
+    expect(requests[0]?.stops).toHaveLength(3);
+    const kept = await db.outboxStops.toArray();
+    expect(kept.map((s) => s.id).sort()).toEqual(
+      stops
+        .slice(1)
+        .map((s) => s.id)
+        .sort(),
+    );
+    expect(await db.outboxTournees.count()).toBe(1);
+  });
+
+  it("sends a confirmed tournée without its unconfirmed stops, which stay queued", async () => {
+    const { tournee, stops } = day(2);
+    await startTournee(db, { tournee, stops }, AGENT);
+    await db.outboxTournees.update(tournee.id, { writtenBy: AGENT });
+    await db.outboxStops.toCollection().modify({ writtenBy: AGENT, unconfirmed: true });
+    const requests: SyncRequest[] = [];
+
+    await runSync({ db, identity: AGENT, fetchFn: acceptingServer(requests) });
+
+    expect(requests[0]?.tournees).toEqual([tournee]);
+    expect(requests[0]?.stops).toEqual([]);
+    expect(await db.outboxTournees.count()).toBe(0);
+    expect(await db.outboxStops.count()).toBe(2);
+  });
+
   it("keeps them through a 426, a 401 and a lost network", async () => {
     await startTournee(db, day(2), AGENT);
     await runSync({ db, identity: AGENT, fetchFn: failWith(426) });
