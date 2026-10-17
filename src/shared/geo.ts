@@ -5,6 +5,9 @@ export type MaybeLocated = { lat: number | null; lng: number | null };
 
 const EARTH_RADIUS_M = 6_371_000;
 
+/** Metres in one degree of latitude, and in one of longitude at the equator. */
+export const METRES_PER_DEGREE_LAT = 111_320;
+
 /** Great-circle distance in metres. */
 export function distanceMeters(a: Point, b: Point): number {
   const toRad = (d: number) => (d * Math.PI) / 180;

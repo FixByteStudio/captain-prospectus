@@ -8,7 +8,7 @@
  */
 import { and, gte, lte } from "drizzle-orm";
 import { DUPLICATES_SCAN_LIMIT } from "../shared/constants";
-import { cellAndNeighbours, cellOf, distanceMeters } from "../shared/geo";
+import { METRES_PER_DEGREE_LAT, cellAndNeighbours, cellOf, distanceMeters } from "../shared/geo";
 import type { Point } from "../shared/geo";
 import type { AreaCandidate, FoundPlace } from "../shared/schemas";
 import { SAME_PLACE_RADIUS_M, isProbablySamePlace } from "../shared/similarity";
@@ -16,8 +16,6 @@ import type { Db } from "./db/client";
 import { prospects } from "./db/schema";
 
 type Nearby = { id: string; name: string } & Point;
-
-const METRES_PER_DEGREE_LAT = 111_320;
 
 function located(place: FoundPlace): place is FoundPlace & Point {
   return typeof place.lat === "number" && typeof place.lng === "number";
