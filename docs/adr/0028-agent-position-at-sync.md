@@ -136,8 +136,9 @@ shared table.
   delete runs in its own try/catch and logs what it deleted. The read path serves a
   stale row as `null` anyway, so a missed night never shows yesterday's position.
 - **The written promise to agents changes.** `security.md` said the round reading
-  is never sent; once the phone side ships, the latest one is. **The owner tells both
-  agents before that release.** The release checklist carries this check.
+  is never sent; since the phone side shipped, the latest one is. **The owner told both
+  agents** (confirmed 2026-10-13). The release checklist keeps the check for any later
+  change to what the phone sends.
 - Harder: a dispute about where an agent was later in a day has no answer. Only the
   latest point exists, and only until the night. That is intended.
 - Follow-up in epic 5:
