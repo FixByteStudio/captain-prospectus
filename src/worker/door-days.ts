@@ -3,7 +3,8 @@
  * of the day decides the outcome, so a correction replaces the earlier answer
  * while the visits themselves stay as they are. The rule lives here, once.
  */
-import { and, asc, desc, eq, gt, gte, lt, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql, type SQL } from "drizzle-orm";
+import { chunk } from "../shared/chunk";
 import type { Outcome, RefusalReason } from "../shared/constants";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
 import type { AdminDoorDay, VisitedStop } from "../shared/schemas";
@@ -140,9 +141,14 @@ export type DoorDaysTouched = { doorDays: AdminDoorDay[]; truncated: boolean };
  *
  * Three steps, so a door-day is listed whole however few of its visits the
  * bounds touch:
- * 1. The touched visits, newest arrival first, `limit + 1` so a cut is known.
- *    With `reason`, only visits that have it: a door-day whose latest visit has
- *    it has at least one.
+ * 1. The touched visits, `limit + 1` so a cut is known. With `reason`, only
+ *    visits that have it: a door-day whose latest visit has it has at least one.
+ *    The seed (`since` = 0) reads the newest arrivals, since a fresh tab wants
+ *    the latest page. A delta poll reads the oldest first, so the client's
+ *    cursor (the greatest `receivedAt` it holds) moves past only what it got,
+ *    and takes the whole tie group at the cut, so the exclusive `since` skips
+ *    none of it. A sync stamps one `received_at`, so the group is usually one
+ *    sync's visits; the page may exceed `limit` by it.
  * 2. Each touched visit's Brussels day, in JS rather than SQL: the unscoped feed
  *    spans any number of clock changes, which `periodOffsets` cannot. `Intl` runs
  *    only when an instant leaves the day held, about twice a distinct day
@@ -181,15 +187,37 @@ export async function doorDaysTouched(
     })
     .from(visits)
     .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(desc(visits.receivedAt))
+    .orderBy(...(since > 0 ? [asc(visits.receivedAt), asc(visits.id)] : [desc(visits.receivedAt)]))
     .limit(limit + 1);
   const truncated = read.length > limit;
   const touched = truncated ? read.slice(0, limit) : read;
   if (touched.length === 0) return { doorDays: [], truncated };
 
+  const last = touched[touched.length - 1];
+  const past = read[limit];
+  if (
+    since > 0 &&
+    last !== undefined &&
+    past !== undefined &&
+    past.receivedAt === last.receivedAt
+  ) {
+    // The cut splits one arrival: take it whole, or the next poll's `since`
+    // (that very `received_at`) would skip the rest of it for good.
+    const tie = await db
+      .select({
+        agentEmail: visits.agentEmail,
+        prospectId: visits.prospectId,
+        visitedAt: visits.visitedAt,
+        receivedAt: visits.receivedAt,
+      })
+      .from(visits)
+      .where(and(...filters, eq(visits.receivedAt, last.receivedAt)));
+    touched.push(...tie);
+  }
+
   const days = brusselsDays(touched.map((v) => v.visitedAt));
-  // Newest arrival first, so the first touched visit holds the greatest.
-  const newest = touched[0]?.receivedAt ?? 0;
+  let newest = 0;
+  for (const v of touched) newest = Math.max(newest, v.receivedAt);
   const keys = new Map<string, [string, string, number, number]>();
   for (const v of touched) {
     // Set by `brusselsDays` for every instant it was given.
@@ -290,6 +318,44 @@ export async function doorDaysTouched(
     .sort((a, b) => b.receivedAt - a.receivedAt || a.key.localeCompare(b.key));
   for (const d of doorDays) d.visits.reverse();
   return { doorDays, truncated };
+}
+
+/**
+ * How many door-days each of `prospectIds` carries, every agent and day included;
+ * a prospect with none is absent. The prospect is the visit's own, never folded
+ * to a survivor. The days are found in JS through `brusselsDays`, as the feed's
+ * are, since these visits span any number of clock changes.
+ */
+export async function doorDayCounts(
+  db: Db,
+  prospectIds: readonly string[],
+): Promise<Map<string, number>> {
+  const read: { prospectId: string; agentEmail: string; visitedAt: number }[] = [];
+  for (const batch of chunk([...new Set(prospectIds)], 1)) {
+    read.push(
+      ...(await db
+        .select({
+          prospectId: visits.prospectId,
+          agentEmail: visits.agentEmail,
+          visitedAt: visits.visitedAt,
+        })
+        .from(visits)
+        .where(inArray(visits.prospectId, batch))),
+    );
+  }
+
+  const days = brusselsDays(read.map((v) => v.visitedAt));
+  const seen = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const v of read) {
+    // Set by `brusselsDays` for every instant it was given.
+    const [dayStart] = days.get(v.visitedAt) ?? [0, 0];
+    const key = doorDayKey(v.agentEmail, v.prospectId, dayStart);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    counts.set(v.prospectId, (counts.get(v.prospectId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** A door-day's identity on the wire (`adminDoorDaySchema.key`). */

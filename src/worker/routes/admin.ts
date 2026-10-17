@@ -101,7 +101,7 @@ import { activeRoster, activeRosterMember } from "../auth";
 import { validate } from "../validate";
 import { listImports, writeImportLog } from "../import-log";
 import { readAgentPosition } from "../agent-position";
-import { doorDaysBetween, doorDaysOn, doorDaysTouched } from "../door-days";
+import { doorDayCounts, doorDaysBetween, doorDaysOn, doorDaysTouched } from "../door-days";
 import { openAssignedProspects } from "../round";
 import { agentsStartedOn, todayTournee } from "../tournee";
 import { boundParamsPerRow, getDb, type Db } from "../db/client";
@@ -1256,18 +1256,13 @@ adminRoutes.get("/prospects/duplicates", async (c) => {
     if (pairs.length >= DUPLICATES_PAGE_SIZE) break;
   }
 
-  // Visit counts, so the admin chooses between two known things rather than
-  // guessing which side carries the history.
-  const ids = [...new Set(pairs.flatMap((p) => [p.a.id, p.b.id]))];
-  const counts = new Map<string, number>();
-  for (const batch of chunk(ids, 2)) {
-    const rows = await db
-      .select({ prospectId: visits.prospectId, n: count() })
-      .from(visits)
-      .where(inArray(visits.prospectId, batch))
-      .groupBy(visits.prospectId);
-    for (const row of rows) counts.set(row.prospectId, row.n);
-  }
+  // Door-day counts, like every other admin figure (ADR-0036), so the admin
+  // chooses between two known things rather than guessing which side carries
+  // the history.
+  const counts = await doorDayCounts(
+    db,
+    pairs.flatMap((p) => [p.a.id, p.b.id]),
+  );
 
   return c.json<DuplicatesResponse>({
     truncated,

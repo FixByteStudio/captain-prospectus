@@ -694,7 +694,7 @@ export const tourneeStopSyncSchema = z.object({
   id: uuidSchema,
   tourneeId: uuidSchema,
   prospectId: uuidSchema,
-  number: z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX)),
+  number: tourneeStopNumberSchema,
   /** Phone clock. The server clamps it to received_at on insert (INVARIANT 12). */
   addedAt: epochMsSchema,
 });
