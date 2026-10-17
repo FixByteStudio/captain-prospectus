@@ -852,7 +852,7 @@ describe("clearAgentCache and the tournée", () => {
     await db.open();
     const { tournee, stops } = day(2);
     await startTournee(db, { tournee, stops }, "a@example.com");
-    await db.tournees.put({ id: tournee.id, dayStart: 1, startedAt: 2 });
+    await db.tournees.put({ id: tournee.id, dayStart: 1, startedAt: 2, clientStartedAt: 2 });
     await db.tourneeStops.put({
       id: crypto.randomUUID(),
       tourneeId: tournee.id,
@@ -860,6 +860,7 @@ describe("clearAgentCache and the tournée", () => {
       number: 1,
       addedAt: 1,
       left: false,
+      joiner: false,
     });
     await db.visitedStops.put({
       prospectId: crypto.randomUUID(),
@@ -910,7 +911,12 @@ describe("appendJoiners", () => {
   async function pulled(db: FieldDb, held: readonly Prospect[]) {
     const tourneeId = crypto.randomUUID();
     await db.prospects.bulkPut([...held]);
-    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tournees.put({
+      id: tourneeId,
+      dayStart: DAY_START,
+      startedAt: DAY_START + 1,
+      clientStartedAt: DAY_START + 1,
+    });
     await db.tourneeStops.bulkPut(
       held.map((p, i) => ({
         id: crypto.randomUUID(),
@@ -919,6 +925,7 @@ describe("appendJoiners", () => {
         number: i + 1,
         addedAt: DAY_START + 1,
         left: false,
+        joiner: false,
       })),
     );
     return tourneeId;
@@ -965,6 +972,7 @@ describe("appendJoiners", () => {
       id: crypto.randomUUID(),
       dayStart: DAY_START - 86_400_000,
       startedAt: DAY_START - 86_000_000,
+      clientStartedAt: DAY_START - 86_000_000,
     });
     await appendJoiners(db, AGENT, NOW);
 
@@ -1036,7 +1044,12 @@ describe("queueFieldProspect", () => {
     const db = new FieldDb(dbName());
     await db.open();
     const tourneeId = crypto.randomUUID();
-    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tournees.put({
+      id: tourneeId,
+      dayStart: DAY_START,
+      startedAt: DAY_START + 1,
+      clientStartedAt: DAY_START + 1,
+    });
     await db.tourneeStops.put({
       id: crypto.randomUUID(),
       tourneeId,
@@ -1044,6 +1057,7 @@ describe("queueFieldProspect", () => {
       number: 20,
       addedAt: DAY_START + 1,
       left: false,
+      joiner: false,
     });
     const prospect = field();
 
@@ -1061,7 +1075,12 @@ describe("queueFieldProspect", () => {
     const db = new FieldDb(dbName());
     await db.open();
     const tourneeId = crypto.randomUUID();
-    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tournees.put({
+      id: tourneeId,
+      dayStart: DAY_START,
+      startedAt: DAY_START + 1,
+      clientStartedAt: DAY_START + 1,
+    });
 
     await queueFieldProspect(db, field(), AGENT, true, NOW);
 
@@ -1085,7 +1104,12 @@ describe("queueFieldProspect", () => {
     const db = new FieldDb(dbName());
     await db.open();
     const tourneeId = crypto.randomUUID();
-    await db.tournees.put({ id: tourneeId, dayStart: DAY_START, startedAt: DAY_START + 1 });
+    await db.tournees.put({
+      id: tourneeId,
+      dayStart: DAY_START,
+      startedAt: DAY_START + 1,
+      clientStartedAt: DAY_START + 1,
+    });
     const prospect = field();
     vi.spyOn(db.outboxStops, "bulkAdd").mockRejectedValueOnce(new Error("QuotaExceededError"));
 

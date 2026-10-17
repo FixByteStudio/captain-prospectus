@@ -37,7 +37,12 @@ const input = (over: Partial<GateInput> = {}): GateInput => ({
   ...over,
 });
 
-const pulledToday = { id: crypto.randomUUID(), dayStart: DAY_START, startedAt: NOW };
+const pulledToday = {
+  id: crypto.randomUUID(),
+  dayStart: DAY_START,
+  startedAt: NOW,
+  clientStartedAt: NOW,
+};
 
 describe("decideTourneeGate", () => {
   it("says never loaded when no pull ever succeeded", () => {

@@ -725,6 +725,8 @@ export const tourneeStopSchema = z.object({
   addedAt: epochMsSchema,
   /** Left the agent's open work unvisited: reassigned, closed or merged (ADR-0036). */
   left: z.boolean(),
+  /** Joined after the swipe (`isJoiner`), so « Nouveau » needs no cross-clock comparison. */
+  joiner: z.boolean(),
 });
 export type TourneeStop = z.infer<typeof tourneeStopSchema>;
 
@@ -732,6 +734,8 @@ export const todayTourneeSchema = z.object({
   id: uuidSchema,
   dayStart: epochMsSchema,
   startedAt: epochMsSchema,
+  /** The phone's own swipe time, to compare with the `addedAt` of stops still queued. */
+  clientStartedAt: epochMsSchema,
   /** In number order. */
   stops: z.array(tourneeStopSchema),
 });

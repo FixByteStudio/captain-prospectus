@@ -30,7 +30,12 @@ export async function seedPulledTournee(
   const tourneeId = crypto.randomUUID();
   const dayStart = brusselsPeriod(now, 1).from;
   await fieldDb.prospects.bulkPut([...prospects]);
-  await fieldDb.tournees.put({ id: tourneeId, dayStart, startedAt: dayStart + 1 });
+  await fieldDb.tournees.put({
+    id: tourneeId,
+    dayStart,
+    startedAt: dayStart + 1,
+    clientStartedAt: dayStart + 1,
+  });
   await fieldDb.tourneeStops.bulkPut(
     prospects.map((p, i) => ({
       id: crypto.randomUUID(),
@@ -39,6 +44,7 @@ export async function seedPulledTournee(
       number: numbers?.[i] ?? i + 1,
       addedAt: dayStart + 1,
       left: false,
+      joiner: false,
     })),
   );
 }

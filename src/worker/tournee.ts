@@ -6,7 +6,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { chunk } from "../shared/chunk";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
 import type { TodayTournee, TourneeStopSync, TourneeSync } from "../shared/schemas";
-import { isStopLeft } from "../shared/tournee";
+import { isJoiner, isStopLeft } from "../shared/tournee";
 import { boundParamsPerRow } from "./db/client";
 import type { Db } from "./db/client";
 import { prospects, tourneeStops, tournees, users } from "./db/schema";
@@ -20,9 +20,10 @@ import type { NewTourneeRow, NewTourneeStopRow } from "./db/schema";
  * first stored). A stop whose tournée is not the agent's or not stored is drained,
  * since it can never be attached later and an outbox row kept for it would retry
  * for ever (INVARIANT 5).
- * A stop whose prospect does not exist yet is NOT accepted: prospects are never
- * deleted, so it is a field prospect still on its way, and the phone resends the
- * stop once that prospect is accepted.
+ * A stop whose prospect does not exist yet is NOT accepted while its tournée's
+ * day lasts: it is a field prospect still on its way, and the phone resends the
+ * stop once that prospect is accepted. After that day it is accepted and not
+ * stored. A number collision is decided by the unique (tournée, number) index.
  */
 export async function writeTournees(
   db: Db,
@@ -57,15 +58,15 @@ export async function writeTournees(
   if (newStops.length > 0) {
     // The agent's own tournées among those named, found after the insert so a
     // tournée stored a moment ago counts, one that will lose its day included.
-    const owned = new Set<string>();
+    const owned = new Map<string, number>();
     const named = [...new Set(newStops.map((s) => s.tourneeId))];
     // Each batch binds its ids plus the agent's email, hence 2 per id (50 ids, 51 params).
     for (const batch of chunk(named, 2)) {
       for (const row of await db
-        .select({ id: tournees.id })
+        .select({ id: tournees.id, dayStart: tournees.dayStart })
         .from(tournees)
         .where(and(eq(tournees.agentEmail, email), inArray(tournees.id, batch)))) {
-        owned.add(row.id);
+        owned.set(row.id, row.dayStart);
       }
     }
 
@@ -86,46 +87,20 @@ export async function writeTournees(
     // The foreign key would fail the whole statement, and with it every stop in
     // the batch, so a stop whose prospect is not here is held back from the insert.
     const insertable = mapped.filter((s) => owned.has(s.tourneeId) && known.has(s.prospectId));
+    const today = brusselsMidnightDaysFromNow(now, 0);
     for (const s of mapped) {
-      if (owned.has(s.tourneeId) && !known.has(s.prospectId)) waiting.add(s.id);
-    }
-    // Two phones of one agent can append different joiners under the same number:
-    // the first stored keeps it (ADR-0036 › Numbers). The loser's stop is still accepted, and
-    // its next pull makes the phone re-append that prospect as the next number.
-    const numbers = new Map<string, Map<number, string>>();
-    const prospectsHeld = new Map<string, Set<string>>();
-    const touched = [...new Set(insertable.map((s) => s.tourneeId))];
-    for (const batch of chunk(touched, 1)) {
-      for (const row of await db
-        .select({
-          tourneeId: tourneeStops.tourneeId,
-          number: tourneeStops.number,
-          prospectId: tourneeStops.prospectId,
-        })
-        .from(tourneeStops)
-        .where(inArray(tourneeStops.tourneeId, batch))) {
-        const byNumber = numbers.get(row.tourneeId) ?? new Map<number, string>();
-        byNumber.set(row.number, row.prospectId);
-        numbers.set(row.tourneeId, byNumber);
-        const byProspect = prospectsHeld.get(row.tourneeId) ?? new Set<string>();
-        byProspect.add(row.prospectId);
-        prospectsHeld.set(row.tourneeId, byProspect);
+      // Once the tournée's day has passed, a prospect that never arrived is
+      // dropped: the stop could no longer be shown, and resending it is for ever.
+      const dayStart = owned.get(s.tourneeId);
+      if (dayStart !== undefined && dayStart >= today && !known.has(s.prospectId)) {
+        waiting.add(s.id);
       }
     }
-    const storable = insertable.filter((s) => {
-      const byNumber = numbers.get(s.tourneeId) ?? new Map<number, string>();
-      const byProspect = prospectsHeld.get(s.tourneeId) ?? new Set<string>();
-      // A resend of a prospect the tournée already holds is no collision, and the
-      // insert would ignore it anyway.
-      if (byProspect.has(s.prospectId)) return false;
-      if (byNumber.has(s.number)) return false;
-      byNumber.set(s.number, s.prospectId);
-      byProspect.add(s.prospectId);
-      numbers.set(s.tourneeId, byNumber);
-      prospectsHeld.set(s.tourneeId, byProspect);
-      return true;
-    });
-    const rows: NewTourneeStopRow[] = storable.map((s) => ({
+    // Two phones of one agent can append different joiners under the same number:
+    // the unique (tournée, number) index keeps the first stored (ADR-0036 › Numbers).
+    // The loser's stop is still accepted, and its next pull makes the phone
+    // re-append that prospect as the next number.
+    const rows: NewTourneeStopRow[] = insertable.map((s) => ({
       id: s.id,
       tourneeId: s.tourneeId,
       prospectId: s.prospectId,
@@ -176,6 +151,7 @@ export async function todayTournee(
       prospectId: tourneeStops.prospectId,
       number: tourneeStops.number,
       addedAt: tourneeStops.addedAt,
+      clientAddedAt: tourneeStops.clientAddedAt,
       assignedTo: prospects.assignedTo,
       status: prospects.status,
       mergedInto: prospects.mergedInto,
@@ -189,11 +165,13 @@ export async function todayTournee(
     id: tournee.id,
     dayStart: tournee.dayStart,
     startedAt: tournee.startedAt,
+    clientStartedAt: tournee.clientStartedAt,
     stops: rows.map((r) => ({
       id: r.id,
       prospectId: r.prospectId,
       number: r.number,
       addedAt: r.addedAt,
+      joiner: isJoiner(r.clientAddedAt, tournee.clientStartedAt),
       left: isStopLeft(r, email, visitedProspectIds.has(r.prospectId)),
     })),
   };

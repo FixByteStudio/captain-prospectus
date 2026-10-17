@@ -179,6 +179,7 @@ async function openGate() {
     id: crypto.randomUUID(),
     dayStart: brusselsPeriod(Date.now(), 1).from,
     startedAt: Date.now(),
+    clientStartedAt: Date.now(),
   });
 }
 
