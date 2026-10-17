@@ -15,7 +15,7 @@ import {
   POLYGON_MAX_VERTICES,
   POLYGON_MIN_VERTICES,
 } from "../../../shared/constants";
-import { distanceMeters } from "../../../shared/geo";
+import { METRES_PER_DEGREE_LAT, distanceMeters } from "../../../shared/geo";
 import type { Vertex } from "../../../shared/schemas";
 
 /**
@@ -112,7 +112,7 @@ export function moveCircleHandle(circle: Circle, index: number, to: Vertex): Cir
  */
 export function edgePoint({ center, radius }: Circle): Vertex {
   const [lat, lng] = center;
-  const metresPerDegreeLng = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const metresPerDegreeLng = METRES_PER_DEGREE_LAT * Math.cos((lat * Math.PI) / 180);
   // Guard the poles: cos(90°) is 0 and the handle would be at infinity.
   return [lat, lng + radius / Math.max(metresPerDegreeLng, 1)];
 }
