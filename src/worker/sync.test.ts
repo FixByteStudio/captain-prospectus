@@ -27,6 +27,7 @@ import {
   SYNC_VISITS_PER_REQUEST,
   TOURNEE_STOP_NUMBER_MAX,
 } from "../shared/constants";
+import { syncResponseSchema, todayTourneeSchema } from "../shared/schemas";
 import type { SyncRequest, SyncResponse } from "../shared/schemas";
 import { MAX_VALIDATION_ISSUES } from "./validate";
 import { workerFetch } from "../../test/worker-fetch";
@@ -191,7 +192,8 @@ describe("POST /api/agent/sync", () => {
     });
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as SyncResponse;
+    // Parsed with the wire schema the client trusts, not just cast.
+    const body = syncResponseSchema.parse(await response.json());
     expect(body.accepted.visits).toHaveLength(1);
 
     const db = getDb(env.DB);
@@ -1461,7 +1463,12 @@ describe("tournée at sync (ADR-0036)", () => {
     outcome,
     answers: {},
   });
-  const bodyOf = async (response: Response) => (await response.json()) as SyncResponse;
+  /** Parsed with the wire schemas, so a dropped field (`serverTime`) fails here. */
+  const bodyOf = async (response: Response): Promise<SyncResponse> => {
+    const body = syncResponseSchema.parse(await response.json());
+    if (body.tournee) todayTourneeSchema.parse(body.tournee);
+    return body;
+  };
 
   /** A stored visit, bypassing sync's ownership rule and its clamp to "now". */
   async function insertVisit(prospectId: string, agentEmail: string, visitedAt: number) {
@@ -2060,4 +2067,28 @@ describe("tournée at sync (ADR-0036)", () => {
     expect(first.tournee?.id).toBe(t.id);
     expect(second.tournee).toEqual(first.tournee);
   });
+
+  it.each([
+    // Late on the 25 h day and on the 23 h day: the swipe's day is that day's
+    // Brussels midnight, not a fixed 24 h before or after.
+    ["2026-10-25", "2026-10-25T22:45:00.000Z", "2026-10-24T22:00:00.000Z"],
+    ["2026-03-29", "2026-03-29T21:45:00.000Z", "2026-03-28T23:00:00.000Z"],
+  ])(
+    "stores a swipe made late on %s under that day and gives it back on the next sync",
+    async (_date, now, dayStart) => {
+      vi.setSystemTime(Date.parse(now));
+      const { t, stops } = await swipe(2);
+      const first = await bodyOf(await sync({ tournees: [t], stops }));
+      expect(first.accepted.tournees).toEqual([t.id]);
+      expect(first.tournee?.id).toBe(t.id);
+      expect(first.tournee?.dayStart).toBe(Date.parse(dayStart));
+
+      const [stored] = await getDb(env.DB).select().from(tournees);
+      expect(stored?.dayStart).toBe(Date.parse(dayStart));
+
+      const next = await bodyOf(await sync({}));
+      expect(next.tournee).toEqual(first.tournee);
+      expect(next.tournee?.stops.map((s) => s.id)).toEqual(stops.map((s) => s.id));
+    },
+  );
 });

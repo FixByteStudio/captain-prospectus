@@ -1,101 +1,125 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { workerFetch } from "../../../test/worker-fetch";
 
 /**
  * Indexes that exist for a query plan rather than a constraint, so nothing
  * else fails when one goes missing or stops being picked.
+ *
+ * The statements planned are the ones the real routes prepare, recorded with
+ * the values they bind, so a copy of the SQL cannot drift from the route.
  */
 
 interface PlanRow {
   detail: string;
 }
 
-async function planOf(sql: string, ...params: number[]): Promise<string[]> {
+interface Recorded {
+  sql: string;
+  params: unknown[];
+}
+
+/** The Worker's `env.DB`, remembering each prepared statement and what it was bound to. */
+function recordingDb(seen: Recorded[]): D1Database {
+  const wrap = (entry: Recorded, real: D1PreparedStatement): D1PreparedStatement =>
+    new Proxy(real, {
+      get(target, prop) {
+        if (prop === "bind") {
+          return (...values: unknown[]) => {
+            entry.params = values;
+            return wrap(entry, target.bind(...values));
+          };
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  return new Proxy(env.DB, {
+    get(target, prop) {
+      if (prop === "prepare") {
+        return (sql: string) => {
+          const entry: Recorded = { sql, params: [] };
+          seen.push(entry);
+          return wrap(entry, target.prepare(sql));
+        };
+      }
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+async function planOf({ sql, params }: Recorded): Promise<string[]> {
   const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
     .bind(...params)
     .all<PlanRow>();
   return results.map((row) => row.detail);
 }
 
-describe("visits(visited_at)", () => {
-  // The dashboard counts visits over up to 180 days by visited_at; a table scan
-  // there would not fit the 10 ms CPU budget (server-gaps G2, INVARIANT 13).
-  it("serves a visited_at range count", async () => {
-    const plan = await planOf(
-      "SELECT count(*) FROM visits WHERE visited_at >= ?1 AND visited_at < ?2",
-      Date.UTC(2026, 2, 1),
-      Date.UTC(2026, 8, 1),
-    );
+const scans = (plan: string[], table: string) =>
+  plan.filter((detail) => detail.startsWith(`SCAN ${table}`));
 
-    expect(plan.some((detail) => detail.includes("visits_visited_idx"))).toBe(true);
-    expect(plan.some((detail) => detail.startsWith("SCAN visits"))).toBe(false);
+/** The one recorded statement matching every pattern. */
+function only(seen: Recorded[], ...patterns: RegExp[]): Recorded {
+  const found = seen.filter((s) => patterns.every((p) => p.test(s.sql)));
+  expect(found, `statements matching ${patterns.join(" and ")}`).toHaveLength(1);
+  const [statement] = found;
+  if (!statement) throw new Error("unreachable: length checked above");
+  return statement;
+}
+
+describe("the dashboard's statements", () => {
+  const seen: Recorded[] = [];
+
+  beforeEach(async () => {
+    // Noon in Brussels, clear of midnight and of a clock change.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse("2026-06-17T10:00:00.000Z"));
+    seen.length = 0;
+    const response = await workerFetch(
+      "http://localhost/api/admin/dashboard?period=90",
+      undefined,
+      {
+        DB: recordingDb(seen),
+      },
+    );
+    expect(response.status).toBe(200);
   });
-});
 
-describe("Convertis' statement", () => {
-  // The shape of conversionCounts in routes/admin.ts: a visited_at range joined
-  // to prospects, UNION ALL the manual conversions read by status.
-  it("serves both branches from an index", async () => {
-    const plan = await planOf(
-      `SELECT count(DISTINCT prospect_key) FROM (
-        SELECT coalesce(prospects.merged_into, prospects.id) AS prospect_key,
-               visits.visited_at >= ?2 AS in_current
-        FROM visits INNER JOIN prospects ON prospects.id = visits.prospect_id
-        WHERE visits.visited_at >= ?1 AND visits.visited_at < ?3
-        UNION ALL
-        SELECT coalesce(merged_into, id), status_set_at >= ?2
-        FROM prospects
-        WHERE status = 'converted' AND status_set_at >= ?1 AND status_set_at < ?3
-          AND (last_visit_at IS NULL OR last_visit_at <= status_set_at)
-      )`,
-      Date.UTC(2026, 2, 1),
-      Date.UTC(2026, 5, 1),
-      Date.UTC(2026, 8, 1),
-    );
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // The dashboard counts visits over up to 90 days by visited_at; a table scan
+  // there would not fit the 10 ms CPU budget (server-gaps G2, INVARIANT 13).
+  it("serves Convertis' two branches from an index", async () => {
+    const statement = only(seen, /count\(distinct case when in_current = 1 and is_conversion = 1/);
+    expect(statement.params.length).toBeGreaterThan(0);
+    const plan = await planOf(statement);
 
     expect(plan.some((detail) => detail.includes("visits_visited_idx"))).toBe(true);
     expect(plan.some((detail) => detail.includes("prospects_status_idx"))).toBe(true);
-    expect(plan.some((detail) => detail.startsWith("SCAN visits"))).toBe(false);
-    expect(plan.some((detail) => detail.startsWith("SCAN prospects"))).toBe(false);
+    expect(scans(plan, "visits")).toEqual([]);
+    expect(scans(plan, "prospects")).toEqual([]);
   });
-});
 
-describe("Visites dans le temps' statement", () => {
-  // The shape of visitsByDay in routes/admin.ts: a visited_at range grouped by
-  // Brussels day and outcome (GH #110).
-  it("serves the range from visits_visited_idx", async () => {
-    const plan = await planOf(
-      `SELECT cast((visited_at + CASE WHEN visited_at >= ?3 THEN ?4 ELSE ?5 END) / ?6 AS integer) - ?7 AS day,
-              outcome, count(*)
-       FROM visits
-       WHERE visited_at >= ?1 AND visited_at < ?2
-       GROUP BY day, outcome`,
-      Date.UTC(2026, 2, 1),
-      Date.UTC(2026, 5, 1),
-      Date.UTC(2026, 2, 29, 1),
-      7_200_000,
-      3_600_000,
-      86_400_000,
-      20_513,
-    );
+  it("serves Visites dans le temps from visits_visited_idx", async () => {
+    const statement = only(seen, /group by day, outcome/);
+    expect(statement.params.length).toBeGreaterThan(0);
+    const plan = await planOf(statement);
 
     expect(plan.some((detail) => detail.includes("visits_visited_idx"))).toBe(true);
-    expect(plan.some((detail) => detail.startsWith("SCAN visits"))).toBe(false);
+    expect(scans(plan, "visits")).toEqual([]);
   });
-});
 
-describe("agentsStartedOn's statement", () => {
   // Polled every 15 s by the recap card: it must probe the (agent, day)
   // index per active user, never scan every tournée ever stored.
-  it("is served by tournees_agent_day_started_idx", async () => {
-    const plan = await planOf(
-      `SELECT count(*) FROM users WHERE active = 1 AND EXISTS (
-        SELECT 1 FROM tournees WHERE agent_email = users.email AND day_start = ?1
-      )`,
-      Date.UTC(2026, 5, 17),
-    );
+  it("serves agentsStartedOn from tournees_agent_day_started_idx", async () => {
+    const statement = only(seen, /exists \(select 1 from "tournees"/);
+    expect(statement.params.length).toBeGreaterThan(0);
+    const plan = await planOf(statement);
 
     expect(plan.some((detail) => detail.includes("tournees_agent_day_started_idx"))).toBe(true);
-    expect(plan.some((detail) => detail.startsWith("SCAN tournees"))).toBe(false);
+    expect(scans(plan, "tournees")).toEqual([]);
   });
 });

@@ -541,12 +541,13 @@ describe("The tournée gate", () => {
       expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
 
       await saveVisit(user);
-      await vi.waitFor(async () => expect(await fieldDb.outboxVisits.count()).toBe(1));
-      const [row] = await fieldDb.outboxVisits.toArray();
+      // The start screen shows only once the visit is stored: no waiting for the
+      // row after it, so a screen that raced the write would fail here.
+      expect(await swipe()).toBeTruthy();
+      const [row, ...others] = await fieldDb.outboxVisits.toArray();
+      expect(others).toEqual([]);
       expect(row?.visitedAt).toBe(MIDNIGHT + 60_000);
       expect(row?.prospectId).toBe(BAR.id);
-
-      expect(await swipe()).toBeTruthy();
       const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
       expect(dialog.textContent).toContain(copy.visit.saved);
       expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();

@@ -18,6 +18,7 @@ import {
   seedPulledTournee,
   setPhoneClockToTourneeDay,
   TOURNEE_NOW,
+  wipeAndPull,
 } from "./tournee-test-helpers";
 import { TodayScreen } from "./TodayScreen";
 import { tourneeCounter } from "./tournee-stops";
@@ -259,9 +260,7 @@ describe("CarnetScreen", () => {
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
     unmount();
 
-    await Promise.all([fieldDb.prospects.clear(), clearTourneeTables()]);
-    await seedPulledTournee(ps);
-    await fieldDb.visitedStops.add(visited(IDS[0] as string));
+    await wipeAndPull(ME, ps, { visited: [visited(IDS[0] as string)] });
     renderCarnet();
 
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
@@ -299,7 +298,20 @@ describe("CarnetScreen", () => {
         now: TOURNEE_NOW,
       });
     const before = await counter();
-    renderCarnet();
+    // The counter as the round screen renders it, before and after the repeat visit.
+    const renderedCounter = async () => {
+      const { unmount } = render(
+        <MemoryRouter initialEntries={["/tournee"]}>
+          <TodayScreen />
+        </MemoryRouter>,
+      );
+      const bar = await screen.findByLabelText(copy.today.progressLabel(2, 3));
+      const text = bar.getAttribute("aria-valuenow");
+      unmount();
+      return text;
+    };
+    const renderedBefore = await renderedCounter();
+    const { unmount: unmountCarnet } = renderCarnet();
     await vi.waitFor(() => expect(rows()).toHaveLength(2));
 
     await user.click(rows()[0] as HTMLElement);
@@ -319,5 +331,7 @@ describe("CarnetScreen", () => {
     });
     expect(rows()).toHaveLength(2);
     expect(await counter()).toEqual(before);
+    unmountCarnet();
+    expect(await renderedCounter()).toBe(renderedBefore);
   });
 });
