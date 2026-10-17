@@ -18,6 +18,7 @@
 import {
   CLIENT_VERSION,
   MAX_REQUEST_BYTES,
+  MINUTE_MS,
   SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
@@ -319,7 +320,7 @@ async function countOutbox(
 /* ------------------------------------------------------------------ backoff */
 
 const BASE_DELAY_MS = 5_000;
-const MAX_DELAY_MS = 5 * 60_000;
+const MAX_DELAY_MS = 5 * MINUTE_MS;
 
 /**
  * Exponential backoff after a failed sync.
@@ -334,4 +335,4 @@ export function backoffDelayMs(consecutiveFailures: number): number {
 }
 
 /** Sync triggers: app start, `online`, after each visit, every 60 s while open. */
-export const SYNC_INTERVAL_MS = 60_000;
+export const SYNC_INTERVAL_MS = MINUTE_MS;
