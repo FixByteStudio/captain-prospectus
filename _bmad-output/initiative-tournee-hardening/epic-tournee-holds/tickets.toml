@@ -1,0 +1,64 @@
+# The stories of epic-tournee-holds (epic id 1), in build order.
+# Refer to an entry as 1.<id> from another epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "The release checklist waits for the review bot"
+description = "Retro action 8: adds \"CodeRabbit finished; each actionable comment answered or filed\" to the Before merge list of .claude/skills/release-checklist/SKILL.md, and rewords ADR-0028's consequence at lines 139-140 and docs/security.md line 43 to say the owner told both agents, not that the owner will tell them before the release."
+verify = "The checklist's Before merge list has the review-bot line, and a grep of docs/adr/0028-agent-position-at-sync.md and docs/security.md finds no promise that the owner will tell the agents."
+covers = ["R1", "R2"]
+after = []
+hitl = false
+risk = "low"
+unknown = "Whether the checklist's existing location line (\"The owner has told the agents first\") stays as written; it guards a future change to what the phone sends, so the builder keeps it unless the owner says otherwise."
+
+[[entry]]
+id = 2
+type = "story"
+title = "A failed tournée write no longer fails the sync, and the ledger counts stay whole"
+description = "Retro action 2: wraps writeTournees in its own try/catch in the sync handler so its failure still acknowledges the visits and leaves its tournées and stops out of accepted (F1), makes the Visites feed cursor gap-free on a truncated poll, ties at the cut included (F6), counts door-days for the duplicates screen's aVisits and bVisits (F7), makes tourneeStopSyncSchema reuse tourneeStopNumberSchema (F8), and fixes the clock in the today-sensitive tests of admin.test.ts and sync.test.ts the retro names, as dashboard.test.ts fakes Date (F10), a setup entry 5 reuses; it updates docs/api.md for the feed and the duplicates counts."
+verify = "A Worker test that makes writeTournees throw gets a 200 with its visits in accepted.visits and none of its tournée or stop ids; a test at the layer the feed fix lands (doorDaysTouched or nextSince) polls with a limit below the arrivals and a tie at the cut and gets every door-day over successive polls; a duplicates pair with two visits on one day counts 1; and the tests the retro names pass with Date faked to 00:30 Brussels."
+covers = ["R3", "R4", "R5", "R6", "R7"]
+after = []
+hitl = false
+risk = "medium"
+unknown = "Whether a gap-free feed cursor needs a compound (received_at, id) cursor or a has-more flag, which may change the admin feed's response but not the sync contract."
+
+[[entry]]
+id = 3
+type = "story"
+title = "The earliest swipe wins, whichever phone syncs first"
+description = "Retro action 6, a sync contract change through the sync-contract-change skill: keeping writeTournees inside entry 2's try/catch, stores every tournée of the agent's day insert-only, replaces the tournees_agent_day_idx unique index in one migration, makes todayTournee, the admin round and agentsStartedOn read the tournée with the earliest client_started_at (id as tie-break) instead of the first to arrive, makes a phone that held a later tournée replace its stops with the winner's on its next pull, keeps the agentsStartedOn plan in indexes.test.ts green with the minimal change (entry 5 rewrites that test), rewords ADR-0036 › Numbers, docs/api.md, docs/data-model.md, docs/domains/field-operations.md, docs/free-tier-budget.md and docs/design.md where they name the index or \"the first swipe\", and the PR quotes the precache total."
+verify = "Worker tests where the later swipe syncs first and the earlier one second, once with correct clocks and once with both phones' clocks ahead of the server, return the earlier tournée and its numbers from both phones' next pulls and from the admin round, and resending either tournée stays accepted and idempotent; a client sync test shows a phone that held the later tournée ends with only the winner's stops; if the change is breaking, CLIENT_VERSION and MIN_CLIENT_VERSION both rise and the old version gets 426; pnpm db:migrate:local applies every migration from zero."
+covers = ["R8"]
+after = [2]
+hitl = false
+risk = "high"
+unknown = "What happens to the losing phone's unsent joiners and stops on its own tournée once it adopts the winner, and whether the change is breaking (CLIENT_VERSION and MIN_CLIENT_VERSION rise together, disposable stage)."
+references = ["docs/adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md#numbers"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Stop numbers are unique in the database and joiners show « Nouveau » on any clock"
+description = "Retro action 3, building on the tournées entry 3 stores and on its migration: adds a unique (tournee_id, number) index in one migration and lets the insert decide a collision in place of writeTournees' in-memory check (F3), drains a stop whose prospect never arrived once its tournée's day has passed, listing it in accepted and storing nothing (F4, owner's decision 2026-10-17), marks a joiner « Nouveau » from something other than a server time compared with a phone time, through the sync-contract-change skill if that needs a response field (F9), and pins with a server test that a stop naming a tournée the server does not hold for this agent is accepted and not stored (F5); it updates docs/data-model.md, docs/api.md and docs/domains/field-operations.md, and the PR quotes the precache total."
+verify = "A Worker test shows D1 refusing a direct insert of a second stop under one number in one tournée, and two sequential syncs sending different prospects under one number both getting them in accepted with one stored; a stop whose prospect is unknown is held back on its day and listed in accepted, unstored, once its day has passed; a client test with the phone clock ahead of serverTime shows the joiner marked « Nouveau »; pnpm db:migrate:local applies every migration from zero and pnpm check:precache is green."
+covers = ["R9", "R10", "R11", "R12"]
+after = [3]
+hitl = false
+risk = "high"
+unknown = "How F9 tells a joiner from a snapshot stop without two clocks, and whether that needs a new field in the sync response."
+references = ["docs/adr/0022-quarantine-visits-the-server-cannot-take.md", "docs/adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md#numbers", ".claude/skills/d1-migration/SKILL.md", ".claude/skills/sync-contract-change/SKILL.md"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "The tests pin the door-day readers, the wire schemas and the outbox drain"
+description = "Retro action 4, faking the clock as entry 2's tests do: one parity test runs doorDaysBetween, doorDaysOn and doorDaysTouched over one seed that crosses both clock changes, with DST-day tests for doorDaysOn, writeTournees and todayTournee (F11, F14); Worker tests parse the sync, today-tournée, admin visits and agent round responses with their zod schemas (F12); indexes.test.ts plans the statements the code runs, against the indexes entries 3 and 4 leave (F13); and the six client tests of F15 are added, the partial-accept drain first."
+verify = "pnpm test passes with the new tests, and three hand mutations each fail one: the outbox drain changed to delete every sent stop, a day boundary in doorDaysOn replaced by dayStart + DAY_MS, and serverTime dropped from the sync response."
+covers = ["R13", "R14", "R15", "R16"]
+after = [2, 4]
+hitl = false
+risk = "medium"
+unknown = "Whether indexes.test.ts can plan Drizzle's built statements through toSQL() for every reader, or some must be exported as SQL builders first."
