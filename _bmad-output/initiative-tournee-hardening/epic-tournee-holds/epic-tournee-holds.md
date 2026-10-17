@@ -1,4 +1,7 @@
 ---
+tracker_id: "538"
+remote: "https://github.com/FixByteStudio/captain-prospectus/issues/538"
+tracker_status: backlog
 type: epic
 title: "The numbered tournée holds under failed, late and racing syncs"
 parent: initiative-tournee-hardening

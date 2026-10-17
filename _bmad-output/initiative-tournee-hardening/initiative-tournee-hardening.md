@@ -1,4 +1,7 @@
 ---
+tracker_id: "5"
+remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/5"
+tracker_status: backlog
 type: initiative
 title: "The numbered tournée holds under failed, late and racing syncs"
 parent: none
