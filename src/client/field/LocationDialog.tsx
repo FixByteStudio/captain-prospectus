@@ -83,9 +83,6 @@ export function LocationDialog({
             </p>
           )}
           <AlertDialogTitle>{copy.location.title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-base">
-            {copy.location.description}
-          </AlertDialogDescription>
         </AlertDialogHeader>
 
         {/* Always in the tree, empty before the first reading: a live region
@@ -106,7 +103,9 @@ export function LocationDialog({
           {copy.location.activate}
         </AlertDialogAction>
 
-        <p className="text-muted-foreground text-center text-sm">{copy.location.settings}</p>
+        <AlertDialogDescription className="text-center text-sm">
+          {copy.location.settings}
+        </AlertDialogDescription>
 
         {adminOnline && (
           <Link to="/admin" className={buttonVariants({ variant: "secondary", size: "touch" })}>

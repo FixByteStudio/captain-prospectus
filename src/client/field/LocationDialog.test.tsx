@@ -40,11 +40,10 @@ function renderDialog(
 }
 
 describe("LocationDialog", () => {
-  it("names itself, explains, and offers one action and the settings line", () => {
+  it("names itself and offers one action and the settings line", () => {
     renderDialog({ kind: "idle" });
 
     const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
-    expect(dialog.textContent).toContain(copy.location.description);
     expect(dialog.textContent).toContain(copy.location.settings);
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("");
@@ -68,9 +67,9 @@ describe("LocationDialog", () => {
     const { unmount } = renderDialog({ kind: "idle" }, { notice: copy.visit.saved });
 
     const line = screen.getByText(copy.visit.saved);
-    // A screen reader opening the alert hears the save first, then the description.
+    // A screen reader opening the alert hears the save first, then the settings line.
     const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
-    const description = screen.getByText(copy.location.description);
+    const description = screen.getByText(copy.location.settings);
     expect(dialog.getAttribute("aria-describedby")).toBe(`${line.id} ${description.id}`);
     const title = screen.getByText(copy.location.title);
     expect(line.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
