@@ -4,6 +4,7 @@
  * D1, with SQLite's own CPU measured and taken out. Why it is done this way is
  * in measure-dashboard-cpu.mjs.
  */
+import { createHmac, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -45,6 +46,31 @@ export function copyLocalD1(work) {
     }
   }
   return sqlite;
+}
+
+/** The pepper every measurement signs its session under (`AUTH_PEPPER` in the Worker's env). */
+export const MEASURE_PEPPER = "measure-pepper";
+
+/**
+ * A signed-in session for `email` in the temporary copy, the way production
+ * authenticates (GH #415): the `sessions` row holds the HMAC of a random token
+ * under `pepper`, and the request carries the token in the `__Host-cp_session`
+ * cookie. The cookie name is `SESSION_COOKIE` in src/worker/session.ts, and the
+ * hash is `hmacHex` (the same lowercase-hex HMAC-SHA-256). With `DEV_USER_EMAIL`
+ * unset in the env, a request that is not session-authenticated answers 401.
+ */
+export function seedSession(sqlite, email, pepper) {
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = createHmac("sha256", pepper).update(token).digest("hex");
+  const now = Date.now();
+  sqlite
+    .prepare(
+      `insert into sessions (token_hash, user_email, created_at, last_seen_at, expires_at, id)
+       values (?, ?, ?, ?, ?, ?)`,
+    )
+    // 90 days is an agent's TTL (SESSION_TTL_MS). An admin's is 30, but the dashboard run never slides, so its expiry does not matter there.
+    .run(tokenHash, email, now, now, now + 90 * 24 * 3_600_000, randomBytes(16).toString("hex"));
+  return { cookie: `__Host-cp_session=${token}`, token, tokenHash };
 }
 
 /** The Worker's default export, built into `work/worker`. */

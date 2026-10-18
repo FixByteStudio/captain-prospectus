@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~5 ms at worst warm, ~6 ms with today's tournée in the pull and ~9 ms on the morning swipe pass (Watch-outs) (field prospects, notes and answers not measured); an old build's 200-visit batch is over, and a cold isolate's first request can be (see watch-outs) | **over on an old build's full batch, and at times on a cold first request** (GH #404) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~4 ms; an old build's 200-visit batch peaks at ~11 ms; a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on heavy visits, on an old build's full batch, and on a cold first request** (GH #404, #449, #450, #451) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -35,8 +35,10 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   100 k. The nightly sweep's deletes stay bounded by `AUTH_SWEEP_BATCH` (see below).
 - **CPU.** A request with a session cookie costs one HMAC-SHA-256; the imported key is cached in module scope
   (`hmacKey`, `session.ts`), so there is no key import. A sign-in does 3 to 5 HMACs (the IP, the credential,
-  the new token; break-glass adds a second to compare). D1 time is not billed. **Not measured**: unlike the
-  dashboard's below, no script times a sign-in, so the 10 ms watch-out is argued, not shown.
+  the new token; break-glass adds a second to compare). D1 time is not billed. The cookie's HMAC and the session lookup are in the
+  sync and dashboard figures below (since GH #415 both scripts authenticate through a seeded session, not
+  `DEV_USER_EMAIL`). **Not measured**: no script times a sign-in's 3 to 5 HMACs, so that part of the 10 ms
+  watch-out is argued, not shown.
 - **The exposed request quota.** No Access application stands in front of the hostname
   ([ADR-0034](adr/0034-launch-on-our-own-login-alone.md)), so anonymous `/api/auth/*` requests run the Worker
   and count against the 100,000 a day **even when its throttle answers 429**; the D1 throttle cannot prevent
@@ -50,7 +52,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 ## Watch-outs
 
 - **The sync pull also reads today's door-days and tournée each pass** (`doorDaysOn`, `todayTournee`,
-  ADR-0036), and a request may carry tournées and stops. Measured 2026-10-16 with
+  ADR-0036), and a request may carry tournées and stops. Measured 2026-10-16, signed in through
+  `DEV_USER_EMAIL` (the session path is in the figures of « Sync through the session »), with
   `TOURNEE=pull|swipe node scripts/measure-sync-cpu.mjs` on a Ryzen 9 7900 (`lscpu`: AMD Ryzen 9 7900
   12-Core), as in the table under « So the phone sends 50 visits a pass »: two runs, the second in
   brackets. `pull` finds today's tournée with 200 stops already stored; `swipe` also sends that tournée
@@ -67,7 +70,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 
   The warm figures stay under 10 ms in every mode, the swipe pass included (8.6 ms at worst over a
   third run, after the script took its tournée from a real swipe instead of a seeded row), so
-  INVARIANT 13 holds for the warm case. A cold isolate's first request runs past 10 ms in every mode,
+  INVARIANT 13 holds for the warm case of bare visits (heavier payloads are in « Sync through the session »). A cold isolate's first request runs past 10 ms in every mode,
   `none` included, and the swipe's reaches 33.9 ms: the cold case stays with #404.
 - **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
@@ -127,8 +130,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
 - **So the phone sends 50 visits a pass** (GH #404, 2026-10-12). `node scripts/measure-sync-cpu.mjs`
   times a sync by batch size, one bare visit (no notes, no answers) to each of that many distinct
   prospects and no field prospects, three alternating rounds of 50 warm runs on a Ryzen 9 7900 (two
-  runs; the second in brackets). A pass that also carries field prospects (up to
-  `SYNC_PROSPECTS_PER_REQUEST`) or visits with notes and answers costs more, and was not measured:
+  runs; the second in brackets), signed in through `DEV_USER_EMAIL`. A pass that also carries field
+  prospects (up to `SYNC_PROSPECTS_PER_REQUEST`) or visits with notes and answers costs more, and is
+  measured in the next entry:
 
   | visits | warm median ms | warm max ms | cold ms (3 rounds × 2 runs) |
   |---|---|---|---|
@@ -145,6 +149,44 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   outbox (INVARIANT 5) and retries with backoff until the PWA update lands, then sends 50 a pass. **A cold isolate's first request can run past 10 ms at any size, one visit included**
   (14.3 ms above): that is compile cost, the dashboard's thin case below, and no batch size fixes
   it, so #404's cold case stays open.
+- **Sync through the session, with heavy visits and field prospects** (GH #415, #449, #450, 2026-10-18).
+  `node scripts/measure-sync-cpu.mjs` now signs in as production does: a seeded `sessions` row, its
+  `__Host-cp_session` cookie and `AUTH_PEPPER`, with `DEV_USER_EMAIL` unset. Every timed request answers
+  200 and has stored what it sent. Ryzen 9 7900 (`lscpu`: AMD Ryzen 9 7900 12-Core), local seed (313
+  prospects, 1,690 visits), 3 alternating rounds of 50 warm runs, two runs (the second in brackets), D1's
+  time taken out. `PAYLOAD=full` is a 2,000-character accented note, the active script's id and 50 mixed
+  answers (10 each of yes/no, number, short text, 2,000-character text, 30 options); `PAYLOAD=max` is the
+  heaviest body the server accepts (50 answers of `LONG_TEXT_MAX`, keys at their cap), as many visits as
+  fit `MAX_REQUEST_BYTES`. Bytes are the request body (the 2 MiB cap is 2,048 KiB):
+
+  | command | visits | KiB | warm median ms | warm max ms | cold ms (3 rounds) |
+  |---|---|---|---|---|---|
+  | `SIZES=1,50,200` | 1 | 0.2 | 1.54 (1.46) | 2.98 (3.07) | 9.2–16.0 (9.7–16.0) |
+  | | 50 | 8.7 | 3.04 (2.95) | 5.58 (5.05) | 12.9–14.7 (12.9–13.3) |
+  | | 200 | 34.8 | 7.50 (7.26) | 11.06 (10.82) | 23.4–26.9 (22.5–26.1) |
+  | `SLIDE=1 SIZES=50` | 50 | 8.7 | 3.11 (3.22) | 5.72 (5.42) | 14.1–21.6 (14.1–21.6) |
+  | `PAYLOAD=full SIZES=50` | 50 | 1,673 | 10.04 (9.89) | 39.48 (40.08) | 30.1–53.8 (34.4–54.5) |
+  | `PAYLOAD=max` | 19 | 1,995 | 6.55 (6.60) | 35.79 (35.74) | 17.8–21.0 (18.0–23.1) |
+  | `PROSPECTS=100 SIZES=50` | 50 | 33.7 | 6.80 (7.11) | 14.48 (13.42) | 21.4–35.7 (22.0–32.6) |
+  | `PROSPECTS=100 PAYLOAD=full TOURNEE=swipe SIZES=50` | 50 | 1,734 | 17.54 (18.09) | 52.82 (60.28) | 54.9–70.3 (48.6–66.2) |
+
+  What it says. The session path costs about 0.2–0.3 ms warm against the 2026-10-16 run (bare 50 visits:
+  2.7 ms signed in as the dev user, 3.0 through the session), not a same-session comparison; a slid
+  session adds a negligible amount (0.1–0.3 ms, within run-to-run noise, `SLIDE=1`). The phone's
+  50-visit batch of bare visits stays well under 10 ms warm, but **50 visits with full notes and answers
+  do not**: the median sits at 10 ms, because the batch is 1.7 MB of JSON to parse and validate and
+  `SYNC_VISITS_PER_BATCH` bounds the count, not the bytes (`PAYLOAD=max` fits only 19 visits under the
+  cap and still has a 6.6 ms median). The 35–60 ms warm tails are mostly garbage collection of earlier
+  requests' and the harness's garbage landing in the timed window: with a collection forced just before
+  each request (`node --expose-gc`, 2026-10-18, `PAYLOAD=full SIZES=50 ROUNDS=1 RUNS=40 WARMUP=10`) the
+  warm median goes 10.0 to 12.1 ms and the worst 34.4 to 14.9 ms. So 50 full visits are over 10 ms either
+  way, and the table's tails overstate the worst case while its medians do not. A local run cannot say how
+  Cloudflare's meter counts any of it. 100 field prospects ride on 50 bare visits at 7 ms median and
+  13–14.5 ms worst, and the morning pass (100 prospects, full visits, the swipe's 200 stops) is 18 ms
+  median. **A cold first request runs past 10 ms in most rounds at every size**: one visit is 9.2–16.0
+  ms. The dedupe lookup of GH #449 is `chunk(keys, 1)`, which is 100 keys a statement (`chunk` takes
+  columns per row), so 100 field prospects are one lookup statement, not 100. Where their cost goes is
+  not isolated; likely their insert, `foldForSearch`, `dedupeKey` and the bigger pull, not the lookup.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
@@ -211,6 +253,15 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   (thirteen in all), `inactiveAgentProspects`, which searches `prospects_merged_idx
   (merged_into=?)` with a correlated subquery that searches `users` by primary key
   (`sqlite_autoindex_users_1 (email=?)`).
+- **Tableau de bord through the session** (GH #415, 2026-10-18). `measure-dashboard-cpu.mjs` now signs in
+  as production does (a seeded `sessions` row, its cookie, `AUTH_PEPPER`; `DEV_USER_EMAIL` unset), so the
+  HMAC and the session lookup are in the figures. On the local seed of 313 prospects and 1,690 visits (the door-days entry above used 303 and 1,689), 200 warm
+  requests a period, Ryzen 9 7900, two runs (the second in brackets): Worker medians 0.79 (0.68), 0.69
+  (0.71) and 0.77 (0.80) ms and worst 4.63 (3.92), 1.57 (1.54) and 1.40 (1.65) ms at 7, 30 and 90 days; one
+  cold first request 8.92 ms (9.30). Against the door-days entry above (0.62, 0.64, 0.75 ms; cold
+  7.62 ms) the warm medians barely move and the cold first request is about 1.3–1.7 ms higher: the
+  headroom on a cold dashboard request is now about 0.7–1.1 ms on local hardware. D1's time, not billed, is a
+  median 14.0 (14.1) ms at 90 days.
 - **D1 free-tier limits are hard-enforced since 2026-09-01.** Past the daily row read/write limit,
   queries fail until midnight UTC with `Your account has exceeded D1's free tier daily row read
   limit` (or `…row write limit`). The sync route must translate that into a clear "retry later"

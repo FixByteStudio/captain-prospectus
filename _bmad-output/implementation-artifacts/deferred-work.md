@@ -436,3 +436,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-541-earliest-swipe-wins.md`
   summary: Pin `todayTournee`'s `ORDER BY client_started_at, id LIMIT 1` with a query-plan test that it uses `tournees_agent_day_started_idx` and no temp b-tree sort.
   evidence: Only `agentsStartedOn`'s plan is tested; entry 5 (R15, #543-lane) rewrites `indexes.test.ts` to plan the statements the code runs, so the test belongs there.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-415-449-450-sync-cpu-measurement.md`
+  summary: Pin the limits `scripts/measure-sync-cpu.mjs` copies from `src/` (MAX_REQUEST_BYTES, LONG_TEXT_MAX, SCRIPT_QUESTIONS_MAX, QUESTION_*, SYNC_*, SESSION_SLIDE_MS) with a parity test in `scripts/*.test.mjs`.
+  evidence: The script may not import `src/`; a limit that tightens fails a run loudly, but one that loosens leaves `PAYLOAD=max` sending a lighter body, so the budget doc's "heaviest the server accepts" figure goes stale silently.
