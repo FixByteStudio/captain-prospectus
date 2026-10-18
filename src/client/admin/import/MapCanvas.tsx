@@ -162,8 +162,10 @@ export function MapCanvas({
     <div
       ref={container}
       // h-[28rem] is the one measurement here: a map needs a height to exist at
-      // all, and it has no intrinsic one.
-      className="border-border h-[28rem] w-full rounded-md border"
+      // all, and it has no intrinsic one. `isolate` keeps Leaflet's panes
+      // (z-index 200-700) inside this element, not in the root stacking
+      // context where they paint over the `z-50` « Import terminé » dialog (#446).
+      className="border-border isolate h-[28rem] w-full rounded-md border"
       // The canvas is a drawing surface, not a control. The shape's size and
       // the actions under it are what a screen reader is given.
       role="application"
