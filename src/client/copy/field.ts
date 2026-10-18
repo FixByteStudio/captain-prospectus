@@ -106,8 +106,9 @@ export const copy = {
   /** The location dialog over the start screen (docs/design.md › The location dialog). */
   location: {
     title: "Activez la localisation",
+    description: "Afin de préparer votre tournée et démarrer votre journée.",
     activate: "Activer",
-    /** The web app cannot open the phone's settings, so the line names them; it is also the dialog's description. */
+    /** The web app cannot open the phone's settings, so the line names them. */
     settings: "Ouvrez Réglages › Localisation, puis revenez ici.",
     coarse: (meters: number) => `Précision : ${meters} m. On affine…`,
     refused: "La localisation est refusée sur ce téléphone.",
