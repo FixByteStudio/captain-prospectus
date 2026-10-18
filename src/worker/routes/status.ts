@@ -36,8 +36,8 @@ const PROSPECTS_PER_STATEMENT = D1_MAX_BOUND_PARAMS - FIXED_PARAMS;
  * then a write, so an admin edit landing in between cannot be lost.
  *
  * One statement per chunk of prospects, not two per prospect: a full sync names
- * up to SYNC_VISITS_PER_REQUEST of them, which was ~400 D1 round trips in one
- * request (#102, docs/free-tier-budget.md). A prospect with no visit has no
+ * up to SYNC_VISITS_PER_BATCH of them, and at the old cap of 200 that was ~400 D1
+ * round trips in one request (#102, docs/free-tier-budget.md). A prospect with no visit has no
  * ranked row to join, so it is left alone.
  *
  * `now` is passed in rather than read here so every row a single request

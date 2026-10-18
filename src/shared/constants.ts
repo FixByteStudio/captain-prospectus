@@ -142,8 +142,8 @@ export function isOpen(status: Status): boolean {
  * raise MIN_CLIENT_VERSION only once every phone reports the new version; while
  * disposable, raise both together (ADR-0033).
  */
-export const CLIENT_VERSION = 2;
-export const MIN_CLIENT_VERSION = 2;
+export const CLIENT_VERSION = 3;
+export const MIN_CLIENT_VERSION = 3;
 
 /**
  * Payload caps.
@@ -155,14 +155,10 @@ export const MIN_CLIENT_VERSION = 2;
 export const IMPORT_ROWS_PER_REQUEST = 250;
 
 /**
- * Sync visits have two limits. SYNC_VISITS_PER_REQUEST is what the server
- * accepts; SYNC_VISITS_PER_BATCH is what this build's phone sends per pass.
- * The batch is set by CPU: 200 visits to 200 prospects runs past 10 ms of
- * Worker CPU, 50 stays near 5 ms (GH #404, docs/free-tier-budget.md). The
- * accept limit stays at 200 because an installed old build still sends 200,
- * and lowering it would refuse that phone's outbox (INVARIANT 9).
+ * Visits per sync, what the phone sends a pass and the most the server accepts.
+ * Set by CPU: 200 visits to 200 prospects runs past 10 ms of Worker CPU, 50 stays
+ * near 5 ms warm (GH #404, #451, docs/free-tier-budget.md).
  */
-export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_VISITS_PER_BATCH = 50;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 /**

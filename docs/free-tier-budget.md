@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~4 ms; an old build's 200-visit batch peaks at ~11 ms; a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on heavy visits, on an old build's full batch, and on a cold first request** (GH #404, #449, #450, #451) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~4 ms; the server refuses more than 50 visits, since 200 peaked at ~11 ms (GH #451); a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on heavy visits and on a cold first request** (GH #404, #449, #450) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -117,7 +117,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   at 250 rows per request ([ingestion](domains/ingestion.md)) and why the session HMAC key is
   cached in module scope rather than imported per request (`hmacKey`, `session.ts`).
 - **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
-  `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
+  200 visits, then the server's accept limit, to 200 distinct prospects, with the same shim as
   `measure-dashboard-cpu.mjs` (now `scripts/worker-cpu-shim.mjs`), on the local seed, alternating
   the two builds three times. Before #102 the status of each prospect was derived with two statements: **439 D1
   statements**, 28.5 ms CPU warm median, 66 ms cold. Now there is one statement per 88 prospects
@@ -143,10 +143,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   | 200 | 6.70 (6.68) | 10.77 (11.68) | 19.8–25.4 |
 
   50 keeps the warm worst near 5 ms, where 100's reached 8.2 ms; 25 buys little and doubles the
-  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50) and the server still accepts
-  `SYNC_VISITS_PER_REQUEST` (200), which an old build still sends and which still costs what the
-  table says. If Cloudflare enforces the limit on such a request, it fails: the old build keeps its
-  outbox (INVARIANT 5) and retries with backoff until the PWA update lands, then sends 50 a pass. **A cold isolate's first request can run past 10 ms at any size, one visit included**
+  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50). Since GH #451 the server accepts no more
+  either: 200 cost what the table says, and the session run below confirmed it over 10 ms. A build
+  from before then gets 426 and updates with its outbox kept (INVARIANT 5). **A cold isolate's first request can run past 10 ms at any size, one visit included**
   (14.3 ms above): that is compile cost, the dashboard's thin case below, and no batch size fixes
   it, so #404's cold case stays open.
 - **Sync through the session, with heavy visits and field prospects** (GH #415, #449, #450, 2026-10-18).
@@ -187,6 +186,8 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   ms. The dedupe lookup of GH #449 is `chunk(keys, 1)`, which is 100 keys a statement (`chunk` takes
   columns per row), so 100 field prospects are one lookup statement, not 100. Where their cost goes is
   not isolated; likely their insert, `foldForSearch`, `dedupeKey` and the bigger pull, not the lookup.
+  The 200-visit row, over 10 ms warm at its worst and 22–27 ms cold, is why the server's accept limit fell
+  to `SYNC_VISITS_PER_BATCH` (GH #451); the script now refuses `SIZES` above 50, as the server does.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
