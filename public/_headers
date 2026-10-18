@@ -1,0 +1,16 @@
+# Security headers for every static-asset response: the app shell, /login and the
+# SPA fallback (GH #454, docs/security.md). Workers Static Assets applies this file
+# without invoking the Worker, so run_worker_first stays ["/api/*"] (INVARIANT 14);
+# /api/* sets its own in src/worker/index.ts. This file is never served itself.
+#
+# script-src: the hash is index.html's inline theme pin; config.test.ts recomputes it.
+# style-src 'unsafe-inline': sonner, Radix scroll lock and ui/chart.tsx inject <style>.
+# img-src: OSM tiles (src/client/leaflet-setup.ts) and Leaflet's CSS images as data:.
+# Referrer-Policy keeps the origin on tile requests: the OSM tile policy requires one.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-11QRGut8L7Ji3HUrEail3pTnC2O1XQSbP45oC7l+5ms='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), usb=()

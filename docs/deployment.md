@@ -54,7 +54,9 @@ terminal, after `npx wrangler login`. An agent runs neither.
    per IP, action Block. The Free plan gives one rule, a 10-second period and a 10-second block; 10 requests
    per period leaves a person signing in well under it.
 8. **Verify**: open the URL in a private window → `/login` shows.
-   `curl -i https://prospectus.fixbyte.cloud/api/me` with no cookie → must be 401. Then do the
+   `curl -i https://prospectus.fixbyte.cloud/api/me` with no cookie → must be 401.
+   `curl -sI https://prospectus.fixbyte.cloud/login` → must carry `strict-transport-security` and a
+   `content-security-policy` with `frame-ancestors 'none'` (`public/_headers`). Then do the
    [first sign-in](#first-sign-in).
 9. **The backup bucket** ([ADR-0023](adr/0023-retention-by-redaction.md), closing
    [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34)): **R2 object storage** →
