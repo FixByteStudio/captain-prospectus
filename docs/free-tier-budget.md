@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~1.5 ms since GH #449 (~4 ms before); the server refuses more than 50 visits, since 200 peaked at ~11 ms (GH #451); a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on heavy visits and on a cold first request** (GH #404, #450) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~1.5 ms since GH #449 (~4 ms before); the server refuses more than 50 visits, since 200 peaked at ~11 ms (GH #451); a cold isolate's first request is 9–12 ms locally for one visit (over 10 ms in some rounds) and 13–17 ms for 50 (over 10 ms in every round), once per isolate; no production figure yet (Watch-outs, « The cold first request, measured fairly ») | **over on heavy visits; a cold first request is over 10 ms locally in every round at 50 visits and in some at one visit, unmeasured in production** (GH #404, #450) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -72,6 +72,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   third run, after the script took its tournée from a real swipe instead of a seeded row), so
   INVARIANT 13 holds for the warm case of bare visits (heavier payloads are in « Sync through the session »). A cold isolate's first request runs past 10 ms in every mode,
   `none` included, and the swipe's reaches 33.9 ms: the cold case stays with #404.
+  *Added 2026-10-19: the worst cold round of the first size in each earlier table (one visit, with
+  the default `SIZES`) may include round 0's inflation (Node's own first use, about 5 ms); see
+  « The cold first request, measured fairly ».*
 - **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
   Each call reads about the day's received visits plus the `users` rows, so the cost grows
@@ -212,6 +215,66 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   is the same work as before; its 3.2 ms against the 3.0 ms above is run-to-run noise). The cold first
   request stays past 10 ms (GH #404), and the visit insert is the same builder: its cost is a
   follow-up, not part of this entry. A local run cannot say how Cloudflare meters it.
+- **The cold first request, measured fairly** (GH #404, 2026-10-19). Every earlier cold figure above came
+  from `scripts/measure-sync-cpu.mjs`, whose round 0 of the first size was also the Node process's
+  first `Request` body read, first WebCrypto HMAC and first call into the shim: Node compiles its own
+  JS `Request`, streams and WebCrypto, which workerd implements natively, so a Cloudflare isolate does
+  not pay it. Later sizes ran in an already-warm process (and `TOURNEE=pull` was warmed by its seed
+  request), so the fix changes only the first size's round-0 cold sample: about 5 ms in the table
+  below (one visit, 16.7 to 11.8), about 6–7 ms in the fresh-process harness (18.6 against 11.7). The
+  script now imports the bundle once under `?warmup` and
+  runs 3 untimed requests first (after the `TOURNEE=pull` seed), so every timed cold round is a fresh
+  import's first request in a warm process. Ryzen 9 7900 (`lscpu`: AMD Ryzen 9 7900 12-Core), Node v24.21.0 (a fresh Node import is a proxy for workerd's cold request, not the same thing), local
+  seed (303 prospects, 1,689 visits, plus the script's 200 assigned ones), D1's time taken out,
+  `SIZES=1,25,50 ROUNDS=5` (5 cold rounds, 5 x 50 warm runs a size), two runs, the second in brackets,
+  and the same command on the script before the fix, on the same checkout:
+
+  | visits | warm median ms | warm max ms | cold ms (5 rounds), fixed | cold ms (5 rounds), before |
+  |---|---|---|---|---|
+  | 1 | 1.48 (1.50) | 4.20 (2.92) | 9.2–11.8 (9.4–11.7) | 9.5–16.7 |
+  | 25 | 2.33 (2.27) | 4.29 (4.71) | 9.2–11.1 (10.3–11.3) | 10.8–12.9 |
+  | 50 | 3.09 (3.01) | 5.42 (5.61) | 13.0–16.5 (13.6–15.9) | 13.4–15.2 |
+
+  `SIZES=1,50 ROUNDS=5` gives 9.2–11.5 and 13.7–15.0. No cold round is more than 3 ms above its size's
+  cold median. The warm figures are those of the earlier entries (same seed, 200 assigned prospects,
+  same flags). The cold excess over warm is 8–10 ms at one visit and 10–13 ms at 50, local, once per
+  isolate.
+
+  What the investigation found (a throwaway harness, not committed, running this script's request and
+  shim: one fresh Node process per sample, an untimed import plus 3 requests to warm Node and the shim,
+  then a second import as the cold isolate; 8 samples per cell, builds alternated as in GH #341):
+
+  | build | cold 1 visit | cold 50 visits | warm median 1 / 50 |
+  |---|---|---|---|
+  | `main` | 11.7 ms (10.6–12.5) | 15.8 (14.6–16.6) | 1.6 / 3.3 |
+  | pull selects the 14 wire columns | 11.2 (10.7–12.1) | 14.6 (12.8–16.0) | 1.5 / 3.3 |
+  | pull read raw (`toSQL` + `D1.raw()`) | 9.3 (8.3–10.3) | 15.1 (14.5–16.3) | 1.3 / 3.1 |
+
+  - **Node's share.** A truly fresh process measures 18.6 ms for one visit (8 samples): about 6 ms of it
+    is Node compiling its own JS `Request`, streams and WebCrypto, which is why the script warms first.
+  - **No GH #341-style fixed cost.** Hono's router, `getDb`, the session HMAC key and zod's JIT are each
+    under 0.3 ms or absent: zod/mini objects never JIT. Re-importing the same source does not reuse
+    compiled code (same-source and distinct-source re-imports give equal figures), so the script's
+    fresh imports are honest cold samples.
+  - **The excess is the sync's own code running once in V8's interpreter.** Profiled, that is Drizzle's
+    SQL builder and `is()` checks (about 40 %, mostly the 50-row visit insert, GH #565), the pull's row
+    mapping (about 1.9 ms at 272 rows), then zod and Hono.
+  - **Two measured options, not shipped.** Selecting only the 14 columns `toWireProspect` keeps, instead
+    of `openAssignedProspects`' 23 (`src/worker/round.ts`, also used by `routes/admin.ts`), moves the
+    cold medians by about 0.5 ms at one visit and 1.2 ms at 50. Reading the pull raw (`toSQL` +
+    `D1.raw()`) by about 2.4 ms at one visit and 0.7 ms at 50. Only the raw read at one visit (8.3–10.3
+    against `main`'s 10.6–12.5) separates from `main`; the other three differences are inside the 8-sample
+    ranges' overlap. ADR-0005 makes Drizzle the access layer and allows the exception only for a hot
+    multi-row insert (`insertOrIgnore`), so the raw read needs an amendment first.
+  - **Cloudflare's limits page** says: "Each isolate has some built-in flexibility to allow for cases
+    where your Worker infrequently runs over the configured limit."
+    (https://developers.cloudflare.com/workers/platform/limits/#cpu-time, read 2026-10-18.) How often
+    this app's isolates start cold has not been measured, and the quote does not exempt cold starts.
+
+  **GH #404 stays open until Cloudflare's p50, p99 and max CPU time for `POST /api/agent/sync` are
+  pasted here**: no production figure exists, and a local run cannot say how Cloudflare meters it.
+  `scripts/measure-dashboard-cpu.mjs` gates on a cold sample that is its process's first request, with
+  the same inflation; it is tracked apart (GH #568).
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.
