@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { boundParamsPerRow, getDb } from "./db/client";
+import { boundParamsPerRow, getDb, insertOrIgnore } from "./db/client";
 import { chunk } from "../shared/chunk";
 import { dedupeKey } from "../shared/dedupe";
 import { DAY_MS } from "../shared/constants";
@@ -22,6 +22,7 @@ import {
   CLIENT_VERSION,
   MAX_REQUEST_BYTES,
   SCRIPT_QUESTIONS_MAX,
+  SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_BATCH,
@@ -620,6 +621,54 @@ describe("POST /api/agent/sync", () => {
     expect(await db.select().from(prospects)).toHaveLength(1);
   });
 
+  it("points a field prospect, and its visit, at the survivor of the row it collides with", async () => {
+    // The key lands on a prospect an admin has merged away: the phone must be
+    // told the survivor, or its visits would pile up on a retired row.
+    const db = getDb(env.DB);
+    const survivor = crypto.randomUUID();
+    const merged = crypto.randomUUID();
+    await seedProspects([survivor, merged]);
+    await db
+      .update(prospects)
+      .set({
+        dedupeKey: dedupeKey({ name: "Le Bistrot", lat: 48.85, lng: 2.35 }),
+        mergedInto: survivor,
+      })
+      .where(eq(prospects.id, merged));
+
+    const clientId = crypto.randomUUID();
+    const visitId = crypto.randomUUID();
+    const response = await sync({
+      prospects: [
+        {
+          id: clientId,
+          name: "Le Bistrot",
+          type: "restaurant",
+          lat: 48.85,
+          lng: 2.35,
+          createdAt: Date.now(),
+        },
+      ] as never,
+      visits: [
+        {
+          id: visitId,
+          prospectId: clientId,
+          visitedAt: Date.now(),
+          flyerGiven: true,
+          outcome: "interested",
+          answers: {},
+        },
+      ] as never,
+    });
+
+    const body = (await response.json()) as SyncResponse;
+    expect(body.idMap).toEqual({ [clientId]: survivor });
+    expect(body.accepted.prospects).toEqual([clientId]);
+    expect(await db.select().from(prospects)).toHaveLength(2);
+    const [stored] = await db.select().from(visits).where(eq(visits.id, visitId));
+    expect(stored?.prospectId).toBe(survivor);
+  });
+
   it("stores a field prospect's folded name for search (ADR-0032)", async () => {
     const id = crypto.randomUUID();
     const response = await sync({
@@ -654,6 +703,101 @@ describe("POST /api/agent/sync", () => {
 
     const db = getDb(env.DB);
     expect(await db.select().from(prospects)).toHaveLength(30);
+  });
+
+  it("stores a full payload of field prospects with every column the route sets (GH #449)", async () => {
+    const created = Array.from({ length: SYNC_PROSPECTS_PER_REQUEST }, (_, i) => ({
+      id: crypto.randomUUID(),
+      name: `Café Épicerie ${i}`,
+      type: i % 2 === 0 ? ("restaurant" as const) : ("food_truck" as const),
+      lat: 45.75 + i * 0.001,
+      lng: 4.83,
+      address: i % 3 === 0 ? `${i} rue de la Paix` : undefined,
+      phone: i % 5 === 0 ? `+3300000${i}` : undefined,
+      createdAt: 1_700_000_000_000 + i,
+    }));
+
+    // A full batch of visits rides on them, as a day offline would send.
+    const visited = created.slice(0, SYNC_VISITS_PER_BATCH).map((p) => ({
+      id: crypto.randomUUID(),
+      prospectId: p.id,
+      visitedAt: Date.now(),
+      flyerGiven: true,
+      outcome: "interested",
+      answers: {},
+    }));
+
+    const response = await sync({ prospects: created as never, visits: visited as never });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as SyncResponse;
+    expect(body.accepted.prospects).toHaveLength(SYNC_PROSPECTS_PER_REQUEST);
+    expect(body.accepted.visits).toHaveLength(SYNC_VISITS_PER_BATCH);
+    expect(body.idMap).toEqual({});
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(SYNC_VISITS_PER_BATCH);
+
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored).toHaveLength(SYNC_PROSPECTS_PER_REQUEST);
+    for (const [i, sent] of created.entries()) {
+      const row = stored.find((r) => r.id === sent.id);
+      expect(row).toMatchObject({
+        name: sent.name,
+        nameSearch: `cafe epicerie ${i}`,
+        type: sent.type,
+        lat: sent.lat,
+        lng: sent.lng,
+        address: sent.address ?? null,
+        phone: sent.phone ?? null,
+        source: "field",
+        sourceRef: null,
+        // Stored as assigned; a visit in the same payload then derives its status.
+        status: i < SYNC_VISITS_PER_BATCH ? "interested" : "assigned",
+        assignedTo: AGENT,
+        createdBy: AGENT,
+        createdAt: sent.createdAt,
+      });
+      expect(row?.dedupeKey).toBe(
+        dedupeKey({ name: sent.name, lat: sent.lat, lng: sent.lng, address: sent.address }),
+      );
+    }
+  });
+
+  it("stores the first of two field prospects with the same key and maps the second to it", async () => {
+    const first = crypto.randomUUID();
+    const twin = crypto.randomUUID();
+    const place = { name: "Le Camion", type: "food_truck", lat: 45.76, lng: 4.83 };
+    const response = await sync({
+      prospects: [
+        { id: first, ...place, createdAt: Date.now() },
+        { id: twin, ...place, createdAt: Date.now() },
+      ] as never,
+    });
+
+    const body = (await response.json()) as SyncResponse;
+    expect(body.idMap).toEqual({ [twin]: first });
+    expect(body.accepted.prospects).toEqual(expect.arrayContaining([first, twin]));
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored.map((r) => r.id)).toEqual([first]);
+  });
+
+  it("stores nothing new and accepts everything when the same payload is resent", async () => {
+    const created = Array.from({ length: 12 }, (_, i) => ({
+      id: crypto.randomUUID(),
+      name: `Renvoi ${i}`,
+      type: "restaurant" as const,
+      lat: 45.7 + i * 0.001,
+      lng: 4.8,
+      createdAt: Date.now(),
+    }));
+
+    const firstPass = await sync({ prospects: created as never });
+    expect(firstPass.status).toBe(200);
+    const secondPass = await sync({ prospects: created as never });
+    expect(secondPass.status).toBe(200);
+
+    const body = (await secondPass.json()) as SyncResponse;
+    expect(body.accepted.prospects).toHaveLength(12);
+    expect(body.idMap).toEqual({});
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(12);
   });
 
   it("quarantines a visit whose prospect is unknown, and accepts it", async () => {
@@ -2042,4 +2186,41 @@ describe("tournée at sync (ADR-0036)", () => {
       expect(next.tournee?.stops.map((s) => s.id)).toEqual(stops.map((s) => s.id));
     },
   );
+});
+
+describe("insertOrIgnore", () => {
+  const base = {
+    type: "restaurant" as const,
+    source: "csv" as const,
+    status: "new" as const,
+    createdBy: AGENT,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  it("throws when a row sets a key the first row lacks, writing nothing", async () => {
+    const rows = [
+      { ...base, id: "a", name: "A", dedupeKey: "k:a" },
+      { ...base, id: "b", name: "B", dedupeKey: "k:b", phone: "+33" },
+    ];
+    await expect(insertOrIgnore(env.DB, prospects, rows)).rejects.toThrow(/"phone"/);
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(0);
+  });
+
+  it("throws when a later row lacks a key the first row sets, writing nothing", async () => {
+    const rows = [
+      { ...base, id: "a", name: "A", dedupeKey: "k:a", phone: "+33" },
+      { ...base, id: "b", name: "B", dedupeKey: "k:b" },
+    ];
+    await expect(insertOrIgnore(env.DB, prospects, rows)).rejects.toThrow(/"phone"/);
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(0);
+  });
+
+  it("does nothing for no rows, and skips a row whose key already exists", async () => {
+    await insertOrIgnore(env.DB, prospects, []);
+    const row = { ...base, id: "a", name: "A", dedupeKey: "k:a" };
+    await insertOrIgnore(env.DB, prospects, [row, { ...row, id: "b", name: "Other" }]);
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored.map((r) => r.id)).toEqual(["a"]);
+  });
 });

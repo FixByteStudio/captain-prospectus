@@ -180,7 +180,7 @@ try {
       : {};
     const sent = prospects ? fieldProspects() : [];
     const body = JSON.stringify({
-      clientVersion: 2,
+      clientVersion: 3, // CLIENT_VERSION: an older one gets 426
       prospects: sent,
       ...morning,
       visits: ids.slice(0, size).map((prospectId, i) => ({

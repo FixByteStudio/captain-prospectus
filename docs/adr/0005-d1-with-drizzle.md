@@ -20,3 +20,4 @@ We will use Cloudflare D1 as the only database, accessed through Drizzle ORM. Th
 - D1 limits apply: **max 100 bound parameters per statement** (inserts must be chunked), single-writer database.
 - Migrations must be backward compatible with the currently deployed Worker, because they run before the new code ships (expand → migrate → contract).
 - Generated migration files are not edited after merge.
+- A hot multi-row insert may use `insertOrIgnore` (`src/worker/db/client.ts`) instead of Drizzle's builder, which costs ~1 µs of Worker CPU per bound value (GH #449). It reads table and column names from the schema and takes the table's insert type, so it stays typed; use it only where a measurement shows the builder over budget.
