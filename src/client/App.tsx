@@ -19,12 +19,12 @@ import {
 import { apiFetch } from "./api";
 import { Band, BandBrand, UpdatePrompt } from "./Band";
 import { copy } from "./copy/field";
-import { initials } from "./format";
 import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
 import { cn } from "./lib/utils";
 import { brusselsPeriod } from "../shared/period";
+import { AccountMenu } from "./field/AccountMenu";
 import { FieldTabs } from "./field/FieldTabs";
 import { useFieldNow } from "./field/field-clock";
 import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
@@ -182,10 +182,12 @@ function FieldFrame({
   adminOnline,
   pwa,
   email,
+  role,
 }: {
   adminOnline: boolean;
   pwa: PwaState;
   email: string;
+  role: MeResponse["role"];
 }) {
   const now = useFieldNow();
   // `FieldFrame` also wraps the forbidden and not-found fallbacks (neither is
@@ -231,20 +233,11 @@ function FieldFrame({
             the row's right edge the way the band nav it replaced used to —
             `ml-auto` on the wrapper below does that instead, standing down
             once the tab bar is back in flow and doing that job itself. */}
-        {gateOpen && <FieldTabs adminOnline={adminOnline} />}
+        {gateOpen && <FieldTabs />}
         <span className="ml-auto md:ml-0">
           <SyncDot />
         </span>
-        {/* Static, no menu (2026-09-24 decision, spec-gh-65): it only names
-            who is signed in, which the outbox and every visit already
-            assume. */}
-        <span
-          role="img"
-          aria-label={copy.nav.avatar(email)}
-          className="bg-primary text-primary-foreground ring-primary-edge flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-inset"
-        >
-          {initials(email)}
-        </span>
+        <AccountMenu email={email} role={role} adminOnline={adminOnline} />
       </Band>
 
       {!hideUpdatePrompt && <UpdatePrompt pwa={pwa} />}
@@ -545,7 +538,9 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
 
         {/* The field-only band. The forbidden and not-found fallbacks live
             here too, since neither screen is admin chrome. */}
-        <Route element={<FieldFrame adminOnline={entry} pwa={pwa} email={me.email} />}>
+        <Route
+          element={<FieldFrame adminOnline={entry} pwa={pwa} email={me.email} role={me.role} />}
+        >
           <Route path="/tournee/*" element={<FieldRoutes />} />
           {!screens && (
             <Route
