@@ -17,7 +17,7 @@ import { prospectIdParamSchema, syncRequestSchema } from "../../shared/schemas";
 import type { SyncRequest, SyncResponse, VisitHistoryResponse } from "../../shared/schemas";
 import type { OrphanReason } from "../../shared/constants";
 import { validate, validationFailed } from "../validate";
-import { boundParamsPerRow, getDb } from "../db/client";
+import { boundParamsPerRow, getDb, insertOrIgnore } from "../db/client";
 import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
 import { writeAgentPosition } from "../agent-position";
 import { doorDaysOn } from "../door-days";
@@ -95,9 +95,9 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
       updatedAt: now,
     }));
 
-    for (const batch of chunk(rows, boundParamsPerRow(prospects))) {
-      await db.insert(prospects).values(batch).onConflictDoNothing();
-    }
+    // Raw D1, not Drizzle's builder: 100 field prospects cost ~2 ms of CPU
+    // there (GH #449, INVARIANT 13).
+    await insertOrIgnore(c.env.DB, prospects, rows);
 
     // Dedupe collisions: the place already existed, so the existing row wins and
     // the client is told which id to use instead.
