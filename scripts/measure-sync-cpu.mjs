@@ -14,7 +14,11 @@
  * The rows a request wrote are reset between requests, outside the timing, so
  * every request does the same work. Each size re-imports the module under a new
  * query string, which compiles it afresh: its first request stands in for a cold
- * isolate's, in a Node process that is otherwise warm. Sizes alternate over
+ * isolate's, in a Node process that is otherwise warm. Before the rounds, one
+ * import under `?warmup` and three untimed requests pay the process's own first
+ * use (Node's JS `Request`, streams, WebCrypto, the shim), which workerd
+ * implements natively and a Cloudflare isolate does not pay (GH #404), so every
+ * timed cold round is a fresh import in a warm process. Sizes alternate over
  * ROUNDS, as in #102's before/after. Local hardware is not Cloudflare's: keep
  * headroom.
  *
@@ -322,6 +326,12 @@ try {
       `authenticated by session cookie (AUTH_PEPPER), no DEV_USER_EMAIL; ` +
       `${MAX_REQUEST_BYTES} bytes is the cap, ${fits} visits of this payload fit`,
   );
+  {
+    const url = pathToFileURL(join(work, "worker/worker.mjs"));
+    url.search = "?warmup";
+    const worker = (await import(url.href)).default;
+    for (let i = 0; i < 3; i++) await once(worker, SIZES[0]);
+  }
   const cold = new Map(SIZES.map((s) => [s, []]));
   const warm = new Map(SIZES.map((s) => [s, []]));
   for (let round = 0; round < ROUNDS; round++) {
