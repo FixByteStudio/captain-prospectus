@@ -7,6 +7,7 @@ import {
   OUTCOMES,
   OUTCOME_TO_STATUS,
   STATUSES,
+  SYNC_BYTES_PER_BATCH,
   SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
@@ -176,5 +177,10 @@ describe("MAX_REQUEST_BYTES", () => {
 describe("sync visit limits", () => {
   it("never sends more visits per pass than the server accepts", () => {
     expect(SYNC_VISITS_PER_BATCH).toBeLessThanOrEqual(SYNC_VISITS_PER_REQUEST);
+  });
+
+  // GH #450: the same for bytes. A pass filled to the budget must be one the server reads.
+  it("never fills a pass past the bytes the server reads", () => {
+    expect(SYNC_BYTES_PER_BATCH).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
   });
 });

@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; visits with full notes and answers (a 1.7 MB request) are ~10 ms median with tails past 40 ms, and 100 field prospects add ~4 ms; an old build's 200-visit batch peaks at ~11 ms; a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on heavy visits, on an old build's full batch, and on a cold first request** (GH #404, #449, #450, #451) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; a pass is also capped at `SYNC_BYTES_PER_BATCH` (384 KiB), so visits with full notes and answers go 11 a pass at ~3.7 ms median and ≤5.4 ms worst (50 of them, 1.7 MB, were ~10 ms median), and 100 field prospects add ~4 ms; an old build's 200-visit batch peaks at ~11 ms; a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on the morning pass (field prospects, stops), on an old build's full batch, and on a cold first request** (GH #404, #449, #451) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -176,17 +176,53 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   50-visit batch of bare visits stays well under 10 ms warm, but **50 visits with full notes and answers
   do not**: the median sits at 10 ms, because the batch is 1.7 MB of JSON to parse and validate and
   `SYNC_VISITS_PER_BATCH` bounds the count, not the bytes (`PAYLOAD=max` fits only 19 visits under the
-  cap and still has a 6.6 ms median). The 35–60 ms warm tails are mostly garbage collection of earlier
-  requests' and the harness's garbage landing in the timed window: with a collection forced just before
-  each request (`node --expose-gc`, 2026-10-18, `PAYLOAD=full SIZES=50 ROUNDS=1 RUNS=40 WARMUP=10`) the
-  warm median goes 10.0 to 12.1 ms and the worst 34.4 to 14.9 ms. So 50 full visits are over 10 ms either
-  way, and the table's tails overstate the worst case while its medians do not. A local run cannot say how
+  cap and still has a 6.6 ms median). The 35–60 ms warm tails on the multi-MB payloads are garbage collection of earlier requests' garbage
+  landing in the timed window (see the byte-budget entry below, which also corrects the full-`gc()` probe
+  first recorded here). A local run cannot say how
   Cloudflare's meter counts any of it. 100 field prospects ride on 50 bare visits at 7 ms median and
   13–14.5 ms worst, and the morning pass (100 prospects, full visits, the swipe's 200 stops) is 18 ms
   median. **A cold first request runs past 10 ms in most rounds at every size**: one visit is 9.2–16.0
   ms. The dedupe lookup of GH #449 is `chunk(keys, 1)`, which is 100 keys a statement (`chunk` takes
   columns per row), so 100 field prospects are one lookup statement, not 100. Where their cost goes is
   not isolated; likely their insert, `foldForSearch`, `dedupeKey` and the bigger pull, not the lookup.
+- **A byte budget per pass** (GH #450, 2026-10-18). `SYNC_VISITS_PER_BATCH` bounds the count, so
+  `SYNC_BYTES_PER_BATCH` (384 KiB, `src/shared/constants.ts`) bounds the bytes: `serializeWithinCap`
+  (`src/client/field/sync.ts`) fills a pass with as many visits as fit, always sends the first visit
+  whatever its size (INVARIANT 5), and never drops field prospects. `MAX_REQUEST_BYTES` stays 2 MiB: one
+  worst-case visit is ~105 KiB, so the server cap never binds a current phone, and an old build's passes
+  still cost what the entries above say. No contract change, so no version bump. Same machine, seed and
+  script as the entry above. `PAYLOAD=full`, warm, 3 rounds × 50 runs. Two ways to keep the harness's
+  garbage out of the timed window, because **the probe recorded above was wrong**: a full
+  `gc()` before each request (`node --expose-gc` as first used) adds ~3.5 ms to *every* request, a one-visit
+  one included (bare 1 / 50 visits: 5.1 / 8.3 ms median against 1.5 / 3.0 without), since it leaves the next
+  request cold. So « still over 10 ms with GC taken out » at 50 full visits was partly the probe.
+  `node --expose-gc` now runs a *minor* collection before each request; `SETTLE=1` also runs a full
+  collection and one untimed request of the same size first, which is the cleanest worst case. Medians
+  from two runs (the second in brackets); worst is `SETTLE=1`, max of two runs:
+
+  | visits | KiB | median ms, minor GC | median ms, `SETTLE=1` | warm worst ms, `SETTLE=1` |
+  |---|---|---|---|---|
+  | 1 | 33.5 | 1.80 (1.66) | 2.29 (2.19) | 4.5 |
+  | 5 | 167 | 2.48 (2.29) | 2.85 (2.77) | 13.8 |
+  | 10 | 335 | 3.31 (3.06) | 3.57 (3.52) | 5.6 |
+  | 11 | 368 | 3.13 (3.26) | 3.72 (3.66) | 5.4 |
+  | 12 | 402 | 3.41 (3.63) | 3.92 (3.80) | 7.1 |
+  | 15 | 502 | 3.75 (3.88) | 4.50 (4.53) | 7.2 |
+  | 20 | 669 | 4.51 (4.72) | 5.16 (5.22) | 8.6 |
+  | 30 | 1,004 | 6.03 (6.01) | 5.97 (6.41) | 10.8 |
+  | 50 | 1,673 | 8.80 (8.67) | 9.83 (9.57) | 57.4 |
+
+  384 KiB is 11 of these visits (368 KiB; 12 are 402 KiB): median 3.1–3.7 ms and worst 5.3–5.4 ms,
+  where 12 reach 6.1–7.1 ms. That is the largest whole number of visits under ~6 ms warm worst; the 5-visit
+  13.8 ms worst is one outlier in a run of 40 that neither neighbouring size repeats. `PAYLOAD=max` (105
+  KiB a visit) at the budget is 3 visits, 315 KiB: 2.6–2.7 ms median, 4.7 ms worst, one `SETTLE=1` run
+  and one minor-GC run, not two. Bare visits are unchanged (50 visits, 8.7 KiB, 3.0 ms median). **The
+  morning pass is not a byte problem**: `PROSPECTS=100 PAYLOAD=full TOURNEE=swipe` is 8.8–10.2 ms median
+  with minor GC and 12.1–13.9 ms with `SETTLE=1` (one run each), the same with 1 visit as with 10, so the
+  100 field prospects and 200 stops cost it, not the visits' bytes (GH #449). A cold first request is
+  still past 10 ms at every size (10–16 ms for one visit). The phone now drains heavy visits 11 a pass:
+  `MAX_DRAIN_PASSES` comes from the count, so 1,200 of them take more than one trigger and the rest wait
+  for the next heartbeat. Local hardware is not Cloudflare's meter: keep headroom.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`
   runs the Worker, bundled by Vite, in Node's V8 against a copy of the local 180-day seed (303
   prospects, 1,981 visits), with D1's own time taken out, since production does not bill it.

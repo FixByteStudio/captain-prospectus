@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CLIENT_VERSION,
-  MAX_REQUEST_BYTES,
+  SYNC_BYTES_PER_BATCH,
   SYNC_STOPS_PER_REQUEST,
   SYNC_VISITS_PER_BATCH,
 } from "../../shared/constants";
@@ -396,11 +396,12 @@ describe("runSync — visits per pass", () => {
 });
 
 /**
- * The byte cap (MAX_REQUEST_BYTES) is enforced by the Worker, which answers 413
- * — and a 413 keeps the outbox, so a payload that is always too large is an
+ * A pass carries at most SYNC_BYTES_PER_BATCH, below the Worker's 413 cap
+ * (MAX_REQUEST_BYTES), because a heavy batch runs past 10 ms of CPU (GH #450).
+ * A 413 or a CPU kill keeps the outbox, so a payload that always fails is an
  * outbox that never drains. The client's job is never to build one.
  */
-describe("runSync — staying under MAX_REQUEST_BYTES", () => {
+describe("runSync — staying under SYNC_BYTES_PER_BATCH", () => {
   /** A visit with 50 answers of 2000 characters: ~100 kB, and schema-valid. */
   const hugeVisit = () =>
     visit({
@@ -444,7 +445,11 @@ describe("runSync — staying under MAX_REQUEST_BYTES", () => {
     await runSync({ db, identity: AGENT, fetchFn });
 
     const body = only();
-    expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
+    const bodyBytes = new TextEncoder().encode(body).length;
+    expect(bodyBytes).toBeLessThanOrEqual(SYNC_BYTES_PER_BATCH);
+    // Filled, not halved: one more visit of the same size would not have fit.
+    const oneMore = new TextEncoder().encode(JSON.stringify(hugeVisit())).length + 1;
+    expect(bodyBytes + oneMore).toBeGreaterThan(SYNC_BYTES_PER_BATCH);
 
     const parsed = JSON.parse(body) as SyncRequest;
     expect(parsed.visits.length).toBeLessThan(SYNC_VISITS_PER_BATCH);
@@ -461,6 +466,23 @@ describe("runSync — staying under MAX_REQUEST_BYTES", () => {
     await runSync({ db, identity: AGENT, fetchFn });
 
     expect((JSON.parse(only()) as SyncRequest).visits).toHaveLength(1);
+  });
+
+  // INVARIANT 5: a visit bigger than the budget is sent alone, never stranded.
+  it("sends a first visit that is over the budget on its own", async () => {
+    // The outbox reads in id order: these ids put the oversized visit first.
+    const oversized = visit({
+      id: "00000000-0000-4000-8000-000000000000",
+      notes: "n".repeat(SYNC_BYTES_PER_BATCH),
+    });
+    await db.outboxVisits.add(oversized);
+    await db.outboxVisits.add(visit({ id: "ffffffff-ffff-4fff-bfff-ffffffffffff" }));
+
+    const { only, fetchFn } = captureBody();
+    const result = await runSync({ db, identity: AGENT, fetchFn });
+
+    expect((JSON.parse(only()) as SyncRequest).visits.map((v) => v.id)).toEqual([oversized.id]);
+    expect(result.remaining).toBeGreaterThan(0);
   });
 
   it("does not trim, or re-serialize, an ordinary batch", async () => {
@@ -779,7 +801,7 @@ describe("runSync — the position", () => {
     expect(await sentBody()).not.toHaveProperty("position");
   });
 
-  it("keeps the position through serializeWithinCap's visit halving", async () => {
+  it("keeps the position through serializeWithinCap's visit trimming", async () => {
     setReadingIdentity(AGENT);
     rememberReading(fix());
     const big = "x".repeat(2_000);

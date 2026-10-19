@@ -86,7 +86,8 @@ Overpass import. A Google import is capped at 20 by Google itself.
 Those cap **rows**. `MAX_REQUEST_BYTES` (2 MiB) caps **bytes**, Worker-wide, and is
 checked before any body is parsed — the two are not the same thing, because 200
 visits of 50 long answers each is schema-valid and about 20 MiB. The field client trims
-a sync batch that would exceed it rather than sending one the server must refuse; see
+each sync batch to `SYNC_BYTES_PER_BATCH` (384 KiB), well under it, because a heavier
+batch runs past the 10 ms CPU limit (GH #450, `docs/free-tier-budget.md`); see
 `docs/security.md`.
 
 `GET /api/admin/prospects` returns at most `PROSPECTS_PAGE_SIZE` rows; `total`

@@ -164,6 +164,13 @@ export const IMPORT_ROWS_PER_REQUEST = 250;
  */
 export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_VISITS_PER_BATCH = 50;
+/**
+ * The bytes this build's phone sends per pass. The count above cannot bound them:
+ * 50 visits with full notes and answers are 1.7 MB and run past 10 ms. 384 KiB keeps a
+ * pass under 6 ms at worst warm (GH #450, docs/free-tier-budget.md). A client-side
+ * budget, below the server's MAX_REQUEST_BYTES, so it changes no contract.
+ */
+export const SYNC_BYTES_PER_BATCH = 393_216;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 /**
  * A tournée is one per agent per Brussels day (ADR-0036); a week's worth covers a
