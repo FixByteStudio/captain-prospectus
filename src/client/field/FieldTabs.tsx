@@ -26,11 +26,11 @@ import { cn } from "../lib/utils";
 import { shouldAsk, useLeaveGuard } from "./leave-guard";
 import { fieldTabs, isCurrentTab, type FieldTab } from "./tabs";
 
-export function FieldTabs({ adminOnline }: { adminOnline: boolean }) {
+export function FieldTabs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { dirty, leave } = useLeaveGuard();
-  const tabs = fieldTabs({ adminOnline });
+  const tabs = fieldTabs();
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>, tab: FieldTab) => {
     if (!shouldAsk({ dirty, to: tab.path, current: pathname })) return;
@@ -103,9 +103,9 @@ export function FieldTabs({ adminOnline }: { adminOnline: boolean }) {
                 </span>
                 <span
                   className={cn(
-                    // w-full + truncate: a tight phone (320px, three tabs)
-                    // clips "Tableau de bord" with an ellipsis instead of
-                    // wrapping it out of the bar's fixed height.
+                    // w-full + truncate: a tight phone (320px) clips a long
+                    // label with an ellipsis instead of wrapping it out of the
+                    // bar's fixed height.
                     "text-meta w-full truncate text-center",
                     current ? "text-foreground font-semibold" : "text-muted-foreground",
                     "md:w-auto md:text-label md:font-medium md:text-inherit",

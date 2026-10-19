@@ -5,7 +5,7 @@
  * project, GH #83).
  */
 import type { ComponentType } from "react";
-import { LayoutGrid, Map as MapIcon, MapPinPlus, NotebookPen, Route } from "lucide-react";
+import { Map as MapIcon, MapPinPlus, NotebookPen, Route } from "lucide-react";
 import { copy } from "../copy/field";
 
 export type FieldTab = {
@@ -25,13 +25,11 @@ export type FieldTab = {
 };
 
 /**
- * Tournée, Carte, Carnet and Ajouter for every role; Tableau de bord last, only when
- * the caller's `adminOnline` is true — `adminAccess(...).entry` from
- * `field/identity.ts` (spec-gh-115), the tab-and-redirect gate layered on top
- * of the admin-screens one, never a second signal of its own.
+ * Tournée, Carte, Carnet and Ajouter, for every role. An admin's way to the
+ * dashboard is the account card (`AccountMenu.tsx`, GH #561), not a fifth tab.
  */
-export function fieldTabs({ adminOnline }: { adminOnline: boolean }): readonly FieldTab[] {
-  const tabs: FieldTab[] = [
+export function fieldTabs(): readonly FieldTab[] {
+  return [
     {
       path: "/tournee",
       label: copy.nav.tabs.today,
@@ -61,21 +59,6 @@ export function fieldTabs({ adminOnline }: { adminOnline: boolean }): readonly F
       end: false,
     },
   ];
-  if (adminOnline) {
-    tabs.push({
-      // `end: false` here, `true` for the same /admin path in `admin/nav.ts`
-      // — not a disagreement: `adminOnline` is `adminAccess(...).entry`,
-      // which implies `screens`, so a rendered instance of this tab is never
-      // on an /admin/* route at all (App.tsx mounts AdminApp there instead);
-      // `end`'s exact-vs-subtree choice is unobservable for it either way.
-      path: "/admin",
-      label: copy.nav.tabs.dashboard,
-      ariaLabel: copy.nav.tabs.dashboard,
-      icon: LayoutGrid,
-      end: false,
-    });
-  }
-  return tabs;
 }
 
 /**

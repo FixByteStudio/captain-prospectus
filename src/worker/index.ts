@@ -11,6 +11,7 @@
 import { Hono } from "hono/quick";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
+import { secureHeaders } from "hono/secure-headers";
 import type { ErrorHandler } from "hono";
 import { MAX_REQUEST_BYTES } from "../shared/constants";
 import { requireAdmin, requireIdentity } from "./auth";
@@ -30,10 +31,24 @@ import type { AppEnv, Bindings } from "./types";
 const app = new Hono<AppEnv>().basePath("/api");
 
 /**
+ * GH #454, docs/security.md: `public/_headers` covers static assets only, so every
+ * /api response sets its own. Outermost, so it also decorates the body cap's 413,
+ * which never calls next(). JSON loads nothing, hence `default-src 'none'`.
+ */
+app.use(
+  "/*",
+  secureHeaders({
+    strictTransportSecurity: "max-age=31536000; includeSubDomains",
+    xFrameOptions: "DENY",
+    contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+  }),
+);
+
+/**
  * INVARIANT 13 and docs/security.md: refuse an oversized body before anything
  * parses it.
  *
- * Registered FIRST, and that is load-bearing. Hono composes matched handlers in
+ * Registered first after the headers above, and that is load-bearing. Hono composes matched handlers in
  * registration order, so a middleware added below the /dev mount would sit
  * *after* the dev handler in the chain and never run — and /api/dev/* and
  * /api/auth/* are the routes mounted before auth. It also has to precede the sync route's

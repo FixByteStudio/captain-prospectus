@@ -17,7 +17,7 @@ import { prospectIdParamSchema, syncRequestSchema } from "../../shared/schemas";
 import type { SyncRequest, SyncResponse, VisitHistoryResponse } from "../../shared/schemas";
 import type { OrphanReason } from "../../shared/constants";
 import { validate, validationFailed } from "../validate";
-import { boundParamsPerRow, getDb } from "../db/client";
+import { boundParamsPerRow, getDb, insertOrIgnore } from "../db/client";
 import { prospects, scripts, visits, visitsOrphaned } from "../db/schema";
 import { writeAgentPosition } from "../agent-position";
 import { doorDaysOn } from "../door-days";
@@ -95,9 +95,9 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
       updatedAt: now,
     }));
 
-    for (const batch of chunk(rows, boundParamsPerRow(prospects))) {
-      await db.insert(prospects).values(batch).onConflictDoNothing();
-    }
+    // Raw D1, not Drizzle's builder: 100 field prospects cost ~2 ms of CPU
+    // there (GH #449, INVARIANT 13).
+    await insertOrIgnore(c.env.DB, prospects, rows);
 
     // Dedupe collisions: the place already existed, so the existing row wins and
     // the client is told which id to use instead.
@@ -167,10 +167,9 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
     // One lookup answers both questions the partition below asks: does the
     // prospect exist, and whose is it.
     //
-    // It is chunked: a batch may name up to SYNC_VISITS_PER_REQUEST distinct
-    // prospects, one bound parameter each. Unchunked, an agent with more than
-    // 100 doors to report got a 500 that left the outbox full and never
-    // drained (#30, INVARIANT 7).
+    // It is chunked: a batch names up to SYNC_VISITS_PER_BATCH distinct
+    // prospects, one bound parameter each, and a cap raised past 100 must not
+    // bring back the 500 that left an outbox full for ever (#30, INVARIANT 7).
     const referenced = [...new Set(rows.map((r) => r.prospectId))];
     for (const batch of chunk(referenced, 1)) {
       for (const row of await db
@@ -222,7 +221,7 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
     ];
     if (referencedScripts.length > 0) {
       // Chunked for the same reason as the prospect lookup above: the ids come
-      // off the payload, so a client can name more than 100 of them (#30).
+      // off the payload, one per visit (#30).
       const knownScripts = new Set<number>();
       for (const batch of chunk(referencedScripts, 1)) {
         for (const r of await db

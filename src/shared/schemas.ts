@@ -54,7 +54,7 @@ import {
   SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
-  SYNC_VISITS_PER_REQUEST,
+  SYNC_VISITS_PER_BATCH,
   TOURNEE_STOP_NUMBER_MAX,
 } from "./constants";
 
@@ -706,7 +706,7 @@ export const syncRequestSchema = z.object({
     z.array(fieldProspectSchema).check(z.maxLength(SYNC_PROSPECTS_PER_REQUEST)),
     [],
   ),
-  visits: z._default(z.array(visitSchema).check(z.maxLength(SYNC_VISITS_PER_REQUEST)), []),
+  visits: z._default(z.array(visitSchema).check(z.maxLength(SYNC_VISITS_PER_BATCH)), []),
   tournees: z._default(
     z.array(tourneeSyncSchema).check(z.maxLength(SYNC_TOURNEES_PER_REQUEST)),
     [],

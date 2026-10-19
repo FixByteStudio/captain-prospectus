@@ -19,6 +19,18 @@ export {
 export const copy = {
   ...sharedCopy,
 
+  /** The account card the band avatar opens (AccountMenu.tsx, GH #561). Not
+   * `account`: the admin copy owns that key, and the full aggregator spreads it over this one. */
+  accountCard: {
+    role: { agent: "Agent", admin: "Administrateur" },
+    dashboard: "Tableau de bord",
+    appearance: "Apparence",
+    theme: { system: "Système", light: "Clair", dark: "Sombre" },
+    /** « Version 0.1.0 · a605114 », or « · dev » for a build with no commit (version.ts). */
+    version: ({ version, commit }: { version: string; commit: string }) =>
+      `Version ${version} · ${commit}`,
+  },
+
   /** Carte (spec-gh-121): the round on a map, sharing `useRound()`'s list with
    * `today` below rather than a second vocabulary for the same stops. */
   carte: {
@@ -106,10 +118,10 @@ export const copy = {
   /** The location dialog over the start screen (docs/design.md › The location dialog). */
   location: {
     title: "Activez la localisation",
-    description: "Votre position fixe l'ordre des arrêts pour la journée.",
+    description: "Afin de préparer votre tournée et démarrer votre journée.",
     activate: "Activer",
     /** The web app cannot open the phone's settings, so the line names them. */
-    settings: "Refusée ? Ouvrez Réglages › Localisation, puis revenez ici.",
+    settings: "Ouvrez Réglages › Localisation, puis revenez ici.",
     coarse: (meters: number) => `Précision : ${meters} m. On affine…`,
     refused: "La localisation est refusée sur ce téléphone.",
     unavailable: "Position introuvable. Sortez à découvert si possible, puis touchez Activer.",

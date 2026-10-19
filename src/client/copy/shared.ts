@@ -69,8 +69,8 @@ export const sharedCopy = {
       cancel: "Annuler",
     },
 
-    /** The band avatar has no menu; this is its only accessible name. */
-    avatar: (email: string) => `Connecté en tant que ${email}`,
+    /** The band avatar's accessible name: it opens the account card (AccountMenu.tsx, GH #561). */
+    avatar: (email: string) => `Ouvrir le menu du compte de ${email}`,
 
     /** Admin sidebar group labels, rendered uppercase through CSS (GH #63). */
     groups: {
