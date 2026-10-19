@@ -163,7 +163,11 @@ bar's Sun/Moon toggle (GH #64) is what pins it: a click stores the chosen
 theme in `localStorage` and writes it straight to `data-theme`, with no route
 back to "system"; a classic `<script>` in `index.html` applies a stored pin
 before first paint, so a pinned-dark reload never flashes light. The field
-side reads the same pin through that boot script.
+side reads the same pin through that boot script, and its account card
+(GH #561, "Account card" below) is where an agent sets it: Système, Clair or
+Sombre, the same one setting per phone. Système is the absence of a pin, so
+choosing it clears the stored theme and `data-theme`; the admin toggle keeps
+its two states.
 
 ## Status is read down the left edge
 
@@ -287,7 +291,8 @@ yet, and no request is made. The bell is a disabled icon button with no
 content. The avatar is initials on `primary` with a `primary-edge` ring,
 opening a `DropdownMenu` with the signed-in email and "Se déconnecter", a menu
 item that ends the session with `POST /api/auth/logout` and then opens `/login` —
-see [identity-access.md](domains/identity-access.md). The field avatar has no menu.
+see [identity-access.md](domains/identity-access.md). The field avatar opens the
+account card ("Account card" below).
 
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build
@@ -1628,7 +1633,7 @@ server, skips straight to the app. None of the gate screens has a tab bar: the
 tabs are the app, and the app opens at the swipe. The band, its sync dot and
 the strip stay on every one of them, « Se reconnecter » included, because the
 sync is never gated. The admin side (`/admin`) has no gates, so an admin on a
-gate screen, when the Tableau de bord tab would show (`adminAccess(...).entry`),
+gate screen, when the account card's Tableau de bord row would show (`adminAccess(...).entry`),
 gets a `secondary` « Tableau de bord » button under the message or above the
 track: the one way back without a tab bar. An agent with nothing assigned has
 no Ajouter either; ADR-0036 gates the whole app on a tournée.
@@ -2545,14 +2550,14 @@ tab's rule drift apart.
 
 ```
 ┌──────────────────────────────────┐
-│ ⬤ Tournée ⬤ Carte ⬤ Carnet ⬤ Ajouter ▤ │  ← 768px: inline in the band
+│ ⬤ Tournée ⬤ Carte ⬤ Carnet ⬤ Ajouter   │  ← 768px: inline in the band
 ├──────────────────────────────────┤
 │                                  │
 │          (the tournée)           │
 │                                  │
 ├──────────────────────────────────┤
-│  ⬤      ⬤      ⬤      ⬤      ▤  │  < 768px: fixed at the bottom
-│ Tournée Carte Carnet Ajouter Tab.│
+│  ⬤       ⬤       ⬤       ⬤       │  < 768px: fixed at the bottom
+│ Tournée  Carte  Carnet  Ajouter  │
 └──────────────────────────────────┘
 ```
 
@@ -2584,26 +2589,14 @@ inset again — on the visit, as a bar sticky in the form's own column (see
 one that has one — both `calc()`'d off `--spacing-tab-bar-height` and the
 safe-area inset rather than a guessed pixel figure.
 
-**Five possible slots, four or five ship now** (Carnet's slot shipped with entry
-8, #504; owner's decision 2026-10-14). Tournée, Carte, Carnet and Ajouter for
-every role, in the order of the day (what is left, where it is, what is done,
-and the odd one out), Tableau de bord last for an admin. Five tabs at 390px
-are about 78px each, well above the 48px minimum; the labels stay whole, and « Tableau de
-bord » may wrap onto two lines. The tab bar exists only after the swipe
-("Before the swipe", above). Two gates, not one, decide
-that last slot (spec-gh-115, `field/identity.ts`'s `adminAccess`). `screens` is
-the security decision (invariant 10): a server-confirmed admin in this
-session, unaffected by the network coming and going. `entry` — what the tab
-and the `/` redirect read — additionally requires a live network, read from
-`window`'s `online`/`offline` events (`useOnline`) rather than `useSync`'s
-trigger 2, which listens for `online` only, so the tab goes the instant the
-network drops and is back the instant it returns, with no reload. Tableau de
-bord disappears outright rather than showing disabled, because the admin side
-needs the network to do anything at all. A session that opened offline on a
-cached admin identity re-asks `/api/me` once the network is confirmed live; a
-confirmed admin regains the tab and the admin screens without a reload.
-Losing the network hides only the tab: an admin already on an `/admin`
-screen keeps it (#97 designs what that screen says with no network).
+**Four tabs, for every role** (Carnet's slot shipped with entry 8, #504; the
+dashboard tab went with GH #561). Tournée, Carte, Carnet and Ajouter, in the
+order of the day (what is left, where it is, what is done, and the odd one
+out). Four tabs at 390px are about 97px each, well above the 48px minimum, and
+the labels stay whole. The tab bar exists only after the swipe ("Before the
+swipe", above). An admin's way to the dashboard is the account card's
+« Tableau de bord » row ("Account card", below), not a tab: a vertical card has
+room the bar never did.
 
 **A tab tap never silently discards a draft (#74).** `/tournee`'s own rule
 differs from every other tab's — it is an index route, so it must match only
@@ -2631,6 +2624,51 @@ three — it is not a tap the agent chooses, so there is nothing to ask about.
 Outside the field route (the admin update banner, and the update prompt on
 `/login`) there is no provider, so `leave` runs its action at once, unchanged
 from before #74.
+
+### Account card
+
+The field avatar is a `button` (48px target around the 32px disc) that opens a
+card (GH #561). It is a native `popover="auto"` wired with `popovertarget`:
+outside tap, Escape and a second tap on the avatar close it with no JS, and no
+Radix menu ships to the phone (ADR-0015). It needs iOS 17; the owner confirms
+the agents' phones. It is `position: fixed`, 12px from the right and just under
+the band (`safe-top` plus `band-height`), because the avatar is always the
+last item of the band's row and CSS anchor positioning needs iOS 26. The popover
+UA style (`inset: 0; margin: auto`) is reset. The card is a labelled region
+(`aria-labelledby` its email), not `role="menu"`: it holds radios and has no
+roving focus.
+
+```
+                          ┌────────────────────────┐
+                          │ francois@captain-      │  email, 12px semibold
+                          │ prospectus.be          │  wraps before « @ »
+                          │ Agent                  │  role, muted
+                          ├────────────────────────┤
+                          │ ▦ Tableau de bord      │  online admin only
+                          ├────────────────────────┤
+                          │ APPARENCE              │  overline
+                          │ [▭]  [☀]  [☾]          │  Système · Clair · Sombre
+                          ├────────────────────────┤
+                          │ Version 0.1.0 · a605114│  muted, 12px
+                          └────────────────────────┘
+```
+
+`popover` surface (`bg-popover`), 1px border, `shadow-md`, `rounded-lg`, at least
+208px wide, never wider than the viewport minus 24px: a long address widens the
+card and then wraps before « @ ». Sections are separated by hairlines.
+« Tableau de bord » shows only for an online admin (`adminAccess(...).entry`):
+it closes the card, then runs through the leave guard (#74) to `/admin`, so a
+dirty form still asks first. « Apparence » is three native radio tiles of 48px
+(the field's `FieldRadioOption`, gold when checked) with a 16px Monitor, Sun or
+Moon icon and an `aria-label` instead of a visible one. A pick applies at once,
+with no reload. The checked tile reads `<html data-theme>`, Système when there
+is no pin or a pin that is not a theme. The version line is the release plus
+the first seven characters of the deploy commit, stamped at build
+(« · dev » locally).
+
+The card holds no sign-out and no other item: an agent cannot end their own
+session. Signing back in needs a fresh admin code, and « Révoquer » is how an
+admin ends a device's session.
 
 ### Field principles
 

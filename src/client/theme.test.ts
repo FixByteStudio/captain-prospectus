@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   THEME_STORAGE_KEY,
+  applyThemeChoice,
+  clearPin,
   otherTheme,
   parseTheme,
   pinTheme,
   resolvedTheme,
+  themeChoice,
   writePin,
 } from "./theme";
 
@@ -146,5 +149,62 @@ describe("pinTheme", () => {
     pinTheme("dark", { dataset: {} });
 
     expect(runBoot(storage)).toBe("dark");
+  });
+});
+
+describe("themeChoice", () => {
+  it.each([
+    ["light", "light"],
+    ["dark", "dark"],
+    [undefined, "system"],
+    ["blue", "system"],
+  ])("themeChoice(%s) -> %s", (pinned, expected) => {
+    expect(themeChoice(pinned)).toBe(expected);
+  });
+});
+
+describe("clearPin", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("removes the storage key and the <html data-theme> attribute together", () => {
+    const store = new Map([[THEME_STORAGE_KEY, "dark"]]);
+    vi.stubGlobal("localStorage", {
+      ...fakeStorage(store),
+      removeItem: (key: string) => void store.delete(key),
+    });
+    const root = { dataset: { theme: "dark" } as Record<string, string | undefined> };
+    clearPin(root);
+    expect(store.has(THEME_STORAGE_KEY)).toBe(false);
+    expect(root.dataset.theme).toBeUndefined();
+  });
+
+  it("still removes the attribute when storage is blocked (I/O matrix)", () => {
+    vi.stubGlobal("localStorage", {
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    });
+    const root = { dataset: { theme: "dark" } as Record<string, string | undefined> };
+    expect(() => clearPin(root)).not.toThrow();
+    expect(root.dataset.theme).toBeUndefined();
+  });
+});
+
+describe("applyThemeChoice", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("pins Clair and Sombre, clears Système", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      ...fakeStorage(store),
+      removeItem: (key: string) => void store.delete(key),
+    });
+    const root = { dataset: {} as Record<string, string | undefined> };
+    applyThemeChoice("dark", root);
+    expect(store.get(THEME_STORAGE_KEY)).toBe("dark");
+    expect(root.dataset.theme).toBe("dark");
+    applyThemeChoice("system", root);
+    expect(store.has(THEME_STORAGE_KEY)).toBe(false);
+    expect(root.dataset.theme).toBeUndefined();
   });
 });

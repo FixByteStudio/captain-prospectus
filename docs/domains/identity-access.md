@@ -108,7 +108,7 @@ one look the same from the phone (GH #35). A network failure clears nothing. An 
 expired session sees an empty round until "Se reconnecter" brings it back.
 
 **The cached identity opens the field side only.** An admin identity read from
-the cache never unlocks the Tableau de bord tab or the admin routes — only a
+the cache never unlocks the Tableau de bord row or the admin routes — only a
 live `/api/me` answer does (invariant 10). A session that started this way
 re-asks `/api/me` itself once the network is confirmed live, rather than
 waiting for a reload: `App.tsx` tracks the browser's own `online`/`offline`

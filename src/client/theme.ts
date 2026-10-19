@@ -57,3 +57,33 @@ export function pinTheme(
   writePin(theme);
   root.dataset.theme = theme;
 }
+
+/** What the field account card offers (GH #561): a pin, or no pin at all. */
+export type ThemeChoice = Theme | "system";
+
+/** The choice the page shows: `<html data-theme>` when it holds a pin, else Système. */
+export function themeChoice(pinned: string | undefined): ThemeChoice {
+  return parseTheme(pinned ?? null) ?? "system";
+}
+
+/**
+ * Système is the absence of a pin: it removes the key and the attribute, and the
+ * CSS follows the phone again (`@custom-variant dark`). A blocked storage is
+ * swallowed like `writePin`: the attribute is still removed for this page.
+ */
+export function clearPin(root: { dataset: Record<string, string | undefined> }): void {
+  try {
+    globalThis.localStorage.removeItem(THEME_STORAGE_KEY);
+  } catch {
+    // Swallowed: only the *next* load keeps a stale pin, the page is right.
+  }
+  delete root.dataset.theme;
+}
+
+export function applyThemeChoice(
+  choice: ThemeChoice,
+  root: { dataset: Record<string, string | undefined> },
+): void {
+  if (choice === "system") clearPin(root);
+  else pinTheme(choice, root);
+}

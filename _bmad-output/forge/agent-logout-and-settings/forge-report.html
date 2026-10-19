@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forge report — the field account card</title>
+<style>
+  :root{--navy:#1b2a4a;--gold:#c9a227;--edge:#a8801a;--paper:#f6f7f0;--muted:#5a6478;--line:#d7dae2;--red:#9b2c2c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--navy);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:48px 28px 80px}
+  header{display:flex;gap:32px;align-items:center;border-bottom:2px solid var(--navy);padding-bottom:28px}
+  header h1{margin:0 0 6px;font-size:30px;line-height:1.15}
+  header p{margin:0;color:var(--muted)}
+  .seal{flex:0 0 170px;animation:press .9s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes press{from{transform:scale(1.6) rotate(-30deg);opacity:0}to{transform:scale(1) rotate(-12deg);opacity:1}}
+  h2{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:36px 0 12px}
+  ul{margin:0;padding-left:20px}
+  li{margin:6px 0}
+  .kill{color:var(--red);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .p{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .p b{display:block;font-size:15px}
+  .p span{font-size:13px;color:var(--muted)}
+  .p q{display:block;margin-top:8px;font-style:italic;font-size:14px}
+  .out{background:var(--navy);color:#eef0f4;border-radius:8px;padding:16px 20px;margin-top:24px}
+  .out a{color:var(--gold)}
+  code{background:#e8eaef;border-radius:4px;padding:1px 5px;font-size:13px}
+  .out code{background:#ffffff1f;color:#eef0f4}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <svg class="seal" viewBox="0 0 200 200" role="img" aria-label="Hardened">
+    <defs>
+      <radialGradient id="wax" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#e2be4b"/><stop offset=".7" stop-color="#c9a227"/><stop offset="1" stop-color="#8a6912"/></radialGradient>
+      <path id="ring" d="M100,100 m-66,0 a66,66 0 1,1 132,0 a66,66 0 1,1 -132,0"/>
+    </defs>
+    <path fill="url(#wax)" d="M100 8c14 0 18 10 30 13s24-4 32 7 0 22 5 33 17 16 15 30-15 16-19 28 4 24-7 32-22 0-33 5-16 17-30 15-16-15-28-19-24 4-32-7 0-22-5-33-17-16-15-30 15-16 19-28-4-24 7-32 22 0 33-5 14-12 28-12z"/>
+    <circle cx="100" cy="100" r="62" fill="none" stroke="#1b2a4a" stroke-width="2.5" opacity=".75"/>
+    <text font-size="13" font-weight="700" letter-spacing="3" fill="#1b2a4a"><textPath href="#ring" startOffset="4%">CAPTAIN PROSPECTUS · FORGE · 2026-10-18 ·</textPath></text>
+    <text x="100" y="108" text-anchor="middle" font-size="24" font-weight="800" letter-spacing="2" fill="#1b2a4a">HARDENED</text>
+  </svg>
+  <div>
+    <h1>The field account card</h1>
+    <p>Started as "agents have no logout button, and a mini settings page for the theme". It ended with no logout and one small card under the avatar.</p>
+  </div>
+</header>
+
+<h2>Locked</h2>
+<ul>
+  <li><b>No agent logout.</b> Signing back in needs a fresh one-time code from an admin, so a stray tap strands the agent. The admin's « Révoquer » already ends a device's session.</li>
+  <li><b>Tapping the avatar opens a small card</b> under it: a native popover with a shadcn look. It closes on a tap outside, a tap on the avatar, or Escape.</li>
+  <li><b>The email is never cut off.</b> 12px, the card widens to fit it, and a long email wraps before « @ ». Then the role.</li>
+  <li><b>Apparence:</b> Système / Clair / Sombre as native radios with monitor / sun / moon icons. Système is the default and clears the stored choice. A choice applies at once.</li>
+  <li><b>The dashboard moves into the card</b> for an online admin, behind the leave guard. The tab bar is four tabs for everyone.</li>
+  <li><b>Version 0.1.0 · a605114</b>: the release plus the deploy commit, written in by CI (« · dev » locally), in its own commit.</li>
+  <li>One story, no epic, no ADR. Published as GH #561.</li>
+</ul>
+
+<h2>Rejected, and why</h2>
+<ul>
+  <li><span class="kill">Agent « Se déconnecter »</span>: getting back in needs an admin's code.</li>
+  <li><span class="kill">A colour picker</span>: the tokens' contrast tests forbid custom colours.</li>
+  <li><span class="kill">A settings page or bottom sheet</span>: too big for what it holds.</li>
+  <li><span class="kill">A « demandez un code » line</span>: cut by the owner.</li>
+  <li><span class="kill">A shadcn DropdownMenu</span>: extra weight, and its radios aren't native.</li>
+  <li><span class="kill">Keeping the dashboard tab</span>: the horizontal tab bar is the crowded space, and a vertical card has room.</li>
+  <li><span class="kill">A date in the version line</span>: the release plus the commit says more.</li>
+</ul>
+
+<h2>Weak points that survived</h2>
+<ul>
+  <li>Native <code>popover</code> needs iOS 17+ or a recent Chrome. The agents' iOS versions haven't been checked yet.</li>
+  <li>An unsaved visit form is not stored anywhere (only saved visits reach the outbox). The dashboard button has to go through the leave guard, or a visit in progress gets lost.</li>
+  <li>The theme setting is one per phone, shared with the admin screens.</li>
+  <li>Sally's rule: the card holds nothing without a reason, or it becomes the next crowded tab bar.</li>
+</ul>
+
+<h2>Who pressure-tested it</h2>
+<div class="grid">
+  <div class="p"><b>🎨 Sally</b><span>UX Designer</span><q>A dead button is a small, constant annoyance.</q></div>
+  <div class="p"><b>📋 John</b><span>Product Manager</span><q>Four tabs. Noted. I'll get over it.</q></div>
+  <div class="p"><b>🏗️ Winston</b><span>System Architect</span><q>When something has no surprises in it, I call it boring. It's a compliment.</q></div>
+  <div class="p"><b>💻 Amelia</b><span>Senior Software Engineer</span><q>A visit still being filled in is stored nowhere.</q></div>
+  <div class="p"><b>🔒 Vex</b><span>Security Engineer</span><q>A logout that doesn't check the outbox breaks invariant 5 in a nice font.</q></div>
+  <div class="p"><b>📞 François</b><span>Field agent, Brussels</span><q>Le soleil, la lune. Je comprends sans lire.</q></div>
+  <div class="p"><b>🚶 Rosa</b><span>Field agent, 8 years door-to-door</span><q>Who is this button for?</q></div>
+</div>
+
+<div class="out">Next: GH <a href="https://github.com/FixByteStudio/captain-prospectus/issues/561">#561</a>. Mockup: <code>mockups/account-menu-v4.png</code>. Summary: <code>forged-idea.md</code>.</div>
+</div>
+</body>
+</html>

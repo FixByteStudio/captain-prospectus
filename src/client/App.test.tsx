@@ -711,22 +711,32 @@ describe("The tournée gate", () => {
  * the bug this closes was exactly the two staying conflated.
  */
 describe("The admin tab and routes follow the network", () => {
+  it("keeps the tab bar at four tabs for an online admin: the dashboard lives in the account card (GH #561)", async () => {
+    stub.me = ADMIN;
+    renderApp("/tournee");
+
+    const nav = await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
+    expect(within(nav).getAllByRole("link")).toHaveLength(4);
+    expect(within(nav).queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
+  });
+
   it("hides the tab the instant the network drops and shows it again the instant it returns, with no second /api/me", async () => {
     stub.me = ADMIN;
     renderApp("/tournee");
 
-    expect(await screen.findByRole("link", { name: copy.nav.tabs.dashboard })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
     expect(stub.identityCalls).toBe(1);
 
     act(() => {
       window.dispatchEvent(new Event("offline"));
     });
-    expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
 
     act(() => {
       window.dispatchEvent(new Event("online"));
     });
-    expect(await screen.findByRole("link", { name: copy.nav.tabs.dashboard })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
     // A session the server already confirmed must not pay for going offline
     // and back — deleting the re-check's `if (!offline) return` would.
     expect(stub.identityCalls).toBe(1);
@@ -759,7 +769,7 @@ describe("The admin tab and routes follow the network", () => {
 
       expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
       expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
-      expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       unmount();
 
       // `screens` is untouched by `online`: the same admin reaching /admin
@@ -781,7 +791,7 @@ describe("The admin tab and routes follow the network", () => {
 
       expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
       expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
-      expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
 
       // The network returns and this time the server reaches back and confirms
@@ -791,7 +801,7 @@ describe("The admin tab and routes follow the network", () => {
         window.dispatchEvent(new Event("online"));
       });
 
-      expect(await screen.findByRole("link", { name: copy.nav.tabs.dashboard })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
     } finally {
       onlineSpy.mockRestore();
     }
@@ -817,7 +827,7 @@ describe("The admin tab and routes follow the network", () => {
 
       // The re-check ran (falls back to the same cache) but changed nothing.
       expect(stub.identityCalls).toBeGreaterThan(callsBefore);
-      expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
@@ -846,7 +856,7 @@ describe("The admin tab and routes follow the network", () => {
       // never-loaded gate, which has no tab bar and, for an agent, no
       // « Tableau de bord » either.
       expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
-      expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
+      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
     } finally {
       onlineSpy.mockRestore();

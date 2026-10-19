@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -9,6 +9,15 @@ import { VitePWA } from "vite-plugin-pwa";
 import { chunkModuleName } from "./scripts/chunk-module-name.ts";
 
 const REPO_ROOT = fileURLToPath(new URL(".", import.meta.url));
+
+/** The build stamp (GH #561): `version.ts` reads these two defines. `dev` when CI's sha is absent. */
+const packageJson = JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf8")) as {
+  version: string;
+};
+const buildDefines = {
+  __APP_VERSION__: JSON.stringify(packageJson.version),
+  __APP_COMMIT__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 7) || "dev"),
+};
 
 /**
  * Writes which modules each client chunk holds, so `check:precache` can fail
@@ -39,6 +48,7 @@ function chunkModuleMap(): Plugin {
 }
 
 export default defineConfig({
+  define: buildDefines,
   // shadcn generates imports as "@/ui/button". The alias is mirrored in
   // tsconfig.client.json; both are needed, Vite resolves and tsc typechecks.
   resolve: {
