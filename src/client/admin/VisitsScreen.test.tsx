@@ -82,9 +82,12 @@ function doorDay(id: string, receivedAt: number, over: Partial<AdminDoorDay> = {
     followUpAt: null,
     notes: null,
     refusalReason: null,
+    listedAt: 0,
     visits: [],
     ...over,
   };
+  // The feed clock is the arrival unless a test says a repair moved it.
+  row.listedAt = over.listedAt ?? row.receivedAt;
   if (row.visits.length === 0) {
     row.visits = [
       dayVisit(`${id}-1`, receivedAt, {

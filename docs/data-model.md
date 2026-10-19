@@ -51,6 +51,7 @@ erDiagram
     int client_visited_at "raw phone clock, unclamped"
     int client_version "sync contract version of the sending build"
     int received_at "server clock"
+    int repaired_at "null unless an orphan repair inserted it; the live feed clock"
   }
   TOURNEES {
     text id PK "client UUID"
@@ -244,7 +245,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
   the whole chunked insert. The visit is still true — only the questionnaire reference is stale — and
   INVARIANT 5 says never lose one. See `src/worker/routes/agent.ts`.
 - **`status_set_at` is written only by an admin's `PATCH` that carries `status`.** A visit dated at or before it keeps its hands off `status` and `next_visit_at` ([prospecting](domains/prospecting.md#prospect-lifecycle)).
-- **Two clocks on a visit.** `visited_at` is when it happened (phone clock), `received_at` is when the server got it. The live feed uses `received_at`; history uses `visited_at`.
+- **Clocks on a visit.** `visited_at` is when it happened (phone clock), `received_at` is when the server got it. `repaired_at` is null on a synced visit and set at insert by an orphan's repair, to the repair's clock; the live feed reads `coalesce(repaired_at, received_at)` so a repaired visit reaches an open ledger, while `received_at` never moves. History uses `visited_at`.
 - **`visited_at` is clamped** on insert ([prospecting](domains/prospecting.md#prospect-lifecycle)); the
   unclamped value stays in `client_visited_at`.
 - **`client_version` records the sync contract version of the build that sent the visit.** It makes
@@ -272,7 +273,8 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `prospects(updated_at)` | admin list default order |
 | `prospects(merged_into)` | live-prospect filter, and finding what a survivor absorbed |
 | `visits(prospect_id, visited_at)` | visit history on a prospect |
-| `visits(received_at)` | live feed |
+| `visits(received_at)` | export, recap, retention sweep |
+| `visits(coalesce(repaired_at, received_at))` | live feed |
 | `visits(agent_email, visited_at)` | an agent's own history |
 | `visits(visited_at)` | the dashboard's period counts, across every prospect and agent |
 | `tournees(agent_email, day_start, client_started_at, id)` | the sync pull's "today's tournée": the earliest swipe of the agent's day |

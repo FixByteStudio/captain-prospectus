@@ -2171,6 +2171,33 @@ describe("GET /api/admin/visits", () => {
         .all<{ detail: string }>();
       expect(results.some((r) => r.detail.includes("visits_prospect_visited_idx"))).toBe(true);
     });
+
+    it("pages a delta poll on the feed clock's index (GH #528)", async () => {
+      await seedVisit("Pizza Roma", at(10), "no_contact");
+
+      const seen: string[] = [];
+      const recording = new Proxy(env.DB, {
+        get(target, prop) {
+          if (prop === "prepare") {
+            return (query: string) => (seen.push(query), target.prepare(query));
+          }
+          const value: unknown = Reflect.get(target, prop);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      const response = await workerFetch("http://localhost/api/admin/visits?since=1", undefined, {
+        DB: recording,
+      });
+      expect(response.status).toBe(200);
+
+      const touched = seen.filter((q) => q.includes("coalesce") && !q.includes("json_each"));
+      expect(touched).toHaveLength(1);
+      const [query = ""] = touched;
+      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query}`)
+        .bind(1, 501)
+        .all<{ detail: string }>();
+      expect(results.some((r) => r.detail.includes("visits_listed_idx"))).toBe(true);
+    });
   });
 
   describe("refusal reasons (GH #249)", () => {

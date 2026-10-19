@@ -868,6 +868,8 @@ export const adminDoorDaySchema = z.object({
   /** The Brussels midnight that starts the door-day. */
   dayStart: epochMsSchema,
   ...doorDayVisitShape,
+  /** Greatest feed clock of the visits (repair time if repaired): the cursor. */
+  listedAt: epochMsSchema,
   visits: z.array(adminDoorDayVisitSchema).check(z.minLength(1)),
 });
 export type AdminDoorDay = z.infer<typeof adminDoorDaySchema>;

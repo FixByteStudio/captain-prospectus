@@ -436,3 +436,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-541-earliest-swipe-wins.md`
   summary: Pin `todayTournee`'s `ORDER BY client_started_at, id LIMIT 1` with a query-plan test that it uses `tournees_agent_day_started_idx` and no temp b-tree sort.
   evidence: Only `agentsStartedOn`'s plan is tested; entry 5 (R15, #543-lane) rewrites `indexes.test.ts` to plan the statements the code runs, so the test belongs there.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-528-repaired-orphan-visites-live-feed.md`
+  summary: A feed-clock stamp taken at request start can land below a cursor already lifted by a write that committed first, so that visit is skipped by an open ledger.
+  evidence: Sync and repair both read `now` before their awaits and insert later; a poll between a later-stamped commit and an earlier-stamped one moves `since` past the earlier one. Low likelihood with two agents and one admin.
