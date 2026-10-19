@@ -51,3 +51,5 @@ Oneshot: roughly 70 lines of code (one constant, the trimming function, its test
 - `pnpm typecheck && pnpm test && pnpm lint && pnpm build` -- expected: all pass
 - `D1_SQLITE=… GC=… node --expose-gc scripts/measure-sync-cpu.mjs` with `PAYLOAD=full SIZES=1,5,10,15,20,30,50`, with and without `SETTLE=1` -- expected: exit 0, figures as in the doc
 - `git diff origin/main -- src/worker src/shared/schemas.ts` -- expected: empty (no server or contract change)
+
+**Merge with main (2026-10-19):** main took #451 (server accepts at most 50 visits, `CLIENT_VERSION` 3), #449 (field-prospect insert ~4 → ~1.5 ms) and #571 (cold-request warmup in the script). Conflicts were docs plus `constants.test.ts`, where `SYNC_VISITS_PER_REQUEST` is gone; the byte-budget test moved to its own `describe`. The morning pass was re-measured on the merged code: 6.3–7.8 ms median (minor GC), 9.0–10.4 ms (`SETTLE=1`, one run), worst 11–15 ms; filed as #577 (found in passing), since bytes are not its lever. The `SETTLE=1` second run of the morning pass and an 11-visit confirmation run were cut off by the 10-minute limit and not repeated.

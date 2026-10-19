@@ -14,14 +14,18 @@
  * The rows a request wrote are reset between requests, outside the timing, so
  * every request does the same work. Each size re-imports the module under a new
  * query string, which compiles it afresh: its first request stands in for a cold
- * isolate's, in a Node process that is otherwise warm. Sizes alternate over
+ * isolate's, in a Node process that is otherwise warm. Before the rounds, one
+ * import under `?warmup` and three untimed requests pay the process's own first
+ * use (Node's JS `Request`, streams, WebCrypto, the shim), which workerd
+ * implements natively and a Cloudflare isolate does not pay (GH #404), so every
+ * timed cold round is a fresh import in a warm process. Sizes alternate over
  * ROUNDS, as in #102's before/after. Local hardware is not Cloudflare's: keep
  * headroom.
  *
  * Usage: pnpm db:migrate:local && (pnpm dev, then pnpm db:seed:local:full)
  *        node scripts/measure-sync-cpu.mjs
  * Env:   D1_SQLITE (the local D1 file; found under .wrangler/state),
- *        SIZES (1,25,50,100,200; with PAYLOAD=max, the one count that fits),
+ *        SIZES (1,25,50; with PAYLOAD=max, the one count that fits),
  *        ROUNDS (3), RUNS per size and round (50), WARMUP (20),
  *        TOURNEE (unset; "pull" seeds today's 200-stop tournée, "swipe" sends one with 200 stops),
  *        SLIDE (unset; "1" sets the session's last_seen_at back past SESSION_SLIDE_MS before each
@@ -49,9 +53,9 @@ import {
   timeRequest,
 } from "./worker-cpu-shim.mjs";
 
-// Copies of src/shared/constants.ts, as 200 below is: this script must not import src/.
+// Copies of src/shared/constants.ts: this script must not import src/.
 const MAX_REQUEST_BYTES = 2_097_152; // MAX_REQUEST_BYTES
-const SYNC_VISITS_PER_REQUEST = 200; // SYNC_VISITS_PER_REQUEST
+const SYNC_VISITS_PER_BATCH = 50; // SYNC_VISITS_PER_BATCH: the server refuses more
 const SYNC_PROSPECTS_PER_REQUEST = 100; // SYNC_PROSPECTS_PER_REQUEST
 const SCRIPT_QUESTIONS_MAX = 50; // SCRIPT_QUESTIONS_MAX: answers per visit
 const QUESTION_KEY_MAX = 60; // QUESTION_KEY_MAX
@@ -93,10 +97,10 @@ try {
   const env = { DB: shim.DB, AUTH_PEPPER: MEASURE_PEPPER };
   const { cookie, tokenHash } = seedSession(sqlite, AGENT, MEASURE_PEPPER);
 
-  // Always SYNC_VISITS_PER_REQUEST (200) assigned prospects, whatever SIZES is:
-  // the sync's pull lists them all, so a different count would change every
-  // request's CPU and make runs with different SIZES incomparable.
-  const SEEDED = SYNC_VISITS_PER_REQUEST;
+  // Always 200 assigned prospects, whatever SIZES is: the sync's pull lists them
+  // all, so a different count would change every request's CPU and make runs
+  // with different SIZES, and docs/free-tier-budget.md's tables, incomparable.
+  const SEEDED = 200;
   const ids = Array.from({ length: SEEDED }, () => crypto.randomUUID());
   const now = Date.now();
   const insert = sqlite.prepare(
@@ -188,7 +192,7 @@ try {
       : {};
     const sent = prospects ? fieldProspects() : [];
     const body = JSON.stringify({
-      clientVersion: 2,
+      clientVersion: 3, // CLIENT_VERSION: an older one gets 426
       prospects: sent,
       ...morning,
       visits: ids.slice(0, size).map((prospectId, i) => ({
@@ -209,7 +213,7 @@ try {
   // The most visits one request can carry under MAX_REQUEST_BYTES (UTF-8 bytes, as the
   // Worker counts): a real phone sends any count that fits (serializeWithinCap).
   let fits = 1;
-  for (let lo = 1, hi = SEEDED; lo <= hi;) {
+  for (let lo = 1, hi = SYNC_VISITS_PER_BATCH; lo <= hi;) {
     const mid = (lo + hi) >> 1;
     if (bytesOf(mid) > MAX_REQUEST_BYTES) {
       hi = mid - 1;
@@ -221,10 +225,12 @@ try {
   const SIZES =
     sizesAsked === undefined && PAYLOAD === "max"
       ? [fits]
-      : (sizesAsked ?? "1,25,50,100,200").split(",").map(Number);
+      : (sizesAsked ?? "1,25,50").split(",").map(Number);
   for (const size of SIZES) {
-    if (!Number.isInteger(size) || size < 1 || size > SEEDED)
-      throw new Error(`SIZES holds whole numbers from 1 to ${SEEDED}, got "${size}"`);
+    if (!Number.isInteger(size) || size < 1 || size > SYNC_VISITS_PER_BATCH)
+      throw new Error(
+        `SIZES holds whole numbers from 1 to ${SYNC_VISITS_PER_BATCH}, got "${size}"`,
+      );
     if (size > fits)
       throw new Error(
         `${size} visits of PAYLOAD=${PAYLOAD} exceed MAX_REQUEST_BYTES (${MAX_REQUEST_BYTES}): ${fits} fit`,
@@ -336,6 +342,12 @@ try {
       `authenticated by session cookie (AUTH_PEPPER), no DEV_USER_EMAIL; ` +
       `${MAX_REQUEST_BYTES} bytes is the cap, ${fits} visits of this payload fit`,
   );
+  {
+    const url = pathToFileURL(join(work, "worker/worker.mjs"));
+    url.search = "?warmup";
+    const worker = (await import(url.href)).default;
+    for (let i = 0; i < 3; i++) await once(worker, SIZES[0]);
+  }
   const cold = new Map(SIZES.map((s) => [s, []]));
   const warm = new Map(SIZES.map((s) => [s, []]));
   for (let round = 0; round < ROUNDS; round++) {

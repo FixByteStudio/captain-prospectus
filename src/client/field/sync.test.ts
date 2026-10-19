@@ -361,9 +361,9 @@ describe("backoffDelayMs", () => {
 });
 
 /**
- * GH #404: the phone sends at most SYNC_VISITS_PER_BATCH visits a pass, well
- * under the server's SYNC_VISITS_PER_REQUEST, so one request stays inside the
- * Worker's 10 ms of CPU. The drain loop sends the rest in further passes.
+ * GH #404, #451: the phone sends at most SYNC_VISITS_PER_BATCH visits a pass,
+ * the server's accept limit too, so one request stays inside the Worker's 10 ms
+ * of CPU. The drain loop sends the rest in further passes.
  */
 describe("runSync — visits per pass", () => {
   it("sends exactly one batch from a larger outbox, then the rest in later passes", async () => {

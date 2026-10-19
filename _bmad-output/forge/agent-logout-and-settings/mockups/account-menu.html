@@ -1,0 +1,62 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0}
+body{background:#cfd3db;font-family:"Archivo","Archivo Variable",system-ui,sans-serif;display:flex;gap:48px;padding:40px;align-items:flex-start}
+.col{display:flex;flex-direction:column;gap:14px;align-items:center}
+.cap{font:600 15px system-ui;color:#1b2a4a}
+.light{--bg:#f6f7f0;--fg:#1b2a4a;--card:#fff;--sec:#e8eaef;--muted:#5a6478;--border:#d7dae2;--primary:#c9a227;--pfg:#1b2a4a;--pedge:#a8801a;--band:#1b2a4a;--bandfg:#eef0f4;--bandmuted:#95a0b8}
+.dark{--bg:#101726;--fg:#e7eaf0;--card:#182031;--sec:#222b3d;--muted:#97a2b8;--border:#2b3547;--primary:#d9b43c;--pfg:#141c2e;--pedge:#e6c65c;--band:#0b1120;--bandfg:#e7eaf0;--bandmuted:#7d899f}
+.phone{width:390px;height:844px;border-radius:44px;overflow:hidden;position:relative;background:var(--bg);color:var(--fg);box-shadow:0 0 0 10px #111,0 20px 50px #0005}
+.band{background:var(--band);color:var(--bandfg);padding:44px 16px 0}
+.row{height:56px;display:flex;align-items:center;gap:12px}
+.mark{width:28px;height:28px;border-radius:50%;border:3px solid var(--primary)}
+.brand{display:flex;flex-direction:column;line-height:1.25}
+.brand b{font-size:16px}.brand span{font-size:12px;color:var(--bandmuted)}
+.dot{margin-left:auto;width:10px;height:10px;border-radius:50%;background:#3fb27f}
+.av{width:32px;height:32px;border-radius:50%;background:var(--primary);color:var(--pfg);font:700 12px system-ui;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--pedge),0 0 0 3px var(--bandfg)}
+main{padding:24px 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:12px}
+.card .t{font-weight:600;margin-bottom:6px}.card .m{font-size:12px;color:var(--muted)}
+.overlay{position:absolute;inset:0;background:#00000080}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:16px 16px 0 0;padding:10px 20px 34px;border-top:1px solid var(--border)}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.head h2{font-size:19px;font-weight:600}
+.x{width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px;margin-right:-12px}
+.who{display:flex;align-items:center;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.who .av{box-shadow:inset 0 0 0 1px var(--pedge);width:40px;height:40px;font-size:14px}
+.who .e{font-size:16px;font-weight:500}.who .r{font-size:12px;color:var(--muted);margin-top:2px}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:8px}
+.radios{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:22px}
+.opt{min-height:48px;border:1px solid var(--border);border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;font-weight:500;font-size:15px}
+.opt.on{background:var(--primary);border-color:var(--pedge);color:var(--pfg)}
+.ver{font-size:12px;color:var(--muted);text-align:center;letter-spacing:.02em}
+.tabs{position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--card);border-top:1px solid var(--border)}
+
+.menu{position:absolute;top:104px;right:12px;width:288px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 30px #0003,0 2px 6px #0002;padding:6px;z-index:5}
+.menu .e{font-size:14px;font-weight:600;padding:8px 10px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .r{font-size:12px;color:var(--muted);padding:2px 10px 8px}
+.sep{height:1px;background:var(--border);margin:4px -6px}
+.menu .lbl{padding:8px 10px 0;margin-bottom:6px}
+.icons{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 4px 8px}
+.io{height:48px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fg)}
+.io.on{background:var(--primary);border-color:var(--pedge);color:var(--pfg)}
+.io svg{width:20px;height:20px}
+.menu .ver{text-align:left;padding:8px 10px 6px}
+.av.open{box-shadow:inset 0 0 0 1px var(--pedge),0 0 0 3px var(--primary)}
+.scrim{position:absolute;inset:0;background:transparent}
+</style></head><body>
+<script>
+const ico={"Système": "<path d=\"M3 4h18v12H3z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/><path d=\"M8 20h8M12 16v4\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>", "Clair": "<circle cx=\"12\" cy=\"12\" r=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>", "Sombre": "<path d=\"M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/>"};
+
+for (const [cls,label,checked] of [["light","Clair — Système choisi",0],["dark","Sombre — Sombre choisi",2]]) {
+ const opts=["Système","Clair","Sombre"].map((o,i)=>`<div class="io ${i===checked?'on':''}" aria-label="${o}"><svg viewBox="0 0 24 24">${ico[o]}</svg></div>`).join("");
+ document.write(`<div class="col"><div class="cap">${label}</div><div class="phone ${cls}">
+ <div class="band"><div class="row"><div class="mark"></div><div class="brand"><b>Captain Prospectus</b><span>Tournée</span></div><div class="dot"></div><div class="av open">FR</div></div></div>
+ <main><div class="card"><div class="t">Arrêt 4 sur 20</div><div class="m">Chez Mamy · Rue Haute 112</div></div><div class="card"><div class="t">Friterie Tabora</div><div class="m">Arrêt 5 · 230 m</div></div><div class="card"><div class="t">Le Pré Salé</div><div class="m">Arrêt 6 · 410 m</div></div></main>
+ <div class="tabs"></div>
+ <div class="menu"><div class="e">francois@captain-prospectus.be</div><div class="r">Agent</div><div class="sep"></div>
+  <div class="lbl">Apparence</div><div class="icons" role="radiogroup">${opts}</div><div class="sep"></div>
+  <div class="ver">Version 0.1.0</div></div>
+ </div></div>`);
+}
+</script></body></html>

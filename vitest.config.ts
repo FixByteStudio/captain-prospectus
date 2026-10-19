@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
@@ -6,6 +7,15 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 // The worker tests build their database from the real migrations, so a
 // migration that does not apply fails CI instead of production.
 const migrations = await readD1Migrations("./drizzle");
+
+// Projects do not inherit the root config, so the build stamp (version.ts) is
+// defined for the unit and dom projects here, with the same shape as vite.config.ts.
+// Each project gets its own copy: vitest deletes the keys it moves to globalThis.
+const packageJson = JSON.parse(readFileSync("./package.json", "utf8")) as { version: string };
+const buildDefines = {
+  __APP_VERSION__: JSON.stringify(packageJson.version),
+  __APP_COMMIT__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 7) || "dev"),
+};
 
 /**
  * Three projects, because the three kinds of test need different runtimes:
@@ -22,6 +32,7 @@ export default defineConfig({
   test: {
     projects: [
       {
+        define: { ...buildDefines },
         test: {
           name: "unit",
           environment: "node",
@@ -63,6 +74,7 @@ export default defineConfig({
         // tests themselves. The root config's plugins are not inherited by a
         // project, and neither are its aliases — hence both below.
         plugins: [react()],
+        define: { ...buildDefines },
         resolve: {
           alias: {
             // Mirrors vite.config.ts and tsconfig.client.json: shadcn writes

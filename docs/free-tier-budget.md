@@ -5,7 +5,7 @@ Limits change. **Re-verify on the vendors' pricing pages before relying on them*
 | Service | Free limit (as understood) | Our expected usage | Headroom |
 |---|---|---|---|
 | Workers requests | 100,000 / day | ~2 agents × ~200 syncs + admin polling ~4,000 (the live feed, and the recap card on every admin page) ≈ 5,000 / day | ~20× |
-| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; a pass is also capped at `SYNC_BYTES_PER_BATCH` (384 KiB), so visits with full notes and answers go 11 a pass at ~3.7 ms median and ≤5.4 ms worst (50 of them, 1.7 MB, were ~10 ms median), and 100 field prospects add ~4 ms; an old build's 200-visit batch peaks at ~11 ms; a cold isolate's first request runs past 10 ms in most rounds at every size (Watch-outs, « Sync through the session ») | **over on the morning pass (field prospects, stops), on an old build's full batch, and on a cold first request** (GH #404, #449, #451) |
+| Worker CPU per request | **10 ms** (hard limit, free plan) | a phone's 50-visit sync batch of bare visits is ~3 ms median and ≤5.7 ms worst warm through the session; a pass is also capped at `SYNC_BYTES_PER_BATCH` (384 KiB), so visits with full notes and answers go 11 a pass at ~3.7 ms median and ≤5.4 ms worst (50 of them, 1.7 MB, were ~10 ms median, GH #450); 100 field prospects add ~1.5 ms since GH #449 (~4 ms before); the server refuses more than 50 visits, since 200 peaked at ~11 ms (GH #451); a cold isolate's first request is 9–12 ms locally for one visit (over 10 ms in some rounds) and 13–17 ms for 50 (over 10 ms in every round), once per isolate; no production figure yet (Watch-outs, « A byte budget per pass », « The cold first request, measured fairly ») | **over at its worst on the morning pass of 100 field prospects and the swipe's stops (GH #577); a cold first request is over 10 ms locally in every round at 50 visits and in some at one visit, unmeasured in production** (GH #404) |
 | Static asset requests | free and unlimited, *if the Worker is not invoked for them* | the whole PWA shell | n/a |
 | D1 storage | 5 GB | < 50 MB in year one | large |
 | D1 rows read | 5 M / day (**enforced**: queries fail past it) | up to a few hundred thousand, most of it the recap card's poll (see watch-outs) | ~10× or more |
@@ -72,6 +72,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   third run, after the script took its tournée from a real swipe instead of a seeded row), so
   INVARIANT 13 holds for the warm case of bare visits (heavier payloads are in « Sync through the session »). A cold isolate's first request runs past 10 ms in every mode,
   `none` included, and the swipe's reaches 33.9 ms: the cold case stays with #404.
+  *Added 2026-10-19: the worst cold round of the first size in each earlier table (one visit, with
+  the default `SIZES`) may include round 0's inflation (Node's own first use, about 5 ms); see
+  « The cold first request, measured fairly ».*
 - **The recap card polls from every admin page** (`GET /api/admin/recap`, docs/api.md › The
   recap card): 240 requests an hour per visible admin tab (ADR-0010), paused on a hidden one.
   Each call reads about the day's received visits plus the `users` rows, so the cost grows
@@ -117,7 +120,7 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   at 250 rows per request ([ingestion](domains/ingestion.md)) and why the session HMAC key is
   cached in module scope rather than imported per request (`hmacKey`, `session.ts`).
 - **A full sync, measured** (GH #102, 2026-10-11). A `POST /api/agent/sync` of
-  `SYNC_VISITS_PER_REQUEST` (200) visits to 200 distinct prospects, with the same shim as
+  200 visits, then the server's accept limit, to 200 distinct prospects, with the same shim as
   `measure-dashboard-cpu.mjs` (now `scripts/worker-cpu-shim.mjs`), on the local seed, alternating
   the two builds three times. Before #102 the status of each prospect was derived with two statements: **439 D1
   statements**, 28.5 ms CPU warm median, 66 ms cold. Now there is one statement per 88 prospects
@@ -143,10 +146,9 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   | 200 | 6.70 (6.68) | 10.77 (11.68) | 19.8–25.4 |
 
   50 keeps the warm worst near 5 ms, where 100's reached 8.2 ms; 25 buys little and doubles the
-  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50) and the server still accepts
-  `SYNC_VISITS_PER_REQUEST` (200), which an old build still sends and which still costs what the
-  table says. If Cloudflare enforces the limit on such a request, it fails: the old build keeps its
-  outbox (INVARIANT 5) and retries with backoff until the PWA update lands, then sends 50 a pass. **A cold isolate's first request can run past 10 ms at any size, one visit included**
+  passes. So the phone sends `SYNC_VISITS_PER_BATCH` (50). Since GH #451 the server accepts no more
+  either: 200 cost what the table says, and the session run below confirmed it over 10 ms. A build
+  from before then gets 426 and updates with its outbox kept (INVARIANT 5). **A cold isolate's first request can run past 10 ms at any size, one visit included**
   (14.3 ms above): that is compile cost, the dashboard's thin case below, and no batch size fixes
   it, so #404's cold case stays open.
 - **Sync through the session, with heavy visits and field prospects** (GH #415, #449, #450, 2026-10-18).
@@ -183,16 +185,101 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   13–14.5 ms worst, and the morning pass (100 prospects, full visits, the swipe's 200 stops) is 18 ms
   median. **A cold first request runs past 10 ms in most rounds at every size**: one visit is 9.2–16.0
   ms. The dedupe lookup of GH #449 is `chunk(keys, 1)`, which is 100 keys a statement (`chunk` takes
-  columns per row), so 100 field prospects are one lookup statement, not 100. Where their cost goes is
-  not isolated; likely their insert, `foldForSearch`, `dedupeKey` and the bigger pull, not the lookup.
+  columns per row), so 100 field prospects are one lookup statement, not 100. Where their cost went,
+  and what fixed it, is in « Field prospects in a sync » below; the 100-prospect rows of this table are
+  the figures from before that fix.
+  The 200-visit row, over 10 ms warm at its worst and 22–27 ms cold, is why the server's accept limit fell
+  to `SYNC_VISITS_PER_BATCH` (GH #451); the script now refuses `SIZES` above 50, as the server does.
+- **Field prospects in a sync** (GH #449, 2026-10-18). The issue assumed the dedupe lookup was the
+  cost; it is one statement for 100 keys. Profiling `PROSPECTS=100 SIZES=50` by phase put the ~4 ms
+  that 100 field prospects add (6.8 ms median against 3.0 ms for the same 50 visits bare) in **the
+  prospect insert, ~2.9 ms**, of which ~2.1 ms was Drizzle's builder assembling 25 statements of 4 rows
+  by 23 columns (~1 µs per bound value). `foldForSearch` plus `dedupeKey` cost 0.13 ms, the lookup
+  0.22 ms, zod about 0.17 ms more and the larger pull about 0.2 ms. The fix is a cheaper insert, not a
+  smaller cap: `insertOrIgnore` (`src/worker/db/client.ts`) builds one `insert ... on conflict do
+  nothing` per 5 rows of the 18 columns the route sets (90 bound parameters, INVARIANT 7), typed from
+  the schema, and sends them in one `d1.batch`. Same machine and method as the entry above (Ryzen 9
+  7900, local seed, 3 alternating rounds of 50 warm runs, D1's time taken out), two runs, the second in
+  brackets, measured back to back on the same checkout:
+
+  | command | build | warm median ms | warm max ms | cold ms (3 rounds) |
+  |---|---|---|---|---|
+  | `PROSPECTS=100 SIZES=50` | before | 6.99 (7.42) | 14.02 (18.06) | 22.6–37.9 (25.3–36.7) |
+  | | after | 4.70 (4.70) | 7.74 (7.07) | 17.0–32.6 (18.8–30.4) |
+  | `SIZES=50` | after | 3.17 (3.33) | 5.19 (6.88) | 13.6–22.6 (14.4–21.9) |
+
+  The warm worst of 100 field prospects on 50 bare visits falls from 13.4–14.5 ms (GH #563) to
+  7.1–7.7 ms, inside 10 ms; the median to 4.7 ms. Bare visits alone are unchanged (the `SIZES=50` row
+  is the same work as before; its 3.2 ms against the 3.0 ms above is run-to-run noise). The cold first
+  request stays past 10 ms (GH #404), and the visit insert is the same builder: its cost is a
+  follow-up, not part of this entry. A local run cannot say how Cloudflare meters it.
+- **The cold first request, measured fairly** (GH #404, 2026-10-19). Every earlier cold figure above came
+  from `scripts/measure-sync-cpu.mjs`, whose round 0 of the first size was also the Node process's
+  first `Request` body read, first WebCrypto HMAC and first call into the shim: Node compiles its own
+  JS `Request`, streams and WebCrypto, which workerd implements natively, so a Cloudflare isolate does
+  not pay it. Later sizes ran in an already-warm process (and `TOURNEE=pull` was warmed by its seed
+  request), so the fix changes only the first size's round-0 cold sample: about 5 ms in the table
+  below (one visit, 16.7 to 11.8), about 6–7 ms in the fresh-process harness (18.6 against 11.7). The
+  script now imports the bundle once under `?warmup` and
+  runs 3 untimed requests first (after the `TOURNEE=pull` seed), so every timed cold round is a fresh
+  import's first request in a warm process. Ryzen 9 7900 (`lscpu`: AMD Ryzen 9 7900 12-Core), Node v24.21.0 (a fresh Node import is a proxy for workerd's cold request, not the same thing), local
+  seed (303 prospects, 1,689 visits, plus the script's 200 assigned ones), D1's time taken out,
+  `SIZES=1,25,50 ROUNDS=5` (5 cold rounds, 5 x 50 warm runs a size), two runs, the second in brackets,
+  and the same command on the script before the fix, on the same checkout:
+
+  | visits | warm median ms | warm max ms | cold ms (5 rounds), fixed | cold ms (5 rounds), before |
+  |---|---|---|---|---|
+  | 1 | 1.48 (1.50) | 4.20 (2.92) | 9.2–11.8 (9.4–11.7) | 9.5–16.7 |
+  | 25 | 2.33 (2.27) | 4.29 (4.71) | 9.2–11.1 (10.3–11.3) | 10.8–12.9 |
+  | 50 | 3.09 (3.01) | 5.42 (5.61) | 13.0–16.5 (13.6–15.9) | 13.4–15.2 |
+
+  `SIZES=1,50 ROUNDS=5` gives 9.2–11.5 and 13.7–15.0. No cold round is more than 3 ms above its size's
+  cold median. The warm figures are those of the earlier entries (same seed, 200 assigned prospects,
+  same flags). The cold excess over warm is 8–10 ms at one visit and 10–13 ms at 50, local, once per
+  isolate.
+
+  What the investigation found (a throwaway harness, not committed, running this script's request and
+  shim: one fresh Node process per sample, an untimed import plus 3 requests to warm Node and the shim,
+  then a second import as the cold isolate; 8 samples per cell, builds alternated as in GH #341):
+
+  | build | cold 1 visit | cold 50 visits | warm median 1 / 50 |
+  |---|---|---|---|
+  | `main` | 11.7 ms (10.6–12.5) | 15.8 (14.6–16.6) | 1.6 / 3.3 |
+  | pull selects the 14 wire columns | 11.2 (10.7–12.1) | 14.6 (12.8–16.0) | 1.5 / 3.3 |
+  | pull read raw (`toSQL` + `D1.raw()`) | 9.3 (8.3–10.3) | 15.1 (14.5–16.3) | 1.3 / 3.1 |
+
+  - **Node's share.** A truly fresh process measures 18.6 ms for one visit (8 samples): about 6 ms of it
+    is Node compiling its own JS `Request`, streams and WebCrypto, which is why the script warms first.
+  - **No GH #341-style fixed cost.** Hono's router, `getDb`, the session HMAC key and zod's JIT are each
+    under 0.3 ms or absent: zod/mini objects never JIT. Re-importing the same source does not reuse
+    compiled code (same-source and distinct-source re-imports give equal figures), so the script's
+    fresh imports are honest cold samples.
+  - **The excess is the sync's own code running once in V8's interpreter.** Profiled, that is Drizzle's
+    SQL builder and `is()` checks (about 40 %, mostly the 50-row visit insert, GH #565), the pull's row
+    mapping (about 1.9 ms at 272 rows), then zod and Hono.
+  - **Two measured options, not shipped.** Selecting only the 14 columns `toWireProspect` keeps, instead
+    of `openAssignedProspects`' 23 (`src/worker/round.ts`, also used by `routes/admin.ts`), moves the
+    cold medians by about 0.5 ms at one visit and 1.2 ms at 50. Reading the pull raw (`toSQL` +
+    `D1.raw()`) by about 2.4 ms at one visit and 0.7 ms at 50. Only the raw read at one visit (8.3–10.3
+    against `main`'s 10.6–12.5) separates from `main`; the other three differences are inside the 8-sample
+    ranges' overlap. ADR-0005 makes Drizzle the access layer and allows the exception only for a hot
+    multi-row insert (`insertOrIgnore`), so the raw read needs an amendment first.
+  - **Cloudflare's limits page** says: "Each isolate has some built-in flexibility to allow for cases
+    where your Worker infrequently runs over the configured limit."
+    (https://developers.cloudflare.com/workers/platform/limits/#cpu-time, read 2026-10-18.) How often
+    this app's isolates start cold has not been measured, and the quote does not exempt cold starts.
+
+  **GH #404 stays open until Cloudflare's p50, p99 and max CPU time for `POST /api/agent/sync` are
+  pasted here**: no production figure exists, and a local run cannot say how Cloudflare meters it.
+  `scripts/measure-dashboard-cpu.mjs` gates on a cold sample that is its process's first request, with
+  the same inflation; it is tracked apart (GH #568).
 - **A byte budget per pass** (GH #450, 2026-10-18). `SYNC_VISITS_PER_BATCH` bounds the count, so
   `SYNC_BYTES_PER_BATCH` (384 KiB, `src/shared/constants.ts`) bounds the bytes: `serializeWithinCap`
   (`src/client/field/sync.ts`) fills a pass with as many visits as fit, always sends the first visit
   whatever its size (INVARIANT 5), and never drops field prospects. `MAX_REQUEST_BYTES` stays 2 MiB: one
-  worst-case visit is ~105 KiB, so the server cap never binds a current phone, and an old build's passes
-  still cost what the entries above say. No contract change, so no version bump. Same machine, seed and
-  script as the entry above. `PAYLOAD=full`, warm, 3 rounds × 50 runs. Two ways to keep the harness's
-  garbage out of the timed window, because **the probe recorded above was wrong**: a full
+  worst-case visit is ~105 KiB, so the server cap never binds a current phone. A phone-side budget, so no
+  contract change and no version bump. Same machine, seed and script as « Sync through the session ». `PAYLOAD=full`, warm, 3 rounds × 50 runs. Two ways to keep the harness's
+  garbage out of the timed window, because **the probe recorded in « Sync through the session » was wrong**: a full
   `gc()` before each request (`node --expose-gc` as first used) adds ~3.5 ms to *every* request, a one-visit
   one included (bare 1 / 50 visits: 5.1 / 8.3 ms median against 1.5 / 3.0 without), since it leaves the next
   request cold. So « still over 10 ms with GC taken out » at 50 full visits was partly the probe.
@@ -217,10 +304,11 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   13.8 ms worst is one outlier in a run of 40 that neither neighbouring size repeats. `PAYLOAD=max` (105
   KiB a visit) at the budget is 3 visits, 315 KiB: 2.6–2.7 ms median, 4.7 ms worst, one `SETTLE=1` run
   and one minor-GC run, not two. Bare visits are unchanged (50 visits, 8.7 KiB, 3.0 ms median). **The
-  morning pass is not a byte problem**: `PROSPECTS=100 PAYLOAD=full TOURNEE=swipe` is 8.8–10.2 ms median
-  with minor GC and 12.1–13.9 ms with `SETTLE=1` (one run each), the same with 1 visit as with 10, so the
-  100 field prospects and 200 stops cost it, not the visits' bytes (GH #449). A cold first request is
-  still past 10 ms at every size (10–16 ms for one visit). The phone now drains heavy visits 11 a pass:
+  morning pass is not a byte problem**: `PROSPECTS=100 PAYLOAD=full TOURNEE=swipe`, after GH #449's fix
+  (2026-10-19), is 6.3–6.4 ms median at 1 visit and 7.8 at 9 (363 KiB) with minor GC, two runs, and
+  9.0 / 10.4 ms with `SETTLE=1`, one run; its worst is 11–15 ms with `SETTLE=1`. 1 visit costs almost as
+  much as 9, so the 100 field prospects and the swipe's 200 stops cost it, not the visits' bytes (GH #577). The cold first request is
+  « The cold first request, measured fairly »'s, which the budget does not change. The phone now drains heavy visits 11 a pass:
   `MAX_DRAIN_PASSES` comes from the count, so 1,200 of them take more than one trigger and the rest wait
   for the next heartbeat. Local hardware is not Cloudflare's meter: keep headroom.
 - **Tableau de bord's CPU, measured** (GH #113, 2026-09-26). `node scripts/measure-dashboard-cpu.mjs`

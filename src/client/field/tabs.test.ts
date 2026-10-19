@@ -2,43 +2,28 @@ import { describe, expect, it } from "vitest";
 import { fieldTabs, isCurrentTab } from "./tabs";
 
 describe("fieldTabs", () => {
-  it("gives an agent four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
-    expect(fieldTabs({ adminOnline: false }).map((t) => t.path)).toEqual([
+  it("gives every role four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
+    expect(fieldTabs().map((t) => t.path)).toEqual([
       "/tournee",
       "/tournee/carte",
       "/tournee/carnet",
       "/tournee/nouveau",
     ]);
-  });
-
-  it("appends Tableau de bord last for an admin", () => {
-    expect(fieldTabs({ adminOnline: true }).map((t) => t.path)).toEqual([
-      "/tournee",
-      "/tournee/carte",
-      "/tournee/carnet",
-      "/tournee/nouveau",
-      "/admin",
-    ]);
-  });
-
-  it("never adds a sixth tab", () => {
-    expect(fieldTabs({ adminOnline: true })).toHaveLength(5);
   });
 
   it("gives every tab a non-empty label and aria-label", () => {
-    for (const tab of fieldTabs({ adminOnline: true })) {
+    for (const tab of fieldTabs()) {
       expect(tab.label.length).toBeGreaterThan(0);
       expect(tab.ariaLabel.length).toBeGreaterThan(0);
     }
   });
 
   it("marks `end` true only for the index tab /tournee, so NavLink's own matcher agrees with isCurrentTab", () => {
-    expect(fieldTabs({ adminOnline: true }).map((t) => [t.path, t.end])).toEqual([
+    expect(fieldTabs().map((t) => [t.path, t.end])).toEqual([
       ["/tournee", true],
       ["/tournee/carte", false],
       ["/tournee/carnet", false],
       ["/tournee/nouveau", false],
-      ["/admin", false],
     ]);
   });
 });
@@ -62,10 +47,6 @@ describe("isCurrentTab", () => {
   it("Nested add route: /tournee/nouveau/ or deeper still matches Ajouter", () => {
     expect(isCurrentTab("/tournee/nouveau/", "/tournee/nouveau")).toBe(true);
     expect(isCurrentTab("/tournee/nouveau/deep/er", "/tournee/nouveau")).toBe(true);
-  });
-
-  it("Admin online: Tableau de bord is not current on /tournee", () => {
-    expect(isCurrentTab("/tournee", "/admin")).toBe(false);
   });
 
   it("On Carte: /tournee/carte is Carte current, Tournée is not (spec-gh-121)", () => {

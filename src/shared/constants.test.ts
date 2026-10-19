@@ -12,7 +12,6 @@ import {
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
   SYNC_VISITS_PER_BATCH,
-  SYNC_VISITS_PER_REQUEST,
   TOURNEE_STOP_NUMBER_MAX,
   isOpen,
 } from "./constants";
@@ -118,8 +117,6 @@ describe("MAX_REQUEST_BYTES", () => {
     expect(bytes(script)).toBeLessThan(MAX_REQUEST_BYTES);
   });
 
-  // At the server's accept limit, not the phone's batch: an old build still
-  // sends SYNC_VISITS_PER_REQUEST visits (GH #404).
   it("fits a full sync of maxed prospects, maxed notes and a 50-question script answered", () => {
     const now = Date.now();
     const payload = {
@@ -134,7 +131,7 @@ describe("MAX_REQUEST_BYTES", () => {
         phone: maxShortText,
         createdAt: now,
       })),
-      visits: Array.from({ length: SYNC_VISITS_PER_REQUEST }, () => ({
+      visits: Array.from({ length: SYNC_VISITS_PER_BATCH }, () => ({
         id: crypto.randomUUID(),
         prospectId: crypto.randomUUID(),
         visitedAt: now,
@@ -170,16 +167,10 @@ describe("MAX_REQUEST_BYTES", () => {
 });
 
 /**
- * GH #404: the phone's batch and the server's accept limit are two constants.
- * A batch above the accept limit would be a request the server always refuses,
- * which keeps the outbox for ever (INVARIANT 5).
+ * GH #450: the phone's byte budget sits under the server's byte cap. A pass filled
+ * past the cap would be a 413 that keeps the outbox for ever (INVARIANT 5).
  */
-describe("sync visit limits", () => {
-  it("never sends more visits per pass than the server accepts", () => {
-    expect(SYNC_VISITS_PER_BATCH).toBeLessThanOrEqual(SYNC_VISITS_PER_REQUEST);
-  });
-
-  // GH #450: the same for bytes. A pass filled to the budget must be one the server reads.
+describe("sync byte budget", () => {
   it("never fills a pass past the bytes the server reads", () => {
     expect(SYNC_BYTES_PER_BATCH).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
   });
