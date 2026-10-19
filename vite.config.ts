@@ -68,7 +68,7 @@ export default defineConfig({
         lang: "fr",
         start_url: "/",
         // Not "standalone", which keeps Android's three navigation buttons.
-        display: "fullscreen",
+        display: "standalone",
         // The icons' own field: any other white shows the icon's square on
         // Android's splash.
         background_color: "#ffffff",
