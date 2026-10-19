@@ -399,4 +399,58 @@ describe("with a position", () => {
     fireEvent.click(swipe(), { detail: 0 });
     await waitFor(() => expect(syncNow).toHaveBeenCalled());
   });
+
+  it("numbers from where the agent is at the swipe, not from where the gate passed", async () => {
+    const snapshot = [stop(1), stop(2), stop(3)];
+    renderStart(snapshot);
+    await waitFor(() => expect(swipe().getAttribute("aria-disabled")).toBeNull());
+
+    // Ten minutes on, at the far end of the line: stop 3 is now the nearest.
+    setGeolocation({ lat: 50.84 + 0.004, lng: 4.35 });
+    fireEvent.click(swipe(), { detail: 0 });
+    await waitFor(() => expect(syncNow).toHaveBeenCalled());
+
+    const stops = (await fieldDb.outboxStops.toArray()).sort((a, b) => a.number - b.number);
+    expect(stops.map((s) => s.prospectId)).toEqual(
+      [snapshot[2], snapshot[1], snapshot[0]].map((s) => s?.id),
+    );
+  });
+
+  it("numbers from the gate's point when the swipe's reading times out", async () => {
+    const snapshot = [stop(1), stop(2), stop(3)];
+    renderStart(snapshot);
+    await waitFor(() => expect(swipe().getAttribute("aria-disabled")).toBeNull());
+
+    setGeolocation("timeout");
+    fireEvent.click(swipe(), { detail: 0 });
+    await waitFor(() => expect(syncNow).toHaveBeenCalled());
+
+    const stops = (await fieldDb.outboxStops.toArray()).sort((a, b) => a.number - b.number);
+    expect(stops.map((s) => s.prospectId)).toEqual(snapshot.map((s) => s.id));
+  });
+
+  it("holds « Démarrage… » while the swipe's reading is outstanding, and queues one tournée", async () => {
+    renderStart([stop(1), stop(2)]);
+    await waitFor(() => expect(swipe().getAttribute("aria-disabled")).toBeNull());
+
+    let answer: PositionCallback = () => {};
+    vi.spyOn(navigator.geolocation, "getCurrentPosition").mockImplementation((ok) => {
+      answer = ok;
+    });
+    fireEvent.click(swipe(), { detail: 0 });
+
+    await waitFor(() => expect(swipe().textContent).toContain(copy.start.starting));
+    fireEvent.click(swipe(), { detail: 0 });
+    expect(await fieldDb.outboxTournees.count()).toBe(0);
+
+    await act(async () =>
+      answer({
+        coords: { latitude: HERE.lat, longitude: HERE.lng, accuracy: 20 },
+        timestamp: Date.now(),
+      } as GeolocationPosition),
+    );
+    await waitFor(() => expect(syncNow).toHaveBeenCalled());
+    expect(await fieldDb.outboxTournees.count()).toBe(1);
+    expect(syncNow).toHaveBeenCalledTimes(1);
+  });
 });

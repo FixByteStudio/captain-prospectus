@@ -3,8 +3,9 @@
  *
  * It previews the day, it does not start it: the stops are what the swipe would
  * freeze now, with no number (numbers do not exist yet) and nothing to tap. The
- * swipe numbers them nearest-next from the reading, queues the tournée and its
- * stops in the outbox, and opens Tournée. The sync stays on: the band, the dot
+ * swipe numbers them nearest-next from a reading taken at the swipe (the gate's
+ * point when that fails), queues the tournée and its stops in the outbox, and
+ * opens Tournée. The sync stays on: the band, the dot
  * and the strip are the frame's, not this screen's. Until a reading is precise
  * enough, the location dialog holds the screen (`useLocationGate`).
  */
@@ -36,7 +37,7 @@ export function StartScreen({
   snapshot: readonly SnapshotProspect[];
   adminOnline: boolean;
 }) {
-  const { status, point, activate } = useLocationGate();
+  const { status, point, swipePoint, activate } = useLocationGate();
   const swipeRef = useRef<HTMLButtonElement | null>(null);
   const { identity, confirmed, syncNow } = useSyncState();
   const navigate = useNavigate();
@@ -75,7 +76,9 @@ export function StartScreen({
 
     const startedAt = Date.now();
     const tourneeId = crypto.randomUUID();
-    const stops = numberStops(snapshot, point).map(({ item, number }) => ({
+    // Never rejects and never blocks the start: at worst it is the gate's point.
+    const from = (await swipePoint()) ?? point;
+    const stops = numberStops(snapshot, from).map(({ item, number }) => ({
       id: crypto.randomUUID(),
       tourneeId,
       prospectId: item.id,

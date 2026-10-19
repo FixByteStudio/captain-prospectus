@@ -4,7 +4,7 @@
  *
  * Module memory only: not React state, Dexie or localStorage, so a reload
  * forgets it and nothing about it outlives the page on the device's disk. It
- * never calls geolocation; `useAgentPosition` is the only caller of that, and
+ * never calls geolocation; `useAgentPosition.ts` is the only caller of that, and
  * sync only reads what the hook already took.
  *
  * A reading is stamped with the confirmed identity active when it was taken.
