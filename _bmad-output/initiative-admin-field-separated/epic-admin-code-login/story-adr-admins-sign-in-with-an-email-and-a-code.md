@@ -33,3 +33,8 @@ Verify: The ADR is proposed in a pull request, ADR-0029 links to it where it is 
 ## Plan
 
 <!-- Filled in by the coding agent; never sent to a tracker. -->
+
+- ADR-0038 (`docs/adr/0038-admins-sign-in-with-an-email-and-a-code.md`), status `proposed`.
+- Open question answered in the ADR, decision 3: break-glass is tried first, on the raw text, then the field is spent as a code.
+- The ADR also amends decision 5: `passphrase` becomes `kind: "admin"` (email + code), and each kind serves one role.
+- ADR-0029's status line and `docs/adr/README.md` link to it.
