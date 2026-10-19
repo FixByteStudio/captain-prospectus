@@ -141,10 +141,7 @@ export function AccountMenu({
         <p className="text-overline text-muted-foreground px-2.5 pt-2 pb-1.5 uppercase">
           {copy.accountCard.appearance}
         </p>
-        <FieldRadioGroup
-          label={copy.accountCard.appearance}
-          className="flex px-2.5 pb-2"
-        >
+        <FieldRadioGroup label={copy.accountCard.appearance} className="flex px-2.5 pb-2">
           {CHOICES.map(({ choice: value, label, icon: Icon }) => (
             <FieldRadioOption
               key={value}
@@ -161,7 +158,9 @@ export function AccountMenu({
         </FieldRadioGroup>
         <Divider />
 
-        <p className="text-meta text-muted-foreground px-2.5 pt-2 pb-1.5">{copy.accountCard.version(BUILD)}</p>
+        <p className="text-meta text-muted-foreground px-2.5 pt-2 pb-1.5">
+          {copy.accountCard.version(BUILD)}
+        </p>
       </div>
     </>
   );
