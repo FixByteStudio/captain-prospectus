@@ -1,6 +1,6 @@
 # ADR-0019: Keep the admin chunk out of the service worker precache
 
-- Status: accepted
+- Status: accepted — amended by [ADR-0037](0037-admins-leave-the-field-side.md): an offline admin sees a Hors ligne screen, not the field side
 - Date: 2026-09-22
 - Deciders: owner
 
