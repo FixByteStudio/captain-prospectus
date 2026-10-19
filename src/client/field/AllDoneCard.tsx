@@ -22,7 +22,7 @@ export function AllDoneCard({ total }: { total: number }) {
         <p className="text-muted-foreground mt-1 text-base">{copy.today.findInCarnet}</p>
       )}
       <Link
-        to="/tournee/carnet"
+        to="/round/logbook"
         className={buttonVariants({ variant: "secondary", size: "touch", className: "mt-4" })}
       >
         {copy.today.openCarnet}

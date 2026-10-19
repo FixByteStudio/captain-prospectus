@@ -100,7 +100,7 @@ export function AddProspectScreen() {
       }
 
       void syncNow();
-      await navigate("/tournee", {
+      await navigate("/round", {
         replace: true,
         state: { added: true, addedAt: parsed.data.createdAt },
       });

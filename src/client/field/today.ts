@@ -21,5 +21,5 @@ export function navigationUrl(item: {
 
 /** The visit form for a stop — one spelling for the tap and the swipe (GH #120). */
 export function visitPath(id: string): string {
-  return `/tournee/${id}`;
+  return `/round/${id}`;
 }

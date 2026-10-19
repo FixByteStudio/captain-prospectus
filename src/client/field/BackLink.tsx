@@ -17,7 +17,7 @@ export const BACK_LINK_CLASS =
 /** `fromCarnet`: the form was opened from a Carnet row, so it goes back there. */
 export function BackLink({ fromCarnet = false }: { fromCarnet?: boolean }) {
   return (
-    <Link to={fromCarnet ? "/tournee/carnet" : "/tournee"} className={BACK_LINK_CLASS}>
+    <Link to={fromCarnet ? "/round/logbook" : "/round"} className={BACK_LINK_CLASS}>
       <ArrowLeftIcon aria-hidden className="size-4" />
       {fromCarnet ? copy.visit.backToCarnet : copy.visit.back}
     </Link>

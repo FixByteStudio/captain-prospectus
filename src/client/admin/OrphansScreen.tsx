@@ -96,7 +96,7 @@ export function OrphansScreen() {
                   <p className="text-foreground font-medium">{copy.orphans.empty}</p>
                   <p>{copy.orphans.emptyHint}</p>
                   <Button variant="outline" size="sm" asChild>
-                    <Link to="/admin/visites">{copy.orphans.emptyCta}</Link>
+                    <Link to="/admin/visits">{copy.orphans.emptyCta}</Link>
                   </Button>
                 </EmptyTile>
               ) : (

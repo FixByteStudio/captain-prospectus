@@ -150,16 +150,27 @@ describe("AdminApp", () => {
     expect(line.closest("[data-slot=sidebar-footer]")).toBeTruthy();
   });
 
-  it("registers /admin/agents: the Agents screen opens", async () => {
-    renderAdmin("/admin/agents");
+  it("registers /admin/users: the Agents screen opens", async () => {
+    renderAdmin("/admin/users");
 
     expect(await screen.findByRole("heading", { level: 2, name: copy.agents.title })).toBeTruthy();
   });
 
-  it("registers /admin/tournee: the round screen opens, asking for an agent", async () => {
-    renderAdmin("/admin/tournee");
+  it("registers /admin/round: the round screen opens, asking for an agent", async () => {
+    renderAdmin("/admin/round");
 
     expect(screen.getByRole("heading", { level: 2, name: copy.round.title })).toBeTruthy();
+  });
+
+  it.each([
+    ["/admin/duplicates", () => copy.duplicates.title],
+    ["/admin/visits", () => copy.visits.title],
+    ["/admin/orphans", () => copy.orphans.title],
+  ])("registers %s: its screen opens, not « Page introuvable. » (#581)", async (path, title) => {
+    renderAdmin(path);
+
+    expect(await screen.findByRole("heading", { level: 2, name: title() })).toBeTruthy();
+    expect(screen.queryByText(copy.errors.notFound)).toBeNull();
   });
 
   it("answers an unknown admin path with « Page introuvable. » inside the frame (#90)", () => {
@@ -169,6 +180,13 @@ describe("AdminApp", () => {
     expect(screen.queryByRole("heading", { name: copy.dashboard.title })).toBeNull();
     // Still the admin frame: the sidebar is there, and nothing in it is current.
     expect(sidebarLink(copy.nav.dashboard).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("answers an old French admin slug with « Page introuvable. », not a redirect (#581)", () => {
+    renderAdmin("/admin/doublons");
+
+    expect(screen.getByText(copy.errors.notFound)).toBeTruthy();
+    expect(sidebarLink(copy.nav.duplicates).getAttribute("aria-current")).toBeNull();
   });
 
   it("counts the whole repair queue in the sidebar badge, not its first page (#159)", async () => {

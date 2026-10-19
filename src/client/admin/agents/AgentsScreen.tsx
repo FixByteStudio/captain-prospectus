@@ -23,7 +23,7 @@ import type { UsersActions } from "./UsersTable";
 
 const t = copy.agents;
 
-/** `/admin/agents` — docs/design.md › Agents. `email` is the signed-in admin. */
+/** `/admin/users` — docs/design.md › Agents. `email` is the signed-in admin. */
 export function AgentsScreen({ email }: { email: string }) {
   const query = useUsers();
   const update = useUpdateUser();
@@ -89,7 +89,7 @@ export function AgentsScreen({ email }: { email: string }) {
     }
     toast.success(t.toast.roleChanged);
     // /admin no longer answers them: land on the round, re-reading who they are.
-    if (user.email === email && role === "agent") window.location.assign("/tournee");
+    if (user.email === email && role === "agent") window.location.assign("/round");
   };
 
   const reactivate = async (user: User) => {

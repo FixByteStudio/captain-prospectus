@@ -112,7 +112,7 @@ function viewportController(initialMobile: boolean) {
 
 function renderScreen() {
   return render(
-    <MemoryRouter initialEntries={["/tournee/carte"]}>
+    <MemoryRouter initialEntries={["/round/map"]}>
       <CarteScreen />
     </MemoryRouter>,
   );
@@ -156,7 +156,7 @@ afterEach(() => {
 });
 
 describe("CarteScreen, phone (< 768px)", () => {
-  it("shows the next stop in the sheet, gold number, Y aller and Visiter to /tournee/:id (matrix: Phone, open)", () => {
+  it("shows the next stop in the sheet, gold number, Y aller and Visiter to /round/:id (matrix: Phone, open)", () => {
     setViewport(true);
     const stop = item();
     round.current = { ...round.current, stops: [stop] };
@@ -169,7 +169,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(within(sheet).getByText(metaText(stop))).toBeTruthy();
 
     const visit = within(sheet).getByRole("link", { name: copy.today.visit });
-    expect(visit.getAttribute("href")).toBe(`/tournee/${stop.id}`);
+    expect(visit.getAttribute("href")).toBe(`/round/${stop.id}`);
     expect(within(sheet).getByRole("link", { name: copy.today.navigate })).toBeTruthy();
 
     // No tablet list pane alongside the sheet, and no duplicate "Visiter".
@@ -210,7 +210,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     // The visit synced away: stop3 is no longer in `list.now`.
     round.current = { ...round.current, stops: [stop1] };
     rerender(
-      <MemoryRouter initialEntries={["/tournee/carte"]}>
+      <MemoryRouter initialEntries={["/round/map"]}>
         <CarteScreen />
       </MemoryRouter>,
     );
@@ -286,7 +286,7 @@ describe("CarteScreen, phone (< 768px)", () => {
     expect(screen.queryByTestId("round-map")).toBeNull();
     expect(RoundMap).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: copy.carte.showList }).getAttribute("href")).toBe(
-      "/tournee",
+      "/round",
     );
     const sheet = screen.getByRole("region", { name: copy.carte.sheetLabel });
     expect(within(sheet).getByText(stop.name)).toBeTruthy();
@@ -458,7 +458,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
     expect(screen.queryByTestId("round-map")).toBeNull();
     expect(RoundMap).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: copy.carte.showList }).getAttribute("href")).toBe(
-      "/tournee",
+      "/round",
     );
   });
 
@@ -472,7 +472,7 @@ describe("CarteScreen, tablet (>= 768px)", () => {
 
     round.current = { ...round.current, loaded: false };
     rerender(
-      <MemoryRouter initialEntries={["/tournee/carte"]}>
+      <MemoryRouter initialEntries={["/round/map"]}>
         <CarteScreen />
       </MemoryRouter>,
     );

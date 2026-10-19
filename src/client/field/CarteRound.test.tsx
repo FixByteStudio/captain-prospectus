@@ -68,7 +68,7 @@ const visit = (over: Partial<Visit> = {}): Visit => ({
 
 function renderScreen() {
   return render(
-    <MemoryRouter initialEntries={["/carte"]}>
+    <MemoryRouter initialEntries={["/round/map"]}>
       <CarteScreen />
     </MemoryRouter>,
   );

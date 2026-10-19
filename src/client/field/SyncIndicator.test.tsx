@@ -78,7 +78,7 @@ function renderStrip(
 ) {
   syncState.current = state;
   const { container } = render(
-    <MemoryRouter initialEntries={["/tournee"]}>
+    <MemoryRouter initialEntries={["/round"]}>
       <LeaveGuardProvider>
         {dirty && <DirtyForm />}
         <SyncStrip pwa={pwa} />
@@ -113,15 +113,15 @@ describe("SyncStrip", () => {
 
   it("opens /login from the strip, online or not", async () => {
     const user = userEvent.setup();
-    const location = stubLocation("https://app.example/tournee");
+    const location = stubLocation("https://app.example/round");
     const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     renderStrip({ status: "unauthorized", running: false, pending: 3 });
-    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+    expect(screen.getByTestId("where").textContent).toBe("/round");
 
     await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
     expect(screen.getByTestId("where").textContent).toBe("/login");
     // A router navigation: the page itself is never reloaded.
-    expect(location.href).toBe("https://app.example/tournee");
+    expect(location.href).toBe("https://app.example/round");
 
     onLine.mockReturnValue(false);
     cleanup();
@@ -136,11 +136,11 @@ describe("SyncStrip", () => {
 
     await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
     expect(screen.getByRole("alertdialog")).toBeTruthy();
-    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+    expect(screen.getByTestId("where").textContent).toBe("/round");
 
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+    expect(screen.getByTestId("where").textContent).toBe("/round");
 
     await user.click(screen.getByRole("button", { name: copy.sync.reconnect }));
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
@@ -198,7 +198,7 @@ describe("SyncStrip", () => {
   it("asks before reloading over a dirty form when no build is waiting yet (#74)", async () => {
     const user = userEvent.setup();
     const reload = vi.fn();
-    stubLocation("https://app.example/tournee", reload);
+    stubLocation("https://app.example/round", reload);
     renderStrip({ status: "upgrade", running: false, pending: 1 }, PWA, { dirty: true });
 
     await user.click(screen.getByRole("button", { name: copy.update.apply }));

@@ -96,11 +96,11 @@ const queued = (prospectId: string, over: Partial<StoredVisit> = {}): StoredVisi
 
 function renderCarnet(state?: object) {
   return render(
-    <MemoryRouter initialEntries={[{ pathname: "/tournee/carnet", state }]}>
+    <MemoryRouter initialEntries={[{ pathname: "/round/logbook", state }]}>
       <Routes>
-        <Route path="/tournee" element={<TodayScreen />} />
-        <Route path="/tournee/carnet" element={<CarnetScreen />} />
-        <Route path="/tournee/:id" element={<VisitScreen />} />
+        <Route path="/round" element={<TodayScreen />} />
+        <Route path="/round/logbook" element={<CarnetScreen />} />
+        <Route path="/round/:id" element={<VisitScreen />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -169,7 +169,7 @@ describe("CarnetScreen", () => {
 
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
     expect(within(rows()[0] as HTMLElement).getByText(copy.today.notSynced)).toBeTruthy();
-    expect(rows()[0]?.getAttribute("href")).toBe(`/tournee/${IDS[2]}`);
+    expect(rows()[0]?.getAttribute("href")).toBe(`/round/${IDS[2]}`);
   });
 
   it("counts a visit both sides list once, and not pending", async () => {
@@ -301,7 +301,7 @@ describe("CarnetScreen", () => {
     // The counter as the round screen renders it, before and after the repeat visit.
     const renderedCounter = async () => {
       const { unmount } = render(
-        <MemoryRouter initialEntries={["/tournee"]}>
+        <MemoryRouter initialEntries={["/round"]}>
           <TodayScreen />
         </MemoryRouter>,
       );

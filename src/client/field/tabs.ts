@@ -18,7 +18,7 @@ export type FieldTab = {
   /**
    * `FieldTabs` passes this straight to `NavLink`'s own `end` prop, so its
    * built-in `isActive`/`aria-current` matcher agrees with `isCurrentTab`
-   * exactly — true only for the index tab `/tournee`, which must not also
+   * exactly — true only for the index tab `/round`, which must not also
    * match its own subtree.
    */
   end: boolean;
@@ -31,28 +31,28 @@ export type FieldTab = {
 export function fieldTabs(): readonly FieldTab[] {
   return [
     {
-      path: "/tournee",
+      path: "/round",
       label: copy.nav.tabs.today,
       ariaLabel: copy.nav.tabs.today,
       icon: Route,
       end: true,
     },
     {
-      path: "/tournee/carte",
+      path: "/round/map",
       label: copy.nav.tabs.map,
       ariaLabel: copy.nav.tabs.map,
       icon: MapIcon,
       end: false,
     },
     {
-      path: "/tournee/carnet",
+      path: "/round/logbook",
       label: copy.nav.tabs.carnet,
       ariaLabel: copy.nav.tabs.carnet,
       icon: NotebookPen,
       end: false,
     },
     {
-      path: "/tournee/nouveau",
+      path: "/round/new",
       label: copy.nav.tabs.add,
       ariaLabel: copy.nav.tabs.add,
       icon: MapPinPlus,
@@ -62,12 +62,12 @@ export function fieldTabs(): readonly FieldTab[] {
 }
 
 /**
- * `/tournee` is an index route, so it must match only itself — the admin
+ * `/round` is an index route, so it must match only itself — the admin
  * sidebar's "path, or anything under it" rule (`admin/nav.ts`'s `isCurrent`)
- * would also light it up on `/tournee/nouveau` and on a visit. Every other
+ * would also light it up on `/round/new` and on a visit. Every other
  * tab's path is a real subtree, so it keeps that rule.
  */
 export function isCurrentTab(pathname: string, path: string): boolean {
-  if (path === "/tournee") return pathname === "/tournee";
+  if (path === "/round") return pathname === "/round";
   return pathname === path || pathname.startsWith(`${path}/`);
 }

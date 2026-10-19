@@ -1,7 +1,7 @@
 # Field operations
 
 ## The gates and the swipe
-Every `/tournee/*` route sits behind a gate ([ADR-0036](../adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › The gates, screens in [design.md](../design.md#before-the-swipe)). `decideTourneeGate` (`src/client/field/tournee-gate.ts`) reads Dexie live and shows the first that applies:
+Every `/round/*` route sits behind a gate ([ADR-0036](../adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md) › The gates, screens in [design.md](../design.md#before-the-swipe)). `decideTourneeGate` (`src/client/field/tournee-gate.ts`) reads Dexie live and shows the first that applies:
 - **Open:** a tournée exists for today's Brussels day, either pulled (`tournees.dayStart` is today's midnight) or queued by this identity (`outboxTournees`, the Brussels day of `startedAt`). A second phone or a reinstall opens straight into the app. The pulled one decides when both exist: the server returns the earliest swipe of the day (by the phone's start time).
 - **Never loaded** (no `lastSyncAt` in `meta`) and **nothing assigned** (pulled, and the snapshot below is empty): a message, no tab bar.
 - **Start screen:** the date, the snapshot's stop count and a name-sorted preview of seven, then the swipe. No tab bar. The band, the sync dot and the unsent strip stay on every gate screen: the sync is never gated.
@@ -123,7 +123,7 @@ day as the list.
   again. The admin's figures count the same unit: door-days ([api](../api.md#the-dashboard)).
 
 **Carnet (GH #504; ADR-0036 › Placement and Carnet).** The third tab,
-`/tournee/carnet`, lists today's door-days newest first: what is done, where
+`/round/logbook`, lists today's door-days newest first: what is done, where
 Tournée shows what is left. `carnetEntries` in `tournee-stops.ts` builds the rows
 from the same inputs and period as the counter, and `useRound` exposes them from
 its one snapshot, so the two cannot disagree.

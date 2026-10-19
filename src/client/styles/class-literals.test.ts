@@ -10,10 +10,10 @@ import { classLiterals } from "./class-literals";
  */
 describe("classLiterals", () => {
   it("keeps a /* inside a string from reading as a comment", () => {
-    // The original bug: `useMatch("/tournee/*")` opened a comment that ate
+    // The original bug: `useMatch("/round/*")` opened a comment that ate
     // every className after it.
-    const source = `useMatch("/tournee/*");\nconst a = "safe-bottom px-4 py-6";`;
-    expect(classLiterals(source)).toEqual(["/tournee/*", "safe-bottom px-4 py-6"]);
+    const source = `useMatch("/round/*");\nconst a = "safe-bottom px-4 py-6";`;
+    expect(classLiterals(source)).toEqual(["/round/*", "safe-bottom px-4 py-6"]);
   });
 
   it("keeps an apostrophe inside a comment from opening a string", () => {

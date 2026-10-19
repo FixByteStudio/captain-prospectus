@@ -127,10 +127,10 @@ const ROUND_MARKER = "tournée du jour (test)";
  */
 async function renderVisit({ expectContinue }: { expectContinue: boolean }) {
   const utils = render(
-    <MemoryRouter initialEntries={[`/tournee/${PROSPECT.id}`]}>
+    <MemoryRouter initialEntries={[`/round/${PROSPECT.id}`]}>
       <Routes>
-        <Route path="/tournee/:id" element={<VisitScreen />} />
-        <Route path="/tournee" element={<p>{ROUND_MARKER}</p>} />
+        <Route path="/round/:id" element={<VisitScreen />} />
+        <Route path="/round" element={<p>{ROUND_MARKER}</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -1617,12 +1617,12 @@ function CarnetMarker() {
 function renderFromCarnet(prospectId: string = PROSPECT.id) {
   return render(
     <MemoryRouter
-      initialEntries={[{ pathname: `/tournee/${prospectId}`, state: { from: "carnet" } }]}
+      initialEntries={[{ pathname: `/round/${prospectId}`, state: { from: "carnet" } }]}
     >
       <Routes>
-        <Route path="/tournee/:id" element={<VisitScreen />} />
-        <Route path="/tournee" element={<p>{ROUND_MARKER}</p>} />
-        <Route path="/tournee/carnet" element={<CarnetMarker />} />
+        <Route path="/round/:id" element={<VisitScreen />} />
+        <Route path="/round" element={<p>{ROUND_MARKER}</p>} />
+        <Route path="/round/logbook" element={<CarnetMarker />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -1633,16 +1633,14 @@ describe("VisitScreen — reopened from Carnet (#504)", () => {
     renderFromCarnet();
 
     const back = await screen.findByRole("link", { name: copy.visit.backToCarnet });
-    expect(back.getAttribute("href")).toBe("/tournee/carnet");
+    expect(back.getAttribute("href")).toBe("/round/logbook");
     expect(screen.queryByRole("link", { name: copy.visit.back })).toBeNull();
   });
 
   it("keeps « Retour à la tournée » when opened from Tournée", async () => {
     await renderVisit({ expectContinue: false });
 
-    expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
-      "/tournee",
-    );
+    expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe("/round");
     expect(screen.queryByRole("link", { name: copy.visit.backToCarnet })).toBeNull();
   });
 
@@ -1691,6 +1689,6 @@ describe("VisitScreen — reopened from Carnet (#504)", () => {
     // The form's own back link is also named so until the lookups settle.
     await screen.findByText(copy.errors.notFound);
     const link = screen.getByRole("link", { name: copy.visit.backToCarnet });
-    expect(link.getAttribute("href")).toBe("/tournee/carnet");
+    expect(link.getAttribute("href")).toBe("/round/logbook");
   });
 });
