@@ -1,0 +1,14 @@
+# The stories of epic-admin-code-login (epic id 3), in build order.
+# Refer to an entry as 3.<id> from another epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "ADR: admins sign in with an email and a code"
+description = "Writes, through the new-adr skill, an ADR recording R9–R11: the admin form takes an email and a one-time code instead of a passphrase, each form checks the role, an admin gets a code from their own row or another admin, and break-glass stays in the admin form; it amends ADR-0029's decisions 3 and 7, adds codes-only to its alternatives, and updates the ADR index."
+verify = "The ADR is proposed in a pull request, ADR-0029 links to it where it is amended, and the owner sets it accepted."
+covers = ["R9", "R10", "R11", "R12"]
+after = ["2.1"]
+hitl = true
+risk = "low"
+unknown = "Whether a code typed on the admin form with OWNER_EMAIL is tried as break-glass first or as a code first when both could match."
