@@ -1,0 +1,14 @@
+# The stories of epic-admins-leave-the-field (epic id 2), in build order.
+# Refer to an entry as 2.<id> from another epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "ADR: admins leave the field side"
+description = "Writes, through the new-adr skill, an ADR recording R2–R8: admins do no tournée, /api/agent and assignment are agent-only, an offline admin sees a Hors ligne screen instead of the field side, roles are fixed at creation, and the Agents screen becomes Utilisateurs; it amends ADR-0019 and ADR-0028 and updates the ADR index."
+verify = "The ADR is proposed in a pull request, ADR-0019 and ADR-0028 link to it where it amends them, and the owner sets it accepted."
+covers = ["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R12"]
+after = []
+hitl = true
+risk = "low"
+unknown = "What happens to visits already in an admin phone's outbox once /api/agent answers 403, which sync.ts treats as a lost session (invariant 5), and whether that 403 is a sync contract change needing a CLIENT_VERSION bump."

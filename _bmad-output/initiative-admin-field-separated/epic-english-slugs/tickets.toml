@@ -1,0 +1,13 @@
+# The stories of epic-english-slugs (epic id 1), in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Rename every client route slug to English"
+description = "Renames the ten route slugs listed in R1 in App.tsx, AdminApp.tsx and nav.ts, every navigate, Link and NavLink target and helper such as visitPath, the tests that pin them, and every doc that quotes an old path, and adds a slug column to the glossary's screen rows; no redirect from the old paths."
+verify = "A grep of src and docs (backlog files with status done excepted) for the route paths /tournee, /admin/agents (not /api/admin/agents), /admin/doublons, /admin/visites, /admin/a-rattacher and /admin/tournee finds no route path, every field tab and admin nav entry opens its screen in the dev server, and pnpm lint, typecheck, test, build and check:precache pass with the precache total quoted in the PR."
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+unknown = "Which done backlog files and ADRs quote an old path as history and should keep it; vite.config.ts names no field path (start_url /, navigateFallback index.html)."
