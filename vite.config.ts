@@ -67,7 +67,7 @@ export default defineConfig({
         description: "Tournées de prospection terrain",
         lang: "fr",
         start_url: "/",
-        // Not "standalone", which keeps Android's three navigation buttons.
+        // Not "fullscreen": it hides the system bars and breaks the dashboard layout.
         display: "standalone",
         // The icons' own field: any other white shows the icon's square on
         // Android's splash.
