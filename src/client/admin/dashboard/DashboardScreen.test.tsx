@@ -223,14 +223,14 @@ describe("DashboardScreen", () => {
     expect(link(copy.dashboard.openProspects, "1\u202f284")).toBe(
       "/admin/prospects?status=new%2Cassigned%2Cfollow_up",
     );
-    expect(link(copy.dashboard.visits, "300")).toBe("/admin/visites?period=30");
+    expect(link(copy.dashboard.visits, "300")).toBe("/admin/visits?period=30");
     expect(link(copy.dashboard.converted, "32")).toBe("/admin/prospects?status=converted");
     // Taux de conversion has no list behind it.
     expect(card(copy.dashboard.conversionRate).closest("a")).toBeNull();
 
     // The Visites card's link follows the selector (GH #178).
     await user.click(screen.getByRole("radio", { name: copy.dashboard.periods[7] }));
-    await waitFor(() => expect(link(copy.dashboard.visits, "70")).toBe("/admin/visites?period=7"));
+    await waitFor(() => expect(link(copy.dashboard.visits, "70")).toBe("/admin/visits?period=7"));
   });
 
   it("lists the pipeline with each status's count and share (GH #112)", async () => {
@@ -693,13 +693,13 @@ describe("DashboardScreen › À traiter (GH #113)", () => {
     await waitFor(() => expect(within(todoRow(t.orphans)).getByText("5")).toBeTruthy());
     expect(
       within(todoRow(t.orphans)).getByRole("link", { name: t.orphansAction }).getAttribute("href"),
-    ).toBe("/admin/a-rattacher");
+    ).toBe("/admin/orphans");
     await waitFor(() => expect(within(todoRow(t.duplicates)).getByText("3 paires")).toBeTruthy());
     expect(
       within(todoRow(t.duplicates))
         .getByRole("link", { name: t.duplicatesAction })
         .getAttribute("href"),
-    ).toBe("/admin/doublons");
+    ).toBe("/admin/duplicates");
     // GH #308: the open statuses the figure counts, so the list totals it.
     expect(within(todoRow(t.inactiveAgent)).getByText("4")).toBeTruthy();
     expect(within(todoRow(t.inactiveAgent)).getByText(t.inactiveAgentMeta)).toBeTruthy();
@@ -938,6 +938,6 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     const link = within(await findCard(copy.dashboard.recent.title)).getByRole("link", {
       name: copy.dashboard.recent.seeAll,
     });
-    expect(link.getAttribute("href")).toBe("/admin/visites");
+    expect(link.getAttribute("href")).toBe("/admin/visits");
   });
 });

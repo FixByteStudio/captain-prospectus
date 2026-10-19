@@ -66,7 +66,7 @@ function renderRowWithRoute(theItem: TourneeItem) {
             </ul>
           }
         />
-        <Route path="/tournee/:id" element={<p>Visit form</p>} />
+        <Route path="/round/:id" element={<p>Visit form</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -110,7 +110,7 @@ describe("StopRow", () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
 
     const visit = screen.getByRole("link", { name: copy.today.visit });
-    expect(visit.getAttribute("href")).toBe("/tournee/11111111-1111-1111-1111-111111111111");
+    expect(visit.getAttribute("href")).toBe("/round/11111111-1111-1111-1111-111111111111");
 
     const navigate = screen.getByRole("link", { name: copy.today.navigate });
     expect(navigate.getAttribute("href")).toContain("openstreetmap.org");

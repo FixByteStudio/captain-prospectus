@@ -67,7 +67,7 @@ function refusalFor(error: unknown): Refusal {
 }
 
 function landingFor(role: "admin" | "agent"): string {
-  return role === "admin" ? "/admin" : "/tournee";
+  return role === "admin" ? "/admin" : "/round";
 }
 
 const labelClass = "font-semibold";

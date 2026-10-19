@@ -78,7 +78,7 @@ export function VisitScreen() {
   // there. Lost on a reload, which falls back to the tournée — harmless, the row
   // is on Carnet either way.
   const fromCarnet = (useLocation().state as { from?: string } | null)?.from === "carnet";
-  const backTo = fromCarnet ? "/tournee/carnet" : "/tournee";
+  const backTo = fromCarnet ? "/round/logbook" : "/round";
   const { syncNow, identity, confirmed } = useSyncState();
   const { point } = useAgentPosition();
   // Below 768px one column; from 768px the form left and `VisitSidePane`

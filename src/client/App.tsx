@@ -108,7 +108,7 @@ type FieldContext = { gate: TourneeGate; adminOnline: boolean; now: number };
 /**
  * The field routes, which every role can reach, behind the tournée gate
  * (ADR-0036, docs/design.md › Before the swipe): a no-tournée message, the
- * start screen, or the app. Every `/tournee/*` path is gated, a deep link to a
+ * start screen, or the app. Every `/round/*` path is gated, a deep link to a
  * stop included, because the app opens at the swipe.
  */
 function FieldRoutes() {
@@ -134,11 +134,11 @@ function FieldRoutes() {
 
   return (
     <Routes>
-      {/* Relative to the parent's /tournee/*. "carte", "carnet" and "nouveau"
+      {/* Relative to the parent's /round/*. "map", "logbook" and "new"
           come before ":id" so neither is ever read as a prospect id. */}
       <Route index element={<TodayScreen />} />
       <Route
-        path="carte"
+        path="map"
         element={
           <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
             <CarteScreen />
@@ -146,7 +146,7 @@ function FieldRoutes() {
         }
       />
       <Route
-        path="carnet"
+        path="logbook"
         element={
           <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
             <CarnetScreen />
@@ -154,7 +154,7 @@ function FieldRoutes() {
         }
       />
       <Route
-        path="nouveau"
+        path="new"
         element={
           <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
             <AddProspectScreen />
@@ -191,14 +191,14 @@ function FieldFrame({
 }) {
   const now = useFieldNow();
   // `FieldFrame` also wraps the forbidden and not-found fallbacks (neither is
-  // under /tournee), so the subtitle names a tab only when there is one.
-  const onTournee = useMatch("/tournee/*");
-  const onAddProspect = useMatch("/tournee/nouveau/*");
-  const onCarte = useMatch("/tournee/carte/*");
-  const onCarnet = useMatch("/tournee/carnet/*");
-  // A form is a visit (`/tournee/:id`, which is none of the tabs) or the
+  // under /round), so the subtitle names a tab only when there is one.
+  const onTournee = useMatch("/round/*");
+  const onAddProspect = useMatch("/round/new/*");
+  const onCarte = useMatch("/round/map/*");
+  const onCarnet = useMatch("/round/logbook/*");
+  // A form is a visit (`/round/:id`, which is none of the tabs) or the
   // add-prospect form: the gate waits for those at midnight (`holdGate`).
-  const onStop = useMatch("/tournee/:id");
+  const onStop = useMatch("/round/:id");
   const onForm = onAddProspect !== null || (onStop !== null && !onCarte && !onCarnet);
   const gate = useTourneeGate(email, now, onForm);
   // The tabs are the app, and the app opens at the swipe: no tab bar on a gate
@@ -534,14 +534,14 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       <Routes>
         {/* Not under FieldFrame: the redirect target decides which frame
             shows, so the field band must not render even for one commit. */}
-        <Route path="/" element={<Navigate to={entry ? "/admin" : "/tournee"} replace />} />
+        <Route path="/" element={<Navigate to={entry ? "/admin" : "/round"} replace />} />
 
         {/* The field-only band. The forbidden and not-found fallbacks live
             here too, since neither screen is admin chrome. */}
         <Route
           element={<FieldFrame adminOnline={entry} pwa={pwa} email={me.email} role={me.role} />}
         >
-          <Route path="/tournee/*" element={<FieldRoutes />} />
+          <Route path="/round/*" element={<FieldRoutes />} />
           {!screens && (
             <Route
               path="/admin/*"
@@ -555,13 +555,13 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
                   <FieldEmptyState
                     icon={WifiOffIcon}
                     message={copy.adminRoute.offline}
-                    action={{ to: "/tournee", label: copy.visit.back }}
+                    action={{ to: "/round", label: copy.visit.back }}
                   />
                 ) : (
                   <FieldEmptyState
                     icon={LockIcon}
                     message={copy.errors.forbidden}
-                    action={{ to: "/tournee", label: copy.visit.back }}
+                    action={{ to: "/round", label: copy.visit.back }}
                   />
                 )
               }
@@ -573,7 +573,7 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
               <FieldEmptyState
                 icon={MapPinOffIcon}
                 message={copy.errors.notFound}
-                action={{ to: "/tournee", label: copy.visit.back }}
+                action={{ to: "/round", label: copy.visit.back }}
               />
             }
           />

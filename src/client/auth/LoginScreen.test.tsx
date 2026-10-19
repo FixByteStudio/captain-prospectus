@@ -32,7 +32,7 @@ function renderLogin(pwa: PwaState = noBuild()) {
       <Routes>
         <Route path="/login" element={<LoginScreen pwa={pwa} />} />
         <Route path="/admin" element={<p>admin landing</p>} />
-        <Route path="/tournee" element={<p>round landing</p>} />
+        <Route path="/round" element={<p>round landing</p>} />
       </Routes>
     </MemoryRouter>,
   );

@@ -241,7 +241,7 @@ describe("App routing", () => {
 
     // The band appears only once identity has settled and the redirect has run.
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-    expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+    expect(screen.getByTestId("pathname").textContent).toBe("/round");
     expect(screen.queryByTestId("admin-frame")).toBeNull();
   });
 
@@ -260,9 +260,7 @@ describe("App routing", () => {
     expect(await screen.findByText(copy.errors.forbidden)).toBeTruthy();
     // Not a redirect: the agent stays where they are, with a way back.
     expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
-    expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
-      "/tournee",
-    );
+    expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe("/round");
     // The tabs wait for the gate's answer from Dexie, so they arrive a beat after the text.
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
@@ -274,6 +272,13 @@ describe("App routing", () => {
 
     expect(await screen.findByText(copy.errors.notFound)).toBeTruthy();
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+  });
+
+  it("answers an old French field slug with the not-found state, not a redirect (#581)", async () => {
+    renderApp("/tournee/carte");
+
+    expect(await screen.findByText(copy.errors.notFound)).toBeTruthy();
+    expect(screen.getByTestId("pathname").textContent).toBe("/tournee/carte");
   });
 });
 
@@ -306,7 +311,7 @@ describe("The tournée gate", () => {
 
   it("says the tournée was never loaded when no pull ever succeeded, with no tabs", async () => {
     await fieldDb.meta.delete("lastSyncAt");
-    const { container } = renderApp("/tournee");
+    const { container } = renderApp("/round");
 
     expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
     expect(screen.getByText(copy.start.neverLoadedBody)).toBeTruthy();
@@ -316,7 +321,7 @@ describe("The tournée gate", () => {
   });
 
   it("says nothing is assigned after a pull with an empty snapshot", async () => {
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByText(copy.start.nothingAssignedTitle)).toBeTruthy();
     expect(fieldBand()).toBeNull();
@@ -324,7 +329,7 @@ describe("The tournée gate", () => {
 
   it("shows the start screen, the count and the swipe, with no tabs, when there is work and no tournée", async () => {
     await fieldDb.prospects.bulkPut([assigned(), assigned({ name: "Chez Marcel" })]);
-    renderApp("/tournee");
+    renderApp("/round");
 
     // `hidden`: the location dialog is open over the start screen, so the page behind it is aria-hidden.
     expect(
@@ -336,7 +341,7 @@ describe("The tournée gate", () => {
 
   it("gates a deep link to a stop the same way", async () => {
     await fieldDb.prospects.put(assigned());
-    renderApp("/tournee/carte");
+    renderApp("/round/map");
 
     expect(
       await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
@@ -347,7 +352,7 @@ describe("The tournée gate", () => {
   });
 
   it("gives a no-tournée message no tab subtitle either", async () => {
-    renderApp("/tournee/nouveau");
+    renderApp("/round/new");
 
     expect(await screen.findByText(copy.start.nothingAssignedTitle)).toBeTruthy();
     expect(screen.queryByText(copy.nav.subtitle.add)).toBeNull();
@@ -361,7 +366,7 @@ describe("The tournée gate", () => {
       startedAt: Date.now(),
       writtenBy: AGENT.email,
     });
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
@@ -371,7 +376,7 @@ describe("The tournée gate", () => {
     await fieldDb.prospects.put(assigned());
     await fieldDb.outboxVisits.put({ ...visit(), writtenBy: AGENT.email });
     stub.sync = { status: "ok", running: false, pending: 1 };
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(
       await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
@@ -387,7 +392,7 @@ describe("The tournée gate", () => {
       startedAt: Date.now(),
       writtenBy: AGENT.email,
     });
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
@@ -395,7 +400,7 @@ describe("The tournée gate", () => {
 
   it("opens the app when a pull returns today's tournée, as a second phone does", async () => {
     await openGate();
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     expect(screen.queryByRole("button", { name: copy.start.swipeName, hidden: true })).toBeNull();
@@ -408,7 +413,7 @@ describe("The tournée gate", () => {
       startedAt: Date.now(),
       writtenBy: OTHER_AGENT.email,
     });
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(
       await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
@@ -418,7 +423,7 @@ describe("The tournée gate", () => {
 
   it("gives an online admin the way back on a gate screen", async () => {
     stub.me = ADMIN;
-    renderApp("/tournee");
+    renderApp("/round");
 
     const link = await screen.findByRole("link", { name: copy.nav.tabs.dashboard });
     expect(link.getAttribute("href")).toBe("/admin");
@@ -490,7 +495,7 @@ describe("The tournée gate", () => {
       // `setTimeout`, so `jest` stands in for the advance its `waitFor` looks for.
       vi.stubGlobal("jest", { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) });
       await onTheEve(["Date", "setTimeout", "clearTimeout"]);
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       await act(() => vi.advanceTimersByTimeAsync(30_000));
@@ -503,8 +508,8 @@ describe("The tournée gate", () => {
     });
 
     it.each([
-      ["Carte", "/tournee/carte", copy.nav.subtitle.map],
-      ["Carnet", "/tournee/carnet", copy.nav.subtitle.carnet],
+      ["Carte", "/round/map", copy.nav.subtitle.map],
+      ["Carnet", "/round/logbook", copy.nav.subtitle.carnet],
     ])(
       "gives %s way to the same start screen, with no subtitle of its own",
       async (_n, path, subtitle) => {
@@ -530,7 +535,7 @@ describe("The tournée gate", () => {
     it("keeps a visit form that was open, saves at 00:01, then shows the saved line once", async () => {
       await onTheEve();
       const user = userEvent.setup({ delay: null });
-      renderApp(`/tournee/${BAR.id}`);
+      renderApp(`/round/${BAR.id}`);
       await screen.findByRole("heading", { name: BAR.name });
 
       crossTo(MIDNIGHT + 60_000);
@@ -556,7 +561,7 @@ describe("The tournée gate", () => {
     it("leaves the save summary open across midnight, and saving behaves the same", async () => {
       await onTheEve();
       const user = userEvent.setup({ delay: null });
-      renderApp(`/tournee/${BAR.id}`);
+      renderApp(`/round/${BAR.id}`);
       await screen.findByRole("heading", { name: BAR.name });
       await user.click(interestedRadio());
       await user.click(screen.getByRole("button", { name: copy.visit.save }));
@@ -576,7 +581,7 @@ describe("The tournée gate", () => {
     it("asks before a tab leaves the held form, and Quitter lands on the start screen", async () => {
       await onTheEve();
       const user = userEvent.setup({ delay: null });
-      renderApp("/tournee/nouveau");
+      renderApp("/round/new");
       expect(await screen.findByText("dirty form")).toBeTruthy();
 
       crossTo(MIDNIGHT + 60_000);
@@ -593,7 +598,7 @@ describe("The tournée gate", () => {
       await onTheEve();
       stub.realAddProspect = true;
       const user = userEvent.setup({ delay: null });
-      renderApp("/tournee/nouveau");
+      renderApp("/round/new");
       await user.type(
         await screen.findByRole("textbox", { name: copy.fieldProspect.name }),
         "Chez Nouveau",
@@ -615,7 +620,7 @@ describe("The tournée gate", () => {
     it("does not hold a form opened while gated: a deep link lands on the start screen", async () => {
       await onTheEve();
       await fieldDb.tournees.clear();
-      renderApp(`/tournee/${BAR.id}`);
+      renderApp(`/round/${BAR.id}`);
 
       expect(await swipe()).toBeTruthy();
       expect(screen.queryByRole("heading", { name: BAR.name })).toBeNull();
@@ -625,7 +630,7 @@ describe("The tournée gate", () => {
     it("says nothing is assigned when the new day has no open work", async () => {
       await onTheEve();
       await fieldDb.prospects.clear();
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       crossTo(MIDNIGHT);
@@ -636,7 +641,7 @@ describe("The tournée gate", () => {
 
     it("takes the new day when a sleeping phone's page becomes visible again", async () => {
       await onTheEve();
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       // The timer never ran: the clock jumped to 07:00 while the phone slept.
@@ -651,7 +656,7 @@ describe("The tournée gate", () => {
 
     it("stays on the new day when a sync lands at 00:05", async () => {
       await onTheEve();
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
       crossTo(MIDNIGHT);
       expect(await swipe()).toBeTruthy();
@@ -666,7 +671,7 @@ describe("The tournée gate", () => {
 
     it("shows no saved line for a save made before midnight, on the same history entry", async () => {
       await onTheEve();
-      renderApp("/tournee", { saved: true, savedAt: EVE - 20 * 60_000 });
+      renderApp("/round", { saved: true, savedAt: EVE - 20 * 60_000 });
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       crossTo(MIDNIGHT);
@@ -680,7 +685,7 @@ describe("The tournée gate", () => {
       await onTheEve();
       // An admin back from /admin, offline: the last sync is still yesterday's.
       vi.setSystemTime(Date.UTC(2026, 9, 15, 5, 0, 0));
-      renderApp("/tournee");
+      renderApp("/round");
 
       expect(await swipe()).toBeTruthy();
       expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
@@ -690,7 +695,7 @@ describe("The tournée gate", () => {
     it("remounts a start screen nobody swiped with the new day's date", async () => {
       await onTheEve();
       await fieldDb.tournees.clear();
-      renderApp("/tournee");
+      renderApp("/round");
       expect(await swipe()).toBeTruthy();
       expect(screen.getByText(weekdayOf(EVE))).toBeTruthy();
 
@@ -713,7 +718,7 @@ describe("The tournée gate", () => {
 describe("The admin tab and routes follow the network", () => {
   it("keeps the tab bar at four tabs for an online admin: the dashboard lives in the account card (GH #561)", async () => {
     stub.me = ADMIN;
-    renderApp("/tournee");
+    renderApp("/round");
 
     const nav = await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
     expect(within(nav).getAllByRole("link")).toHaveLength(4);
@@ -723,7 +728,7 @@ describe("The admin tab and routes follow the network", () => {
 
   it("hides the tab the instant the network drops and shows it again the instant it returns, with no second /api/me", async () => {
     stub.me = ADMIN;
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
     expect(stub.identityCalls).toBe(1);
@@ -757,7 +762,7 @@ describe("The admin tab and routes follow the network", () => {
     expect(fieldBand()).toBeNull();
   });
 
-  it("sends a live-confirmed admin to /tournee from /, not /admin, when the browser already reports no network at mount", async () => {
+  it("sends a live-confirmed admin to /round from /, not /admin, when the browser already reports no network at mount", async () => {
     // Pins that `/`'s redirect reads `entry`, not `screens`: this admin is
     // server-confirmed (`screens` true) but the browser never fires an
     // `offline` event here — `navigator.onLine` is already false when the
@@ -768,7 +773,7 @@ describe("The admin tab and routes follow the network", () => {
       const { unmount } = renderApp("/");
 
       expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
       expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       unmount();
 
@@ -790,7 +795,7 @@ describe("The admin tab and routes follow the network", () => {
       renderApp("/");
 
       expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
       expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
 
@@ -828,7 +833,7 @@ describe("The admin tab and routes follow the network", () => {
       // The re-check ran (falls back to the same cache) but changed nothing.
       expect(stub.identityCalls).toBeGreaterThan(callsBefore);
       expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
       onlineSpy.mockRestore();
@@ -857,7 +862,7 @@ describe("The admin tab and routes follow the network", () => {
       // « Tableau de bord » either.
       expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
       expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
     } finally {
       onlineSpy.mockRestore();
     }
@@ -931,7 +936,7 @@ describe("The admin tab and routes follow the network", () => {
       expect(screen.queryByText(copy.errors.forbidden)).toBeNull();
       expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
       expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
-        "/tournee",
+        "/round",
       );
       expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
@@ -996,7 +1001,7 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       await setMeta(fieldDb, "identity", AGENT);
       stub.me = AGENT;
       stub.identityUnreachable = true;
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       const queuedUnconfirmed = visit();
@@ -1039,7 +1044,7 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       await setMeta(fieldDb, "identity", AGENT);
       stub.me = AGENT;
       stub.identityUnreachable = true;
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       const queued = visit();
@@ -1066,7 +1071,7 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
       await setMeta(fieldDb, "identity", AGENT);
       stub.me = AGENT;
       stub.identityUnreachable = true;
-      renderApp("/tournee");
+      renderApp("/round");
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
       const queued = visit();
@@ -1112,7 +1117,7 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
     stub.me = AGENT;
     // Fully live, fully online: `identityFromCache` never becomes true this
     // session, unlike every other case in this file.
-    renderApp("/tournee");
+    renderApp("/round");
     await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
 
     await waitFor(async () => {
@@ -1134,7 +1139,7 @@ describe("App confirms an outbox queued while cache-sourced (docs/backlog/013)",
     ]);
 
     stub.identityUnauthorized = true;
-    renderApp("/tournee");
+    renderApp("/round");
 
     await screen.findByText(copy.login.title);
     await waitFor(async () => {
@@ -1172,7 +1177,7 @@ describe("App band header", () => {
   });
 
   it("draws the band in the field frame", async () => {
-    const { container } = renderApp("/tournee");
+    const { container } = renderApp("/round");
 
     expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
     // The field band's row carries the tabs, the sync dot and the avatar too,
@@ -1182,15 +1187,15 @@ describe("App band header", () => {
     expect(band?.querySelector("nav")).toBeTruthy();
   });
 
-  it("names Carte in the band subtitle on /tournee/carte, not Tournée, and actually renders CarteScreen there rather than falling through to :id (spec-gh-121)", async () => {
+  it("names Carte in the band subtitle on /round/map, not Tournée, and actually renders CarteScreen there rather than falling through to :id (spec-gh-121)", async () => {
     // Offline, so this waits on the lazy chunk itself but not on a real
     // Leaflet map settling — `copy.carte.offline` only ever comes from
     // `CarteScreen`, so seeing it (rather than, say, VisitScreen reading
-    // "carte" as a prospect id) is the proof this route resolved to the right
+    // "map" as a prospect id) is the proof this route resolved to the right
     // screen at all.
     const onlineSpy = mockOffline();
     try {
-      const { container } = renderApp("/tournee/carte");
+      const { container } = renderApp("/round/map");
 
       await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
       const band = bandHeader(container);
@@ -1202,8 +1207,8 @@ describe("App band header", () => {
     }
   });
 
-  it("names Carnet in the band subtitle on /tournee/carnet and renders CarnetScreen, not :id (#504)", async () => {
-    const { container } = renderApp("/tournee/carnet");
+  it("names Carnet in the band subtitle on /round/logbook and renders CarnetScreen, not :id (#504)", async () => {
+    const { container } = renderApp("/round/logbook");
 
     await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
     const band = bandHeader(container);
@@ -1215,7 +1220,7 @@ describe("App band header", () => {
 describe("App update prompt", () => {
   it("shows the update banner once under the band while the strip is quiet", async () => {
     stub.needRefresh = true;
-    renderApp("/tournee");
+    renderApp("/round");
 
     // Once: `FieldFrame` renders it, and nothing else on the field side does.
     expect(await screen.findAllByText(copy.update.available)).toHaveLength(1);
@@ -1235,7 +1240,7 @@ describe("App update prompt", () => {
   it("steps aside for the update-needed strip, which carries the button instead", async () => {
     stub.sync = { status: "upgrade", running: false, pending: 1 };
     stub.needRefresh = true;
-    const { container } = renderApp("/tournee");
+    const { container } = renderApp("/round");
 
     expect(await screen.findByText(copy.sync.upgrade)).toBeTruthy();
     // hidesUpdateBanner: the strip already says a build is waiting.
@@ -1256,7 +1261,7 @@ describe("App, the Worker's 401 at launch (GH #309)", () => {
     await setMeta(fieldDb, "identity", AGENT);
     await fieldDb.outboxVisits.bulkAdd([visit(), visit()]);
     stub.identityUnauthorized = true;
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByText(copy.login.title)).toBeTruthy();
     expect(screen.getByTestId("pathname").textContent).toBe("/login");
@@ -1278,7 +1283,7 @@ describe("App, the Worker's 401 on the re-check of a cache-started session (GH #
     await setMeta(fieldDb, "identity", AGENT);
     await fieldDb.outboxVisits.bulkAdd([visit(), visit()]);
     stub.identityUnreachable = true;
-    renderApp("/tournee/nouveau");
+    renderApp("/round/new");
     expect(await screen.findByText("dirty form")).toBeTruthy();
 
     stub.identityUnreachable = false;
@@ -1297,7 +1302,7 @@ describe("App, the Worker's 401 on the re-check of a cache-started session (GH #
       await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
 
       expect(screen.getByText("dirty form")).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee/nouveau");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round/new");
       expect(await getMeta(fieldDb, "identity")).toEqual(AGENT);
       expect(await fieldDb.outboxVisits.count()).toBe(2);
     } finally {
@@ -1325,7 +1330,7 @@ describe("App, the Worker's 401 on the re-check of a cache-started session (GH #
 describe("App identity-error frame", () => {
   it("offers no button when the phone simply has never reached the server", async () => {
     stub.identityUnreachable = true;
-    renderApp("/tournee");
+    renderApp("/round");
 
     expect(await screen.findByText(copy.errors.offlineFirstRun)).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();

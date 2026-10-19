@@ -4,10 +4,10 @@ import { fieldTabs, isCurrentTab } from "./tabs";
 describe("fieldTabs", () => {
   it("gives every role four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
     expect(fieldTabs().map((t) => t.path)).toEqual([
-      "/tournee",
-      "/tournee/carte",
-      "/tournee/carnet",
-      "/tournee/nouveau",
+      "/round",
+      "/round/map",
+      "/round/logbook",
+      "/round/new",
     ]);
   });
 
@@ -18,48 +18,48 @@ describe("fieldTabs", () => {
     }
   });
 
-  it("marks `end` true only for the index tab /tournee, so NavLink's own matcher agrees with isCurrentTab", () => {
+  it("marks `end` true only for the index tab /round, so NavLink's own matcher agrees with isCurrentTab", () => {
     expect(fieldTabs().map((t) => [t.path, t.end])).toEqual([
-      ["/tournee", true],
-      ["/tournee/carte", false],
-      ["/tournee/carnet", false],
-      ["/tournee/nouveau", false],
+      ["/round", true],
+      ["/round/map", false],
+      ["/round/logbook", false],
+      ["/round/new", false],
     ]);
   });
 });
 
 describe("isCurrentTab", () => {
   // I/O matrix, spec-gh-66.
-  it("Agent, round: /tournee matches only itself, Tournée current", () => {
-    expect(isCurrentTab("/tournee", "/tournee")).toBe(true);
+  it("Agent, round: /round matches only itself, Tournée current", () => {
+    expect(isCurrentTab("/round", "/round")).toBe(true);
   });
 
-  it("Agent, add: /tournee/nouveau is Ajouter current, Tournée not", () => {
-    expect(isCurrentTab("/tournee/nouveau", "/tournee/nouveau")).toBe(true);
-    expect(isCurrentTab("/tournee/nouveau", "/tournee")).toBe(false);
+  it("Agent, add: /round/new is Ajouter current, Tournée not", () => {
+    expect(isCurrentTab("/round/new", "/round/new")).toBe(true);
+    expect(isCurrentTab("/round/new", "/round")).toBe(false);
   });
 
-  it("Visit open: /tournee/abc123 matches neither tab", () => {
-    expect(isCurrentTab("/tournee/abc123", "/tournee")).toBe(false);
-    expect(isCurrentTab("/tournee/abc123", "/tournee/nouveau")).toBe(false);
+  it("Visit open: /round/abc123 matches neither tab", () => {
+    expect(isCurrentTab("/round/abc123", "/round")).toBe(false);
+    expect(isCurrentTab("/round/abc123", "/round/new")).toBe(false);
   });
 
-  it("Nested add route: /tournee/nouveau/ or deeper still matches Ajouter", () => {
-    expect(isCurrentTab("/tournee/nouveau/", "/tournee/nouveau")).toBe(true);
-    expect(isCurrentTab("/tournee/nouveau/deep/er", "/tournee/nouveau")).toBe(true);
+  it("Nested add route: /round/new/ or deeper still matches Ajouter", () => {
+    expect(isCurrentTab("/round/new/", "/round/new")).toBe(true);
+    expect(isCurrentTab("/round/new/deep/er", "/round/new")).toBe(true);
   });
 
-  it("On Carte: /tournee/carte is Carte current, Tournée is not (spec-gh-121)", () => {
-    expect(isCurrentTab("/tournee/carte", "/tournee/carte")).toBe(true);
-    expect(isCurrentTab("/tournee/carte", "/tournee")).toBe(false);
+  it("On Carte: /round/map is Carte current, Tournée is not (spec-gh-121)", () => {
+    expect(isCurrentTab("/round/map", "/round/map")).toBe(true);
+    expect(isCurrentTab("/round/map", "/round")).toBe(false);
   });
 
-  it("On Carnet: /tournee/carnet is Carnet current, Tournée is not", () => {
-    expect(isCurrentTab("/tournee/carnet", "/tournee/carnet")).toBe(true);
-    expect(isCurrentTab("/tournee/carnet", "/tournee")).toBe(false);
+  it("On Carnet: /round/logbook is Carnet current, Tournée is not", () => {
+    expect(isCurrentTab("/round/logbook", "/round/logbook")).toBe(true);
+    expect(isCurrentTab("/round/logbook", "/round")).toBe(false);
   });
 
   it("does not let a sibling prefix pass, same rule as admin/nav.ts", () => {
-    expect(isCurrentTab("/tournees", "/tournee")).toBe(false);
+    expect(isCurrentTab("/rounds", "/round")).toBe(false);
   });
 });

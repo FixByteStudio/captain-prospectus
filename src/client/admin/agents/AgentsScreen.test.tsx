@@ -484,7 +484,7 @@ describe("AgentsScreen", () => {
       expect(await screen.findByText(t.lastAdmin)).toBeTruthy();
     });
 
-    it("loads /tournee after you demote yourself", async () => {
+    it("loads /round after you demote yourself", async () => {
       const second = user("max@example.com", { role: "admin" });
       stubFetch([[ADMIN, second]], {
         "PATCH /api/admin/users/sam%40example.com": () => new Response(null, { status: 204 }),
@@ -492,7 +492,7 @@ describe("AgentsScreen", () => {
       renderScreen();
       await openMenu("Sam Owner");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.makeAgent }));
-      await waitFor(() => expect(assign).toHaveBeenCalledWith("/tournee"));
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("/round"));
     });
 
     it("disables both actions on the last active admin, with the reason", async () => {

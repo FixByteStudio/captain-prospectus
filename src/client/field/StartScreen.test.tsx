@@ -47,7 +47,7 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>;
 }
 
-function renderStart(snapshot: SnapshotProspect[], adminOnline = false, from = "/tournee") {
+function renderStart(snapshot: SnapshotProspect[], adminOnline = false, from = "/round") {
   return render(
     <MemoryRouter initialEntries={[from]}>
       <StartScreen snapshot={snapshot} adminOnline={adminOnline} />
@@ -228,16 +228,16 @@ describe("with a position", () => {
 
   it("starts at once on a keyboard activation: one tournée, stops numbered nearest-next, Tournée opens", async () => {
     const snapshot = [stop(3), stop(1), stop(2)];
-    // From a deep link, so the pathname only becomes /tournee through `navigate`.
-    renderStart(snapshot, false, "/tournee/carte");
-    expect(screen.getByTestId("where").textContent).toBe("/tournee/carte");
+    // From a deep link, so the pathname only becomes /round through `navigate`.
+    renderStart(snapshot, false, "/round/map");
+    expect(screen.getByTestId("where").textContent).toBe("/round/map");
     await waitFor(() => expect(swipe().getAttribute("aria-disabled")).toBeNull());
 
     swipe().focus();
     await userEvent.keyboard("{Enter}");
 
     await waitFor(() => expect(syncNow).toHaveBeenCalled());
-    expect(screen.getByTestId("where").textContent).toBe("/tournee");
+    expect(screen.getByTestId("where").textContent).toBe("/round");
 
     const tournees = await fieldDb.outboxTournees.toArray();
     expect(tournees).toHaveLength(1);

@@ -41,7 +41,7 @@ export function RecentVisits() {
       <div className="flex items-baseline justify-between gap-4 px-4.5">
         <h3 className="text-heading">{t.title}</h3>
         <Link
-          to="/admin/visites"
+          to="/admin/visits"
           className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
         >
           {t.seeAll}

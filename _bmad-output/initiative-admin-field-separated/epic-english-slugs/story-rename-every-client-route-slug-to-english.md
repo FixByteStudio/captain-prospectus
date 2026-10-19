@@ -31,3 +31,5 @@ Verify: A grep of src and docs (backlog files with status done excepted) for the
 ## Plan
 
 <!-- Filled in by the coding agent; never sent to a tracker. -->
+
+Built from `_bmad-output/implementation-artifacts/spec-gh-581-english-route-slugs.md`.

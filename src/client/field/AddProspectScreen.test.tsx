@@ -64,10 +64,10 @@ function holdPosition() {
 
 function renderAdd() {
   return render(
-    <MemoryRouter initialEntries={["/tournee/nouveau"]}>
+    <MemoryRouter initialEntries={["/round/new"]}>
       <Routes>
-        <Route path="/tournee/nouveau" element={<AddProspectScreen />} />
-        <Route path="/tournee" element={<TodayScreen />} />
+        <Route path="/round/new" element={<AddProspectScreen />} />
+        <Route path="/round" element={<TodayScreen />} />
       </Routes>
     </MemoryRouter>,
   );

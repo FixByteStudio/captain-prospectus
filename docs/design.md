@@ -1226,7 +1226,7 @@ Visites.
 
 ### The admin round view
 
-`/admin/tournee`, last in Terrain: where an agent's tournée stands today, without
+`/admin/round`, last in Terrain: where an agent's tournée stands today, without
 phoning them. An agent `Select` (kept in `?agent=`, which wins; without one, the
 agent last chosen on this browser is restored from `localStorage`, and the URL
 stays plain), then a read-only list of that agent's stops still to do, under the
@@ -1285,7 +1285,7 @@ From `md` the list and the map sit side by side:
 
 ### Agents
 
-`/admin/agents`, second in Pilotage (Lucide `Users`): who may sign in, with
+`/admin/users`, second in Pilotage (Lucide `Users`): who may sign in, with
 which role, and on which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
 Adding an agent is one form here, with no deploy. Built on the #175
 primitives: a `ScreenHeader`, a `ScreenState` gate and one `Surface` holding
@@ -1884,7 +1884,7 @@ before the list either way.
 *Its numbering is built by entry 5 of the numbered-tournée epic (#496).* Mockup:
 [`key-t2-tournee.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t2-tournee.png), frame 2.
 
-`/tournee/carte`, the tab bar's second slot (spec-gh-121) — a lazy chunk, same
+`/round/map`, the tab bar's second slot (spec-gh-121) — a lazy chunk, same
 as the visit form and Ajouter, so an agent who never opens the map never
 blocks the first paint on Leaflet loading; ADR-0026 still precaches the chunk
 regardless, so it is already on the phone and Carte works the first time it is
@@ -2001,7 +2001,7 @@ never come.
 [`key-t3-carnet.png`](../_bmad-output/planning-artifacts/ux-designs/ux-captain-prospectus-2026-09-24/mockups/key-t3-carnet.png),
 frames 1, 2 and 4.
 
-`/tournee/carnet`, the tab bar's third slot: what the agent did today, the
+`/round/logbook`, the tab bar's third slot: what the agent did today, the
 page of the *carnet de tournée* they used to keep in a pocket. Tournée is what
 is left; Carnet is what is done. It lists today's door-days (one prospect, one
 Brussels day, its latest visit), from the server's visited stops joined with
@@ -2602,16 +2602,16 @@ swipe", above). An admin's way to the dashboard is the account card's
 « Tableau de bord » row ("Account card", below), not a tab: a vertical card has
 room the bar never did.
 
-**A tab tap never silently discards a draft (#74).** `/tournee`'s own rule
+**A tab tap never silently discards a draft (#74).** `/round`'s own rule
 differs from every other tab's — it is an index route, so it must match only
 itself, or the admin sidebar's "path, or anything under it" rule would light
-it up on `/tournee/nouveau` and on an open visit too (`isCurrentTab`,
+it up on `/round/new` and on an open visit too (`isCurrentTab`,
 `tabs.ts`). Tapping a tab away from a dirty visit or add-prospect form — one
 react-hook-form `formState.isDirty` the open screen registers, read at the
 moment of the tap — opens a shadcn AlertDialog, "Quitter sans enregistrer ?",
 and leaves only on "Quitter". "Annuler" leaves the draft exactly as it was,
 values and focus both. Tapping the tab that is already current never asks and
-never navigates. A save's own `navigate("/tournee")` bypasses the guard
+never navigates. A save's own `navigate("/round")` bypasses the guard
 entirely — it is built on the tab bar's own click handler, not on the router,
 so a save is never the thing a dialog interrupts.
 

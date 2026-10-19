@@ -122,7 +122,7 @@ export function useRegisterDirty(dirty: boolean): void {
  * spec-gh-66) — that row exists here, not just as a UI accident, because a
  * dirty form's own tab must stay silent. "Already current" is `isCurrentTab`,
  * the same subtree rule the bar highlights with — not exact string equality
- * — so a tab that reads as current (`/tournee/nouveau/` for Ajouter) never
+ * — so a tab that reads as current (`/round/new/` for Ajouter) never
  * asks either, even though the pathname itself differs from `to`.
  */
 export function shouldAsk({

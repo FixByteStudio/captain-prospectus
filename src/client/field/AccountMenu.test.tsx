@@ -35,7 +35,7 @@ function renderMenu({
   children?: React.ReactNode;
 } = {}) {
   return render(
-    <MemoryRouter initialEntries={["/tournee"]}>
+    <MemoryRouter initialEntries={["/round"]}>
       <LeaveGuardProvider>
         <AccountMenu email={EMAIL} role={role} adminOnline={adminOnline} />
         {children}
@@ -152,11 +152,11 @@ describe("AccountMenu", () => {
       renderMenu({ role: "admin", adminOnline: true, children: <DirtyForm /> });
       await user.click(screen.getByRole("button", { name: copy.accountCard.dashboard }));
       expect(screen.getByRole("alertdialog")).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
 
       await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
       expect(screen.queryByRole("alertdialog")).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/tournee");
+      expect(screen.getByTestId("pathname").textContent).toBe("/round");
     });
   });
 });

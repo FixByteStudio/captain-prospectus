@@ -100,7 +100,7 @@ export function StartScreen({
       return;
     }
     void syncNow();
-    void navigate("/tournee", { replace: true });
+    void navigate("/round", { replace: true });
   }
 
   return (

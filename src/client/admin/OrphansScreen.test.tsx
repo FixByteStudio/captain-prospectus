@@ -408,7 +408,7 @@ describe("OrphansScreen", () => {
     expect(await screen.findByText(t.empty)).toBeTruthy();
     expect(screen.getByText(t.emptyHint)).toBeTruthy();
     expect(screen.getByRole("link", { name: t.emptyCta }).getAttribute("href")).toBe(
-      "/admin/visites",
+      "/admin/visits",
     );
     expect(screen.queryByText(/pas encore rattachée/)).toBeNull();
   });

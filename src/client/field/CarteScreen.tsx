@@ -101,7 +101,7 @@ function OfflineCanvas({ className }: { className?: string }) {
           </span>
           <p className="mt-2.5 text-base font-semibold">{copy.carte.offline}</p>
           <Link
-            to="/tournee"
+            to="/round"
             className={cn(buttonVariants({ variant: "secondary", size: "touch" }), "mt-3 w-full")}
           >
             <RouteIcon aria-hidden="true" />

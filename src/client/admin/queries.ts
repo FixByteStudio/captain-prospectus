@@ -126,7 +126,7 @@ export function prospectsHref(filters: ProspectFilters): string {
 
 /** Where Visites opens for this period — the dashboard's Visites card (GH #178). */
 export function visitsHref(period: DashboardPeriod): string {
-  return `/admin/visites?period=${period}`;
+  return `/admin/visits?period=${period}`;
 }
 
 /**

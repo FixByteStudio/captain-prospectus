@@ -17,14 +17,14 @@ import {
  */
 const ADMIN_APP_ROUTES = [
   "/admin",
-  "/admin/agents",
+  "/admin/users",
   "/admin/prospects",
   "/admin/import",
-  "/admin/doublons",
-  "/admin/visites",
-  "/admin/a-rattacher",
+  "/admin/duplicates",
+  "/admin/visits",
+  "/admin/orphans",
   "/admin/scripts",
-  "/admin/tournee",
+  "/admin/round",
 ];
 
 describe("NAV_GROUPS", () => {
@@ -34,15 +34,15 @@ describe("NAV_GROUPS", () => {
     ).toEqual([
       {
         label: "Pilotage",
-        paths: ["/admin", "/admin/agents"],
+        paths: ["/admin", "/admin/users"],
       },
       {
         label: "Prospects",
-        paths: ["/admin/prospects", "/admin/import", "/admin/doublons"],
+        paths: ["/admin/prospects", "/admin/import", "/admin/duplicates"],
       },
       {
         label: "Terrain",
-        paths: ["/admin/visites", "/admin/a-rattacher", "/admin/scripts", "/admin/tournee"],
+        paths: ["/admin/visits", "/admin/orphans", "/admin/scripts", "/admin/round"],
       },
     ]);
   });
@@ -56,8 +56,8 @@ describe("NAV_GROUPS", () => {
   it("only Doublons and À rattacher carry a count source", () => {
     const withCount = NAV_GROUPS.flatMap((group) => group.items).filter((item) => item.count);
     expect(withCount.map((item) => [item.path, item.count])).toEqual([
-      ["/admin/doublons", "duplicates"],
-      ["/admin/a-rattacher", "orphans"],
+      ["/admin/duplicates", "duplicates"],
+      ["/admin/orphans", "orphans"],
     ]);
   });
 });
@@ -98,9 +98,9 @@ describe("orphanTotal", () => {
 describe("isCurrent", () => {
   it("marks a deep link's own item", () => {
     const current = NAV_GROUPS.flatMap((group) => group.items).filter((item) =>
-      isCurrent("/admin/a-rattacher", item.path, item.end),
+      isCurrent("/admin/orphans", item.path, item.end),
     );
-    expect(current.map((item) => item.path)).toEqual(["/admin/a-rattacher"]);
+    expect(current.map((item) => item.path)).toEqual(["/admin/orphans"]);
   });
 
   it("marks only Tableau de bord on /admin (I/O matrix, sidebar current)", () => {
@@ -121,7 +121,7 @@ describe("isCurrent", () => {
   it("with end, matches the path alone, exactly as NavLink's end does", () => {
     expect(isCurrent("/admin", "/admin", true)).toBe(true);
     expect(isCurrent("/admin/", "/admin", true)).toBe(false);
-    expect(isCurrent("/admin/visites", "/admin", true)).toBe(false);
+    expect(isCurrent("/admin/visits", "/admin", true)).toBe(false);
   });
 
   it("matches a trailing slash or a nested path, not a sibling prefix", () => {
@@ -137,7 +137,7 @@ describe("breadcrumbFor", () => {
   });
 
   it("names the group and page for a deep link (I/O matrix)", () => {
-    expect(breadcrumbFor("/admin/a-rattacher")).toEqual({ group: "Terrain", page: "À rattacher" });
+    expect(breadcrumbFor("/admin/orphans")).toEqual({ group: "Terrain", page: "À rattacher" });
   });
 
   it("names every route NAV_GROUPS carries", () => {
