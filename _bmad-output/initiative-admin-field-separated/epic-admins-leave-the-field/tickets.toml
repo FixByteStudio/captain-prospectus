@@ -12,3 +12,74 @@ after = []
 hitl = true
 risk = "low"
 unknown = "What happens to visits already in an admin phone's outbox once /api/agent answers 403, which sync.ts treats as a lost session (invariant 5), and whether that 403 is a sync contract change needing a CLIENT_VERSION bump."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Agent-only field API and assignment"
+description = "Adds requireAgent beside requireAdmin on /api/agent/*, removes agent.ts's admin exceptions (position at :284, any prospect's visits at :342), and narrows the roster to active agents so /api/admin/agents, PATCH and bulk assign refuse an admin, with docs/api.md and docs/domains/identity-access.md updated; delivers R2–R4 and the server part of R5."
+verify = "Worker tests show an admin session gets 403 from POST /api/agent/sync and that assigning a prospect to an admin is refused on PATCH and on bulk assign, while an agent's sync and assignment still pass."
+covers = ["R2", "R3", "R4", "R5"]
+after = [1]
+hitl = true
+risk = "medium"
+unknown = "Whether the recap and the admin round view, which also read activeRoster, need anything beyond the roster narrowing; imports carry no assignee (see the epic's Source conflict)."
+
+[[entry]]
+id = 3
+type = "story"
+title = "Admin Hors ligne screen"
+description = "Builds, after the owner approves its mockup, the offline admin screen of R6 in the entry chunk (copy in copy.ts, one Réessayer button that re-checks the identity) and shows it to a cached admin identity on /admin/* in place of today's offline FieldEmptyState; story 4 routes every other admin entry to it."
+verify = "A component test renders the screen's two lines and button, the dev server with the network off shows it on /admin for a cached admin, and the PR quotes the precache total against 1,000 KiB."
+covers = ["R6"]
+after = [1, "1.1"]
+hitl = true
+risk = "medium"
+unknown = "The screen's layout, frame and what Réessayer shows while it re-checks, settled by the mockup."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Remove the admin field side and its links"
+description = "Removes adminAccess, the adminOnline prop chain, the avatar card's Tableau de bord, the / redirect to the field, the role checks left in src/client and backlog 010's pinned tests, so an admin on /, /login or the installed PWA lands on /admin, or on story 3's Hors ligne screen when offline; delivers the client part of R5."
+verify = "A grep for adminAccess, adminOnline and role !== \"admin\" in src/worker/routes/agent.ts and src/client finds nothing, tests cover the admin landing from /, /login and offline, and the PR quotes the precache total against 1,000 KiB."
+covers = ["R5", "R6"]
+after = [3]
+hitl = false
+risk = "medium"
+unknown = "What an agent identity read from the cache that records role admin should see once the field fallback is gone (the ADR says Hors ligne; invariant 10 says a cached role proves nothing)."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Roles are fixed at creation"
+description = "Drops role from userUpdateSchema and the PATCH /api/admin/users/:email guard (which then protects only the last active admin from deactivation), removes « Passer admin » / « Passer agent » and the self-demotion jump, and makes the deactivation confirmation ask for a sync first; delivers R7."
+verify = "Worker tests show a PATCH carrying role is refused with 400 and the last active admin cannot be deactivated, and a screen test shows no role toggle in the row menu and the sync sentence in the deactivation confirmation."
+covers = ["R7"]
+after = [1, "1.1"]
+hitl = false
+risk = "low"
+unknown = "None known; the copy of the deactivation sentence is written in the story."
+
+[[entry]]
+id = 6
+type = "story"
+title = "Utilisateurs screen in two sections"
+description = "Turns the Agents screen into Utilisateurs at /admin/users, after the owner approves its mockup, listing Administrateurs and Agents in two sections with the role chosen once in Ajouter un utilisateur, and updates docs/design.md and docs/glossary.md; delivers R8 and what epic 3 needs from this epic."
+verify = "A screen test shows the two sections with no role toggle, the dev server's /admin/users matches the approved mockup, and the PR quotes the precache total."
+covers = ["R8"]
+after = [5]
+hitl = true
+risk = "low"
+unknown = "The sections' layout on a phone and on a desktop, settled by the mockup."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the epic's build records and deferred review findings name, scope set when pulled; cleanup only, any pushed-out scope becomes its own story."
+verify = "pnpm lint, typecheck, test and build pass and the sweep's PR lists each finding it closes."
+covers = ["R2", "R3", "R4", "R5", "R6", "R7", "R8"]
+after = [2, 4, 6]
+hitl = false
+risk = "low"
