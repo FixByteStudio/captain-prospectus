@@ -7,6 +7,7 @@ import {
   OUTCOMES,
   OUTCOME_TO_STATUS,
   STATUSES,
+  SYNC_BYTES_PER_BATCH,
   SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
@@ -162,5 +163,15 @@ describe("MAX_REQUEST_BYTES", () => {
     };
     expect(syncRequestSchema.safeParse(payload).success).toBe(true);
     expect(bytes(payload)).toBeLessThan(MAX_REQUEST_BYTES);
+  });
+});
+
+/**
+ * GH #450: the phone's byte budget sits under the server's byte cap. A pass filled
+ * past the cap would be a 413 that keeps the outbox for ever (INVARIANT 5).
+ */
+describe("sync byte budget", () => {
+  it("never fills a pass past the bytes the server reads", () => {
+    expect(SYNC_BYTES_PER_BATCH).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
   });
 });

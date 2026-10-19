@@ -37,8 +37,9 @@ It exists because the array caps bound rows, not bytes: a visit may carry 50 ans
 It is enforced as the first middleware registered after the security headers, above the `/dev` mount, because
 Hono composes handlers in registration order and `/api/dev/*` is the one route mounted
 before auth. Budget tests in `src/shared/constants.test.ts` fail if a count cap is ever
-raised past the byte cap, and `src/client/field/sync.ts` trims a batch that would exceed
-it — a payload the server always refuses is an outbox that never drains (INVARIANT 5).
+raised past the byte cap, and `src/client/field/sync.ts` trims each batch to
+`SYNC_BYTES_PER_BATCH` (384 KiB, below this cap, for CPU: GH #450), always keeping the first visit —
+a payload the server always refuses is an outbox that never drains (INVARIANT 5).
 
 ## Personal data
 - **Prospect data** is mostly public business info, but may include a contact person's name or phone. Keep it to what the business needs.

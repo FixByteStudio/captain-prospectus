@@ -34,7 +34,10 @@
  *          script's id and 50 mixed answers; "max" gives it the heaviest the server accepts, and
  *          the count is the most that fits MAX_REQUEST_BYTES),
  *        PROSPECTS (0; 1 to 100 field prospects ride along with each request's visits).
- * Run with `node --expose-gc` to collect garbage before each request, outside the timing.
+ *        SETTLE (unset; "1" runs a full collection and one untimed request of the same size
+ *          before each warm timed request, so the warm max is the request's own cost, not an
+ *          earlier request's old-space garbage; needs --expose-gc; the cold request is not settled).
+ * Run with `node --expose-gc` to run a minor collection before each request, outside the timing.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -75,6 +78,11 @@ if (!["bare", "full", "max"].includes(PAYLOAD))
 const SLIDE = process.env.SLIDE;
 if (SLIDE !== undefined && SLIDE !== "1")
   throw new Error(`SLIDE must be unset or "1", got "${SLIDE}"`);
+const SETTLE = process.env.SETTLE;
+if (SETTLE !== undefined && SETTLE !== "1")
+  throw new Error(`SETTLE must be unset or "1", got "${SETTLE}"`);
+if (SETTLE && typeof globalThis.gc !== "function")
+  throw new Error("SETTLE=1 needs `node --expose-gc`");
 const PROSPECTS = Number(process.env.PROSPECTS ?? 0);
 if (!Number.isInteger(PROSPECTS) || PROSPECTS < 0 || PROSPECTS > SYNC_PROSPECTS_PER_REQUEST)
   throw new Error(
@@ -247,7 +255,13 @@ try {
   const lastSeenAt = () =>
     sqlite.prepare("select last_seen_at as t from sessions where token_hash = ?").get(tokenHash).t;
 
-  const once = async (worker, size) => {
+  const once = async (worker, size, { settle = false } = {}) => {
+    // Untimed: SETTLE=1 collects everything, old space included, then re-warms the code a full
+    // collection leaves cold with one request of the same size (GH #450).
+    if (settle) {
+      globalThis.gc();
+      await once(worker, size);
+    }
     // Untimed: a session idle past SESSION_SLIDE_MS is slid by this request's UPDATE.
     const stale = Date.now() - 2 * SESSION_SLIDE_MS;
     if (SLIDE) {
@@ -259,9 +273,10 @@ try {
       swipe: TOURNEE === "swipe",
       prospects: true,
     });
-    // Untimed, and only under `node --expose-gc`: earlier requests' garbage otherwise lands in
-    // this request's window and shows as 35 ms tails on the multi-MB payloads.
-    globalThis.gc?.();
+    // Untimed, and only under `node --expose-gc`: earlier requests' young garbage otherwise
+    // lands in this request's window. Minor only: a full collection here added ~3.5 ms to every
+    // request, even a one-visit one, by leaving the next request cold (GH #450).
+    globalThis.gc?.({ type: "minor" });
     const r = await timeRequest(worker, req, env, shim);
     // A 200 alone could be the quarantine path (identity or assignment drifted),
     // which skips the inserts this is meant to time.
@@ -322,7 +337,8 @@ try {
   }
 
   console.log(
-    `PAYLOAD=${PAYLOAD} PROSPECTS=${PROSPECTS} SLIDE=${SLIDE ?? "unset"} TOURNEE=${TOURNEE ?? "unset"}; ` +
+    `PAYLOAD=${PAYLOAD} PROSPECTS=${PROSPECTS} SLIDE=${SLIDE ?? "unset"} TOURNEE=${TOURNEE ?? "unset"} ` +
+      `SETTLE=${SETTLE ?? "unset"} GC=${typeof globalThis.gc === "function" ? "minor" : "off"}; ` +
       `authenticated by session cookie (AUTH_PEPPER), no DEV_USER_EMAIL; ` +
       `${MAX_REQUEST_BYTES} bytes is the cap, ${fits} visits of this payload fit`,
   );
@@ -341,7 +357,8 @@ try {
       const worker = (await import(url.href)).default;
       cold.get(size).push(await once(worker, size));
       for (let i = 0; i < WARMUP; i++) await once(worker, size);
-      for (let i = 0; i < RUNS; i++) warm.get(size).push(await once(worker, size));
+      for (let i = 0; i < RUNS; i++)
+        warm.get(size).push(await once(worker, size, { settle: SETTLE === "1" }));
     }
   }
 
