@@ -125,10 +125,15 @@ never re-checks — going offline and back costs it nothing.
 that access is denied** (GH #209): "Hors ligne. Cette page a besoin du réseau.
 Votre tournée reste accessible.", with "Retour à la tournée", in the field
 band. "Vous n'avez pas accès à cette page." is kept for a role the server
-confirmed. The cached role decides neither: it is no more proof of "agent"
-than of "admin". The same page shows when `/api/me` failed with the browser
-online (a Worker error, a captive portal), where "Hors ligne" is loose; the
-band's strip names that case ("Vérification de votre session…").
+confirmed. A cached **agent** gets the page above. A cached **admin** gets the
+Hors ligne screen instead (ADR-0037, R6, `auth/AdminOfflineScreen.tsx`): «
+Vous êtes hors ligne », « Le tableau de bord a besoin du réseau. Reconnectez-vous
+puis réessayez. » and one « Réessayer » button that re-runs the identity check
+(« Vérification… » while it runs; a 401 still opens `/login`), outside the field
+frame and with no link to the round. The cached role only picks which *offline*
+screen renders; it opens nothing, and it never says "access denied". Either
+page also shows when `/api/me` failed with the browser online (a Worker error,
+a captive portal), where "Hors ligne" is loose; the band's strip names that case ("Vérification de votre session…").
 
 The cached identity is a rendering convenience, never proof: the Worker
 re-derives identity on every request from the session regardless of what the client claims to be. Its only other effect is that if the identity that

@@ -291,6 +291,15 @@ export const copy = {
     offline: "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible.",
   },
 
+  /** The Hors ligne screen of an admin whose identity came from the cache
+   * (ADR-0037, R6). Entry chunk, so it lives here and not in `copy/admin.ts`. */
+  adminOffline: {
+    title: "Vous êtes hors ligne",
+    body: "Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.",
+    retry: "Réessayer",
+    checking: "Vérification…",
+  },
+
   /** The service worker has a new build waiting (registerType: "prompt"). */
   update: {
     available: "Une nouvelle version est disponible.",

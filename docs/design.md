@@ -294,6 +294,13 @@ item that ends the session with `POST /api/auth/logout` and then opens `/login` 
 see [identity-access.md](domains/identity-access.md). The field avatar opens the
 account card ("Account card" below).
 
+The **Hors ligne screen** (ADR-0037, R6) is what a cached admin identity sees on
+`/admin/*`: the brand-only band (no tabs, no avatar), the empty-state shape (64px
+`secondary` tile with `WifiOff`, title, muted sentence) and one primary touch-size
+« Réessayer » button. While the re-check runs the button is disabled, `aria-busy`
+and shows the `Spinner` before « Vérification… »; a failed re-check returns to the
+same screen with no toast. It ships in the entry chunk.
+
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build
 waits, or — while `useOnline()` reports offline — a full-width `Alert`

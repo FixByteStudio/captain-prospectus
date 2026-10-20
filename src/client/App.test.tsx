@@ -878,7 +878,7 @@ describe("The admin tab and routes follow the network", () => {
 
       // Cache-sourced, so the admin routes stay shut however admin the cached
       // identity claims to be (invariant 10) — the other half of the tab.
-      expect(await screen.findByText(copy.adminRoute.offline)).toBeTruthy();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
 
       stub.identityUnreachable = false;
@@ -924,7 +924,7 @@ describe("The admin tab and routes follow the network", () => {
     }
   });
 
-  it("tells a cache-started admin on an /admin deep link that the page needs the network, inside the field frame, never that access is denied (GH #209)", async () => {
+  it("shows a cache-started admin on an /admin deep link the Hors ligne screen, with no field side and never access denied (ADR-0037)", async () => {
     const onlineSpy = mockOffline();
     try {
       await setMeta(fieldDb, "identity", ADMIN);
@@ -932,30 +932,120 @@ describe("The admin tab and routes follow the network", () => {
       stub.identityUnreachable = true;
       renderApp("/admin/prospects");
 
-      expect(await screen.findByText(copy.adminRoute.offline)).toBeTruthy();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+      expect(screen.getByText(copy.adminOffline.body)).toBeTruthy();
       expect(screen.queryByText(copy.errors.forbidden)).toBeNull();
       expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
-      expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
-        "/round",
-      );
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+      expect(screen.queryByRole("link", { name: copy.visit.back })).toBeNull();
+      expect(screen.queryByRole("navigation", { name: copy.nav.tabsLabel })).toBeNull();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
       onlineSpy.mockRestore();
     }
   });
 
-  it("gives the same page, not the forbidden state, when /api/me fails while the browser reports a network", async () => {
+  it("gives the same screen when /api/me fails while the browser reports a network", async () => {
     // A Worker 5xx or a captive portal: cache-sourced with no `offline` event.
-    // The sentence has no wording of its own for it yet (deferred-work.md).
     await setMeta(fieldDb, "identity", ADMIN);
     stub.me = ADMIN;
     stub.identityUnreachable = true;
     renderApp("/admin/prospects");
 
-    expect(await screen.findByText(copy.adminRoute.offline)).toBeTruthy();
+    expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
     expect(screen.queryByText(copy.errors.forbidden)).toBeNull();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
+  });
+
+  it("opens the admin frame at the same URL when Réessayer gets the server's answer", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin/prospects");
+
+      const retry = await screen.findByRole("button", { name: copy.adminOffline.retry });
+      stub.identityUnreachable = false;
+      act(() => {
+        retry.click();
+      });
+
+      expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("shows Vérification…, disabled and busy, while Réessayer waits on /api/me", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin");
+
+      const retry = await screen.findByRole("button", { name: copy.adminOffline.retry });
+      stub.identityUnreachable = false;
+      stub.identityPending = true;
+      act(() => {
+        retry.click();
+      });
+
+      const checking = await screen.findByRole("button", { name: copy.adminOffline.checking });
+      expect((checking as HTMLButtonElement).disabled).toBe(true);
+      expect(checking.getAttribute("aria-busy")).toBe("true");
+    } finally {
+      stub.identityPending = false;
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("returns to an enabled Réessayer, same screen, when the re-check is still unreachable", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin");
+
+      const retry = await screen.findByRole("button", { name: copy.adminOffline.retry });
+      act(() => {
+        retry.click();
+      });
+
+      await waitFor(() => {
+        const again = screen.getByRole("button", { name: copy.adminOffline.retry });
+        expect((again as HTMLButtonElement).disabled).toBe(false);
+      });
+      expect(screen.getByText(copy.adminOffline.title)).toBeTruthy();
+      expect(screen.queryByTestId("admin-frame")).toBeNull();
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("takes a cache-started admin from the Hors ligne screen to /login when Réessayer gets a 401", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin");
+
+      const retry = await screen.findByRole("button", { name: copy.adminOffline.retry });
+      stub.identityUnreachable = false;
+      stub.identityUnauthorized = true;
+      act(() => {
+        retry.click();
+      });
+
+      expect(await screen.findByText(copy.login.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/login");
+      expect(await getMeta(fieldDb, "identity")).toBeUndefined();
+    } finally {
+      onlineSpy.mockRestore();
+    }
   });
 
   it("keeps the forbidden words for the server's answer: a cached agent reads the network page first, then access denied once the re-check confirms the role", async () => {
