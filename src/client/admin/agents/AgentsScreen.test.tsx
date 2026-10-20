@@ -1,4 +1,4 @@
-/** The Agents page (GH #304): docs/design.md › Agents, ADR-0029. */
+/** The Utilisateurs page (GH #304, #594): docs/design.md › Utilisateurs, ADR-0029. */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -119,14 +119,63 @@ describe("AgentsScreen", () => {
   it("lists active users as the server sent them, with badge and Vous", async () => {
     stubFetch([[LEA, ADMIN, user("old@example.com", { active: false })]]);
     renderScreen();
-    const rows = await screen.findAllByRole("row");
-    expect(rows[1]?.textContent).toContain("Léa Dupont");
-    expect(rows[1]?.textContent).toContain(t.enrolled);
-    expect(rows[2]?.textContent).toContain(`sam@example.com · ${t.you}`);
+    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
+    const admins = within(screen.getByRole("region", { name: /^Administrateurs/ }));
+    const agentRows = agents.getAllByRole("row");
+    expect(agentRows[1]?.textContent).toContain("Léa Dupont");
+    expect(agentRows[1]?.textContent).toContain(t.enrolled);
+    expect(admins.getAllByRole("row")[1]?.textContent).toContain(`sam@example.com · ${t.you}`);
     expect(screen.queryByText("old@example.com")).toBeNull();
     expect(
       screen.getByRole("button", { name: t.deactivated(1) }).getAttribute("aria-expanded"),
     ).toBe("false");
+  });
+
+  it("lists Agents then Administrateurs with counts and no Rôle column", async () => {
+    stubFetch([[ADMIN, LEA, user("tom@example.com")]]);
+    renderScreen();
+    await screen.findByText("Léa Dupont");
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    expect(headings.map((h) => h.textContent)).toEqual([
+      `${t.sections.agent}2`,
+      `${t.sections.admin}1`,
+    ]);
+    expect(screen.queryByRole("columnheader", { name: "Rôle" })).toBeNull();
+    expect(screen.getAllByRole("table")).toHaveLength(2);
+    expect(screen.queryByText(/· (Agent|Admin)$/)).toBeNull();
+  });
+
+  it("shows no role text on phone rows", async () => {
+    setMobile(true);
+    stubFetch([[ADMIN, LEA]]);
+    renderScreen();
+    await screen.findByText("Léa Dupont");
+    expect(screen.queryByText(/· (Agent|Admin)$/)).toBeNull();
+    expect(screen.getAllByRole("list")).toHaveLength(2);
+  });
+
+  it("says so when there is no agent", async () => {
+    stubFetch([[ADMIN]]);
+    renderScreen();
+    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
+    expect(agents.getByText(t.noAgent)).toBeTruthy();
+    expect(
+      within(screen.getByRole("region", { name: /^Administrateurs/ })).getByText("Sam Owner"),
+    ).toBeTruthy();
+  });
+
+  it("gives each section its own Désactivés toggle", async () => {
+    const offAgent = user("old@example.com", { name: "Old Agent", active: false });
+    const offAdmin = user("gone@example.com", { name: "Gone Admin", role: "admin", active: false });
+    stubFetch([[ADMIN, LEA, offAgent, offAdmin]]);
+    renderScreen();
+    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
+    const admins = within(screen.getByRole("region", { name: /^Administrateurs/ }));
+    await userEvent.click(agents.getByRole("button", { name: t.deactivated(1) }));
+    expect(agents.getByText("Old Agent")).toBeTruthy();
+    expect(screen.queryByText("Gone Admin")).toBeNull();
+    await userEvent.click(admins.getByRole("button", { name: t.deactivated(1) }));
+    expect(admins.getByText("Gone Admin")).toBeTruthy();
   });
 
   it("shows no Désactivés button when nobody is deactivated", async () => {
@@ -827,7 +876,7 @@ describe("AgentsScreen", () => {
       setMobile(true);
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
-      expect((await screen.findAllByRole("listitem"))[0]?.textContent).toContain(t.you);
+      expect((await screen.findAllByRole("listitem"))[1]?.textContent).toContain(t.you);
       await openMenu("Sam Owner");
       expect(
         (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),

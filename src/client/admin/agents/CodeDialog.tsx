@@ -15,7 +15,7 @@ import { copyToClipboard } from "./copy-to-clipboard";
 const t = copy.agents.codeDialog;
 
 /**
- * The one time a code is shown (docs/design.md › Agents). Split 4 + 4 for
+ * The one time a code is shown (docs/design.md › Utilisateurs). Split 4 + 4 for
  * reading aloud; the server's normaliser ignores the space. The expiry is the
  * server's, in Brussels time, so a wrong device clock cannot misstate it.
  * Closing it any way is fine: the code works until it expires or is used.

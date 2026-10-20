@@ -237,8 +237,8 @@ sequence rather than compared. Figures are formatted for fr-FR: "1 284",
 ## Layout
 
 The admin side has a navy sidebar (GH #63): **Pilotage** (Tableau de bord,
-Agents), **Prospects** (Prospects, Import, Doublons) and **Terrain** (Visites,
-À rattacher, Scripts), each item a 36px row
+Utilisateurs), **Prospects** (Prospects, Import, Doublons) and **Terrain**
+(Visites, À rattacher, Scripts), each item a 36px row
 with an icon and a label, group labels in the overline style. The current item
 is a gold fill with navy text and a `primary-edge` inset; item text otherwise
 stays `band-foreground` in every state, including the `band-accent` hover
@@ -1290,30 +1290,41 @@ From `md` the list and the map sit side by side:
   280 px, then the list; from `md` the list is on the left and the map on the
   right, 80 % of the viewport tall and sticky.
 
-### Agents
+### Utilisateurs
 
-`/admin/users`, second in Pilotage (Lucide `Users`): who may sign in, with
-which role, and on which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+`/admin/users`, second in Pilotage (Lucide `Users`): who may sign in, and on
+which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
 Adding an agent is one form here, with no deploy. Built on the #175
-primitives: a `ScreenHeader`, a `ScreenState` gate and one `Surface` holding
-the rows.
+primitives: a `ScreenHeader`, a `ScreenState` gate and, per role, a heading
+with its count over its own `Surface` holding the rows. Agents come first,
+then Administrateurs. A role is fixed at creation
+([ADR-0037](adr/0037-admins-leave-the-field-side.md)), so the section heading
+names it and there is no Rôle column.
 
 ```
-│ Agents                                     [Ajouter un utilisateur] │
-│ Qui peut se connecter, et avec quel rôle.                           │
-├─────────────────────────────────────────────────────────────────────┤
-│ Utilisateur          Rôle            Inscription         Appareils  │
-│ › Léa Dupont         Agent           Inscrit                  2   ⋮ │
+  Utilisateurs                                 [Ajouter un utilisateur]
+  Qui peut se connecter, et sur quels appareils.
+
+  Agents 3
+┌─────────────────────────────────────────────────────────────────────┐
+│ Utilisateur                          Inscription         Appareils  │
+│ › Léa Dupont                         Inscrit                  2   ⋮ │
 │   lea@example.com                                                   │
 │     iPhone · Safari  Inscrit le 24/09  Vu le 07/10 15:24 [Révoquer] │
-│ › Marc Peeters       Agent           Pas encore inscrit       0   ⋮ │
-│ › Sam Owner          Admin           Inscrit                  1   ⋮ │
-├─────────────────────────────────────────────────────────────────────┤
+│ › Marc Peeters                       Pas encore inscrit       0   ⋮ │
+└─────────────────────────────────────────────────────────────────────┘
   › Désactivés (1)
+
+  Administrateurs 2
+┌─────────────────────────────────────────────────────────────────────┐
+│ Utilisateur                          Inscription         Appareils  │
+│ › Nadia Benali                       Inscrit                  1   ⋮ │
+│ › Sam Owner                          Inscrit                  2   ⋮ │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Header.** "Agents", lede "Qui peut se connecter, et avec quel rôle.", and
-  one `default` Button, "Ajouter un utilisateur".
+- **Header.** "Utilisateurs", lede "Qui peut se connecter, et sur quels
+  appareils.", and one `default` Button, "Ajouter un utilisateur".
 - **Adding opens a `Dialog`** titled "Ajouter un utilisateur", a shadcn
   `form` (ADR-0018) whose resolver is a `z.pick` of the shared schema:
   "Adresse e-mail", "Nom", and "Rôle" as a `Select` of "Agent" (the default)
@@ -1325,10 +1336,14 @@ the rows.
   refused with "Cette adresse a déjà un compte. S'il est désactivé,
   réactivez-le sous Désactivés." Users are never deleted, so a typo is fixed
   by deactivating the wrong row.
+- **Two sections**, « Agents » then « Administrateurs »: a `text-heading`
+  heading with the active count in meta, tabular, over its own `Surface`.
+  An Agents section with no active agent holds one muted line, "Aucun agent.
+  Ajoutez-en un pour lancer les tournées."; Administrateurs is never empty
+  (you are in it).
 - **One row per active user**, by name. Utilisateur is the name, the email
-  under it in meta. Rôle is plain text, "Agent" or "Admin".
-  Inscription is a badge: "Inscrit" (`tint-success`) when the user has at
-  least one live session, "Pas encore inscrit" (`secondary`) otherwise.
+  under it in meta. Inscription is a badge: "Inscrit" (`tint-success`) when
+  the user has at least one live session, "Pas encore inscrit" (`secondary`) otherwise.
   Appareils is the count of live sessions in tabular figures. The signed-in admin's own row carries
   "Vous" in meta after the email.
 - **The row expands to its devices.** A chevron before the name opens one
@@ -1384,22 +1399,23 @@ the rows.
   assigned, refetched when the dialog opens; the story that adds the users
   routes names its field in [api.md](api.md). Deactivating your own row
   (allowed when another admin is active) signs you out.
-- **Désactivés.** Under the `Surface`, a ghost Button "Désactivés ({n})" with
-  a chevron and `aria-expanded` shows a second list of the same columns,
+- **Désactivés.** Under each section's `Surface`, a ghost Button
+  "Désactivés ({n})" with a chevron and `aria-expanded` shows a second list
+  of that section's deactivated users only, with the same columns,
   names in `muted-foreground`, no devices (deactivation deleted them), and
   one action per row, a `secondary` "Réactiver". A reactivated user returns
   to the active list as "Pas encore inscrit" and needs a new code; the toast
   says "Utilisateur réactivé." The button
-  is absent when no user is deactivated.
+  is absent from a section with no deactivated user.
 - **Below 768px** the table becomes a list of rows, as on Prospects
-  (`useIsMobile()`): name and badge on the first line, email and role on the
+  (`useIsMobile()`): name and badge on the first line, email on the
   second, the device count and the row menu on the right. A device line
-  wraps under its label: dates on one line, "Révoquer" on the right. The
-  Désactivés list takes the same shape.
+  wraps under its label: dates on one line, "Révoquer" on the right. Each
+  section and its Désactivés list take the same shape.
 - **Loading and failure** go through `ScreenState`: skeleton rows with a
   visually hidden "Chargement des utilisateurs…", or "Impossible de charger
-  les utilisateurs." with "Réessayer". There is no empty state: the admin
-  reading the page is always a row.
+  les utilisateurs." with "Réessayer". The only empty state is the Agents
+  line above.
 
 ## Principles
 

@@ -33,3 +33,5 @@ Verify: A screen test shows the two sections with no role toggle, the dev server
 ## Plan
 
 <!-- Filled in by the coding agent; never sent to a tracker. -->
+
+Built from `_bmad-output/implementation-artifacts/spec-gh-594-utilisateurs-screen-in-two-sections.md`; mockup approved 2026-10-20 (`mockup-utilisateurs-screen.png`): Agents then Administrateurs, a Désactivés toggle per section, the add dialog unchanged.

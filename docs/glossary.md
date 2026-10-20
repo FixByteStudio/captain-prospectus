@@ -59,7 +59,7 @@ Every client path is an English slug, whatever the French label on screen. A new
 | Add prospect | Ajouter | `/round/new` |
 | Visit form | Nouvelle visite | `/round/:id` |
 | Dashboard | Tableau de bord | `/admin` |
-| Users | Agents | `/admin/users` |
+| Users | Utilisateurs | `/admin/users` |
 | Prospects | Prospects | `/admin/prospects` |
 | Import | Import | `/admin/import` |
 | Duplicates | Doublons | `/admin/duplicates` |

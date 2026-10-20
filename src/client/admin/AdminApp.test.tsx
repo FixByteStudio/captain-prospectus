@@ -150,10 +150,12 @@ describe("AdminApp", () => {
     expect(line.closest("[data-slot=sidebar-footer]")).toBeTruthy();
   });
 
-  it("registers /admin/users: the Agents screen opens", async () => {
+  it("registers /admin/users: the Utilisateurs screen opens, named so in the sidebar", async () => {
     renderAdmin("/admin/users");
 
-    expect(await screen.findByRole("heading", { level: 2, name: copy.agents.title })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "Utilisateurs" })).toBeTruthy();
+    const links = screen.getAllByRole("link", { name: "Utilisateurs" });
+    expect(links.map((a) => a.getAttribute("href"))).toContain("/admin/users");
   });
 
   it("registers /admin/round: the round screen opens, asking for an agent", async () => {
