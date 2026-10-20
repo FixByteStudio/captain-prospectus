@@ -12,7 +12,7 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
    or more after the last slide pushes it to now + the role's lifetime (30 days admin, 90 days
    agent) and re-sends the cookie, so a device in use stays signed in. Each session carries a public
    id and a device label from the User-Agent at login; an admin revokes one device by that id from
-   the Agents page, and its next request is a 401.
+   the Utilisateurs page, and its next request is a 401.
 2. **`DEV_USER_EMAIL`**, on localhost only (below). After the session, so a developer signed in
    through `/login` is who the session says.
 3. Otherwise **401**.
@@ -37,7 +37,7 @@ repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret ge
 `POST /api/auth/logout` deletes the device's session.
 
 **An admin's passphrase** is the same admin form, for everyday sign-ins. An admin picks "Nouvelle
-phrase de passe" on their own row of the Agents page, and only there: after a confirmation, the
+phrase de passe" on their own row of the Utilisateurs page, and only there: after a confirmation, the
 server generates 20 Crockford base32 characters (100 bits), shows them once and stores only their
 HMAC ([api](../api.md#admin)). Nobody chooses a passphrase or sees another user's. Generating a new
 one replaces the old at once; sessions stay. The login tries break-glass first, then the user's

@@ -52,16 +52,17 @@ export function UsersTable({
   actions: UsersActions;
 }) {
   return (
-    <Table>
+    <Table className="min-w-xl table-fixed">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className="w-full min-w-48 pl-3.5">{copy.agents.columns.user}</TableHead>
-          <TableHead>{copy.agents.columns.role}</TableHead>
-          <TableHead>{copy.agents.columns.enrolment}</TableHead>
-          <TableHead className="text-right">
+          <TableHead className="pl-3.5">{copy.agents.columns.user}</TableHead>
+          <TableHead className="w-48">{copy.agents.columns.enrolment}</TableHead>
+          {/* A deactivated row has no devices but a wider Réactiver: the two
+              swap width so Inscription lines up with the active table above. */}
+          <TableHead className={cn("text-right", deactivated ? "w-12" : "w-28")}>
             {deactivated ? "" : copy.agents.columns.devices}
           </TableHead>
-          <TableHead className="w-10" />
+          <TableHead className={deactivated ? "w-32" : "w-16"} />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -83,9 +84,6 @@ export function UsersTable({
                       <UserCell user={user} self={actions.self} />
                     </div>
                   )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {copy.agents.roles[user.role]}
                 </TableCell>
                 <TableCell>
                   <EnrolmentBadge user={user} />
@@ -117,7 +115,7 @@ export function UsersTable({
               </TableRow>
               {open && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="pr-3.5 pl-11">
+                  <TableCell colSpan={4} className="pr-3.5 pl-11">
                     <DeviceLines
                       devices={user.devices}
                       variant="table"

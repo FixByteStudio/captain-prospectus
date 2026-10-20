@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
+import type { Role } from "../../../shared/constants";
 import type { Device, LoginCodeResponse, User } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { copy } from "../../copy";
@@ -23,14 +24,70 @@ import type { UsersActions } from "./UsersTable";
 
 const t = copy.agents;
 
-/** `/admin/users` — docs/design.md › Agents. `email` is the signed-in admin. */
+/** Agents first: they are the rows an admin works with most (owner, 2026-10-20). */
+const SECTION_ORDER: readonly Role[] = ["agent", "admin"];
+
+type RowsComponent = typeof UsersList | typeof UsersTable;
+
+/** One role's heading with its count, its rows, and its own Désactivés toggle. */
+function UsersSection({
+  role,
+  active,
+  deactivated,
+  Rows,
+  actions,
+}: {
+  role: Role;
+  active: User[];
+  deactivated: User[];
+  Rows: RowsComponent;
+  actions: UsersActions;
+}) {
+  const [showDeactivated, setShowDeactivated] = useState(false);
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-2">
+      <h3 id={headingId} className="text-heading flex items-baseline gap-2">
+        {t.sections[role]}
+        <span className="text-muted-foreground text-meta tnum">{active.length}</span>
+      </h3>
+      <Surface className="overflow-hidden">
+        {active.length === 0 && role === "agent" ? (
+          <p className="text-muted-foreground p-4">{t.noAgent}</p>
+        ) : (
+          <Rows users={active} actions={actions} />
+        )}
+      </Surface>
+
+      {deactivated.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="ghost"
+            className="self-start"
+            aria-expanded={showDeactivated}
+            onClick={() => setShowDeactivated((v) => !v)}
+          >
+            {showDeactivated ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            {t.deactivated(deactivated.length)}
+          </Button>
+          {showDeactivated && (
+            <Surface className="overflow-hidden" aria-label={t.deactivatedLabel(role)}>
+              <Rows users={deactivated} deactivated actions={actions} />
+            </Surface>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** `/admin/users` — docs/design.md › Utilisateurs. `email` is the signed-in admin. */
 export function AgentsScreen({ email }: { email: string }) {
   const query = useUsers();
   const update = useUpdateUser();
   const isMobile = useIsMobile();
   const [adding, setAdding] = useState(false);
   const [deactivating, setDeactivating] = useState<string | null>(null);
-  const [showDeactivated, setShowDeactivated] = useState(false);
   const generate = useGenerateCode();
   const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
   const [replacingPassphrase, setReplacingPassphrase] = useState(false);
@@ -132,28 +189,16 @@ export function AgentsScreen({ email }: { email: string }) {
           const Rows = isMobile ? UsersList : UsersTable;
           return (
             <>
-              <Surface className="overflow-hidden">
-                <Rows users={active} actions={actions} />
-              </Surface>
-
-              {deactivated.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <Button
-                    variant="ghost"
-                    className="self-start"
-                    aria-expanded={showDeactivated}
-                    onClick={() => setShowDeactivated((v) => !v)}
-                  >
-                    {showDeactivated ? <ChevronDownIcon /> : <ChevronRightIcon />}
-                    {t.deactivated(deactivated.length)}
-                  </Button>
-                  {showDeactivated && (
-                    <Surface className="overflow-hidden" aria-label={t.deactivatedLabel}>
-                      <Rows users={deactivated} deactivated actions={actions} />
-                    </Surface>
-                  )}
-                </div>
-              )}
+              {SECTION_ORDER.map((role) => (
+                <UsersSection
+                  key={role}
+                  role={role}
+                  active={active.filter((u) => u.role === role)}
+                  deactivated={deactivated.filter((u) => u.role === role)}
+                  Rows={Rows}
+                  actions={actions}
+                />
+              ))}
             </>
           );
         }}

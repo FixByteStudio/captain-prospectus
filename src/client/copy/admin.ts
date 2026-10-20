@@ -3,7 +3,7 @@
  * through `../copy.ts`, never from a field-reachable module (GH #20).
  */
 import { formatCount, formatRadiusKm } from "../format";
-import type { DashboardPeriod, OrphanReason } from "../../shared/constants";
+import type { DashboardPeriod, OrphanReason, Role } from "../../shared/constants";
 
 /** The 25-row pager's words, shared by Prospects and Visites; each adds its own `nav`. */
 const PAGER = {
@@ -22,16 +22,17 @@ export const adminCopy = {
     reconnected: "Connexion rétablie.",
   },
 
-  /** The Agents page (GH #304, docs/design.md › Agents). */
+  /** The Utilisateurs page (GH #304, #594; docs/design.md › Utilisateurs). */
   agents: {
-    title: "Agents",
-    subtitle: "Qui peut se connecter, et avec quel rôle.",
+    title: "Utilisateurs",
+    subtitle: "Qui peut se connecter, et sur quels appareils.",
+    sections: { agent: "Agents", admin: "Administrateurs" },
+    noAgent: "Aucun agent. Ajoutez-en un pour lancer les tournées.",
     loading: "Chargement des utilisateurs…",
     loadFailed: "Impossible de charger les utilisateurs.",
     add: "Ajouter un utilisateur",
     columns: {
       user: "Utilisateur",
-      role: "Rôle",
       enrolment: "Inscription",
       devices: "Appareils",
     },
@@ -46,7 +47,8 @@ export const adminCopy = {
     reactivate: "Réactiver",
     lastAdmin: "Il faut au moins un administrateur actif.",
     deactivated: (n: number) => `Désactivés (${n})`,
-    deactivatedLabel: "Utilisateurs désactivés",
+    deactivatedLabel: (role: Role) =>
+      role === "agent" ? "Agents désactivés" : "Administrateurs désactivés",
 
     /** A row's device lines (GH #307). `date` and `dateTime` come formatted. */
     devices: {

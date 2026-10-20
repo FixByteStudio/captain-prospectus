@@ -171,7 +171,7 @@ HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. 
 counts while `expires_at` is in the future and its user is `active`; the role is read from
 `users` on every request. The expiry slides: a request at least an hour after `last_seen_at`
 sets it to now and `expires_at` to now + the role's lifetime (30 d admin, 90 d agent) in one
-conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Agents page revokes a
+conditional `UPDATE`, and re-sends the cookie. `id` is a random public id the Utilisateurs page revokes a
 device by, so the hash never leaves the Worker; it is NOT NULL. `device_label` is parsed from
 the User-Agent at login ("iPhone · Safari"); the raw header is never stored. The nightly sweep
 deletes rows with `expires_at` in the past, however long since the session was last seen.
@@ -285,7 +285,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `scripts(name, version)` unique | a version is a version *of* a script |
 | `visits_orphaned(quarantined_at)` | the repair queue's only ordering |
 | `imports(started_at)` | `GET /api/admin/imports`, the 20 newest |
-| `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Agents page's device list |
+| `sessions(user_email)` | a user's sessions: signing every device out on deactivation, the Utilisateurs page's device list |
 | `sessions(id)` unique | revoking one device by its public id |
 | `login_codes(user_email)` | a user's codes: superseding them on generate, deleting them on deactivation |
 

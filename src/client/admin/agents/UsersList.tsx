@@ -8,7 +8,7 @@ import { RowMenu, displayName } from "./RowMenu";
 import type { UsersActions } from "./UsersTable";
 
 /**
- * Below 768px: name and badge, then email and role, the count and the menu on
+ * Below 768px: name and badge, then email, the count and the menu on
  * the right; an open row's device lines under it.
  */
 export function UsersList({
@@ -44,7 +44,6 @@ export function UsersList({
                 <p className="text-muted-foreground text-meta truncate">
                   {user.email}
                   {user.email === actions.self ? ` · ${copy.agents.you}` : ""}
-                  {` · ${copy.agents.roles[user.role]}`}
                 </p>
               </div>
               {deactivated ? (
