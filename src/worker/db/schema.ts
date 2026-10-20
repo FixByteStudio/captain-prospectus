@@ -127,8 +127,15 @@ export const visits = sqliteTable(
     visitedAt: integer("visited_at").notNull(),
     /** The raw phone clock value, unclamped, so skew stays visible. */
     clientVisitedAt: integer("client_visited_at").notNull(),
-    /** Server clock. The live feed orders by this; history orders by visitedAt. */
+    /** Server clock: when the phone's sync arrived. History orders by visitedAt. */
     receivedAt: integer("received_at").notNull(),
+    /**
+     * Null on every synced visit. Set only by an orphan's repair, to the repair's
+     * clock, so the live feed lists it then: `received_at` stays when the phone's
+     * sync arrived (clamp, export, recap, retention read it). Written at insert,
+     * never updated.
+     */
+    repairedAt: integer("repaired_at"),
 
     lat: real("lat"),
     lng: real("lng"),
@@ -155,6 +162,8 @@ export const visits = sqliteTable(
   (t) => [
     index("visits_prospect_visited_idx").on(t.prospectId, t.visitedAt),
     index("visits_received_idx").on(t.receivedAt),
+    // The live feed's clock, written as the same text the feed queries.
+    index("visits_listed_idx").on(sql`coalesce(${t.repairedAt}, ${t.receivedAt})`),
     index("visits_agent_visited_idx").on(t.agentEmail, t.visitedAt),
     index("visits_visited_idx").on(t.visitedAt),
   ],

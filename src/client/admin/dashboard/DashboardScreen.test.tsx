@@ -645,6 +645,7 @@ function doorDay(n: number, over: Partial<AdminDoorDay> = {}): AdminDoorDay {
     dayStart: 0,
     visitedAt: n * 1000,
     receivedAt: n * 1000,
+    listedAt: n * 1000,
     flyerGiven: false,
     outcome: "interested" as const,
     followUpAt: null,

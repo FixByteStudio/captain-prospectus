@@ -1570,11 +1570,12 @@ function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined
  * Door-days as they arrive — ADR-0010, ADR-0036 R13, docs/design.md "The live
  * feed": one row per agent, prospect and Brussels day, each carrying its visits.
  *
- * Ordered by the door-day's greatest `received_at`, not `visited_at`: the feed
- * answers "what has reached me", and a phone that synced a three-day-old visit
- * this minute is news. `visits_received_idx` exists for exactly this ordering.
+ * Ordered by the door-day's greatest `coalesce(repaired_at, received_at)`
+ * (`listedAt`), not `visited_at`: the feed answers "what has reached me", and a
+ * phone that synced a three-day-old visit this minute, or an admin who repaired
+ * an orphan, is news. `visits_listed_idx` exists for exactly this ordering.
  *
- * `since` is exclusive, so the client can pass back the greatest `receivedAt` it
+ * `since` is exclusive, so the client can pass back the greatest `listedAt` it
  * saw and get only the door-days touched since, each whole. Polling every 15 s
  * makes that the difference between 500 rows and none.
  *
@@ -1854,6 +1855,8 @@ adminRoutes.post(
           visitedAt: held.visitedAt,
           clientVisitedAt: held.clientVisitedAt,
           receivedAt: held.receivedAt,
+          // The feed's clock: the one non-sync way a visit enters `visits`.
+          repairedAt: now,
           lat: held.lat,
           lng: held.lng,
           flyerGiven: held.flyerGiven,

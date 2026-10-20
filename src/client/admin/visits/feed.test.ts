@@ -22,6 +22,7 @@ function doorDay(key: string, receivedAt: number, outcome = "interested"): Admin
     dayStart: 0,
     visitedAt: receivedAt,
     receivedAt,
+    listedAt: receivedAt,
     outcome: latest.outcome,
     refusalReason: null,
     flyerGiven: true,
@@ -67,8 +68,24 @@ describe("mergeDoorDays", () => {
   });
 });
 
+describe("a repaired orphan (GH #528)", () => {
+  // Received long ago, listed at the repair: the feed clock is `listedAt`.
+  const repaired = { ...doorDay("a", 1, "converted"), listedAt: 9 };
+
+  it("sorts to the top and moves the cursor on listedAt, not receivedAt", () => {
+    const held = [doorDay("b", 5)];
+    const merged = mergeDoorDays(held, [repaired]);
+    expect(merged.map((d) => d.key)).toEqual(["a", "b"]);
+    expect(nextSince(merged)).toBe(9);
+  });
+
+  it("is marked as arrived though its receivedAt did not grow", () => {
+    expect(arrivedKeys([doorDay("a", 1)], [repaired])).toEqual(["a"]);
+  });
+});
+
 describe("nextSince", () => {
-  it("is the highest receivedAt held, not the newest-first row", () => {
+  it("is the highest listedAt held, not the newest-first row", () => {
     expect(nextSince([doorDay("a", 3), doorDay("b", 9), doorDay("c", 1)])).toBe(9);
   });
 

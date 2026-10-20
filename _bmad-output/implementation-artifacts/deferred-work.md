@@ -442,3 +442,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-415-449-450-sync-cpu-measurement.md`
   summary: Pin the limits `scripts/measure-sync-cpu.mjs` copies from `src/` (MAX_REQUEST_BYTES, LONG_TEXT_MAX, SCRIPT_QUESTIONS_MAX, QUESTION_*, SYNC_*, SESSION_SLIDE_MS) with a parity test in `scripts/*.test.mjs`.
   evidence: The script may not import `src/`; a limit that tightens fails a run loudly, but one that loosens leaves `PAYLOAD=max` sending a lighter body, so the budget doc's "heaviest the server accepts" figure goes stale silently.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-528-repaired-orphan-visites-live-feed.md`
+  summary: A feed-clock stamp taken at request start can land below a cursor already lifted by a write that committed first, so that visit is skipped by an open ledger.
+  evidence: Sync and repair both read `now` before their awaits and insert later; a poll between a later-stamped commit and an earlier-stamped one moves `since` past the earlier one. Low likelihood with two agents and one admin.

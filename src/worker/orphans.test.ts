@@ -229,6 +229,36 @@ describe("POST /api/admin/visits/orphaned/:id/repair", () => {
     expect(stored?.receivedAt).toBe(before?.receivedAt);
   });
 
+  it("stamps repaired_at so the live feed lists it past an earlier cursor (GH #528)", async () => {
+    const db = getDb(env.DB);
+    const prospectId = crypto.randomUUID();
+    await seedProspect(prospectId);
+    const visitId = await quarantine();
+    // Received a minute ago, so the repair's clock is past the cursor however fast it runs.
+    await db
+      .update(visitsOrphaned)
+      .set({ receivedAt: Date.now() - 60_000 })
+      .where(eq(visitsOrphaned.id, visitId));
+    const [before] = await db.select().from(visitsOrphaned).where(eq(visitsOrphaned.id, visitId));
+    const cursor = (before?.receivedAt ?? 0) + 1;
+
+    await post(`/api/admin/visits/orphaned/${visitId}/repair`, { prospectId });
+    const [stored] = await db.select().from(visits);
+    expect(stored?.repairedAt).toBeGreaterThanOrEqual(cursor);
+    expect(stored?.receivedAt).toBe(before?.receivedAt);
+
+    const feed = (await (await call(`/api/admin/visits?since=${cursor}`)).json()) as {
+      doorDays: { visits: { id: string }[]; listedAt: number }[];
+    };
+    expect(feed.doorDays.map((d) => d.visits.map((v) => v.id))).toEqual([[visitId]]);
+    expect(feed.doorDays[0]?.listedAt).toBe(stored?.repairedAt);
+
+    // A replay writes nothing, so the clock stays put.
+    await post(`/api/admin/visits/orphaned/${visitId}/repair`, { prospectId });
+    const [again] = await db.select().from(visits);
+    expect(again?.repairedAt).toBe(stored?.repairedAt);
+  });
+
   it("carries the refusal reason through repair", async () => {
     const db = getDb(env.DB);
     const prospectId = crypto.randomUUID();

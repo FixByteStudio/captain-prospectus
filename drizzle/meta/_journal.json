@@ -134,6 +134,13 @@
       "when": 1792256815932,
       "tag": "0018_skinny_tana_nile",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1792417512032,
+      "tag": "0019_powerful_metal_master",
+      "breakpoints": true
     }
   ]
 }

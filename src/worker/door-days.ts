@@ -3,7 +3,7 @@
  * of the day decides the outcome, so a correction replaces the earlier answer
  * while the visits themselves stay as they are. The rule lives here, once.
  */
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, sql, type SQL } from "drizzle-orm";
 import { chunk } from "../shared/chunk";
 import type { Outcome, RefusalReason } from "../shared/constants";
 import { brusselsMidnightDaysFromNow } from "../shared/period";
@@ -18,6 +18,13 @@ import type { Db } from "./db/client";
  * in `doorDaysTouched`'s join with `json_each`.
  */
 const LATEST_VISIT_FIRST = sql`${visits.visitedAt} desc, ${visits.receivedAt} desc, ${visits.id} desc`;
+
+/**
+ * The live feed's clock: when the visit entered `visits`. A repaired orphan keeps
+ * its original `received_at` and is stamped `repaired_at`, so the feed's cursor
+ * sees it. `visits_listed_idx` is declared on this same expression.
+ */
+const LISTED_AT = sql`coalesce(${visits.repairedAt}, ${visits.receivedAt})`;
 
 /**
  * The door-days of every agent over `[from, to)` as a subquery body (no
@@ -172,7 +179,7 @@ export async function doorDaysTouched(
   }: { since: number; from?: number; to?: number; reason?: RefusalReason; limit: number },
 ): Promise<DoorDaysTouched> {
   const filters = [
-    since > 0 ? gt(visits.receivedAt, since) : undefined,
+    since > 0 ? sql`${LISTED_AT} > ${since}` : undefined,
     from !== undefined ? gte(visits.receivedAt, from) : undefined,
     to !== undefined ? lte(visits.receivedAt, to) : undefined,
     reason !== undefined ? eq(visits.refusalReason, reason) : undefined,
@@ -184,10 +191,11 @@ export async function doorDaysTouched(
       prospectId: visits.prospectId,
       visitedAt: visits.visitedAt,
       receivedAt: visits.receivedAt,
+      listedAt: sql<number>`${LISTED_AT}`,
     })
     .from(visits)
     .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(...(since > 0 ? [asc(visits.receivedAt), asc(visits.id)] : [desc(visits.receivedAt)]))
+    .orderBy(...(since > 0 ? [asc(LISTED_AT), asc(visits.id)] : [desc(LISTED_AT)]))
     .limit(limit + 1);
   const truncated = read.length > limit;
   const touched = truncated ? read.slice(0, limit) : read;
@@ -195,29 +203,25 @@ export async function doorDaysTouched(
 
   const last = touched[touched.length - 1];
   const past = read[limit];
-  if (
-    since > 0 &&
-    last !== undefined &&
-    past !== undefined &&
-    past.receivedAt === last.receivedAt
-  ) {
+  if (since > 0 && last !== undefined && past !== undefined && past.listedAt === last.listedAt) {
     // The cut splits one arrival: take it whole, or the next poll's `since`
-    // (that very `received_at`) would skip the rest of it for good.
+    // (that very feed clock) would skip the rest of it for good.
     const tie = await db
       .select({
         agentEmail: visits.agentEmail,
         prospectId: visits.prospectId,
         visitedAt: visits.visitedAt,
         receivedAt: visits.receivedAt,
+        listedAt: sql<number>`${LISTED_AT}`,
       })
       .from(visits)
-      .where(and(...filters, eq(visits.receivedAt, last.receivedAt)));
+      .where(and(...filters, sql`${LISTED_AT} = ${last.listedAt}`));
     touched.push(...tie);
   }
 
   const days = brusselsDays(touched.map((v) => v.visitedAt));
   let newest = 0;
-  for (const v of touched) newest = Math.max(newest, v.receivedAt);
+  for (const v of touched) newest = Math.max(newest, v.listedAt);
   const keys = new Map<string, [string, string, number, number]>();
   for (const v of touched) {
     // Set by `brusselsDays` for every instant it was given.
@@ -239,6 +243,7 @@ export async function doorDaysTouched(
     day_start: number;
     visited_at: number;
     received_at: number;
+    listed_at: number;
     outcome: Outcome;
     refusal_reason: RefusalReason | null;
     flyer_given: number;
@@ -254,6 +259,7 @@ export async function doorDaysTouched(
       json_extract(k.value, '$[2]') as day_start,
       "visits"."visited_at" as visited_at,
       "visits"."received_at" as received_at,
+      ${LISTED_AT} as listed_at,
       "visits"."outcome" as outcome,
       "visits"."refusal_reason" as refusal_reason,
       "visits"."flyer_given" as flyer_given,
@@ -268,7 +274,7 @@ export async function doorDaysTouched(
       and "visits"."agent_email" = json_extract(k.value, '$[0]')
       -- A visit synced after the first read waits for the next poll: it would
       -- lift the cursor past a door-day that read never touched.
-      and "visits"."received_at" <= ${newest}
+      and ${LISTED_AT} <= ${newest}
     join ${prospects} on ${prospects.id} = "visits"."prospect_id"
     order by ${LATEST_VISIT_FIRST}
   `);
@@ -293,6 +299,7 @@ export async function doorDaysTouched(
       held.visits.push(visit);
       held.flyerGiven ||= visit.flyerGiven;
       held.receivedAt = Math.max(held.receivedAt, visit.receivedAt);
+      held.listedAt = Math.max(held.listedAt, row.listed_at);
       continue;
     }
     byKey.set(key, {
@@ -303,6 +310,7 @@ export async function doorDaysTouched(
       dayStart: row.day_start,
       visitedAt: visit.visitedAt,
       receivedAt: visit.receivedAt,
+      listedAt: row.listed_at,
       outcome: visit.outcome,
       refusalReason: visit.refusalReason,
       flyerGiven: visit.flyerGiven,
@@ -315,7 +323,7 @@ export async function doorDaysTouched(
   const doorDays = [...byKey.values()]
     // A refusal count reads the latest visit only (R12), so the filter does too.
     .filter((d) => reason === undefined || d.refusalReason === reason)
-    .sort((a, b) => b.receivedAt - a.receivedAt || a.key.localeCompare(b.key));
+    .sort((a, b) => b.listedAt - a.listedAt || a.key.localeCompare(b.key));
   for (const d of doorDays) d.visits.reverse();
   return { doorDays, truncated };
 }
