@@ -42,7 +42,7 @@ server generates 20 Crockford base32 characters (100 bits), shows them once and 
 HMAC ([api](../api.md#admin)). Nobody chooses a passphrase or sees another user's. Generating a new
 one replaces the old at once; sessions stay. The login tries break-glass first, then the user's
 passphrase, read like a code (case, spaces and hyphens ignored, I/L as 1, O as 0): it opens a
-30-day admin session for an active admin whose hash matches. Demoting or deactivating a user clears
+30-day admin session for an active admin whose hash matches. Deactivating a user clears
 their passphrase. Every refusal — unknown email, no passphrase, deactivated, agent, wrong
 passphrase — gets the same 401 after the same work, and nothing logs a passphrase or its hash.
 
@@ -62,7 +62,7 @@ ended ([data-model](../data-model.md)).
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |
 | Read an agent's position of the day ([ADR-0028](../adr/0028-agent-position-at-sync.md)) | | ✓ |
-| Manage users: add one, change a role, deactivate or reactivate | | ✓ |
+| Manage users: add one, with a role fixed at creation ([ADR-0037](../adr/0037-admins-leave-the-field-side.md)); deactivate or reactivate | | ✓ |
 | Generate a one-time code for any user, their own row included | | ✓ |
 | Revoke one device's session | | ✓ |
 | Regenerate one's own passphrase | | ✓ |

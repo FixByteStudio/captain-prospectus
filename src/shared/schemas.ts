@@ -594,13 +594,11 @@ export const userCreateSchema = z.object({
 });
 export type UserCreate = z.infer<typeof userCreateSchema>;
 
-/** PATCH /api/admin/users/:email: what is absent stays as it is. */
-export const userUpdateSchema = z
-  .object({
-    role: z.optional(roleSchema),
-    active: z.optional(z.boolean()),
-  })
-  .check(z.refine((v) => v.role !== undefined || v.active !== undefined));
+/**
+ * PATCH /api/admin/users/:email: only `active`. A role is fixed at creation
+ * (ADR-0037), so a body carrying `role` or any other key is a 400.
+ */
+export const userUpdateSchema = z.strictObject({ active: z.boolean() });
 export type UserUpdate = z.infer<typeof userUpdateSchema>;
 
 /** DELETE /api/admin/sessions/:id. */

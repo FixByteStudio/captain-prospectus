@@ -16,7 +16,6 @@ export type UsersActions = {
   onGenerateCode: (user: User) => void;
   /** Only ever offered on the `self` row: a passphrase is shown to its owner alone. */
   onNewPassphrase: () => void;
-  onToggleRole: (user: User) => void;
   onDeactivate: (user: User) => void;
   onReactivate: (user: User) => void;
   /** Emails whose device lines are open. */
@@ -111,7 +110,6 @@ export function UsersTable({
                       onNewPassphrase={
                         user.email === actions.self ? actions.onNewPassphrase : undefined
                       }
-                      onToggleRole={() => actions.onToggleRole(user)}
                       onDeactivate={() => actions.onDeactivate(user)}
                     />
                   )}

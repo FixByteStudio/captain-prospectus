@@ -79,19 +79,6 @@ export function AgentsScreen({ email }: { email: string }) {
     setIssued({ name: displayName(user), code });
   };
 
-  const toggleRole = async (user: User) => {
-    const role = user.role === "admin" ? "agent" : "admin";
-    try {
-      await update.mutateAsync({ email: user.email, update: { role } });
-    } catch (error) {
-      failureToast(error);
-      return;
-    }
-    toast.success(t.toast.roleChanged);
-    // /admin no longer answers them: land on the round, re-reading who they are.
-    if (user.email === email && role === "agent") window.location.assign("/round");
-  };
-
   const reactivate = async (user: User) => {
     try {
       await update.mutateAsync({ email: user.email, update: { active: true } });
@@ -135,7 +122,6 @@ export function AgentsScreen({ email }: { email: string }) {
             lastAdmin: activeAdmins.length === 1 ? (activeAdmins[0]?.email ?? null) : null,
             onGenerateCode: (user) => void generateCode(user),
             onNewPassphrase: () => setReplacingPassphrase(true),
-            onToggleRole: (user) => void toggleRole(user),
             onDeactivate: (user) => setDeactivating(user.email),
             onReactivate: (user) => void reactivate(user),
             expanded,

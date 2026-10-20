@@ -1335,16 +1335,14 @@ the rows.
   session whose User-Agent gave no summary is labelled "Appareil inconnu".
 - **The row menu** (`DropdownMenu`, `MoreVertical`) holds, in order:
   "Générer un code"; "Nouvelle phrase de passe", on the signed-in admin's own
-  row only; "Passer admin" or "Passer agent"; and, after a
-  separator, "Désactiver" in `destructive`. On the last active admin's row,
-  "Passer agent" and "Désactiver" are disabled with "Il faut au moins un
-  administrateur actif." in meta under them; should the server still refuse
-  (another admin acted first), that sentence is the error toast. A role
-  change applies at once, with the toast "Rôle modifié."; an admin who makes
-  themselves an agent lands on the round, since `/admin` no longer answers
-  them. Any other failed action on this page — add, revoke, role change,
-  code, passphrase, deactivate, reactivate — keeps the screen as it was and
-  toasts "L'action n'a pas abouti. Réessayez."
+  row only; and, after a separator, "Désactiver" in
+  `destructive`. There is no role item: a role is fixed at creation
+  ([ADR-0037](adr/0037-admins-leave-the-field-side.md)). On the last active
+  admin's row, "Désactiver" is disabled with "Il faut au moins un
+  administrateur actif." in meta under it; should the server still refuse
+  (another admin acted first), that sentence is the error toast. Any other
+  failed action on this page — add, revoke, code, passphrase, deactivate,
+  reactivate — keeps the screen as it was and toasts "L'action n'a pas abouti. Réessayez."
 - **The code `Dialog`.** Titled "Code pour {nom}". The eight characters in
   `text-display`, tabular, split 4 + 4 by a space ("K7QM 2XPA" — the
   normaliser ignores spaces), with "Valable jusqu'à {heure}, une seule fois."
@@ -1370,7 +1368,9 @@ the rows.
   then one of "{n} prospects restent assignés à {nom}. Réassignez-les depuis
   « Prospects sans agent actif » au Tableau de bord.", "1 prospect reste
   assigné à {nom}. Réassignez-le depuis « Prospects sans agent actif » au
-  Tableau de bord." or "Aucun prospect n'est assigné à {nom}.", and always
+  Tableau de bord." or "Aucun prospect n'est assigné à {nom}."; on an agent's
+  row, "Demandez-lui d'abord de synchroniser son téléphone : une visite qui
+  n'est pas encore partie ne pourra plus l'être."; and always
   "Ses appareils seront déconnectés et son code annulé. Vous pourrez le
   réactiver." "Annuler" and a `destructive` "Désactiver"; done, the toast
   says "Utilisateur désactivé." The count is the user's prospects still

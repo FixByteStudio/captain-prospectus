@@ -458,62 +458,40 @@ describe("AgentsScreen", () => {
     });
   });
 
-  describe("role change", () => {
-    it("patches the role, toasts, and invalidates users and agents", async () => {
-      const calls = stubFetch([[ADMIN, LEA]], {
-        "PATCH /api/admin/users/lea%40example.com": () => new Response(null, { status: 204 }),
-      });
-      const { invalidate } = renderScreen();
-      await openMenu("Léa Dupont");
-      await userEvent.click(await screen.findByRole("menuitem", { name: t.makeAdmin }));
-      expect(await screen.findByText(t.toast.roleChanged)).toBeTruthy();
-      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ role: "admin" });
-      const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
-      expect(keys).toContain(JSON.stringify(adminKeys.users()));
-      expect(keys).toContain(JSON.stringify(adminKeys.agents()));
-    });
-
-    it("toasts the last-admin sentence on a 409", async () => {
-      stubFetch([[ADMIN, LEA]], {
-        "PATCH /api/admin/users/lea%40example.com": () =>
-          json({ error: "last_admin", message: "x" }, 409),
-      });
+  describe("fixed roles", () => {
+    it("offers no role item in the menu", async () => {
+      stubFetch([[ADMIN, LEA]]);
       renderScreen();
       await openMenu("Léa Dupont");
-      await userEvent.click(await screen.findByRole("menuitem", { name: t.makeAdmin }));
-      expect(await screen.findByText(t.lastAdmin)).toBeTruthy();
+      await screen.findAllByRole("menuitem");
+      expect(screen.queryByRole("menuitem", { name: /Passer (admin|agent)/ })).toBeNull();
     });
 
-    it("loads /round after you demote yourself", async () => {
-      const second = user("max@example.com", { role: "admin" });
-      stubFetch([[ADMIN, second]], {
-        "PATCH /api/admin/users/sam%40example.com": () => new Response(null, { status: 204 }),
-      });
+    it("offers no role item below 768px either", async () => {
+      setMobile(true);
+      stubFetch([[ADMIN, LEA]]);
       renderScreen();
       await openMenu("Sam Owner");
-      await userEvent.click(await screen.findByRole("menuitem", { name: t.makeAgent }));
-      await waitFor(() => expect(assign).toHaveBeenCalledWith("/round"));
+      await screen.findAllByRole("menuitem");
+      expect(screen.queryByRole("menuitem", { name: /Passer (admin|agent)/ })).toBeNull();
     });
 
-    it("disables both actions on the last active admin, with the reason", async () => {
+    it("disables Désactiver on the last active admin, with the reason", async () => {
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
       await openMenu("Sam Owner");
       expect(
-        (await screen.findByRole("menuitem", { name: t.makeAgent })).getAttribute("aria-disabled"),
-      ).toBe("true");
-      expect(
-        screen.getByRole("menuitem", { name: t.deactivate }).getAttribute("aria-disabled"),
+        (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),
       ).toBe("true");
       expect(screen.getByText(t.lastAdmin)).toBeTruthy();
     });
 
-    it("enables them when two admins are active", async () => {
+    it("enables it when two admins are active", async () => {
       stubFetch([[ADMIN, user("max@example.com", { role: "admin" })]]);
       renderScreen();
       await openMenu("Sam Owner");
       expect(
-        (await screen.findByRole("menuitem", { name: t.makeAgent })).getAttribute("aria-disabled"),
+        (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),
       ).toBeNull();
     });
   });
@@ -534,7 +512,24 @@ describe("AgentsScreen", () => {
       await userEvent.click(await screen.findByRole("menuitem", { name: t.deactivate }));
       const dialog = await screen.findByRole("alertdialog");
       await waitFor(() => expect(dialog.textContent).toContain(sentence));
+      expect(dialog.textContent).toContain(t.deactivateDialog.syncFirst);
       expect(dialog.textContent).toContain(t.deactivateDialog.always);
+    });
+
+    it("leaves the sync sentence out for an admin", async () => {
+      const max = user("max@example.com", { role: "admin" });
+      stubFetch([
+        [ADMIN, max],
+        [ADMIN, max],
+      ]);
+      renderScreen();
+      await openMenu("max");
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.deactivate }));
+      const dialog = await screen.findByRole("alertdialog");
+      await waitFor(() =>
+        expect(dialog.textContent).toContain(t.deactivateDialog.assigned(0, "max")),
+      );
+      expect(dialog.textContent).not.toContain(t.deactivateDialog.syncFirst);
     });
 
     it("waits for the refetch before the destructive button works", async () => {
@@ -835,10 +830,7 @@ describe("AgentsScreen", () => {
       expect((await screen.findAllByRole("listitem"))[0]?.textContent).toContain(t.you);
       await openMenu("Sam Owner");
       expect(
-        (await screen.findByRole("menuitem", { name: t.makeAgent })).getAttribute("aria-disabled"),
-      ).toBe("true");
-      expect(
-        screen.getByRole("menuitem", { name: t.deactivate }).getAttribute("aria-disabled"),
+        (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),
       ).toBe("true");
       expect(screen.getByText(t.lastAdmin)).toBeTruthy();
     });
