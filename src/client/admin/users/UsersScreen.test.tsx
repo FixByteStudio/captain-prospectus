@@ -111,37 +111,55 @@ afterEach(() => {
   assign.mockReset();
 });
 
+async function showAdmins() {
+  await userEvent.click(await screen.findByRole("tab", { name: /^Administrateurs/ }));
+}
+
 async function openMenu(name: string) {
   await userEvent.click(await screen.findByRole("button", { name: t.menu(name) }));
 }
 
 describe("UsersScreen", () => {
-  it("lists active users as the server sent them, with badge and Vous", async () => {
+  const tabName = (role: "agent" | "admin", n: number) =>
+    new RegExp(`^${t.sections[role]}\\s*${n}$`);
+
+  it("lists active agents as the server sent them, with badge", async () => {
     stubFetch([[LEA, ADMIN, user("old@example.com", { active: false })]]);
     renderScreen();
-    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
-    const admins = within(screen.getByRole("region", { name: /^Administrateurs/ }));
-    const agentRows = agents.getAllByRole("row");
-    expect(agentRows[1]?.textContent).toContain("Léa Dupont");
-    expect(agentRows[1]?.textContent).toContain(t.enrolled);
-    expect(admins.getAllByRole("row")[1]?.textContent).toContain(`sam@example.com · ${t.you}`);
+    await screen.findByText("Léa Dupont");
+    const rows = screen.getAllByRole("row");
+    expect(rows[1]?.textContent).toContain("Léa Dupont");
+    expect(rows[1]?.textContent).toContain(t.enrolled);
     expect(screen.queryByText("old@example.com")).toBeNull();
     expect(
       screen.getByRole("button", { name: t.deactivated(1) }).getAttribute("aria-expanded"),
     ).toBe("false");
   });
 
-  it("lists Agents then Administrateurs with counts and no Rôle column", async () => {
+  it("shows Vous on your own row under Administrateurs", async () => {
+    stubFetch([[LEA, ADMIN]]);
+    renderScreen();
+    await screen.findByText("Léa Dupont");
+    await userEvent.click(screen.getByRole("tab", { name: tabName("admin", 1) }));
+    expect(screen.getAllByRole("row")[1]?.textContent).toContain(`sam@example.com · ${t.you}`);
+    expect(screen.queryByText("Léa Dupont")).toBeNull();
+  });
+
+  it("opens on Agents, tabs in order with counts, header Nom and no Rôle column", async () => {
     stubFetch([[ADMIN, LEA, user("tom@example.com")]]);
     renderScreen();
     await screen.findByText("Léa Dupont");
-    const headings = screen.getAllByRole("heading", { level: 3 });
-    expect(headings.map((h) => h.textContent)).toEqual([
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
       `${t.sections.agent}2`,
       `${t.sections.admin}1`,
     ]);
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(tabs[1]?.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("columnheader", { name: "Nom" })).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Rôle" })).toBeNull();
-    expect(screen.getAllByRole("table")).toHaveLength(2);
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+    expect(screen.queryByText("Sam Owner")).toBeNull();
     expect(screen.queryByText(/· (Agent|Admin)$/)).toBeNull();
   });
 
@@ -151,31 +169,53 @@ describe("UsersScreen", () => {
     renderScreen();
     await screen.findByText("Léa Dupont");
     expect(screen.queryByText(/· (Agent|Admin)$/)).toBeNull();
-    expect(screen.getAllByRole("list")).toHaveLength(2);
+    expect(screen.getAllByRole("list")).toHaveLength(1);
   });
 
   it("says so when there is no agent", async () => {
     stubFetch([[ADMIN]]);
     renderScreen();
-    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
-    expect(agents.getByText(t.noAgent)).toBeTruthy();
-    expect(
-      within(screen.getByRole("region", { name: /^Administrateurs/ })).getByText("Sam Owner"),
-    ).toBeTruthy();
+    expect(await screen.findByText(t.noAgent)).toBeTruthy();
+    expect(screen.getByRole("tab", { name: tabName("agent", 0) })).toBeTruthy();
+    await userEvent.click(screen.getByRole("tab", { name: tabName("admin", 1) }));
+    expect(screen.getByText("Sam Owner")).toBeTruthy();
   });
 
-  it("gives each section its own Désactivés toggle", async () => {
+  it("gives each tab its own Désactivés toggle", async () => {
     const offAgent = user("old@example.com", { name: "Old Agent", active: false });
     const offAdmin = user("gone@example.com", { name: "Gone Admin", role: "admin", active: false });
     stubFetch([[ADMIN, LEA, offAgent, offAdmin]]);
     renderScreen();
-    const agents = within(await screen.findByRole("region", { name: /^Agents/ }));
-    const admins = within(screen.getByRole("region", { name: /^Administrateurs/ }));
-    await userEvent.click(agents.getByRole("button", { name: t.deactivated(1) }));
-    expect(agents.getByText("Old Agent")).toBeTruthy();
+    await screen.findByText("Léa Dupont");
+    await userEvent.click(screen.getByRole("button", { name: t.deactivated(1) }));
+    expect(screen.getByText("Old Agent")).toBeTruthy();
     expect(screen.queryByText("Gone Admin")).toBeNull();
-    await userEvent.click(admins.getByRole("button", { name: t.deactivated(1) }));
-    expect(admins.getByText("Gone Admin")).toBeTruthy();
+    await userEvent.click(screen.getByRole("tab", { name: tabName("admin", 1) }));
+    expect(screen.queryByText("Old Agent")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: t.deactivated(1) }));
+    expect(screen.getByText("Gone Admin")).toBeTruthy();
+  });
+
+  it("keeps a tab's Désactivés list open when you come back to it", async () => {
+    stubFetch([[ADMIN, LEA, user("old@example.com", { name: "Old Agent", active: false })]]);
+    renderScreen();
+    await screen.findByText("Léa Dupont");
+    await userEvent.click(screen.getByRole("button", { name: t.deactivated(1) }));
+    await userEvent.click(screen.getByRole("tab", { name: tabName("admin", 1) }));
+    await userEvent.click(screen.getByRole("tab", { name: tabName("agent", 1) }));
+    expect(
+      screen.getByRole("button", { name: t.deactivated(1) }).getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getByText("Old Agent")).toBeTruthy();
+  });
+
+  it("shows Désactivés only under the tab that has deactivated users", async () => {
+    stubFetch([[ADMIN, LEA, user("old@example.com", { active: false })]]);
+    renderScreen();
+    await screen.findByText("Léa Dupont");
+    expect(screen.getByRole("button", { name: t.deactivated(1) })).toBeTruthy();
+    await userEvent.click(screen.getByRole("tab", { name: tabName("admin", 1) }));
+    expect(screen.queryByRole("button", { name: /Désactivés/ })).toBeNull();
   });
 
   it("shows no Désactivés button when nobody is deactivated", async () => {
@@ -195,6 +235,7 @@ describe("UsersScreen", () => {
   it("uses the email when the name is null", async () => {
     stubFetch([[user("root@example.com", { name: null, role: "admin" }), ADMIN]]);
     renderScreen();
+    await showAdmins();
     expect(await screen.findByRole("button", { name: t.menu("root@example.com") })).toBeTruthy();
   });
 
@@ -204,7 +245,7 @@ describe("UsersScreen", () => {
     renderScreen();
     await screen.findByText("Léa Dupont");
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
   });
 
   describe("adding", () => {
@@ -223,6 +264,55 @@ describe("UsersScreen", () => {
       expect(post?.body).toEqual({ email: "lea@x.be", name: "Léa", role: "agent" });
       expect(await screen.findByText(t.notEnrolled)).toBeTruthy();
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    async function fillAndSubmit(role?: "admin" | "agent") {
+      await userEvent.click(await screen.findByRole("button", { name: t.add }));
+      await userEvent.type(screen.getByLabelText(t.addDialog.email), "new@x.be");
+      await userEvent.type(screen.getByLabelText(t.addDialog.name), "New");
+      if (role) {
+        await userEvent.click(screen.getByRole("combobox"));
+        await userEvent.click(await screen.findByRole("option", { name: t.roles[role] }));
+      }
+      await userEvent.click(screen.getByRole("button", { name: t.addDialog.submit }));
+    }
+
+    it("opens the Administrateurs tab after adding an admin from Agents", async () => {
+      stubFetch([[ADMIN, LEA]], {
+        "POST /api/admin/users": () => json(user("new@x.be", { role: "admin" }), 201),
+      });
+      renderScreen();
+      await screen.findByText("Léa Dupont");
+      await fillAndSubmit("admin");
+      expect(await screen.findByText(t.toast.added)).toBeTruthy();
+      expect(
+        screen.getByRole("tab", { name: /^Administrateurs/ }).getAttribute("aria-selected"),
+      ).toBe("true");
+    });
+
+    it("opens the Agents tab after adding an agent from Administrateurs", async () => {
+      stubFetch([[ADMIN, LEA]], {
+        "POST /api/admin/users": () => json(user("new@x.be"), 201),
+      });
+      renderScreen();
+      await screen.findByText("Léa Dupont");
+      await userEvent.click(screen.getByRole("tab", { name: /^Administrateurs/ }));
+      await fillAndSubmit();
+      expect(await screen.findByText(t.toast.added)).toBeTruthy();
+      expect(screen.getByRole("tab", { name: /^Agents/ }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+    });
+
+    it("leaves the tab unchanged when the add fails", async () => {
+      stubFetch([[ADMIN, LEA]], { "POST /api/admin/users": () => json({ error: "bad" }, 400) });
+      renderScreen();
+      await screen.findByText("Léa Dupont");
+      await fillAndSubmit("admin");
+      expect(await screen.findByText(t.toast.failed)).toBeTruthy();
+      expect(
+        screen.getByRole("tab", { name: /^Agents/, hidden: true }).getAttribute("aria-selected"),
+      ).toBe("true");
     });
 
     it("refuses an empty name and a bad email without a request", async () => {
@@ -291,6 +381,7 @@ describe("UsersScreen", () => {
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
       for (const name of ["Léa Dupont", "Sam Owner"]) {
+        if (name === "Sam Owner") await showAdmins();
         await openMenu(name);
         const items = await screen.findAllByRole("menuitem");
         expect(items[0]?.textContent).toBe(t.generateCode);
@@ -384,6 +475,7 @@ describe("UsersScreen", () => {
     }
 
     async function replaceOwn() {
+      await showAdmins();
       await openMenu("Sam Owner");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
       const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
@@ -395,6 +487,7 @@ describe("UsersScreen", () => {
     it("offers Nouvelle phrase de passe after Générer un code on your own row only", async () => {
       stubFetch([[ADMIN, LEA, user("max@example.com", { name: "Max", role: "admin" })]]);
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       const items = await screen.findAllByRole("menuitem");
       expect(items.slice(0, 2).map((i) => i.textContent)).toEqual([
@@ -402,7 +495,10 @@ describe("UsersScreen", () => {
         t.newPassphrase,
       ]);
       await userEvent.keyboard("{Escape}");
-      for (const name of ["Léa Dupont", "Max"]) {
+      for (const name of ["Max", "Léa Dupont"]) {
+        if (name === "Léa Dupont") {
+          await userEvent.click(screen.getByRole("tab", { name: /^Agents/ }));
+        }
         await openMenu(name);
         await screen.findAllByRole("menuitem");
         expect(screen.queryByRole("menuitem", { name: t.newPassphrase })).toBeNull();
@@ -413,6 +509,7 @@ describe("UsersScreen", () => {
     it("sends nothing when the confirmation is cancelled", async () => {
       const calls = stubFetch([[ADMIN, LEA]]);
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
       const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
@@ -478,6 +575,7 @@ describe("UsersScreen", () => {
     it("toasts the generic failure and shows no passphrase when generating fails", async () => {
       stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json({ error: "not_found" }, 404) });
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.newPassphrase }));
       const confirm = await screen.findByRole("alertdialog", { name: P.confirmTitle });
@@ -520,6 +618,7 @@ describe("UsersScreen", () => {
       setMobile(true);
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       await screen.findAllByRole("menuitem");
       expect(screen.queryByRole("menuitem", { name: /Passer (admin|agent)/ })).toBeNull();
@@ -528,6 +627,7 @@ describe("UsersScreen", () => {
     it("disables Désactiver on the last active admin, with the reason", async () => {
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       expect(
         (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),
@@ -538,6 +638,7 @@ describe("UsersScreen", () => {
     it("enables it when two admins are active", async () => {
       stubFetch([[ADMIN, user("max@example.com", { role: "admin" })]]);
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       expect(
         (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),
@@ -572,6 +673,7 @@ describe("UsersScreen", () => {
         [ADMIN, max],
       ]);
       renderScreen();
+      await showAdmins();
       await openMenu("max");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.deactivate }));
       const dialog = await screen.findByRole("alertdialog");
@@ -674,6 +776,7 @@ describe("UsersScreen", () => {
         "PATCH /api/admin/users/sam%40example.com": () => new Response(null, { status: 204 }),
       });
       renderScreen();
+      await showAdmins();
       await openMenu("Sam Owner");
       await userEvent.click(await screen.findByRole("menuitem", { name: t.deactivate }));
       const dialog = await screen.findByRole("alertdialog");
@@ -767,6 +870,7 @@ describe("UsersScreen", () => {
     it("reads Cet appareil, not Révoquer, on the session the page is open on", async () => {
       stubFetch([[lea, sam]]);
       renderScreen();
+      await showAdmins();
       await userEvent.click(await expand("Sam Owner"));
       expect(screen.getByText("Mac · Safari")).toBeTruthy();
       expect(screen.getByText(t.devices.current)).toBeTruthy();
@@ -876,7 +980,8 @@ describe("UsersScreen", () => {
       setMobile(true);
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
-      expect((await screen.findAllByRole("listitem"))[1]?.textContent).toContain(t.you);
+      await showAdmins();
+      expect((await screen.findAllByRole("listitem"))[0]?.textContent).toContain(t.you);
       await openMenu("Sam Owner");
       expect(
         (await screen.findByRole("menuitem", { name: t.deactivate })).getAttribute("aria-disabled"),

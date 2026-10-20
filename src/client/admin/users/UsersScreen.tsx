@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { Role } from "../../../shared/constants";
@@ -8,6 +8,7 @@ import { copy } from "../../copy";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from "../../ui/button";
 import { Skeleton } from "../../ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { ScreenHeader } from "../ScreenHeader";
 import { ScreenState } from "../ScreenState";
 import { Surface } from "../Surface";
@@ -29,8 +30,8 @@ const SECTION_ORDER: readonly Role[] = ["agent", "admin"];
 
 type RowsComponent = typeof UsersList | typeof UsersTable;
 
-/** One role's heading with its count, its rows, and its own Désactivés toggle. */
-function UsersSection({
+/** One role's tab panel: its rows and its own Désactivés toggle. */
+function UsersPanel({
   role,
   active,
   deactivated,
@@ -44,13 +45,8 @@ function UsersSection({
   actions: UsersActions;
 }) {
   const [showDeactivated, setShowDeactivated] = useState(false);
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h3 id={headingId} className="text-heading flex items-baseline gap-2">
-        {t.sections[role]}
-        <span className="text-muted-foreground text-meta tnum">{active.length}</span>
-      </h3>
+    <TabsContent value={role}>
       <Surface className="overflow-hidden">
         {active.length === 0 && role === "agent" ? (
           <p className="text-muted-foreground p-4">{t.noAgent}</p>
@@ -77,7 +73,7 @@ function UsersSection({
           )}
         </div>
       )}
-    </section>
+    </TabsContent>
   );
 }
 
@@ -87,6 +83,8 @@ export function UsersScreen({ email }: { email: string }) {
   const update = useUpdateUser();
   const isMobile = useIsMobile();
   const [adding, setAdding] = useState(false);
+  // Not in the URL: Agents opens on every visit (owner, 2026-10-20).
+  const [tab, setTab] = useState<Role>("agent");
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const generate = useGenerateCode();
   const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
@@ -188,9 +186,25 @@ export function UsersScreen({ email }: { email: string }) {
           };
           const Rows = isMobile ? UsersList : UsersTable;
           return (
-            <>
+            <Tabs
+              value={tab}
+              onValueChange={(next) => {
+                const role = SECTION_ORDER.find((r) => r === next);
+                if (role) setTab(role);
+              }}
+            >
+              <TabsList className="w-full md:w-fit">
+                {SECTION_ORDER.map((role) => (
+                  <TabsTrigger key={role} value={role}>
+                    {t.sections[role]}
+                    <span className="text-muted-foreground text-meta tnum">
+                      {active.filter((u) => u.role === role).length}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
               {SECTION_ORDER.map((role) => (
-                <UsersSection
+                <UsersPanel
                   key={role}
                   role={role}
                   active={active.filter((u) => u.role === role)}
@@ -199,12 +213,12 @@ export function UsersScreen({ email }: { email: string }) {
                   actions={actions}
                 />
               ))}
-            </>
+            </Tabs>
           );
         }}
       </ScreenState>
 
-      <AddUserDialog open={adding} onOpenChange={setAdding} />
+      <AddUserDialog open={adding} onOpenChange={setAdding} onAdded={setTab} />
       {issued && (
         <CodeDialog name={issued.name} issued={issued.code} onClose={() => setIssued(null)} />
       )}
