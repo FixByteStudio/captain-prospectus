@@ -20,6 +20,7 @@ import {
   AUTH_SWEEP_BATCH,
   D1_MAX_BOUND_PARAMS,
   IMPORT_LOG_SWEEP_BATCH,
+  LOGIN_WINDOW_MS,
   OVERPASS_CACHE_TTL_MS,
   PLACES_CACHE_TTL_MS,
   RETENTION_BATCH,
@@ -27,7 +28,7 @@ import {
 } from "../shared/constants";
 import { describeSweep, runRetention } from "./retention";
 import worker from "./index";
-import { LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, throttleKey } from "./login-throttle";
+import { LOGIN_MAX_FAILURES, throttleKey } from "./login-throttle";
 import { hmacHex } from "./session";
 import { TEST_ADMIN, TEST_AGENT } from "../../test/users";
 import { workerFetch } from "../../test/worker-fetch";

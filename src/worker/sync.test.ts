@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { boundParamsPerRow, getDb } from "./db/client";
+import { boundParamsPerRow, getDb, insertOrIgnore } from "./db/client";
 import { chunk } from "../shared/chunk";
 import { dedupeKey } from "../shared/dedupe";
 import { DAY_MS } from "../shared/constants";
@@ -22,9 +22,10 @@ import {
   CLIENT_VERSION,
   MAX_REQUEST_BYTES,
   SCRIPT_QUESTIONS_MAX,
+  SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
-  SYNC_VISITS_PER_REQUEST,
+  SYNC_VISITS_PER_BATCH,
   TOURNEE_STOP_NUMBER_MAX,
 } from "../shared/constants";
 import { syncResponseSchema, todayTourneeSchema } from "../shared/schemas";
@@ -58,7 +59,7 @@ async function seedProspect(id: string, owner: string | null = AGENT): Promise<v
   await seedProspects([id], owner);
 }
 
-/** Many at once: 150 sequential inserts would dominate a test's runtime. */
+/** Many at once: a batch of sequential inserts would dominate a test's runtime. */
 async function seedProspects(ids: readonly string[], owner: string | null = AGENT): Promise<void> {
   const db = getDb(env.DB);
   const now = Date.now();
@@ -428,6 +429,24 @@ describe("POST /api/agent/sync", () => {
     expect(response.status).toBe(426);
   });
 
+  // GH #451: a build from before the cap fell to SYNC_VISITS_PER_BATCH still
+  // sends up to 200 visits a pass; it must be told to update, keeping its outbox.
+  it("answers 426, not 400, to the previous version sending more than a batch", async () => {
+    const response = await sync({
+      clientVersion: CLIENT_VERSION - 1,
+      visits: Array.from({ length: SYNC_VISITS_PER_BATCH + 1 }, () => ({
+        id: crypto.randomUUID(),
+        prospectId: crypto.randomUUID(),
+        visitedAt: Date.now(),
+        flyerGiven: true,
+        outcome: "interested" as const,
+        answers: {},
+      })),
+    });
+    expect(response.status).toBe(426);
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(0);
+  });
+
   it("answers 400, not 500, to a body that is not JSON", async () => {
     const response = await call("/api/agent/sync", {
       method: "POST",
@@ -457,14 +476,12 @@ describe("POST /api/agent/sync", () => {
    * phone can legitimately build answers 413 to a payload the outbox rebuilds
    * identically for ever (INVARIANT 5).
    *
-   * It is also the old-build guarantee (GH #404): a new phone sends
-   * SYNC_VISITS_PER_BATCH visits a pass, but an installed old build still sends
-   * SYNC_VISITS_PER_REQUEST, and with no clientVersion bump (INVARIANT 9) the
-   * server must keep taking all of them.
+   * The phone sends SYNC_VISITS_PER_BATCH visits a pass and the server
+   * accepts exactly that many (GH #451).
    */
   it("accepts a full batch of visits carrying maximum-length notes", async () => {
     const db = getDb(env.DB);
-    const ids = Array.from({ length: SYNC_VISITS_PER_REQUEST }, () => crypto.randomUUID());
+    const ids = Array.from({ length: SYNC_VISITS_PER_BATCH }, () => crypto.randomUUID());
     await seedProspects(ids);
     const sent = ids.map((prospectId) => ({
       id: crypto.randomUUID(),
@@ -480,14 +497,14 @@ describe("POST /api/agent/sync", () => {
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as SyncResponse;
-    expect(body.accepted.visits).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    expect(body.accepted.visits).toHaveLength(SYNC_VISITS_PER_BATCH);
     expect(new Set(body.accepted.visits)).toEqual(new Set(sent.map((v) => v.id)));
-    expect(await db.select().from(visits)).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    expect(await db.select().from(visits)).toHaveLength(SYNC_VISITS_PER_BATCH);
   });
 
-  it("refuses one visit over the server's accept limit with 400, storing none", async () => {
+  it("refuses one visit over a batch with 400, storing none", async () => {
     const response = await sync({
-      visits: Array.from({ length: SYNC_VISITS_PER_REQUEST + 1 }, () => ({
+      visits: Array.from({ length: SYNC_VISITS_PER_BATCH + 1 }, () => ({
         id: crypto.randomUUID(),
         prospectId: crypto.randomUUID(),
         visitedAt: Date.now(),
@@ -503,39 +520,6 @@ describe("POST /api/agent/sync", () => {
   });
 
   /**
-   * #30, INVARIANT 7. A week offline is enough to reach 150 distinct doors, and
-   * every id in the route's prospect lookup binds one parameter: unchunked, the
-   * statement breaches D1's 100 and 500s. A 500 rightly keeps the outbox
-   * (INVARIANT 5), so the phone would rebuild the same payload for ever.
-   *
-   * The orphan assertion is the other half: a lookup that chunked but kept only
-   * one batch's rows would still answer 200, quietly quarantining the visits it
-   * could no longer match to a prospect.
-   */
-  it("accepts visits spread over more distinct prospects than D1 can bind", async () => {
-    const db = getDb(env.DB);
-    const ids = Array.from({ length: 150 }, () => crypto.randomUUID());
-    await seedProspects(ids);
-
-    const response = await sync({
-      visits: ids.map((prospectId) => ({
-        id: crypto.randomUUID(),
-        prospectId,
-        visitedAt: Date.now(),
-        flyerGiven: true,
-        outcome: "interested" as const,
-        answers: {},
-      })),
-    });
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as SyncResponse;
-    expect(body.accepted.visits).toHaveLength(150);
-    expect(await db.select().from(visits)).toHaveLength(150);
-    expect(await db.select().from(visitsOrphaned)).toHaveLength(0);
-  });
-
-  /**
    * #102. Deriving status took two D1 statements per distinct prospect, so a
    * full batch was ~400 round trips in one request. It is now one statement
    * per chunk of prospects; this pins both the result and that it stays a
@@ -543,7 +527,7 @@ describe("POST /api/agent/sync", () => {
    */
   it("derives a full batch of distinct prospects in a handful of statements", async () => {
     const db = getDb(env.DB);
-    const ids = Array.from({ length: SYNC_VISITS_PER_REQUEST }, () => crypto.randomUUID());
+    const ids = Array.from({ length: SYNC_VISITS_PER_BATCH }, () => crypto.randomUUID());
     await seedProspects(ids);
     const outcomeOf = (i: number): Outcome => OUTCOMES[i % OUTCOMES.length] as Outcome;
 
@@ -584,7 +568,7 @@ describe("POST /api/agent/sync", () => {
     expect(updates.length).toBeGreaterThan(0);
     expect(updates.length).toBeLessThanOrEqual(3);
     const rows = await db.select().from(prospects);
-    expect(rows).toHaveLength(SYNC_VISITS_PER_REQUEST);
+    expect(rows).toHaveLength(SYNC_VISITS_PER_BATCH);
     for (const row of rows) {
       const i = ids.indexOf(row.id);
       expect(row.status).toBe(OUTCOME_TO_STATUS[outcomeOf(i)]);
@@ -637,6 +621,54 @@ describe("POST /api/agent/sync", () => {
     expect(await db.select().from(prospects)).toHaveLength(1);
   });
 
+  it("points a field prospect, and its visit, at the survivor of the row it collides with", async () => {
+    // The key lands on a prospect an admin has merged away: the phone must be
+    // told the survivor, or its visits would pile up on a retired row.
+    const db = getDb(env.DB);
+    const survivor = crypto.randomUUID();
+    const merged = crypto.randomUUID();
+    await seedProspects([survivor, merged]);
+    await db
+      .update(prospects)
+      .set({
+        dedupeKey: dedupeKey({ name: "Le Bistrot", lat: 48.85, lng: 2.35 }),
+        mergedInto: survivor,
+      })
+      .where(eq(prospects.id, merged));
+
+    const clientId = crypto.randomUUID();
+    const visitId = crypto.randomUUID();
+    const response = await sync({
+      prospects: [
+        {
+          id: clientId,
+          name: "Le Bistrot",
+          type: "restaurant",
+          lat: 48.85,
+          lng: 2.35,
+          createdAt: Date.now(),
+        },
+      ] as never,
+      visits: [
+        {
+          id: visitId,
+          prospectId: clientId,
+          visitedAt: Date.now(),
+          flyerGiven: true,
+          outcome: "interested",
+          answers: {},
+        },
+      ] as never,
+    });
+
+    const body = (await response.json()) as SyncResponse;
+    expect(body.idMap).toEqual({ [clientId]: survivor });
+    expect(body.accepted.prospects).toEqual([clientId]);
+    expect(await db.select().from(prospects)).toHaveLength(2);
+    const [stored] = await db.select().from(visits).where(eq(visits.id, visitId));
+    expect(stored?.prospectId).toBe(survivor);
+  });
+
   it("stores a field prospect's folded name for search (ADR-0032)", async () => {
     const id = crypto.randomUUID();
     const response = await sync({
@@ -671,6 +703,101 @@ describe("POST /api/agent/sync", () => {
 
     const db = getDb(env.DB);
     expect(await db.select().from(prospects)).toHaveLength(30);
+  });
+
+  it("stores a full payload of field prospects with every column the route sets (GH #449)", async () => {
+    const created = Array.from({ length: SYNC_PROSPECTS_PER_REQUEST }, (_, i) => ({
+      id: crypto.randomUUID(),
+      name: `Café Épicerie ${i}`,
+      type: i % 2 === 0 ? ("restaurant" as const) : ("food_truck" as const),
+      lat: 45.75 + i * 0.001,
+      lng: 4.83,
+      address: i % 3 === 0 ? `${i} rue de la Paix` : undefined,
+      phone: i % 5 === 0 ? `+3300000${i}` : undefined,
+      createdAt: 1_700_000_000_000 + i,
+    }));
+
+    // A full batch of visits rides on them, as a day offline would send.
+    const visited = created.slice(0, SYNC_VISITS_PER_BATCH).map((p) => ({
+      id: crypto.randomUUID(),
+      prospectId: p.id,
+      visitedAt: Date.now(),
+      flyerGiven: true,
+      outcome: "interested",
+      answers: {},
+    }));
+
+    const response = await sync({ prospects: created as never, visits: visited as never });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as SyncResponse;
+    expect(body.accepted.prospects).toHaveLength(SYNC_PROSPECTS_PER_REQUEST);
+    expect(body.accepted.visits).toHaveLength(SYNC_VISITS_PER_BATCH);
+    expect(body.idMap).toEqual({});
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(SYNC_VISITS_PER_BATCH);
+
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored).toHaveLength(SYNC_PROSPECTS_PER_REQUEST);
+    for (const [i, sent] of created.entries()) {
+      const row = stored.find((r) => r.id === sent.id);
+      expect(row).toMatchObject({
+        name: sent.name,
+        nameSearch: `cafe epicerie ${i}`,
+        type: sent.type,
+        lat: sent.lat,
+        lng: sent.lng,
+        address: sent.address ?? null,
+        phone: sent.phone ?? null,
+        source: "field",
+        sourceRef: null,
+        // Stored as assigned; a visit in the same payload then derives its status.
+        status: i < SYNC_VISITS_PER_BATCH ? "interested" : "assigned",
+        assignedTo: AGENT,
+        createdBy: AGENT,
+        createdAt: sent.createdAt,
+      });
+      expect(row?.dedupeKey).toBe(
+        dedupeKey({ name: sent.name, lat: sent.lat, lng: sent.lng, address: sent.address }),
+      );
+    }
+  });
+
+  it("stores the first of two field prospects with the same key and maps the second to it", async () => {
+    const first = crypto.randomUUID();
+    const twin = crypto.randomUUID();
+    const place = { name: "Le Camion", type: "food_truck", lat: 45.76, lng: 4.83 };
+    const response = await sync({
+      prospects: [
+        { id: first, ...place, createdAt: Date.now() },
+        { id: twin, ...place, createdAt: Date.now() },
+      ] as never,
+    });
+
+    const body = (await response.json()) as SyncResponse;
+    expect(body.idMap).toEqual({ [twin]: first });
+    expect(body.accepted.prospects).toEqual(expect.arrayContaining([first, twin]));
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored.map((r) => r.id)).toEqual([first]);
+  });
+
+  it("stores nothing new and accepts everything when the same payload is resent", async () => {
+    const created = Array.from({ length: 12 }, (_, i) => ({
+      id: crypto.randomUUID(),
+      name: `Renvoi ${i}`,
+      type: "restaurant" as const,
+      lat: 45.7 + i * 0.001,
+      lng: 4.8,
+      createdAt: Date.now(),
+    }));
+
+    const firstPass = await sync({ prospects: created as never });
+    expect(firstPass.status).toBe(200);
+    const secondPass = await sync({ prospects: created as never });
+    expect(secondPass.status).toBe(200);
+
+    const body = (await secondPass.json()) as SyncResponse;
+    expect(body.accepted.prospects).toHaveLength(12);
+    expect(body.idMap).toEqual({});
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(12);
   });
 
   it("quarantines a visit whose prospect is unknown, and accepts it", async () => {
@@ -885,38 +1012,6 @@ describe("POST /api/agent/sync — the script a visit was answered with", () => 
 
     const body = (await response.json()) as SyncResponse;
     expect(body.accepted.visits).toEqual(expect.arrayContaining([good, stale]));
-  });
-
-  /**
-   * The script lookup is chunked for the same reason as the prospect one (#30,
-   * INVARIANT 7): nothing caps how many distinct script ids a batch names, so
-   * 150 of them bound 150 parameters and 500d.
-   *
-   * The known id goes first, in the first chunk: a lookup that kept only the
-   * last chunk's rows would null it and still answer 200.
-   */
-  it("resolves more distinct script ids than D1 can bind", async () => {
-    const scriptId = await seedScript();
-    const prospectId = crypto.randomUUID();
-    await seedProspect(prospectId);
-
-    const base = { prospectId, visitedAt: Date.now(), flyerGiven: false, outcome: "interested" };
-    const response = await sync({
-      visits: Array.from({ length: 150 }, (_, i) => ({
-        ...base,
-        id: crypto.randomUUID(),
-        // Distinct and unknown, except the first — 424_242 upwards is nobody's id.
-        scriptId: i === 0 ? scriptId : 424_242 + i,
-        answers: {},
-      })) as SyncRequest["visits"],
-    });
-
-    expect(response.status).toBe(200);
-    const db = getDb(env.DB);
-    const stored = await db.select({ scriptId: visits.scriptId }).from(visits);
-    expect(stored).toHaveLength(150);
-    expect(stored.filter((r) => r.scriptId === scriptId)).toHaveLength(1);
-    expect(stored.filter((r) => r.scriptId === null)).toHaveLength(149);
   });
 });
 
@@ -2091,4 +2186,41 @@ describe("tournée at sync (ADR-0036)", () => {
       expect(next.tournee?.stops.map((s) => s.id)).toEqual(stops.map((s) => s.id));
     },
   );
+});
+
+describe("insertOrIgnore", () => {
+  const base = {
+    type: "restaurant" as const,
+    source: "csv" as const,
+    status: "new" as const,
+    createdBy: AGENT,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  it("throws when a row sets a key the first row lacks, writing nothing", async () => {
+    const rows = [
+      { ...base, id: "a", name: "A", dedupeKey: "k:a" },
+      { ...base, id: "b", name: "B", dedupeKey: "k:b", phone: "+33" },
+    ];
+    await expect(insertOrIgnore(env.DB, prospects, rows)).rejects.toThrow(/"phone"/);
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(0);
+  });
+
+  it("throws when a later row lacks a key the first row sets, writing nothing", async () => {
+    const rows = [
+      { ...base, id: "a", name: "A", dedupeKey: "k:a", phone: "+33" },
+      { ...base, id: "b", name: "B", dedupeKey: "k:b" },
+    ];
+    await expect(insertOrIgnore(env.DB, prospects, rows)).rejects.toThrow(/"phone"/);
+    expect(await getDb(env.DB).select().from(prospects)).toHaveLength(0);
+  });
+
+  it("does nothing for no rows, and skips a row whose key already exists", async () => {
+    await insertOrIgnore(env.DB, prospects, []);
+    const row = { ...base, id: "a", name: "A", dedupeKey: "k:a" };
+    await insertOrIgnore(env.DB, prospects, [row, { ...row, id: "b", name: "Other" }]);
+    const stored = await getDb(env.DB).select().from(prospects);
+    expect(stored.map((r) => r.id)).toEqual(["a"]);
+  });
 });

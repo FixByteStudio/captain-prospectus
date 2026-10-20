@@ -6,8 +6,8 @@
  * second seed — any day later — computes the same ids and inserts nothing
  * (INVARIANT 4). Only the dashboard's windows slide over the rows as days pass.
  */
-import { CLIENT_VERSION, DAY_MS, HOUR_MS, type Outcome } from "../shared/constants";
-import { brusselsPeriod } from "../shared/period";
+import { CLIENT_VERSION, HOUR_MS, type Outcome } from "../shared/constants";
+import { brusselsMidnightDaysFromNow } from "../shared/period";
 import type { NewVisitRow } from "./db/schema";
 
 /** How far back the seeded walk may start. */
@@ -67,16 +67,6 @@ export function seedId(label: string): string {
     `${variant}${hex.slice(17, 20)}`,
     hex.slice(20, 32),
   ].join("-");
-}
-
-/**
- * The Brussels midnight that starts the day `k` days before today (negative k
- * is ahead). Anchored at noon, so stepping whole 24 h days across a clock
- * change never slides over a midnight (src/shared/period.ts owns the boundary).
- */
-export function seedDayStart(now: number, k: number): number {
-  const todayStart = brusselsPeriod(now, 1).from;
-  return brusselsPeriod(todayStart + 12 * HOUR_MS - k * DAY_MS, 1).from;
 }
 
 type Step = {
@@ -182,7 +172,9 @@ export function seedHistory(prospect: SeedSubject, now: number): NewVisitRow[] {
 
   const visit = (k: number, outcome: Outcome, followUpK: number | null) => {
     const planned =
-      seedDayStart(now, k) + FIRST_VISIT_HOUR * HOUR_MS + rand() * VISIT_HOURS * HOUR_MS;
+      brusselsMidnightDaysFromNow(now, -k) +
+      FIRST_VISIT_HOUR * HOUR_MS +
+      rand() * VISIT_HOURS * HOUR_MS;
     const visitedAt = Math.min(Math.floor(planned), now);
     const receivedAt = Math.min(visitedAt + Math.floor(rand() * 30 * 60_000), now);
     const flyerGiven = rand() < FLYER_SHARE;
@@ -198,7 +190,9 @@ export function seedHistory(prospect: SeedSubject, now: number): NewVisitRow[] {
       flyerGiven,
       outcome,
       followUpAt:
-        followUpK === null ? null : seedDayStart(now, followUpK) + FOLLOW_UP_HOUR * HOUR_MS,
+        followUpK === null
+          ? null
+          : brusselsMidnightDaysFromNow(now, -followUpK) + FOLLOW_UP_HOUR * HOUR_MS,
       notes: null,
       // No panel reads answers, and a script id would tie the row to one database.
       scriptId: null,

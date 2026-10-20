@@ -436,6 +436,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-541-earliest-swipe-wins.md`
   summary: Pin `todayTournee`'s `ORDER BY client_started_at, id LIMIT 1` with a query-plan test that it uses `tournees_agent_day_started_idx` and no temp b-tree sort.
   evidence: Only `agentsStartedOn`'s plan is tested; entry 5 (R15, #543-lane) rewrites `indexes.test.ts` to plan the statements the code runs, so the test belongs there.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-527-swipe-numbers-from-a-fresh-reading.md`
+  summary: If a browser never calls back a `getCurrentPosition` at the swipe, `await swipePoint()` never settles and the track stays on « Démarrage… » until a reload (unverified, medium if true).
+  evidence: The swipe relies on the browser's own `timeout` (`LOCATION_GATE_SWIPE_TIMEOUT_MS`), as the #527 spec requires; the permission is already granted there. Settle by swiping on real iOS Safari and an Android WebView with GPS off and the page briefly hidden; if a hang shows, a backstop timer needs the owner to lift the spec's "no JS timer" rule.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-415-449-450-sync-cpu-measurement.md`
+  summary: Pin the limits `scripts/measure-sync-cpu.mjs` copies from `src/` (MAX_REQUEST_BYTES, LONG_TEXT_MAX, SCRIPT_QUESTIONS_MAX, QUESTION_*, SYNC_*, SESSION_SLIDE_MS) with a parity test in `scripts/*.test.mjs`.
+  evidence: The script may not import `src/`; a limit that tightens fails a run loudly, but one that loosens leaves `PAYLOAD=max` sending a lighter body, so the budget doc's "heaviest the server accepts" figure goes stale silently.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-528-repaired-orphan-visites-live-feed.md`
   summary: A feed-clock stamp taken at request start can land below a cursor already lifted by a write that committed first, so that visit is skipped by an open ledger.

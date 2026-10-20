@@ -172,7 +172,7 @@ function Location() {
   return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
-function renderScreen(initialPath = "/admin/visites") {
+function renderScreen(initialPath = "/admin/visits") {
   const client = createAdminQueryClient();
   client.setDefaultOptions({ queries: { retry: false, refetchOnWindowFocus: false } });
   render(
@@ -226,7 +226,7 @@ describe("VisitsScreen", () => {
 
   it("treats a bad ?period= as 30 (I/O matrix)", async () => {
     stubFetch({});
-    renderScreen("/admin/visites?period=12");
+    renderScreen("/admin/visits?period=12");
     await waitFor(() =>
       expect(
         screen
@@ -247,7 +247,7 @@ describe("VisitsScreen", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: copy.dashboard.periods[7] }));
     await waitFor(() =>
-      expect(screen.getByTestId("location").textContent).toBe("/admin/visites?period=7"),
+      expect(screen.getByTestId("location").textContent).toBe("/admin/visits?period=7"),
     );
 
     const period7 = brusselsPeriod(NOW, 7);
@@ -308,7 +308,7 @@ describe("VisitsScreen", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: copy.dashboard.periods[7] }));
     await waitFor(() =>
-      expect(screen.getByTestId("location").textContent).toBe("/admin/visites?period=7"),
+      expect(screen.getByTestId("location").textContent).toBe("/admin/visits?period=7"),
     );
     await screen.findByText(copy.visits.count(30));
 
@@ -636,7 +636,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
 
   it("puts the chosen reason in the URL and reseeds a narrowed feed from since=0", async () => {
     const asked = stubFetch({ visits: byReason });
-    const client = renderScreen("/admin/visites?period=7");
+    const client = renderScreen("/admin/visits?period=7");
     await screen.findByText("Place c");
     const before = asked.length;
 
@@ -646,7 +646,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
 
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/admin/visites?period=7&reason=no_need",
+        "/admin/visits?period=7&reason=no_need",
       ),
     );
     await waitFor(() => expect(screen.queryByText("Place c")).toBeNull());
@@ -672,7 +672,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
 
   it("drops ?reason= from the URL when Toutes les raisons is chosen", async () => {
     stubFetch({ visits: byReason });
-    renderScreen("/admin/visites?period=7&reason=no_need");
+    renderScreen("/admin/visits?period=7&reason=no_need");
     await screen.findByText("Place a");
 
     const user = userEvent.setup();
@@ -680,14 +680,14 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
     await user.click(await screen.findByRole("option", { name: copy.visits.reasonFilter.any }));
 
     await waitFor(() =>
-      expect(screen.getByTestId("location").textContent).toBe("/admin/visites?period=7"),
+      expect(screen.getByTestId("location").textContent).toBe("/admin/visits?period=7"),
     );
     expect(await screen.findByText("Place c")).toBeTruthy();
   });
 
   it("reads ?period=7&reason=no_need back: the select shows the reason, the period stays 7", async () => {
     stubFetch({ visits: byReason });
-    renderScreen("/admin/visites?period=7&reason=no_need");
+    renderScreen("/admin/visits?period=7&reason=no_need");
     await screen.findByText("Place a");
 
     expect(reasonSelect().textContent).toBe(REFUSAL_REASON_LABELS.no_need);
@@ -698,7 +698,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
 
   it("says no visit matches the reason, not that none arrived, when the filter is empty", async () => {
     const asked = stubFetch({});
-    renderScreen("/admin/visites?reason=wait_and_see");
+    renderScreen("/admin/visits?reason=wait_and_see");
     await screen.findByText(copy.visits.reasonFilter.empty);
     expect(screen.queryByText(copy.visits.empty)).toBeNull();
 
@@ -709,7 +709,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
 
   it("treats a bad ?reason= as Toutes les raisons, and the feed asks without one", async () => {
     const asked = stubFetch({ visits: byReason });
-    renderScreen("/admin/visites?reason=bogus");
+    renderScreen("/admin/visits?reason=bogus");
     await screen.findByText("Place c");
 
     expect(reasonSelect().textContent).toBe(copy.visits.reasonFilter.any);
@@ -731,7 +731,7 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
           },
         }),
     });
-    renderScreen("/admin/visites?period=7&reason=fee_distrust");
+    renderScreen("/admin/visits?period=7&reason=fee_distrust");
     await screen.findByText("Place b");
 
     await userEvent.click(screen.getByRole("button", { name: copy.visits.export.button }));

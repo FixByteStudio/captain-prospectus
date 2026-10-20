@@ -120,7 +120,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("RoundScreen", () => {
   it("asks for an agent and fetches no round before one is chosen", async () => {
     const { asked, view } = setup(round(PROSPECTS));
-    view("/admin/tournee");
+    view("/admin/round");
     expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
     expect(asked).toEqual([]);
   });
@@ -129,7 +129,7 @@ describe("RoundScreen", () => {
     const { asked, view } = setup(
       round(PROSPECTS, { lat: 50.85, lng: 4.35, accuracy: 10, capturedAt: CAPTURED }),
     );
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     // Skeleton first, never the "choose an agent" prompt for a linked agent.
     expect(screen.getByRole("status").textContent).toBe(t.loading);
     expect(screen.queryByText(t.choosePrompt)).toBeNull();
@@ -151,7 +151,7 @@ describe("RoundScreen", () => {
 
   it("keeps the numbers with the notice and no distance when there is no position", async () => {
     const { view } = setup(round(PROSPECTS));
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     const items = await screen.findAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
       expect.stringMatching(/^1.*Zeste/),
@@ -164,7 +164,7 @@ describe("RoundScreen", () => {
 
   it("offers no Visiter, Y aller or link on any row", async () => {
     const { view } = setup(round(PROSPECTS));
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     for (const li of await screen.findAllByRole("listitem")) {
       expect(li.textContent).not.toMatch(/Visiter|Y aller/);
       expect(within(li).queryByRole("link")).toBeNull();
@@ -174,7 +174,7 @@ describe("RoundScreen", () => {
 
   it("shows the load-failed alert with a retry when the round fetch fails", async () => {
     const { view } = setup(round([]), 500);
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     expect(await screen.findByText(t.loadFailed)).toBeTruthy();
     expect(screen.getByRole("button", { name: copy.errors.retry })).toBeTruthy();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
@@ -182,7 +182,7 @@ describe("RoundScreen", () => {
 
   it("says the agent has not started, with no rows, before the swipe", async () => {
     const { view } = setup(NOT_STARTED);
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     expect(await screen.findByText(t.notStarted(EMAIL))).toBeTruthy();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.queryByText(t.empty)).toBeNull();
@@ -192,7 +192,7 @@ describe("RoundScreen", () => {
 
   it("shows the empty message for a tournée with every stop done", async () => {
     const { view } = setup(round([]));
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     await waitFor(() => expect(screen.getByText(t.empty)).toBeTruthy());
     expect(screen.getByText(t.count(0))).toBeTruthy();
   });
@@ -200,7 +200,7 @@ describe("RoundScreen", () => {
   it("fetches the round and renders rows once an agent is picked in the Select", async () => {
     const user = userEvent.setup();
     const { asked, view } = setup(round(PROSPECTS));
-    view("/admin/tournee");
+    view("/admin/round");
     await user.click(await screen.findByRole("combobox", { name: t.agentLabel }));
     await user.click(await screen.findByRole("option", { name: EMAIL }));
     expect(await screen.findAllByRole("listitem")).toHaveLength(3);
@@ -209,7 +209,7 @@ describe("RoundScreen", () => {
 
   it("ignores an agent that is not in the roster: prompt, no round fetch", async () => {
     const { asked, view } = setup(round(PROSPECTS));
-    view("/admin/tournee?agent=other@example.com");
+    view("/admin/round?agent=other@example.com");
     expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
     expect(asked).toEqual([]);
   });
@@ -221,14 +221,14 @@ describe("RoundScreen", () => {
     it("remembers the agent picked in the Select, for the next visit", async () => {
       const user = userEvent.setup();
       const first = setup(stops);
-      const { unmount } = first.view("/admin/tournee");
+      const { unmount } = first.view("/admin/round");
       await user.click(await screen.findByRole("combobox", { name: t.agentLabel }));
       await user.click(await screen.findByRole("option", { name: EMAIL }));
       await screen.findAllByRole("listitem");
       unmount();
 
       const second = setup(stops);
-      second.view("/admin/tournee");
+      second.view("/admin/round");
       expect(await screen.findAllByRole("listitem")).toHaveLength(3);
       expect(second.asked).toEqual([`/api/admin/agents/${encodeURIComponent(EMAIL)}/round`]);
     });
@@ -238,9 +238,9 @@ describe("RoundScreen", () => {
       const { asked } = setup(stops, 200, 200, [EMAIL, OTHER]);
       localStorage.setItem(REMEMBERED_AGENT_KEY, EMAIL);
       render(
-        <MemoryRouter initialEntries={["/admin/tournee"]}>
+        <MemoryRouter initialEntries={["/admin/round"]}>
           <QueryClientProvider client={createAdminQueryClient()}>
-            <Link to="/admin/tournee">plain</Link>
+            <Link to="/admin/round">plain</Link>
             <RoundScreen />
           </QueryClientProvider>
         </MemoryRouter>,
@@ -256,7 +256,7 @@ describe("RoundScreen", () => {
     it("lets ?agent= win over the remembered agent, and keeps the memory", async () => {
       localStorage.setItem(REMEMBERED_AGENT_KEY, EMAIL);
       const { asked, view } = setup(stops, 200, 200, [EMAIL, OTHER]);
-      view(`/admin/tournee?agent=${OTHER}`);
+      view(`/admin/round?agent=${OTHER}`);
       await screen.findAllByRole("listitem");
       expect(asked).toEqual([`/api/admin/agents/${encodeURIComponent(OTHER)}/round`]);
       expect(localStorage.getItem(REMEMBERED_AGENT_KEY)).toBe(EMAIL);
@@ -265,7 +265,7 @@ describe("RoundScreen", () => {
     it("shows the prompt when the remembered agent left the roster", async () => {
       localStorage.setItem(REMEMBERED_AGENT_KEY, "gone@example.com");
       const { asked, view } = setup(stops);
-      view("/admin/tournee");
+      view("/admin/round");
       expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
       expect(asked).toEqual([]);
     });
@@ -280,7 +280,7 @@ describe("RoundScreen", () => {
       });
       try {
         const { view } = setup(stops);
-        view("/admin/tournee");
+        view("/admin/round");
         expect(await screen.findByText(t.choosePrompt)).toBeTruthy();
         await user.click(await screen.findByRole("combobox", { name: t.agentLabel }));
         await user.click(await screen.findByRole("option", { name: EMAIL }));
@@ -293,7 +293,7 @@ describe("RoundScreen", () => {
 
   it("shows the load-failed alert with a retry, and no prompt, when the roster fails", async () => {
     const { asked, view } = setup(round([]), 200, 500);
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     expect(await screen.findByText(t.loadFailed)).toBeTruthy();
     expect(screen.getByRole("button", { name: copy.errors.retry })).toBeTruthy();
     expect(screen.queryByText(t.choosePrompt)).toBeNull();
@@ -302,7 +302,7 @@ describe("RoundScreen", () => {
 
   it("keeps the no-position notice off an empty round", async () => {
     const { view } = setup(round([]));
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     expect(await screen.findByText(t.empty)).toBeTruthy();
     expect(screen.queryByText(t.noPosition)).toBeNull();
   });
@@ -319,7 +319,7 @@ describe("RoundScreen", () => {
         [2, dueToday],
       ]),
     );
-    view(`/admin/tournee?agent=${EMAIL}`);
+    view(`/admin/round?agent=${EMAIL}`);
     const items = await screen.findAllByRole("listitem");
     expect(items).toHaveLength(2);
     expect(within(items[0] as HTMLElement).getByText(STATUS_LABELS.assigned)).toBeTruthy();
@@ -331,21 +331,21 @@ describe("RoundScreen", () => {
 
     it("is absent before an agent is chosen", async () => {
       const { view } = setup(round(PROSPECTS));
-      view("/admin/tournee");
+      view("/admin/round");
       await screen.findByText(t.choosePrompt);
       expect(screen.queryByTestId("round-map")).toBeNull();
     });
 
     it("is absent when the round fails to load", async () => {
       const { view } = setup(round([]), 500);
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByText(t.loadFailed);
       expect(screen.queryByTestId("round-map")).toBeNull();
     });
 
     it("with a position: swipe numbers, uncoordinated stop has no pin, gold on the lowest, path, position", async () => {
       const { view } = setup(round(PROSPECTS, POS));
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findAllByRole("listitem");
       const props = lastMapProps();
       expect(props.pins).toEqual([
@@ -363,7 +363,7 @@ describe("RoundScreen", () => {
 
     it("without a position: the same numbers, gold and path, and no marker", async () => {
       const { view } = setup(round(PROSPECTS));
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findAllByRole("listitem");
       const props = lastMapProps();
       expect(props.pins).toEqual([
@@ -379,7 +379,7 @@ describe("RoundScreen", () => {
 
     it("before the swipe: the map holds the position marker only", async () => {
       const { view } = setup({ tournee: null, position: POS });
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByText(t.notStarted(EMAIL));
       const props = lastMapProps();
       expect(props.pins).toEqual([]);
@@ -394,7 +394,7 @@ describe("RoundScreen", () => {
           [3, prospect("z", "Zeste", 50.9, 4.4)],
         ]),
       );
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findAllByRole("listitem");
       expect(lastMapProps().pins).toEqual([
         expect.objectContaining({ name: "Alpha", number: 2, next: true }),
@@ -404,7 +404,7 @@ describe("RoundScreen", () => {
 
     it("zero pins with a stored position: map mounted, centred on the position", async () => {
       const { view } = setup(round([], POS));
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByText(t.empty);
       const props = lastMapProps();
       expect(props.pins).toEqual([]);
@@ -414,14 +414,14 @@ describe("RoundScreen", () => {
 
     it("asks the map to fit the stops, not the position", async () => {
       const { view } = setup(round(PROSPECTS, POS));
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByText("Madeleine");
       expect(lastMapProps().fitPosition).toBe(false);
     });
 
     it("mounts for a loaded round with zero pins", async () => {
       const { view } = setup(round([]));
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByText(t.empty);
       expect(screen.getByTestId("round-map")).toBeTruthy();
       expect(lastMapProps().pins).toEqual([]);
@@ -431,7 +431,7 @@ describe("RoundScreen", () => {
       const user = userEvent.setup();
       const other = "marc@example.com";
       const { view } = setup(round(PROSPECTS), 200, 200, [EMAIL, other]);
-      view(`/admin/tournee?agent=${EMAIL}`);
+      view(`/admin/round?agent=${EMAIL}`);
       await screen.findByTestId("round-map");
       expect(mapMounts.count).toBe(1);
       await user.click(screen.getByRole("combobox", { name: t.agentLabel }));

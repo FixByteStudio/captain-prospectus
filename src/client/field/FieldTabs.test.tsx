@@ -42,18 +42,16 @@ function FormThatCanClose() {
 }
 
 function renderTabs({
-  adminOnline = false,
-  path = "/tournee/abc123",
+  path = "/round/abc123",
   children,
 }: {
-  adminOnline?: boolean;
   path?: string;
   children?: React.ReactNode;
 } = {}) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <LeaveGuardProvider>
-        <FieldTabs adminOnline={adminOnline} />
+        <FieldTabs />
         {children}
         <CurrentPath />
       </LeaveGuardProvider>
@@ -65,7 +63,7 @@ const pathname = () => screen.getByTestId("pathname").textContent;
 
 describe("FieldTabs", () => {
   it("marks only the current tab with aria-current", () => {
-    renderTabs({ path: "/tournee" });
+    renderTabs({ path: "/round" });
     expect(
       screen.getByRole("link", { name: copy.nav.tabs.today }).getAttribute("aria-current"),
     ).toBe("page");
@@ -74,8 +72,8 @@ describe("FieldTabs", () => {
     ).toBeNull();
   });
 
-  it("lists Tournée, Carte, Carnet, Ajouter in order and marks Carte current on /tournee/carte", () => {
-    renderTabs({ path: "/tournee/carte" });
+  it("lists Tournée, Carte, Carnet, Ajouter in order and marks Carte current on /round/map", () => {
+    renderTabs({ path: "/round/map" });
 
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
       copy.nav.tabs.today,
@@ -91,15 +89,9 @@ describe("FieldTabs", () => {
     ).toBeNull();
   });
 
-  it("shows Tableau de bord only for an online admin", () => {
-    const { unmount } = renderTabs({ adminOnline: false });
+  it("never shows Tableau de bord, whatever the role (GH #561)", () => {
+    renderTabs();
     expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
-    unmount();
-
-    renderTabs({ adminOnline: true });
-    expect(screen.getByRole("link", { name: copy.nav.tabs.dashboard }).getAttribute("href")).toBe(
-      "/admin",
-    );
   });
 
   it("navigates straight away when no form is dirty", async () => {
@@ -109,7 +101,7 @@ describe("FieldTabs", () => {
     await user.click(screen.getByRole("link", { name: copy.nav.tabs.add }));
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(pathname()).toBe("/tournee/nouveau");
+    expect(pathname()).toBe("/round/new");
   });
 
   it("asks before leaving a dirty form, and stays put when cancelled", async () => {
@@ -122,10 +114,10 @@ describe("FieldTabs", () => {
     // router has not moved.
     expect(screen.getByRole("alertdialog")).toBeTruthy();
     expect(screen.getByText(copy.nav.leaveGuard.body)).toBeTruthy();
-    expect(pathname()).toBe("/tournee/abc123");
+    expect(pathname()).toBe("/round/abc123");
 
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
-    expect(pathname()).toBe("/tournee/abc123");
+    expect(pathname()).toBe("/round/abc123");
   });
 
   it("closes on Escape without navigating, and asks again on the next tap", async () => {
@@ -137,16 +129,16 @@ describe("FieldTabs", () => {
 
     // Escape goes through the dialog's `onOpenChange`, not Annuler (GH #86).
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(pathname()).toBe("/tournee/abc123");
+    expect(pathname()).toBe("/round/abc123");
 
     // The dismissed tap is dropped, not kept: the next one, to another tab,
     // asks afresh and Quitter follows it rather than the stale Ajouter.
     await user.click(screen.getByRole("link", { name: copy.nav.tabs.map }));
     expect(screen.getByRole("alertdialog")).toBeTruthy();
-    expect(pathname()).toBe("/tournee/abc123");
+    expect(pathname()).toBe("/round/abc123");
 
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
-    expect(pathname()).toBe("/tournee/carte");
+    expect(pathname()).toBe("/round/map");
   });
 
   it("never asks when the dirty form's own tab is tapped", async () => {
@@ -158,14 +150,14 @@ describe("FieldTabs", () => {
     // exact string: "already current" is `isCurrentTab`'s subtree rule read
     // pathname-first, so this case also fails if the component ever passes
     // `shouldAsk` the tab and the pathname the wrong way round.
-    renderTabs({ path: "/tournee/nouveau/deep/er", children: <DirtyForm /> });
+    renderTabs({ path: "/round/new/deep/er", children: <DirtyForm /> });
 
     await user.click(screen.getByRole("link", { name: copy.nav.tabs.add }));
 
     // No dialog: the tap goes straight through, keeping the agent inside the
     // form's own route rather than offering to discard what they are typing.
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(pathname()).toBe("/tournee/nouveau");
+    expect(pathname()).toBe("/round/new");
   });
 
   it("navigates once the agent confirms", async () => {
@@ -175,7 +167,7 @@ describe("FieldTabs", () => {
     await user.click(screen.getByRole("link", { name: copy.nav.tabs.add }));
     await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.leave }));
 
-    expect(pathname()).toBe("/tournee/nouveau");
+    expect(pathname()).toBe("/round/new");
   });
 
   it("stops asking once the dirty form unmounts", async () => {
@@ -186,6 +178,6 @@ describe("FieldTabs", () => {
     await user.click(screen.getByRole("link", { name: copy.nav.tabs.add }));
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(pathname()).toBe("/tournee/nouveau");
+    expect(pathname()).toBe("/round/new");
   });
 });

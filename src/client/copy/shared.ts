@@ -14,6 +14,7 @@ import type {
   Source,
   Status,
 } from "../../shared/constants";
+import { RATING_MAX, RATING_MIN } from "../../shared/constants";
 
 export const sharedCopy = {
   appName: "Captain Prospectus",
@@ -68,8 +69,8 @@ export const sharedCopy = {
       cancel: "Annuler",
     },
 
-    /** The band avatar has no menu; this is its only accessible name. */
-    avatar: (email: string) => `Connecté en tant que ${email}`,
+    /** The band avatar's accessible name: it opens the account card (AccountMenu.tsx, GH #561). */
+    avatar: (email: string) => `Ouvrir le menu du compte de ${email}`,
 
     /** Admin sidebar group labels, rendered uppercase through CSS (GH #63). */
     groups: {
@@ -172,7 +173,7 @@ export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
   multi: "Choix multiple",
   text: "Texte",
   number: "Nombre",
-  rating: "Note (1 à 5)",
+  rating: `Note (${RATING_MIN} à ${RATING_MAX})`,
 };
 
 export const TYPE_LABELS: Readonly<Record<ProspectType, string>> = {

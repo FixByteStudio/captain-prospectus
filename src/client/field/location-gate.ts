@@ -12,6 +12,13 @@ export const LOCATION_GATE_ACCURACY_M = 200;
 /** Wait between two readings while the last one was too coarse. */
 export const LOCATION_GATE_RETRY_MS = 2_000;
 
+/**
+ * The swipe's own reading waits this long (the browser's `timeout`), then the
+ * swipe numbers from the gate's point. Longer would hold the day's one
+ * irreversible act hostage to a fix; provisional too.
+ */
+export const LOCATION_GATE_SWIPE_TIMEOUT_MS = 3_000;
+
 /** The gate's readings ask for the coarse fix too, until the pavement test says otherwise. */
 export const LOCATION_GATE_HIGH_ACCURACY = false;
 

@@ -1,0 +1,21 @@
+# The epics of initiative-admin-field-separated, in build order.
+
+[[epic]]
+id = 1
+slug = "epic-english-slugs"
+title = "Every client URL slug is English"
+covers = ["R1"]
+
+[[epic]]
+id = 2
+slug = "epic-admins-leave-the-field"
+title = "Admins leave the field side"
+covers = ["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R12"]
+after = [{ epic = 1, needs = "the English route slugs" }]
+
+[[epic]]
+id = 3
+slug = "epic-admin-code-login"
+title = "Admins sign in with an email and a code"
+covers = ["R9", "R10", "R11", "R12"]
+after = [{ epic = 2, needs = "the Utilisateurs screen without a role toggle" }]

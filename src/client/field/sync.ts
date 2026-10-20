@@ -17,7 +17,8 @@
  */
 import {
   CLIENT_VERSION,
-  MAX_REQUEST_BYTES,
+  MINUTE_MS,
+  SYNC_BYTES_PER_BATCH,
   SYNC_PROSPECTS_PER_REQUEST,
   SYNC_STOPS_PER_REQUEST,
   SYNC_TOURNEES_PER_REQUEST,
@@ -84,42 +85,42 @@ const EMPTY = {
 
 /**
  * Serialize the payload, dropping visits off the end until it fits
- * MAX_REQUEST_BYTES.
+ * SYNC_BYTES_PER_BATCH.
  *
  * The count caps above bound how many rows go out; they cannot bound how many
  * bytes, because a visit may carry SCRIPT_QUESTIONS_MAX answers of LONG_TEXT_MAX
- * characters each. A full batch of ordinary visits is about 250 kB and fits; a
- * batch of 50 visits each holding 50 such answers is about 5 MB and does not,
- * and it is schema-valid all the same.
- *
- * The server refuses what it cannot read (INVARIANT 13), and a payload the
- * server always refuses is a payload the outbox rebuilds identically for ever,
- * because every non-auth failure keeps every row (INVARIANT 5). So the client
- * makes sure it never builds one.
+ * characters each. 50 ordinary visits are about 10 kB; 50 visits with full notes
+ * and answers are 1.7 MB, schema-valid, and past the Worker's 10 ms of CPU
+ * (INVARIANT 13, GH #450). The budget sits below MAX_REQUEST_BYTES, which the
+ * server refuses with a 413 that would keep every row for ever (INVARIANT 5).
  *
  * Field prospects are never dropped: 100 of them at every field's cap is 74 kB,
- * so they alone cannot exceed the cap, and a visit may reference one created in
- * the same payload — they have to travel together or earlier. At least one visit
- * always survives, so the outbox drains one round trip at a time through the
- * existing `remaining` path rather than stalling.
+ * and a visit may reference one created in the same payload — they have to
+ * travel together or earlier. The first visit always goes, whatever its size,
+ * so the outbox drains one round trip at a time through the existing
+ * `remaining` path rather than stalling; one schema-valid visit is ~105 kB.
  *
  * Costs one `JSON.stringify` in the common case, and returns that same string.
  */
 function serializeWithinCap(payload: SyncRequest): string {
-  let visits = payload.visits;
-  let serialized = JSON.stringify({ ...payload, visits });
+  const serialized = JSON.stringify(payload);
 
-  // Bytes, not characters: MAX_REQUEST_BYTES is what the Worker counts, and a
-  // note written outdoors is full of accented characters worth two of them.
+  // Bytes, not characters: the Worker counts bytes, and a note written outdoors
+  // is full of accented characters worth two of them.
   const bytes = (value: string) => new TextEncoder().encode(value).length;
+  if (bytes(serialized) <= SYNC_BYTES_PER_BATCH) return serialized;
 
-  // Halve rather than drop one at a time: the loop ends in at most log2(50)
-  // passes instead of 50 stringifies of a multi-megabyte payload.
-  while (visits.length > 1 && bytes(serialized) > MAX_REQUEST_BYTES) {
-    visits = visits.slice(0, Math.max(1, Math.floor(visits.length / 2)));
-    serialized = JSON.stringify({ ...payload, visits });
+  // The visits array is the payload with `[]` filled by each visit and a comma
+  // between two, so the longest prefix that fits is exact without re-serializing
+  // the whole payload per guess.
+  let total = bytes(JSON.stringify({ ...payload, visits: [] }));
+  let count = 0;
+  for (const visit of payload.visits) {
+    total += bytes(JSON.stringify(visit)) + (count > 0 ? 1 : 0);
+    if (count > 0 && total > SYNC_BYTES_PER_BATCH) break;
+    count++;
   }
-  return serialized;
+  return JSON.stringify({ ...payload, visits: payload.visits.slice(0, count) });
 }
 
 /** The wire shape of an outbox row: the stamp stays on the device. */
@@ -319,7 +320,7 @@ async function countOutbox(
 /* ------------------------------------------------------------------ backoff */
 
 const BASE_DELAY_MS = 5_000;
-const MAX_DELAY_MS = 5 * 60_000;
+const MAX_DELAY_MS = 5 * MINUTE_MS;
 
 /**
  * Exponential backoff after a failed sync.
@@ -334,4 +335,4 @@ export function backoffDelayMs(consecutiveFailures: number): number {
 }
 
 /** Sync triggers: app start, `online`, after each visit, every 60 s while open. */
-export const SYNC_INTERVAL_MS = 60_000;
+export const SYNC_INTERVAL_MS = MINUTE_MS;

@@ -15,8 +15,11 @@
  * a synchronous `node:sqlite` shim whose own CPU is measured and taken out,
  * which leaves what production bills: routing, auth, zod, `Intl`, row mapping
  * and JSON. It first times a cold request, the fresh module's first, then
- * warm ones. Local hardware is not Cloudflare's: keep headroom. Written
- * against Node 24 (`node:sqlite`'s `setReturnArrays`).
+ * warm ones. It authenticates the way production does (GH #415): a seeded
+ * `sessions` row, its `__Host-cp_session` cookie and `AUTH_PEPPER`, with
+ * `DEV_USER_EMAIL` unset, so the HMAC and the session lookup are in the figure.
+ * Local hardware is not Cloudflare's: keep headroom. Written against Node 24
+ * (`node:sqlite`'s `setReturnArrays`).
  *
  * Usage: pnpm db:migrate:local && (pnpm dev, then pnpm db:seed:local:full)
  *        node scripts/measure-dashboard-cpu.mjs
@@ -28,7 +31,15 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { at, buildWorker, copyLocalD1, d1Shim, timeRequest } from "./worker-cpu-shim.mjs";
+import {
+  MEASURE_PEPPER,
+  at,
+  buildWorker,
+  copyLocalD1,
+  d1Shim,
+  seedSession,
+  timeRequest,
+} from "./worker-cpu-shim.mjs";
 
 const RUNS = Number(process.env.RUNS ?? 200);
 const WARMUP = Number(process.env.WARMUP ?? 50);
@@ -41,16 +52,15 @@ try {
   const sqlite = copyLocalD1(work);
   const worker = await buildWorker(work);
   const shim = d1Shim(sqlite);
-  const env = {
-    DB: shim.DB,
-    DEV_USER_EMAIL: ADMIN,
-  };
+  const { cookie } = seedSession(sqlite, ADMIN, MEASURE_PEPPER);
+  const env = { DB: shim.DB, AUTH_PEPPER: MEASURE_PEPPER };
+  const headers = { Cookie: cookie };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
 
   const once = (period) =>
     timeRequest(
       worker,
-      new Request(`http://localhost/api/admin/dashboard?period=${period}`),
+      new Request(`http://localhost/api/admin/dashboard?period=${period}`, { headers }),
       env,
       shim,
     );
@@ -63,7 +73,7 @@ try {
       DB: { prepare: (query) => (seen.push(query), env.DB.prepare(query)) },
     };
     const response = await worker.fetch(
-      new Request("http://localhost/api/admin/dashboard?period=90"),
+      new Request("http://localhost/api/admin/dashboard?period=90", { headers }),
       explain,
       ctx,
     );

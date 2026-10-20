@@ -21,6 +21,7 @@ import { LocateFixedIcon } from "lucide-react";
 import { copy } from "../copy/field";
 import { Button } from "@/ui/button";
 import { DEFAULT_CENTER, DEFAULT_ZOOM } from "../admin/import/map";
+import { addOsmTiles, motionOptions, readToken } from "../leaflet-setup";
 import type { Point } from "../../shared/geo";
 import type { MapPin } from "./round-map";
 
@@ -62,14 +63,6 @@ const POSITION_ICON = L.divIcon({
   iconSize: [24, 24],
   iconAnchor: [12, 12],
 });
-
-/** A `@theme` token's computed value, so the dashed path follows the theme
- * (including dark) without a second palette here — MapCanvas's own
- * `readToken`. Leaflet's vector layers take a CSS colour string, not a class,
- * which is the one place this component cannot just reach for Tailwind. */
-function readToken(token: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#c9a227";
-}
 
 /** A stable key for "which points would we fit to", so the auto-fit effect can
  * tell a genuinely new round from a re-render that changed nothing it draws. */
@@ -171,23 +164,14 @@ export function RoundMap({
     const element = container.current;
     if (!element || map.current) return;
 
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const instance = L.map(element, {
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       zoomControl: false,
-      zoomAnimation: !still,
-      fadeAnimation: !still,
-      markerZoomAnimation: !still,
+      ...motionOptions(),
     });
-
-    // INVARIANT 11: attribution on every map, fed to the tile layer so it
-    // cannot be laid out away. `setPrefix(false)` drops Leaflet's own credit
-    // link, not ours — `copy.attribution` still shows.
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: copy.attribution,
-      maxZoom: 19,
-    }).addTo(instance);
+    addOsmTiles(instance);
+    // Drops Leaflet's own credit link, not ours: `copy.attribution` still shows.
     instance.attributionControl.setPrefix(false);
 
     // Tells a hand move from one of ours: `movestart` fires the instant either
@@ -294,7 +278,7 @@ export function RoundMap({
     }
     if (path.length >= 2) {
       pathLine.current = L.polyline(path as [number, number][], {
-        color: readToken("--color-primary"),
+        color: readToken("--color-primary", "#c9a227"),
         weight: 3,
         dashArray: "7 6",
       }).addTo(instance);

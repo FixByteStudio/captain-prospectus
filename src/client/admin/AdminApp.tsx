@@ -39,14 +39,14 @@ export function AdminApp({ email, updatePrompt }: { email: string; updatePrompt:
       <AdminLayout banner={updatePrompt} email={email}>
         <Routes>
           <Route index element={<DashboardScreen />} />
-          <Route path="agents" element={<AgentsScreen email={email} />} />
+          <Route path="users" element={<AgentsScreen email={email} />} />
           <Route path="prospects" element={<ProspectsScreen />} />
           <Route path="import" element={<ImportScreen />} />
-          <Route path="doublons" element={<DuplicatesScreen />} />
-          <Route path="visites" element={<VisitsScreen />} />
-          <Route path="a-rattacher" element={<OrphansScreen />} />
+          <Route path="duplicates" element={<DuplicatesScreen />} />
+          <Route path="visits" element={<VisitsScreen />} />
+          <Route path="orphans" element={<OrphansScreen />} />
           <Route path="scripts" element={<ScriptsScreen />} />
-          <Route path="tournee" element={<RoundScreen />} />
+          <Route path="round" element={<RoundScreen />} />
           {/* Inside the admin frame, so a typo keeps the sidebar (#90). */}
           <Route
             path="*"

@@ -4,7 +4,7 @@
  * scan `className`/`cn()` strings without a DOM.
  *
  * A naive `/(["'`])(...)*\1/` scan (and stripping `/* … *\/` comments first)
- * both break on real code: `useMatch("/tournee/*")` contains a `/*` inside a
+ * both break on real code: `useMatch("/round/*")` contains a `/*` inside a
  * *string*, which a comment-stripper reads as a comment start, and a prose
  * apostrophe ("it's") reads as a string start — either way, everything up to
  * the next matching character is swallowed into one bogus "literal",

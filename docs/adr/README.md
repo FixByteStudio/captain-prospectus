@@ -34,7 +34,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0026](0026-budget-the-field-precache-not-the-entry-chunk.md) | Budget the field route by its precache, not its entry chunk | accepted — ceiling basis amended by 0031 |
 | [0027](0027-interested-is-its-own-closed-status.md) | An "Intéressé" visit gives the prospect its own closed status | accepted |
 | [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | accepted |
-| [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted — decision 12 amended by 0034 |
+| [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted — decision 12 amended by 0034, decisions 3, 5 and 7 by 0038 |
 | [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | accepted |
 | [0031](0031-the-precache-ceiling-counts-every-precached-entry.md) | The precache ceiling counts every precached entry | proposed |
 | [0032](0032-a-stored-folded-name-for-search.md) | A stored folded name for search | accepted |
@@ -42,5 +42,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0034](0034-launch-on-our-own-login-alone.md) | Launch on our own login alone, with no Cloudflare Access phase | accepted |
 | [0035](0035-serve-the-app-on-a-domain-we-already-own.md) | Serve the app on a domain we already own | accepted |
 | [0036](0036-a-swipe-freezes-each-agents-numbered-tournee.md) | A morning swipe freezes each agent's numbered tournée | accepted |
+| [0037](0037-admins-leave-the-field-side.md) | Admins leave the field side | proposed |
+| [0038](0038-admins-sign-in-with-an-email-and-a-code.md) | Admins sign in with an email and a code | proposed |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.

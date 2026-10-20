@@ -37,9 +37,9 @@ import { useRound } from "./useRound";
  * under the tab bar. `useCarteTop` below measures the real value into
  * `--carte-top`; only the bottom term stays a fixed calc off the shell's own
  * tokens (below 768px the tab bar is fixed and owns its own safe-area inset,
- * `--spacing-tab-bar-height`, app.css:219, 437-438; from 768px the tabs move
- * into the band and the bottom margin is the page's usual one instead,
- * app.css:441-445's own `.pb-tab-bar` override, mirrored here since a
+ * `--spacing-tab-bar-height` in app.css; from 768px the tabs move into the
+ * band and the bottom margin is the page's usual one instead, app.css's own
+ * `width >= 48rem` override of `.pb-tab-bar`, mirrored here since a
  * full-bleed canvas cannot also carry that class's padding-bottom).
  */
 const FULL_BLEED = cn(
@@ -101,7 +101,7 @@ function OfflineCanvas({ className }: { className?: string }) {
           </span>
           <p className="mt-2.5 text-base font-semibold">{copy.carte.offline}</p>
           <Link
-            to="/tournee"
+            to="/round"
             className={cn(buttonVariants({ variant: "secondary", size: "touch" }), "mt-3 w-full")}
           >
             <RouteIcon aria-hidden="true" />

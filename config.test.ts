@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -75,6 +76,60 @@ describe("service worker", () => {
     // Extension-less on purpose: Leaflet's stylesheet arrives as a separate
     // `AdminApp-*.css`, which a `.js`-only ignore would keep precaching.
     expect(config).toMatch(/globIgnores:\s*\[\s*"\*\*\/assets\/AdminApp-\*"/);
+  });
+});
+
+describe("public/_headers", () => {
+  /** The headers of the one `/*` rule, by lower-case name. */
+  function shellHeaders(): Map<string, string> {
+    const raw = readFileSync("public/_headers", "utf8").replace(/^#.*$/gm, "");
+    const rule = /^\/\*\n((?:[ \t]+.+\n?)+)/m.exec(raw);
+    if (!rule) throw new Error("public/_headers has no /* rule");
+    return new Map(
+      [...rule[1].matchAll(/^\s+([\w-]+):\s*(.+)$/gm)].map(([, name, value]) => [
+        name.toLowerCase(),
+        value.trim(),
+      ]),
+    );
+  }
+
+  it("covers the whole static shell with HSTS, nosniff and no framing (GH #454)", () => {
+    // Static assets never run the Worker (INVARIANT 14), so this file is the
+    // only place /login can get them.
+    const headers = shellHeaders();
+    expect(headers.get("strict-transport-security")).toBe("max-age=31536000; includeSubDomains");
+    expect(headers.get("x-content-type-options")).toBe("nosniff");
+    expect(headers.get("x-frame-options")).toBe("DENY");
+    expect(headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  });
+
+  it("keeps the origin on tile requests and geolocation open to the app itself", () => {
+    // `no-referrer` would break the OSM tile usage policy, which requires a
+    // Referer; `geolocation=()` would break the agent position (useAgentPosition.ts).
+    const headers = shellHeaders();
+    expect(headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+    expect(headers.get("permissions-policy")).toContain("geolocation=(self)");
+  });
+
+  it("allows index.html's inline theme pin by its exact hash", () => {
+    // Without the right hash the browser drops the script silently and a
+    // pinned-dark user gets the system theme (src/client/theme.test.ts).
+    const html = readFileSync("index.html", "utf8");
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    expect(scripts).toHaveLength(1);
+    const hash = createHash("sha256").update(scripts[0][1]).digest("base64");
+    expect(shellHeaders().get("content-security-policy")).toContain(
+      `script-src 'self' 'sha256-${hash}'`,
+    );
+  });
+
+  it("lets the browser reach the OSM tile host, the one third-party origin the client loads", () => {
+    const tiles = new URL(
+      /tileLayer\("([^"]+)"/.exec(readFileSync("src/client/leaflet-setup.ts", "utf8"))?.[1] ?? "",
+    ).origin;
+    expect(shellHeaders().get("content-security-policy")).toContain(
+      `img-src 'self' data: ${tiles}`,
+    );
   });
 });
 

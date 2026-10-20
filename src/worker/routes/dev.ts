@@ -14,6 +14,7 @@ import { chunk } from "../../shared/chunk";
 import { CLIENT_VERSION, HOUR_MS } from "../../shared/constants";
 import type { Role } from "../../shared/constants";
 import { dedupeKey } from "../../shared/dedupe";
+import { brusselsMidnightDaysFromNow } from "../../shared/period";
 import { foldForSearch } from "../../shared/search";
 import { devSeedSchema } from "../../shared/schemas";
 import type { DevSeed, DevSeedResult } from "../../shared/schemas";
@@ -23,7 +24,7 @@ import { validate } from "../validate";
 import { boundParamsPerRow, getDb } from "../db/client";
 import { prospects, scripts, users, visits, visitsOrphaned } from "../db/schema";
 import type { NewOrphanedVisitRow, NewProspectRow, NewVisitRow } from "../db/schema";
-import { FIXED_STORIES, seedDayStart, seedHistory, seedId } from "../dev-seed-history";
+import { FIXED_STORIES, seedHistory, seedId } from "../dev-seed-history";
 import type { AppEnv } from "../types";
 import { deriveProspectStatus } from "./status";
 
@@ -190,7 +191,7 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   // 6. The manual status and the merge, each written only while unset: a status
   // an admin has since set by hand is kept, but a prospect they have unmerged
   // has `merged_into` null again, so a re-seed merges it again.
-  const yesterdayAfternoon = seedDayStart(now, 1) + 14 * HOUR_MS;
+  const yesterdayAfternoon = brusselsMidnightDaysFromNow(now, -1) + 14 * HOUR_MS;
   for (const { input: p, key } of seeds) {
     const row = stored.get(key);
     if (!row) continue;
@@ -295,7 +296,7 @@ function seedOrphans(
     ),
   ];
 
-  const visitedAt = Math.min(seedDayStart(now, 1) + 11 * HOUR_MS, now);
+  const visitedAt = Math.min(brusselsMidnightDaysFromNow(now, -1) + 11 * HOUR_MS, now);
   const receivedAt = Math.min(visitedAt + 20 * 60_000, now);
   const base = {
     visitedAt,
@@ -304,7 +305,7 @@ function seedOrphans(
     flyerGiven: false,
     // Both outcomes below take a follow-up, as the generator's do; a repaired
     // orphan then leaves its prospect with a `next_visit_at`.
-    followUpAt: seedDayStart(now, -3) + 10 * HOUR_MS,
+    followUpAt: brusselsMidnightDaysFromNow(now, 3) + 10 * HOUR_MS,
     notes: null,
     scriptId: null,
     answers: {},

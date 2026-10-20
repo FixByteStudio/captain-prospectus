@@ -34,6 +34,7 @@ import { formatBrusselsTime } from "../format";
 import { fieldDb } from "../field/db";
 import { useOnline } from "../hooks/use-online";
 import type { PwaState } from "../pwa";
+import { LOGIN_WINDOW_MS } from "../../shared/constants";
 import {
   codeLoginSchema,
   meResponseSchema,
@@ -53,9 +54,6 @@ type Refusal = "refused" | "unreachable" | "failed";
 /** A 429 locks the button until `until`; `exact` says Retry-After gave the time. */
 type Lockout = { until: number; exact: boolean };
 
-/** What design.md waits when the 429 carries no usable Retry-After. */
-const LOCKOUT_FALLBACK_MS = 15 * 60 * 1000;
-
 function refusalCopy(refusal: Refusal, mode: Mode): string {
   if (refusal === "refused")
     return mode === "code" ? copy.login.codeRefused : copy.login.adminRefused;
@@ -69,7 +67,7 @@ function refusalFor(error: unknown): Refusal {
 }
 
 function landingFor(role: "admin" | "agent"): string {
-  return role === "admin" ? "/admin" : "/tournee";
+  return role === "admin" ? "/admin" : "/round";
 }
 
 const labelClass = "font-semibold";
@@ -166,7 +164,7 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) {
         const exact = error.retryAfter !== null;
-        const wait = error.retryAfter !== null ? error.retryAfter * 1000 : LOCKOUT_FALLBACK_MS;
+        const wait = error.retryAfter !== null ? error.retryAfter * 1000 : LOGIN_WINDOW_MS;
         setLockout({ until: Date.now() + wait, exact });
         return;
       }

@@ -76,17 +76,18 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 ## Payload caps
 Every array is bounded, because one request must stay inside the Workers Free
 10 ms CPU budget (`docs/free-tier-budget.md`). The limits live in
-`src/shared/constants.ts`: 250 import rows, 200 visits, 100 field prospects, 7 tournées and 250 stops
-per sync (the server's accept limit; a current phone sends at most 50 visits a
-pass, and an older build up to 200 — GH #404). A stop's `number` is at most 10,000.
+`src/shared/constants.ts`: 250 import rows, 50 visits, 100 field prospects, 7 tournées and 250 stops
+per sync (the phone sends at most 50 visits a pass, and the server refuses more — GH #404,
+#451). A stop's `number` is at most 10,000.
 Also 50 answers per visit (a script's own question ceiling), 500 ids per bulk assign,
 500 visits per live-feed page, 200 prospects per list page and 1000 candidates per
 Overpass import. A Google import is capped at 20 by Google itself.
 
 Those cap **rows**. `MAX_REQUEST_BYTES` (2 MiB) caps **bytes**, Worker-wide, and is
-checked before any body is parsed — the two are not the same thing, because 200
-visits of 50 long answers each is schema-valid and about 20 MiB. The field client trims
-a sync batch that would exceed it rather than sending one the server must refuse; see
+checked before any body is parsed — the two are not the same thing, because 50
+visits of 50 long answers each is schema-valid and about 5 MiB. The field client trims
+each sync batch to `SYNC_BYTES_PER_BATCH` (384 KiB), well under it, because a heavier
+batch runs past the 10 ms CPU limit (GH #450, `docs/free-tier-budget.md`); see
 `docs/security.md`.
 
 `GET /api/admin/prospects` returns at most `PROSPECTS_PAGE_SIZE` rows; `total`

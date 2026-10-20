@@ -6,8 +6,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setGeolocation, setGeolocationPermission } from "../../../test/geolocation";
-import { dropReading, setReadingIdentity } from "./last-reading";
-import { LOCATION_GATE_ACCURACY_M, LOCATION_GATE_RETRY_MS } from "./location-gate";
+import { dropReading, readingToSend, setReadingIdentity } from "./last-reading";
+import {
+  LOCATION_GATE_ACCURACY_M,
+  LOCATION_GATE_RETRY_MS,
+  LOCATION_GATE_SWIPE_TIMEOUT_MS,
+} from "./location-gate";
 import { useLocationGate } from "./useLocationGate";
 
 const HERE = { lat: 50.8467, lng: 4.3525 };
@@ -229,5 +233,95 @@ describe("useLocationGate", () => {
     expect(result.current.status).toEqual({ kind: "passed" });
     expect(result.current.point).toEqual(HERE);
     reading.mockRestore();
+  });
+
+  describe("swipePoint", () => {
+    const THERE = { lat: 50.86, lng: 4.36 };
+
+    /** A gate that has passed at HERE; the fix is then switched by the test. */
+    async function passedAtHere() {
+      setGeolocationPermission("granted");
+      setGeolocation({ ...HERE, accuracy: 30 });
+      const gate = renderHook(() => useLocationGate());
+      await flush();
+      await flush();
+      expect(gate.result.current.status).toEqual({ kind: "passed" });
+      return gate;
+    }
+
+    it("numbers from the fresh reading when the agent moved and it passes the rule", async () => {
+      const { result } = await passedAtHere();
+      setGeolocation({ ...THERE, accuracy: LOCATION_GATE_ACCURACY_M });
+
+      let point: unknown;
+      await act(async () => {
+        point = await result.current.swipePoint();
+      });
+
+      expect(point).toEqual(THERE);
+      // The gate stays where it ended.
+      expect(result.current.status).toEqual({ kind: "passed" });
+      expect(result.current.point).toEqual(HERE);
+    });
+
+    it("asks for a fresh reading with the swipe's own timeout", async () => {
+      const { result } = await passedAtHere();
+      const reading = vi.spyOn(navigator.geolocation, "getCurrentPosition");
+      await act(async () => void (await result.current.swipePoint()));
+
+      expect(reading).toHaveBeenCalledTimes(1);
+      expect(reading.mock.calls[0]?.[2]).toMatchObject({
+        maximumAge: 0,
+        timeout: LOCATION_GATE_SWIPE_TIMEOUT_MS,
+      });
+      reading.mockRestore();
+    });
+
+    it.each([
+      ["too coarse", { ...THERE, accuracy: LOCATION_GATE_ACCURACY_M + 1 }],
+      ["refused", "denied"],
+      ["lost", "unavailable"],
+      ["timed out", "timeout"],
+    ] as const)("falls back to the gate's point when the reading is %s", async (_name, fix) => {
+      const { result } = await passedAtHere();
+      setGeolocation(fix);
+
+      let point: unknown;
+      await act(async () => {
+        point = await result.current.swipePoint();
+      });
+
+      expect(point).toEqual(HERE);
+      expect(result.current.status).toEqual({ kind: "passed" });
+    });
+
+    it("falls back when the browser has no geolocation at all", async () => {
+      const { result } = await passedAtHere();
+      const real = Object.getOwnPropertyDescriptor(navigator, "geolocation");
+      // @ts-expect-error -- an older WebView has no such property
+      delete navigator.geolocation;
+      try {
+        let point: unknown;
+        await act(async () => {
+          point = await result.current.swipePoint();
+        });
+        expect(point).toEqual(HERE);
+      } finally {
+        if (real) Object.defineProperty(navigator, "geolocation", real);
+      }
+    });
+
+    it("remembers the swipe's reading for the ADR-0028 marker, even a coarse one", async () => {
+      setReadingIdentity("agent@example.com");
+      const { result } = await passedAtHere();
+      setGeolocation({ ...THERE, accuracy: LOCATION_GATE_ACCURACY_M + 50 });
+      await act(async () => void (await result.current.swipePoint()));
+
+      expect(readingToSend("agent@example.com", Date.now())).toMatchObject({
+        lat: THERE.lat,
+        lng: THERE.lng,
+        accuracy: LOCATION_GATE_ACCURACY_M + 50,
+      });
+    });
   });
 });

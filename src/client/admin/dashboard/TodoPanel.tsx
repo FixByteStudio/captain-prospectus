@@ -61,7 +61,7 @@ export function TodoPanel({
       meta: t.orphansMeta,
       count: orphans,
       action: t.orphansAction,
-      to: "/admin/a-rattacher",
+      to: "/admin/orphans",
     },
     {
       icon: Copy,
@@ -70,7 +70,7 @@ export function TodoPanel({
       count: duplicates,
       format: t.pairs,
       action: t.duplicatesAction,
-      to: "/admin/doublons",
+      to: "/admin/duplicates",
     },
     {
       icon: UserX,

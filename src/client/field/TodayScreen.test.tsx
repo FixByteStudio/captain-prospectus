@@ -84,7 +84,7 @@ const visit = (over: Partial<Visit> = {}): Visit => ({
 
 function renderScreen() {
   return render(
-    <MemoryRouter initialEntries={["/tournee"]}>
+    <MemoryRouter initialEntries={["/round"]}>
       <TodayScreen />
     </MemoryRouter>,
   );
@@ -495,7 +495,7 @@ describe("TodayScreen", () => {
     expect(screen.getByText(copy.today.progressOf(2))).toBeTruthy();
     expect(screen.getByText(copy.today.findInCarnet)).toBeTruthy();
     expect(screen.getByRole("link", { name: copy.today.openCarnet }).getAttribute("href")).toBe(
-      "/tournee/carnet",
+      "/round/logbook",
     );
     expect(screen.queryByText(copy.today.nextStop)).toBeNull();
     expect(screen.queryByRole("link", { name: copy.today.visit })).toBeNull();

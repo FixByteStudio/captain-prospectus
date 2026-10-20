@@ -9,6 +9,8 @@ export type GeolocationFix =
   | "denied"
   /** Error code 2: the device could not get a fix. */
   | "unavailable"
+  /** Error code 3: the browser's `timeout` ran out. */
+  | "timeout"
   | {
       lat: number;
       lng: number;

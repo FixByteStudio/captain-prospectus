@@ -30,13 +30,13 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Tournée** | Tournée | One agent's stops for one Brussels calendar day, at most one per agent per day. A morning swipe freezes it from the agent's open work and numbers it nearest-next; the server keeps it as inserts only ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | route |
 | **Stop** | Arrêt | One prospect in a tournée, with the number it took at the swipe, or the next number if it joined later. The number never changes; a stop that leaves unvisited leaves a gap. The field UI counts arrêts, never visites ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | visite (on the field side), door |
 | **Door-day** | — (internal; the admin UI still says « visites ») | One agent, one prospect and one Brussels day; its outcome is that day's latest visit. What the admin figures, the Visites ledger and Carnet count ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | visit (a door-day can hold several) |
-| **Today list** | Tournée du jour | The field screen at `/tournee`: today's tournée's stops with no visit today, in number order, the next one on a card ([design](design.md#next-stop-card)) | route |
-| **Carnet** | Carnet | The field tab at `/tournee/carnet`: today's door-days, each with its number (none for a door-day outside the tournée) and latest outcome; reopening one saves a new visit ([design](design.md#carnet)) | history, journal, ma journée |
-| **Admin round view** | Tournée du jour | The admin's read-only view of one agent's tournée at `/admin/tournee`, in the phone's stop numbers; the stored agent position only places the agent's marker ([design](design.md#the-admin-round-view), [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | tracking screen |
+| **Today list** | Tournée du jour | The field screen ([Screens](#screens)): today's tournée's stops with no visit today, in number order, the next one on a card ([design](design.md#next-stop-card)) | route |
+| **Carnet** | Carnet | The field tab ([Screens](#screens)): today's door-days, each with its number (none for a door-day outside the tournée) and latest outcome; reopening one saves a new visit ([design](design.md#carnet)) | history, journal, ma journée |
+| **Admin round view** | Tournée du jour | The admin's read-only view of one agent's tournée ([Screens](#screens)), in the phone's stop numbers; the stored agent position only places the agent's marker ([design](design.md#the-admin-round-view), [ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | tracking screen |
 | **Agent position** | Position | The latest reading the phone took today, sent with a sync; one per agent, shown only in the admin round view and gone overnight ([ADR-0028](adr/0028-agent-position-at-sync.md)) | location history, tracking |
-| **Carte** (screen) | Carte | The field tab at `/tournee/carte`: the Today list drawn as pins carrying their stop numbers | the `osm` import source below, which the admin side also labels "Carte" |
+| **Carte** (screen) | Carte | The field tab ([Screens](#screens)): the Today list drawn as pins carrying their stop numbers | the `osm` import source below, which the admin side also labels "Carte" |
 | **Flyer** | Flyer | The leaflet handed over during a visit | prospectus, brochure |
-| **Dashboard** | Tableau de bord | The admin's landing screen at `/admin`: how canvassing is going over 7, 30 or 90 days | home, overview |
+| **Dashboard** | Tableau de bord | The admin's landing screen ([Screens](#screens)): how canvassing is going over 7, 30 or 90 days | home, overview |
 | **Open prospect** | Prospect ouvert | A live prospect (`merged_into IS NULL`) whose status is `new`, `assigned` or `follow_up` | active lead |
 | **Personne sur place** (outcome `no_contact`) | Personne sur place | Closed, or nobody at all to speak to. The agent comes back; the script is not asked | absent |
 | **À relancer** (outcome `follow_up`) | À relancer | Someone was there (staff or the boss), but the boss is busy, away, or not interested right now while keeping the door open for later. The agent comes back; the script is not asked | callback |
@@ -45,6 +45,28 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Waitlist** | Liste d'attente | The prospects signed up to hear about the launch. Joining it is a conversion | mailing list, newsletter |
 | **Channel** | Canal | How a prospect joins the waitlist: today the WhatsApp group or the waitlist itself | medium, source (that's the import origin) |
 | **Conversion rate** | Taux de conversion | Prospects converted in a period ÷ distinct prospects visited in it ([api.md › The dashboard](api.md#the-dashboard)) | win rate, close rate |
+
+## Screens
+
+Every client path is an English slug, whatever the French label on screen. A new screen takes the next slug in the same shape: `/round/…` for the field, `/admin/…` for the admin.
+
+| Screen | French (UI) | Slug |
+|---|---|---|
+| Login | Connexion | `/login` |
+| Today list | Tournée | `/round` |
+| Carte | Carte | `/round/map` |
+| Carnet | Carnet | `/round/logbook` |
+| Add prospect | Ajouter | `/round/new` |
+| Visit form | Nouvelle visite | `/round/:id` |
+| Dashboard | Tableau de bord | `/admin` |
+| Users | Agents | `/admin/users` |
+| Prospects | Prospects | `/admin/prospects` |
+| Import | Import | `/admin/import` |
+| Duplicates | Doublons | `/admin/duplicates` |
+| Visits | Visites | `/admin/visits` |
+| Orphans | À rattacher | `/admin/orphans` |
+| Scripts | Scripts | `/admin/scripts` |
+| Admin round view | Tournée du jour | `/admin/round` |
 
 ## Enum values
 

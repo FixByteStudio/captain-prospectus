@@ -15,9 +15,8 @@
  */
 import { lte, sql, type SQL } from "drizzle-orm";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
-import { AUTH_SWEEP_BATCH } from "../shared/constants";
+import { AUTH_SWEEP_BATCH, LOGIN_WINDOW_MS } from "../shared/constants";
 import { loginAttempts, loginCodes, sessions } from "./db/schema";
-import { LOGIN_WINDOW_MS } from "./login-throttle";
 import type { Db } from "./db/client";
 
 export type AuthSweepCounts = {

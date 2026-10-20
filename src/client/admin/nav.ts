@@ -46,7 +46,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: copy.nav.groups.pilotage,
     items: [
       { label: copy.nav.dashboard, path: "/admin", icon: LayoutGrid, end: true },
-      { label: copy.nav.agents, path: "/admin/agents", icon: Users },
+      { label: copy.nav.agents, path: "/admin/users", icon: Users },
     ],
   },
   {
@@ -54,16 +54,16 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { label: copy.nav.prospects, path: "/admin/prospects", icon: Store },
       { label: copy.nav.import, path: "/admin/import", icon: CloudUpload },
-      { label: copy.nav.duplicates, path: "/admin/doublons", icon: Copy, count: "duplicates" },
+      { label: copy.nav.duplicates, path: "/admin/duplicates", icon: Copy, count: "duplicates" },
     ],
   },
   {
     label: copy.nav.groups.terrain,
     items: [
-      { label: copy.nav.visits, path: "/admin/visites", icon: MapPin },
-      { label: copy.nav.orphans, path: "/admin/a-rattacher", icon: LinkIcon, count: "orphans" },
+      { label: copy.nav.visits, path: "/admin/visits", icon: MapPin },
+      { label: copy.nav.orphans, path: "/admin/orphans", icon: LinkIcon, count: "orphans" },
       { label: copy.nav.scripts, path: "/admin/scripts", icon: FileText },
-      { label: copy.nav.round, path: "/admin/tournee", icon: Route },
+      { label: copy.nav.round, path: "/admin/round", icon: Route },
     ],
   },
 ];

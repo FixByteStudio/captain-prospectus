@@ -1,6 +1,6 @@
 /**
  * The agent last chosen in Tournée du jour, so the sidebar link (plain
- * `/admin/tournee`) reopens on them — GH #284. A per-viewer convenience: no
+ * `/admin/round`) reopens on them — GH #284. A per-viewer convenience: no
  * server state, and `?agent=` still wins. Try/catch like `theme.ts`: blocked
  * site data must cost the memory, never the screen.
  */

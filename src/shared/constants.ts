@@ -5,7 +5,9 @@
  * the values below are the ones the domain docs describe, and the docs win.
  */
 
-export const HOUR_MS = 60 * 60 * 1000;
+export const MINUTE_MS = 60 * 1000;
+
+export const HOUR_MS = 60 * MINUTE_MS;
 
 /** A day in ms. Brussels days are not all this long, which is why `periodOffsets` exists (shared/period.ts). */
 export const DAY_MS = 24 * HOUR_MS;
@@ -18,6 +20,10 @@ export const LONG_TEXT_MAX = 2000;
 
 /** A question's `options`, and so the choices one multi answer can hold. */
 export const QUESTION_OPTIONS_MAX = 30;
+
+/** The bounds of a `rating` answer, an integer (docs/domains/scripts.md). */
+export const RATING_MIN = 1;
+export const RATING_MAX = 5;
 
 /** A question's `key`, and so an answer's: answers are keyed by question key. */
 export const QUESTION_KEY_MAX = 60;
@@ -136,8 +142,8 @@ export function isOpen(status: Status): boolean {
  * raise MIN_CLIENT_VERSION only once every phone reports the new version; while
  * disposable, raise both together (ADR-0033).
  */
-export const CLIENT_VERSION = 2;
-export const MIN_CLIENT_VERSION = 2;
+export const CLIENT_VERSION = 3;
+export const MIN_CLIENT_VERSION = 3;
 
 /**
  * Payload caps.
@@ -149,15 +155,18 @@ export const MIN_CLIENT_VERSION = 2;
 export const IMPORT_ROWS_PER_REQUEST = 250;
 
 /**
- * Sync visits have two limits. SYNC_VISITS_PER_REQUEST is what the server
- * accepts; SYNC_VISITS_PER_BATCH is what this build's phone sends per pass.
- * The batch is set by CPU: 200 visits to 200 prospects runs past 10 ms of
- * Worker CPU, 50 stays near 5 ms (GH #404, docs/free-tier-budget.md). The
- * accept limit stays at 200 because an installed old build still sends 200,
- * and lowering it would refuse that phone's outbox (INVARIANT 9).
+ * Visits per sync, what the phone sends a pass and the most the server accepts.
+ * Set by CPU: 200 visits to 200 prospects runs past 10 ms of Worker CPU, 50 stays
+ * near 5 ms warm (GH #404, #451, docs/free-tier-budget.md).
  */
-export const SYNC_VISITS_PER_REQUEST = 200;
 export const SYNC_VISITS_PER_BATCH = 50;
+/**
+ * The bytes this build's phone sends per pass. The count above cannot bound them:
+ * 50 visits with full notes and answers are 1.7 MB and run past 10 ms. 384 KiB keeps a
+ * pass under 6 ms at worst warm (GH #450, docs/free-tier-budget.md). A client-side
+ * budget, below the server's MAX_REQUEST_BYTES, so it changes no contract.
+ */
+export const SYNC_BYTES_PER_BATCH = 393_216;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 /**
  * A tournée is one per agent per Brussels day (ADR-0036); a week's worth covers a
@@ -275,11 +284,17 @@ export const MAP_CACHE_EVICT_BATCH = 500;
 export const AUTH_SWEEP_BATCH = 500;
 
 /**
+ * The fixed window failed logins are counted in (login-throttle.ts). The login
+ * screen waits it out when a 429 carries no usable Retry-After (docs/design.md).
+ */
+export const LOGIN_WINDOW_MS = 15 * MINUTE_MS;
+
+/**
  * The import log (ADR-0030). An import with batches missing and none received
  * for this long is read as « Interrompu »; a newer one is still running and is
  * not listed. Read-time only, so changing it needs no migration.
  */
-export const IMPORT_STALE_MS = 5 * 60 * 1000;
+export const IMPORT_STALE_MS = 5 * MINUTE_MS;
 
 /** Cap on `importLog.batchCount`: 10 000 batches of 250 rows is 2.5 M rows. */
 export const IMPORT_LOG_BATCH_COUNT_MAX = 10_000;

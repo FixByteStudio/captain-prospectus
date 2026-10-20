@@ -8,7 +8,7 @@ import { useNavigate } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiFetch, authError, isWorkerUnauthorized, redirectError } from "../api";
 import { copy } from "../copy";
-import { IMPORT_ROWS_PER_REQUEST } from "../../shared/constants";
+import { IMPORT_ROWS_PER_REQUEST, MINUTE_MS } from "../../shared/constants";
 import { brusselsPeriod } from "../../shared/period";
 import {
   dueBeforeSchema,
@@ -126,7 +126,7 @@ export function prospectsHref(filters: ProspectFilters): string {
 
 /** Where Visites opens for this period — the dashboard's Visites card (GH #178). */
 export function visitsHref(period: DashboardPeriod): string {
-  return `/admin/visites?period=${period}`;
+  return `/admin/visits?period=${period}`;
 }
 
 /**
@@ -294,7 +294,7 @@ export function useDuplicates() {
     queryKey: adminKeys.duplicates(),
     queryFn: () => apiFetch<DuplicatesResponse>("/api/admin/prospects/duplicates"),
     // A sweep compares thousands of rows; it is not something to redo on a whim.
-    staleTime: 60_000,
+    staleTime: MINUTE_MS,
   });
 }
 

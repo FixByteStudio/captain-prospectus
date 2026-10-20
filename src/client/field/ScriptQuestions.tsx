@@ -16,10 +16,10 @@ import { FieldCheckbox, FieldRadioGroup, FieldRadioOption } from "@/ui/field-con
 import { Textarea } from "@/ui/textarea";
 import { NumberStepper } from "./NumberStepper";
 import { copy } from "../copy/field";
+import { RATING_MAX, RATING_MIN } from "../../shared/constants";
 import type { Answers, Question } from "../../shared/schemas";
 
-/** scripts.md: rating is an integer 1–5. */
-const RATINGS = [1, 2, 3, 4, 5] as const;
+const RATINGS = Array.from({ length: RATING_MAX - RATING_MIN + 1 }, (_, i) => RATING_MIN + i);
 
 export const questionDomId = (key: string) => `question-${key}`;
 

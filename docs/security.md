@@ -8,13 +8,14 @@ a mitigation nobody has verified is worse than one nobody claimed.
 
 | Threat | Mitigation |
 |---|---|
-| A request with no valid session | Identity is a D1 session (`src/worker/auth.ts`); with none, every `/api` route outside `/api/auth/*` and `/api/dev/*` answers 401, whether the cookie is missing, unknown, expired or its user deactivated (`auth.test.ts`, `requireIdentity`). A missing `AUTH_PEPPER` skips the session lookup and makes sign-in answer 500, never open access. Preview URLs are disabled by `preview_urls: false` in `wrangler.jsonc`, which every deploy applies and `config.test.ts` asserts |
+| A request with no valid session | Identity is a D1 session (`src/worker/auth.ts`); with none, every `/api` route outside `/api/auth/*` and `/api/dev/*` answers 401 to a request that passes the origin check (a write from a missing or foreign `Origin` gets 403 first, see Cross-site request forgery), whether the cookie is missing, unknown, expired or its user deactivated (`auth.test.ts`, `requireIdentity`). A missing `AUTH_PEPPER` skips the session lookup and makes sign-in answer 500, never open access. Preview URLs are disabled by `preview_urls: false` in `wrangler.jsonc`, which every deploy applies and `config.test.ts` asserts |
 | Header spoofing | Email taken from the D1 session only, never a header or a client claim |
 | Dev impersonation leaking to prod | `DEV_USER_EMAIL` ignored unless host is localhost, `127.0.0.1` or `[::1]`, and even there it must name an active `users` row, which also gives the role; `/api/dev/*` needs both that variable and a localhost host, and it and `/api/auth/*` (sign-in and sign-out) are the only routes mounted before auth |
 | Agent reading other agents' data | Agent **reads** filter by the verified email. A visit against a prospect that isn't the sender's is quarantined in `visits_orphaned` and derives nothing until an admin repairs it. It is not refused, because INVARIANT 5 outranks the rule ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md), [#33](https://github.com/FixbyteStudio/captain-prospectus/issues/33)) |
 | Cross-site request forgery | The session cookie is `SameSite=Strict`, and any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or not the Worker's own gets 403, on every route (`src/worker/origin.ts`) |
 | Guessing codes or passphrases | After 10 failed logins from one IP in a fixed 15-minute window, every login from it gets 429 until the window ends, checked before the credential. Each try reserves its failure in one conditional upsert before the check, so a parallel burst gets no more than 10 through. Counted in D1 `login_attempts` under an HMAC of the IP (an IPv6 address by its /64), never the IP in clear; requests without `CF-Connecting-IP` share one bucket (`src/worker/login-throttle.ts`) |
 | Flooding the sign-in routes to exhaust the request quota | The zone's rate-limiting rule blocks an IP in front of `/api/auth/*` before the Worker runs, on the one hostname that reaches it ([ADR-0035](adr/0035-serve-the-app-on-a-domain-we-already-own.md), [deployment](deployment.md#one-time-setup-production)). It is dashboard setup that no test checks, and it counts per IP: a flood from many IPs can still stop the app until midnight UTC ([free-tier-budget](free-tier-budget.md#own-login-adr-0029)) |
+| Clickjacking, downgrade to HTTP, MIME sniffing | Static assets, `/login` included, get HSTS (1 year, no preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a CSP with `frame-ancestors 'none'`, `Referrer-Policy: strict-origin-when-cross-origin` (the OSM tile policy needs the origin) and a `Permissions-Policy` allowing geolocation to self only, from `public/_headers`, which Workers Static Assets applies without running the Worker (INVARIANT 14). Its CSP allows scripts from self plus the inline theme pin by hash, and images from self, `data:` and the OSM tile host. `config.test.ts` checks the file; that the edge applies it was checked on a local build only, and the deploy check is `curl -sI` on `/login` ([deployment](deployment.md)). `/api/*` sets the same HSTS, nosniff and framing headers with `default-src 'none'` and `no-referrer` in Hono's `secureHeaders`, registered outermost; `security-headers.test.ts` covers a 200, 401, 403, 404 and the body cap's 413, not the 500 of `onError`. `style-src` keeps `'unsafe-inline'`, because sonner, Radix and `ui/chart.tsx` inject `<style>` |
 | Malformed or oversized payloads | zod validation, array size caps, and a `MAX_REQUEST_BYTES` body cap enforced Worker-wide in `src/worker/index.ts` before anything parses the body |
 | SQL injection | Drizzle parameterised queries only; no string-built SQL |
 | XSS through imported data (names, notes) | React escaping; no `dangerouslySetInnerHTML` |
@@ -26,17 +27,19 @@ a mitigation nobody has verified is worse than one nobody claimed.
 
 ### The body cap
 
-`MAX_REQUEST_BYTES` (`src/shared/constants.ts`) is 2 MiB, about twice the largest
-request a client can legitimately build — a full sync of 100 field prospects and 200
-visits carrying maximum-length notes and a 50-question script answered is 1060 KiB.
+`MAX_REQUEST_BYTES` (`src/shared/constants.ts`) is 2 MiB, about three times the largest
+request a client can legitimately build — a full sync of 100 field prospects, 50
+visits carrying maximum-length notes and a 50-question script answered, and a week of
+tournées with 250 stops is 614 KiB.
 It exists because the array caps bound rows, not bytes: a visit may carry 50 answers
-(`SCRIPT_QUESTIONS_MAX`) of 2000 characters each, so a schema-valid payload can reach 19.7 MiB.
+(`SCRIPT_QUESTIONS_MAX`) of 2000 characters each, so a schema-valid payload can reach about 4.9 MiB.
 
-It is enforced as the **first** middleware registered, above the `/dev` mount, because
+It is enforced as the first middleware registered after the security headers, above the `/dev` mount, because
 Hono composes handlers in registration order and `/api/dev/*` is the one route mounted
 before auth. Budget tests in `src/shared/constants.test.ts` fail if a count cap is ever
-raised past the byte cap, and `src/client/field/sync.ts` trims a batch that would exceed
-it — a payload the server always refuses is an outbox that never drains (INVARIANT 5).
+raised past the byte cap, and `src/client/field/sync.ts` trims each batch to
+`SYNC_BYTES_PER_BATCH` (384 KiB, below this cap, for CPU: GH #450), always keeping the first visit —
+a payload the server always refuses is an outbox that never drains (INVARIANT 5).
 
 ## Personal data
 - **Prospect data** is mostly public business info, but may include a contact person's name or phone. Keep it to what the business needs.

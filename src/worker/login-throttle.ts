@@ -12,13 +12,13 @@
  */
 import { createMiddleware } from "hono/factory";
 import { and, eq, lt, sql } from "drizzle-orm";
+import { LOGIN_WINDOW_MS } from "../shared/constants";
 import { getDb } from "./db/client";
 import { loginAttempts } from "./db/schema";
 import { hmacHex } from "./session";
 import type { AppEnv } from "./types";
 
 export const LOGIN_MAX_FAILURES = 10;
-export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 /** Every request without the header shares one bucket rather than going unthrottled. */
 const UNKNOWN_IP = "unknown";
