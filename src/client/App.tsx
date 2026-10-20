@@ -45,7 +45,7 @@ import {
   releaseUnconfirmed,
   setMeta,
 } from "./field/db";
-import { adminAccess, resolveIdentity } from "./field/identity";
+import { resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
 import { LoginScreen } from "./auth/LoginScreen";
 
@@ -104,33 +104,27 @@ const CarnetScreen = lazy(() =>
 );
 
 /** What `FieldFrame` hands the routes under it: the gate it already decided, and the clock it decided it on. */
-type FieldContext = { gate: TourneeGate; adminOnline: boolean; now: number };
+type FieldContext = { gate: TourneeGate; now: number };
 
 /**
- * The field routes, which every role can reach, behind the tournée gate
+ * The field routes, agent-only (ADR-0037), behind the tournée gate
  * (ADR-0036, docs/design.md › Before the swipe): a no-tournée message, the
  * start screen, or the app. Every `/round/*` path is gated, a deep link to a
  * stop included, because the app opens at the swipe.
  */
 function FieldRoutes() {
-  const { gate, adminOnline, now } = useOutletContext<FieldContext>();
+  const { gate, now } = useOutletContext<FieldContext>();
 
   if (gate.kind === "loading") {
     return <p className="text-muted-foreground" aria-busy="true" />;
   }
   if (gate.kind === "neverLoaded" || gate.kind === "nothingAssigned") {
-    return <NoTourneeMessage kind={gate.kind} adminOnline={adminOnline} />;
+    return <NoTourneeMessage kind={gate.kind} />;
   }
   if (gate.kind === "start") {
     // Keyed by the Brussels day, so midnight remounts it: its date and its
     // location dialog are the new day's, and a reading from yesterday is not.
-    return (
-      <StartScreen
-        key={brusselsPeriod(now, 1).from}
-        snapshot={gate.snapshot}
-        adminOnline={adminOnline}
-      />
-    );
+    return <StartScreen key={brusselsPeriod(now, 1).from} snapshot={gate.snapshot} />;
   }
 
   return (
@@ -180,12 +174,10 @@ function FieldRoutes() {
  * renders as a sibling route, not nested inside `FieldFrame`.
  */
 function FieldFrame({
-  adminOnline,
   pwa,
   email,
   role,
 }: {
-  adminOnline: boolean;
   pwa: PwaState;
   email: string;
   role: MeResponse["role"];
@@ -238,7 +230,7 @@ function FieldFrame({
         <span className="ml-auto md:ml-0">
           <SyncDot />
         </span>
-        <AccountMenu email={email} role={role} adminOnline={adminOnline} />
+        <AccountMenu email={email} role={role} />
       </Band>
 
       {!hideUpdatePrompt && <UpdatePrompt pwa={pwa} />}
@@ -256,7 +248,7 @@ function FieldFrame({
           gateOpen ? "pb-tab-bar" : gate.kind === "start" ? "pb-start-track" : "pb-page",
         )}
       >
-        <Outlet context={{ gate, adminOnline, now } satisfies FieldContext} />
+        <Outlet context={{ gate, now } satisfies FieldContext} />
       </main>
     </>
   );
@@ -522,19 +514,30 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
     );
   }
 
-  // Two gates, not one (spec-gh-115): `screens` is the security decision
-  // (invariant 10, unchanged) — admin screens are useless without the
-  // network, so a cached identity opens the field side only, whatever role
-  // it happens to record. `entry` additionally requires a live network for
-  // the tab and the `/` redirect, so an admin never sees a door that cannot
-  // open (ADR-0019) — but an admin already on an /admin screen keeps it when
-  // the network drops. A cache-sourced admin gets the Hors ligne screen
-  // instead (ADR-0037).
-  const { screens, entry } = adminAccess({ role: me.role, fromCache: identityFromCache, online });
-
-  // The cached role only picks which *offline* screen renders (invariant 10):
-  // it opens nothing, and only a live `/api/me` sets `screens`.
-  const adminOffline = identityFromCache && me.role === "admin";
+  // One role, one side (ADR-0037). An admin gets /admin/* and nothing else, and
+  // runs no sync: the Worker answers 403 to an admin on /api/agent/*. Any
+  // leftover outbox rows stay in Dexie untouched (invariant 5).
+  if (me.role === "admin") {
+    return (
+      <Routes>
+        <Route
+          path="/admin/*"
+          element={
+            // The cached role only picks this static screen (invariant 10): it
+            // opens no route or data. Only a live `/api/me` opens the frame.
+            identityFromCache ? (
+              <AdminOfflineScreen checking={checking} onRetry={recheckIdentity} />
+            ) : (
+              <Suspense fallback={<AdminFrameFallback />}>
+                <AdminApp email={me.email} updatePrompt={<UpdatePrompt pwa={pwa} />} />
+              </Suspense>
+            )
+          }
+        />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    );
+  }
 
   return (
     <SyncProvider
@@ -543,41 +546,36 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       recheckIdentity={recheckIdentity}
     >
       <Routes>
-        {/* Not under FieldFrame: the redirect target decides which frame
-            shows, so the field band must not render even for one commit. */}
-        <Route path="/" element={<Navigate to={entry ? "/admin" : "/round"} replace />} />
+        {/* Not under FieldFrame: the redirect target decides which frame shows. */}
+        <Route path="/" element={<Navigate to="/round" replace />} />
 
         {/* The field-only band. The forbidden and not-found fallbacks live
             here too, since neither screen is admin chrome. */}
-        <Route
-          element={<FieldFrame adminOnline={entry} pwa={pwa} email={me.email} role={me.role} />}
-        >
+        <Route element={<FieldFrame pwa={pwa} email={me.email} role={me.role} />}>
           <Route path="/round/*" element={<FieldRoutes />} />
-          {!screens && !adminOffline && (
-            <Route
-              path="/admin/*"
-              element={
-                // A cached identity proves neither role (invariant 10), so it
-                // gets the network's answer, never the permission one
-                // (EXPERIENCE.md § State Patterns, Offline after a reload).
-                // The same sentence shows when `/api/me` failed with the
-                // browser online: that case has no wording of its own yet.
-                identityFromCache ? (
-                  <FieldEmptyState
-                    icon={WifiOffIcon}
-                    message={copy.adminRoute.offline}
-                    action={{ to: "/round", label: copy.visit.back }}
-                  />
-                ) : (
-                  <FieldEmptyState
-                    icon={LockIcon}
-                    message={copy.errors.forbidden}
-                    action={{ to: "/round", label: copy.visit.back }}
-                  />
-                )
-              }
-            />
-          )}
+          <Route
+            path="/admin/*"
+            element={
+              // A cached identity proves no role (invariant 10), so it gets
+              // the network's answer, never the permission one
+              // (EXPERIENCE.md § State Patterns, Offline after a reload).
+              // The same sentence shows when `/api/me` failed with the
+              // browser online: that case has no wording of its own yet.
+              identityFromCache ? (
+                <FieldEmptyState
+                  icon={WifiOffIcon}
+                  message={copy.adminRoute.offline}
+                  action={{ to: "/round", label: copy.visit.back }}
+                />
+              ) : (
+                <FieldEmptyState
+                  icon={LockIcon}
+                  message={copy.errors.forbidden}
+                  action={{ to: "/round", label: copy.visit.back }}
+                />
+              )
+            }
+          />
           <Route
             path="*"
             element={
@@ -589,26 +587,6 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
             }
           />
         </Route>
-
-        {/* Outside FieldFrame: no tabs, no avatar, no field side (ADR-0037). */}
-        {adminOffline && (
-          <Route
-            path="/admin/*"
-            element={<AdminOfflineScreen checking={checking} onRetry={recheckIdentity} />}
-          />
-        )}
-
-        {/* Admin screens get their own frame instead of the field band. */}
-        {screens && (
-          <Route
-            path="/admin/*"
-            element={
-              <Suspense fallback={<AdminFrameFallback />}>
-                <AdminApp email={me.email} updatePrompt={<UpdatePrompt pwa={pwa} />} />
-              </Suspense>
-            }
-          />
-        )}
       </Routes>
     </SyncProvider>
   );

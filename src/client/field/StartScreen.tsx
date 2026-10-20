@@ -10,10 +10,9 @@
  * enough, the location dialog holds the screen (`useLocationGate`).
  */
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { copy, TYPE_LABELS } from "../copy/field";
 import { formatBrusselsWeekday } from "../format";
-import { buttonVariants } from "@/ui/button-variants";
 import { brusselsPeriod } from "../../shared/period";
 import type { SnapshotProspect } from "../../shared/tournee";
 import { numberStops } from "../../shared/tournee";
@@ -30,13 +29,7 @@ type SaveState = { saved?: boolean; savedAt?: number; added?: boolean; addedAt?:
 /** The preview shows this many stops, then « et {n} autres arrêts ». */
 const PREVIEW_STOPS = 7;
 
-export function StartScreen({
-  snapshot,
-  adminOnline,
-}: {
-  snapshot: readonly SnapshotProspect[];
-  adminOnline: boolean;
-}) {
+export function StartScreen({ snapshot }: { snapshot: readonly SnapshotProspect[] }) {
   const { status, point, swipePoint, activate } = useLocationGate();
   const swipeRef = useRef<HTMLButtonElement | null>(null);
   const { identity, confirmed, syncNow } = useSyncState();
@@ -140,11 +133,6 @@ export function StartScreen({
       {/* Where the tab bar will be. Fixed above the safe area. */}
       <div className="safe-bottom bg-background border-border fixed inset-x-0 bottom-0 z-40 border-t px-4 pt-3">
         <div className="mx-auto flex max-w-xl flex-col gap-2 pb-3">
-          {adminOnline && (
-            <Link to="/admin" className={buttonVariants({ variant: "secondary", size: "touch" })}>
-              {copy.nav.tabs.dashboard}
-            </Link>
-          )}
           <StartSwipe
             ref={swipeRef}
             ready={point !== null}
@@ -163,7 +151,6 @@ export function StartScreen({
         open={point === null}
         status={status}
         onActivate={activate}
-        adminOnline={adminOnline}
         swipeRef={swipeRef}
         notice={notice}
       />

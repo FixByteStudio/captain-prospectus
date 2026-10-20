@@ -8,7 +8,6 @@
  * to whatever opened it.
  */
 import { useId, type RefObject } from "react";
-import { Link } from "react-router";
 import { MapPinIcon } from "lucide-react";
 import { copy } from "../copy/field";
 import {
@@ -43,15 +42,12 @@ export function LocationDialog({
   open,
   status,
   onActivate,
-  adminOnline,
   swipeRef,
   notice,
 }: {
   open: boolean;
   status: LocationStatus;
   onActivate: () => void;
-  /** The dialog covers the « Tableau de bord » link above the track, so it carries its own. */
-  adminOnline: boolean;
   swipeRef: RefObject<HTMLButtonElement | null>;
   /** A save's confirmation, above the title: a form open at midnight saved, then landed here. */
   notice?: string;
@@ -107,12 +103,6 @@ export function LocationDialog({
         </AlertDialogAction>
 
         <p className="text-muted-foreground text-center text-sm">{copy.location.settings}</p>
-
-        {adminOnline && (
-          <Link to="/admin" className={buttonVariants({ variant: "secondary", size: "touch" })}>
-            {copy.nav.tabs.dashboard}
-          </Link>
-        )}
       </AlertDialogContent>
     </AlertDialog>
   );

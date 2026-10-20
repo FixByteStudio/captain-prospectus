@@ -50,13 +50,12 @@ export const sharedCopy = {
     },
 
     /** The field tab bar's labels (spec-gh-66), bottom on a phone, in the band
-     * from 768px. Tableau de bord only renders for an admin who is online. */
+     * from 768px. */
     tabs: {
       today: "Tournée",
       map: "Carte",
       carnet: "Carnet",
       add: "Ajouter",
-      dashboard: "Tableau de bord",
     },
     /** The field tab bar's own `<nav>` landmark name (FieldTabs.tsx). */
     tabsLabel: "Navigation",

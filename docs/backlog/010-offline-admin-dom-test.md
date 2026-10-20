@@ -7,6 +7,11 @@ depends_on: []
 
 # Pin that an offline admin opens the field side, with no Tableau de bord tab
 
+**Superseded again by #592** ([ADR-0037](../adr/0037-admins-leave-the-field-side.md)):
+an admin never reaches the field side now, online or not. A cache-started
+admin sees the Hors ligne screen, and the cases #115 added here were removed
+with `adminAccess`.
+
 **Superseded by #115** (spec-gh-115-admin-tab-offline): the DOM cases this
 task asked for — a cache-started admin's `/` redirect, its `/admin` deep
 link, and its missing tab — are covered by `App.test.tsx`'s new cases, built

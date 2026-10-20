@@ -89,11 +89,6 @@ describe("FieldTabs", () => {
     ).toBeNull();
   });
 
-  it("never shows Tableau de bord, whatever the role (GH #561)", () => {
-    renderTabs();
-    expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
-  });
-
   it("navigates straight away when no form is dirty", async () => {
     const user = userEvent.setup();
     renderTabs();
