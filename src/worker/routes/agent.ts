@@ -64,7 +64,7 @@ const syncRequest = validator("json", (value: unknown, c) => {
 
 agentRoutes.post("/sync", syncRequest, async (c) => {
   const body: SyncRequest = c.req.valid("json");
-  const { email, role } = c.get("identity");
+  const { email } = c.get("identity");
   const db = getDb(c.env.DB);
   const now = Date.now();
 
@@ -278,10 +278,8 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
     console.error("tournee write failed", err instanceof Error ? err.name : "unknown");
   }
 
-  // ---- 3c. The agent's latest reading (ADR-0028). Agents only: an admin
-  // walking a round from the field route stores nothing. A session or dev
-  // identity always has an active `users` row, so the role is enough.
-  if (body.position && role === "agent") {
+  // ---- 3c. The agent's latest reading (ADR-0028). requireAgent keeps admins out.
+  if (body.position) {
     // Its own try: a bad position never fails a sync (ADR-0028). Name only, since
     // a Drizzle message carries the bound lat/lng/email.
     try {
@@ -334,12 +332,12 @@ agentRoutes.post("/sync", syncRequest, async (c) => {
  */
 agentRoutes.get("/prospects/:id/visits", validate("param", prospectIdParamSchema), async (c) => {
   const db = getDb(c.env.DB);
-  const { email, role } = c.get("identity");
+  const { email } = c.get("identity");
   const { id } = c.req.valid("param");
 
   const [prospect] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);
   if (!prospect) return c.json({ error: "not_found" }, 404);
-  if (role !== "admin" && prospect.assignedTo !== email) {
+  if (prospect.assignedTo !== email) {
     return c.json({ error: "forbidden", message: "Ce prospect ne vous est pas assigné." }, 403);
   }
 

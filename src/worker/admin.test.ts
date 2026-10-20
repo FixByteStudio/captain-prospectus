@@ -94,27 +94,22 @@ beforeEach(async () => {
 });
 
 describe("GET /api/admin/agents", () => {
-  it("lists the admins and the agents, with their roles", async () => {
+  it("lists the agents only, with their role", async () => {
     const response = await call("/api/admin/agents");
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as AgentsResponse;
-    expect(body.agents).toEqual([
-      { email: ADMIN, role: "admin" },
-      { email: AGENT, role: "agent" },
-    ]);
+    expect(body.agents).toEqual([{ email: AGENT, role: "agent" }]);
   });
 
-  it("lists active users only, with their own role, sorted by email (GH #303)", async () => {
+  it("lists active agents only, with their own role, sorted by email (GH #303)", async () => {
     await seedUser("zoe@example.com", "admin");
     await seedUser("bob@example.com", "agent");
     await seedUser("gone@example.com", "agent", false);
     const body = (await (await call("/api/admin/agents")).json()) as AgentsResponse;
     expect(body.agents).toEqual([
-      { email: ADMIN, role: "admin" },
       { email: AGENT, role: "agent" },
       { email: "bob@example.com", role: "agent" },
-      { email: "zoe@example.com", role: "admin" },
     ]);
   });
 });
@@ -164,6 +159,33 @@ describe("a deactivated user leaves the roster (GH #303)", () => {
     expect(
       (await post("/api/admin/prospects/assign", { ids: [first.id], assignedTo: null })).status,
     ).toBe(200);
+  });
+});
+
+describe("an admin is not assignable (ADR-0037)", () => {
+  it("refuses an active admin on PATCH and on bulk assign, and leaves the prospect alone", async () => {
+    await importRows([{ name: "Chez Léa", lat: 50.84, lng: 4.35 }]);
+    const db = getDb(env.DB);
+    const [row] = await db.select().from(prospects);
+    if (!row) throw new Error("the import wrote nothing");
+
+    const bulk = await post("/api/admin/prospects/assign", { ids: [row.id], assignedTo: ADMIN });
+    expect(bulk.status).toBe(400);
+    expect(((await bulk.json()) as { error: string }).error).toBe("unknown_assignee");
+    expect((await patch(`/api/admin/prospects/${row.id}`, { assignedTo: ADMIN })).status).toBe(400);
+    expect((await db.select().from(prospects))[0]?.assignedTo).toBeNull();
+
+    expect((await patch(`/api/admin/prospects/${row.id}`, { assignedTo: AGENT })).status).toBe(200);
+  });
+
+  it("counts a prospect left on an admin as sans agent actif", async () => {
+    await importRows([{ name: "Chez Léa", lat: 50.84, lng: 4.35 }]);
+    const db = getDb(env.DB);
+    await db.update(prospects).set({ assignedTo: ADMIN });
+    const body = (await (
+      await call("/api/admin/prospects?inactiveAgent=true")
+    ).json()) as ProspectsResponse;
+    expect(body.total).toBe(1);
   });
 });
 
@@ -657,7 +679,7 @@ describe("Hors cible signalé (GH #250)", () => {
 
   it("combines with another filter, and totals the combined set", async () => {
     await flagged("Chez Léa", { assignedTo: AGENT });
-    await flagged("Le Zinc", { assignedTo: ADMIN });
+    await flagged("Le Zinc", { assignedTo: "bob@example.com" });
     await seedProspect("Ouvert", { assignedTo: AGENT });
 
     expect(await list(`outOfTarget=true&assignedTo=${AGENT}`)).toEqual({
@@ -1412,15 +1434,22 @@ describe("merging duplicates", () => {
     const { original, renamed } = await renamedPair();
     await post("/api/admin/prospects/assign", {
       ids: [original, renamed],
-      assignedTo: ADMIN,
+      assignedTo: AGENT,
     });
     await post("/api/admin/prospects/merge", { survivorId: renamed, mergedId: original });
 
-    const sync = await post("/api/agent/sync", {
-      clientVersion: CLIENT_VERSION,
-      prospects: [],
-      visits: [],
-    });
+    // The agent syncs, not the admin: /api/agent/* is agents only (ADR-0037).
+    env.DEV_USER_EMAIL = AGENT;
+    let sync: Response;
+    try {
+      sync = await post("/api/agent/sync", {
+        clientVersion: CLIENT_VERSION,
+        prospects: [],
+        visits: [],
+      });
+    } finally {
+      env.DEV_USER_EMAIL = ADMIN;
+    }
     const body = (await sync.json()) as { prospects: Prospect[] };
     expect(body.prospects.map((p) => p.id)).toEqual([renamed]);
   });
@@ -2389,7 +2418,7 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       })),
     );
     // Stop 4 is reassigned, stop 2 visited today.
-    await db.update(prospects).set({ assignedTo: ADMIN }).where(eqId(four));
+    await db.update(prospects).set({ assignedTo: "bob@example.com" }).where(eqId(four));
     await db.insert(visits).values({
       id: crypto.randomUUID(),
       prospectId: two,
@@ -2446,14 +2475,20 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
         assignedTo: AGENT,
         mergedInto: ids.open,
       },
-      { ...base(now), id: ids.other, dedupeKey: "r:other", status: "assigned", assignedTo: ADMIN },
+      {
+        ...base(now),
+        id: ids.other,
+        dedupeKey: "r:other",
+        status: "assigned",
+        assignedTo: "bob@example.com",
+      },
     ]);
     await swipe(now, [
       [1, ids.open],
       [2, ids.converted],
       [3, ids.merged],
     ]);
-    await swipe(now, [[1, ids.other]], ADMIN);
+    await swipe(now, [[1, ids.other]], "bob@example.com");
     const body = agentRoundResponseSchema.parse(
       await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
     );
@@ -2484,7 +2519,13 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     const id = crypto.randomUUID();
     await getDb(env.DB)
       .insert(prospects)
-      .values({ ...base(now), id, dedupeKey: "round:left", status: "assigned", assignedTo: ADMIN });
+      .values({
+        ...base(now),
+        id,
+        dedupeKey: "round:left",
+        status: "assigned",
+        assignedTo: "bob@example.com",
+      });
     await swipe(now - 1_000, [[1, id]]);
     const body = agentRoundResponseSchema.parse(
       await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
@@ -2492,11 +2533,8 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     expect(body.tournee).toEqual({ startedAt: now - 1_000, stops: [] });
   });
 
-  it("answers 200 with a null position for an admin's email", async () => {
-    const body = agentRoundResponseSchema.parse(
-      await (await call(`/api/admin/agents/${ADMIN}/round`)).json(),
-    );
-    expect(body.position).toBeNull();
+  it("answers 404 for an admin's email, like any non-assignable one (ADR-0037)", async () => {
+    expect((await call(`/api/admin/agents/${ADMIN}/round`)).status).toBe(404);
   });
 
   it("serves capturedAt clamped to receivedAt", async () => {

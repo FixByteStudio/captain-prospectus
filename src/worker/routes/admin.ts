@@ -159,8 +159,8 @@ const PLACES_UNCONFIGURED = {
 /* ------------------------------------------------------------------- people */
 
 /**
- * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
- * Admins are included — in a two-person field team an admin may well walk a round.
+ * Everyone a prospect can be assigned to: the active agents (ADR-0029, ADR-0037).
+ * Admins do no tournée, so they are not listed.
  */
 adminRoutes.get("/agents", async (c) => {
   const roster = await activeRoster(getDb(c.env.DB));
@@ -206,7 +206,7 @@ adminRoutes.get("/agents/:email/round", validate("param", agentEmailParamSchema)
  * prospect disappears from every agent's sync pull, which matches on the exact
  * email, while the admin list still shows it as assigned and handled. One typo
  * and a restaurant is never visited again. So the assignee has to be on the
- * roster (an active user), and `null` — unassign — is always allowed.
+ * roster (an active agent), and `null` — unassign — is always allowed.
  */
 async function unknownAssignee(email: string | null, db: Db): Promise<boolean> {
   return email !== null && !(await activeRosterMember(db, email));
@@ -763,8 +763,8 @@ const OUT_OF_TARGET_FLAGGED = sql`(
 
 /**
  * "Sans agent actif" (docs/api.md › The dashboard): assigned to an email with
- * no active `users` row, so a deactivated user and an address left from the
- * allow-lists both count. Shared by the dashboard's `inactiveAgentProspects`
+ * no active agent row, so a deactivated user, an admin and an address left from
+ * the allow-lists all count. Shared by the dashboard's `inactiveAgentProspects`
  * and `prospectFilters`, so the figure and the list cannot diverge. The
  * subselect is a primary-key lookup on `users.email`.
  */
@@ -773,6 +773,7 @@ const NO_ACTIVE_AGENT = sql`(
   and not exists (
     select 1 from ${users}
     where ${users.email} = ${prospects.assignedTo} and ${users.active} = 1
+      and ${users.role} = 'agent'
   )
 )`;
 

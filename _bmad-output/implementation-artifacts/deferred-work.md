@@ -446,3 +446,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-528-repaired-orphan-visites-live-feed.md`
   summary: A feed-clock stamp taken at request start can land below a cursor already lifted by a write that committed first, so that visit is skipped by an open ledger.
   evidence: Sync and repair both read `now` before their awaits and insert later; a poll between a later-stamped commit and an earlier-stamped one moves `since` past the earlier one. Low likelihood with two agents and one admin.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
+  summary: Changing a user's role agent→admin (`src/worker/routes/identity.ts:155`) leaves their prospects off every sync pull and their outbox behind a 403.
+  evidence: Roster and /api/agent/* are agent-only since GH #590; the role toggle stays until the epic #579 story "roles are fixed at creation" removes it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
+  summary: `scripts/seed.mjs:17` and `/api/dev/seed` assign seeded prospects, visits and positions to DEV_USER_EMAIL, which defaults to the dev admin.
+  evidence: An admin is no longer assignable (ADR-0037), so local seed data lands on a non-agent and shows as « sans agent actif ».

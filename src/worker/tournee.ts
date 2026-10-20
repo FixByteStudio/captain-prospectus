@@ -178,7 +178,7 @@ export async function todayTournee(
 }
 
 /**
- * Roster members who started the tournée of the Brussels day `dayStart` begins:
+ * Roster members (active agents) who started the tournée of the Brussels day `dayStart` begins:
  * the swipe alone counts, with no visit needed. One helper serves « Agents en
  * tournée » and the recap's « actifs aujourd'hui », so they are the same figure
  * (ADR-0036). It drives from the handful of active `users` rows into
@@ -192,6 +192,7 @@ export async function agentsStartedOn(db: Db, dayStart: number): Promise<number>
     .where(
       and(
         eq(users.active, true),
+        eq(users.role, "agent"),
         sql`exists (select 1 from ${tournees} where ${tournees.agentEmail} = ${users.email} and ${tournees.dayStart} = ${dayStart})`,
       ),
     );

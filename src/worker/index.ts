@@ -14,7 +14,7 @@ import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import type { ErrorHandler } from "hono";
 import { MAX_REQUEST_BYTES } from "../shared/constants";
-import { requireAdmin, requireIdentity } from "./auth";
+import { requireAdmin, requireAgent, requireIdentity } from "./auth";
 import { getDb } from "./db/client";
 import { isD1DailyLimitError } from "./errors";
 import { describeSweep, runRetention } from "./retention";
@@ -92,6 +92,7 @@ app.route("/auth", authRoutes);
 app.use("/*", requireIdentity);
 
 app.route("/me", meRoutes);
+app.use("/agent/*", requireAgent);
 app.route("/agent", agentRoutes);
 app.use("/admin/*", requireAdmin);
 app.route("/admin", adminRoutes);
