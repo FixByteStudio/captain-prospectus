@@ -1295,32 +1295,27 @@ From `md` the list and the map sit side by side:
 `/admin/users`, second in Pilotage (Lucide `Users`): who may sign in, and on
 which devices ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
 Adding an agent is one form here, with no deploy. Built on the #175
-primitives: a `ScreenHeader`, a `ScreenState` gate and, per role, a heading
-with its count over its own `Surface` holding the rows. Agents come first,
-then Administrateurs. A role is fixed at creation
-([ADR-0037](adr/0037-admins-leave-the-field-side.md)), so the section heading
-names it and there is no Rôle column.
+primitives: a `ScreenHeader`, a `ScreenState` gate and one `Tabs` (shadcn)
+over the rows: « Agents » (the default) and « Administrateurs », each with
+its active count. A role is fixed at creation
+([ADR-0037](adr/0037-admins-leave-the-field-side.md)), so the tab names it
+and there is no Rôle column. Mockups: forge
+`utilisateurs-screen-rethink`, `mockup-b-nom.png` (desktop) and
+`mockup-b-phone.png` (phone), under `_bmad-output/forge/`.
 
 ```
   Utilisateurs                                 [Ajouter un utilisateur]
   Qui peut se connecter, et sur quels appareils.
 
-  Agents 3
+  ( Agents 3 | Administrateurs 2 )
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Utilisateur                          Inscription         Appareils  │
+│ Nom                                  Inscription         Appareils  │
 │ › Léa Dupont                         Inscrit                  2   ⋮ │
 │   lea@example.com                                                   │
 │     iPhone · Safari  Inscrit le 24/09  Vu le 07/10 15:24 [Révoquer] │
 │ › Marc Peeters                       Pas encore inscrit       0   ⋮ │
 └─────────────────────────────────────────────────────────────────────┘
   › Désactivés (1)
-
-  Administrateurs 2
-┌─────────────────────────────────────────────────────────────────────┐
-│ Utilisateur                          Inscription         Appareils  │
-│ › Nadia Benali                       Inscrit                  1   ⋮ │
-│ › Sam Owner                          Inscrit                  2   ⋮ │
-└─────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Header.** "Utilisateurs", lede "Qui peut se connecter, et sur quels
@@ -1336,12 +1331,15 @@ names it and there is no Rôle column.
   refused with "Cette adresse a déjà un compte. S'il est désactivé,
   réactivez-le sous Désactivés." Users are never deleted, so a typo is fixed
   by deactivating the wrong row.
-- **Two sections**, « Agents » then « Administrateurs »: a `text-heading`
-  heading with the active count in meta, tabular, over its own `Surface`.
-  An Agents section with no active agent holds one muted line, "Aucun agent.
-  Ajoutez-en un pour lancer les tournées."; Administrateurs is never empty
-  (you are in it).
-- **One row per active user**, by name. Utilisateur is the name, the email
+- **Two tabs**, « Agents » then « Administrateurs »: a `TabsList` on a
+  `secondary` track, the selected trigger lifted onto `card` with a shadow
+  (as `PeriodToggle`), each with its active count in meta, tabular. Agents
+  opens on every visit and the choice is not in the URL. Below 768px the
+  list is full width, two equal halves. After adding a user, the tab their
+  row lands in is selected. An Agents tab with no active agent holds one
+  muted line in its `Surface`, "Aucun agent. Ajoutez-en un pour lancer les
+  tournées."; Administrateurs is never empty (you are in it).
+- **One row per active user**, by name. Nom is the name, the email
   under it in meta. Inscription is a badge: "Inscrit" (`tint-success`) when
   the user has at least one live session, "Pas encore inscrit" (`secondary`) otherwise.
   Appareils is the count of live sessions in tabular figures. The signed-in admin's own row carries
@@ -1399,19 +1397,20 @@ names it and there is no Rôle column.
   assigned, refetched when the dialog opens; the story that adds the users
   routes names its field in [api.md](api.md). Deactivating your own row
   (allowed when another admin is active) signs you out.
-- **Désactivés.** Under each section's `Surface`, a ghost Button
+- **Désactivés.** Under the selected tab's `Surface`, a ghost Button
   "Désactivés ({n})" with a chevron and `aria-expanded` shows a second list
-  of that section's deactivated users only, with the same columns,
+  of that tab's deactivated users only, with the same columns,
   names in `muted-foreground`, no devices (deactivation deleted them), and
   one action per row, a `secondary` "Réactiver". A reactivated user returns
   to the active list as "Pas encore inscrit" and needs a new code; the toast
   says "Utilisateur réactivé." The button
-  is absent from a section with no deactivated user.
+  is absent from a tab with no deactivated user. Each tab remembers
+  whether its list is open.
 - **Below 768px** the table becomes a list of rows, as on Prospects
   (`useIsMobile()`): name and badge on the first line, email on the
   second, the device count and the row menu on the right. A device line
   wraps under its label: dates on one line, "Révoquer" on the right. Each
-  section and its Désactivés list take the same shape.
+  tab and its Désactivés list take the same shape.
 - **Loading and failure** go through `ScreenState`: skeleton rows with a
   visually hidden "Chargement des utilisateurs…", or "Impossible de charger
   les utilisateurs." with "Réessayer". The only empty state is the Agents

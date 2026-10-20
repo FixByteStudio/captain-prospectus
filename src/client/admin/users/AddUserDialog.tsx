@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { toast } from "sonner";
 import * as z from "zod/mini";
+import type { Role } from "../../../shared/constants";
 import { userCreateSchema } from "../../../shared/schemas";
 import { ApiError } from "../../api";
 import { copy } from "../../copy";
@@ -22,9 +23,12 @@ const t = copy.users;
 export function AddUserDialog({
   open,
   onOpenChange,
+  onAdded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called once the user is created, so the screen can open the tab the row lands in. */
+  onAdded?: (role: Role) => void;
 }) {
   const create = useCreateUser();
   const [taken, setTaken] = useState(false);
@@ -57,6 +61,7 @@ export function AddUserDialog({
       toast.error(t.toast.failed);
       return;
     }
+    onAdded?.(values.role);
     toast.success(t.toast.added);
     close(false);
   };

@@ -32,7 +32,7 @@ export const adminCopy = {
     loadFailed: "Impossible de charger les utilisateurs.",
     add: "Ajouter un utilisateur",
     columns: {
-      user: "Utilisateur",
+      user: "Nom",
       enrolment: "Inscription",
       devices: "Appareils",
     },
