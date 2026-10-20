@@ -58,5 +58,11 @@ The agent and assignment routes, the client's identity gate and field frame, the
 
 - Decision (2026-10-19): only the ADR story is planned now; the owner and Winston chose to cut the rest once the ADR is accepted, as with ADR-0036. The expected stories: agent-only routes and assignment (server); remove the admin field side and its links (client); fixed roles and the Utilisateurs screen (mockup first); the admin Hors ligne screen (mockup first).
 - Decision (2026-10-19): fixed roles replace refusing a promotion while work is assigned. A user deactivated with visits still in the phone's outbox is reactivated, syncs, and is deactivated again; no new code for it.
-- Decision (2026-10-19): the epic's `after` on epic-english-slugs is pinned on the implementation stories when they are cut; the ADR story needs nothing from it, so `tickets.py status` reports it unpinned until then.
 - Waits on epic-english-slugs because: the stories here edit the same routes and would otherwise carry the rename.
+- Source conflict: R4 — the initiative and ADR-0037 refuse an admin assignee on import too, but `importRowSchema` and `prospectBatchSchema` carry no `assignedTo`; the refusal covers PATCH and bulk assign, and import has nothing to change.
+- Decision (2026-10-20): ADR-0037 accepted; the remaining six stories are cut. Tracer bullet: 2 (agent-only field API and assignment), the rule the rest of the epic cleans up around. Next, the least certain: 3 (Hors ligne screen, mockup first).
+- Decision (2026-10-20): two client lanes after the server story: 3 then 4 (both edit the identity gate in `App.tsx`), and 5 then 6 (both edit the Agents screen). 2, 3 and 5 can run at once. 5 and 6 stay apart so only 6 waits on its mockup.
+- Decision (2026-10-20): the epic's `after` on epic-english-slugs is pinned on 3 and 5 (as `1.1`); the server story needs nothing from it.
+- Decision (2026-10-20): the release step of ADR-0037 (each admin who walked a round syncs from the field before the 403 ships) is story 2's hitl step, done before it merges.
+- Decision (2026-10-20): a closing refactor sweep (7) after every other story; no end-to-end suite, since the source has no test plan.
+- Decision (2026-10-20): R4's import part needs no work, since an import cannot set an assignee; story 2 covers PATCH and bulk assign.
