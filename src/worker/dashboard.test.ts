@@ -771,7 +771,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
       await seedVisits(await seedProspect("assigned"), [from], "interested", OTHER);
 
       const body = await dashboard(`?period=${period}`);
-      expect(body.agents.map((a) => a.email)).toEqual([ADMIN, AGENT]);
+      expect(body.agents.map((a) => a.email)).toEqual([AGENT]);
       expect(body.visits.value).toBe(1);
       // Two open prospects: the deactivated user's still counts.
       expect(body.openProspects).toBe(2);
@@ -788,7 +788,6 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
 
       const body = await dashboard(`?period=${period}`);
       expect(body.agents).toEqual([
-        zeros(ADMIN),
         { email: AGENT, visits: 0, converted: 0, followUp: 2, openProspects: 2 },
         zeros(OTHER),
       ]);
@@ -812,7 +811,6 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
       expect(body.agents).toEqual([
         { email: AGENT, visits: 2, converted: 1, followUp: 0, openProspects: 2 },
         { email: OTHER, visits: 1, converted: 0, followUp: 0, openProspects: 0 },
-        zeros(ADMIN),
       ]);
       expect(body.agents.reduce((n, a) => n + a.visits, 0)).toBe(body.visits.value);
       expect(body.converted.value).toBe(2);
@@ -829,7 +827,6 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
       expect(body.pipeline.new).toBe(1);
       expect(body.openProspects).toBe(2);
       expect(body.agents).toEqual([
-        zeros(ADMIN),
         zeros(AGENT),
         { email: OTHER, visits: 0, converted: 0, followUp: 0, openProspects: 1 },
       ]);
@@ -848,7 +845,7 @@ describe("Pipeline and Activité par agent (GH #112)", () => {
         converted: 0,
         rejected: 0,
       });
-      expect(body.agents).toEqual([zeros(ADMIN), zeros(AGENT), zeros(OTHER)]);
+      expect(body.agents).toEqual([zeros(AGENT), zeros(OTHER)]);
     },
   );
 });
@@ -1105,6 +1102,8 @@ describe("À traiter › Prospects sans agent actif (GH #308)", () => {
     const deactivated = await seedProspect("assigned", null, null, GONE);
     const noRow = await seedProspect("follow_up", null, null, STRAY);
     const deactivatedNew = await seedProspect("new", null, null, GONE);
+    // An admin is not an active agent (ADR-0037).
+    const onAdmin = await seedProspect("assigned", null, null, ADMIN);
     // Neither counted nor listed.
     await seedProspect("assigned"); // active assignee
     await seedProspect("new", null, null, null); // unassigned
@@ -1115,14 +1114,14 @@ describe("À traiter › Prospects sans agent actif (GH #308)", () => {
     const lead = await seedProspect("interested", null, null, GONE);
 
     const body = await dashboard();
-    expect(body.inactiveAgentProspects).toBe(3);
+    expect(body.inactiveAgentProspects).toBe(4);
 
     const open = await list("status=new,assigned,follow_up&inactiveAgent=true");
     expect(open.total).toBe(body.inactiveAgentProspects);
-    expect(open.ids).toEqual([deactivated, noRow, deactivatedNew].sort());
+    expect(open.ids).toEqual([deactivated, noRow, deactivatedNew, onAdmin].sort());
 
     const all = await list("inactiveAgent=true");
-    expect(all.ids).toEqual([deactivated, noRow, deactivatedNew, won, lost, lead].sort());
+    expect(all.ids).toEqual([deactivated, noRow, deactivatedNew, onAdmin, won, lost, lead].sort());
   });
 
   it("ignores the period, and reads 0 once every one is reassigned to an active agent", async () => {

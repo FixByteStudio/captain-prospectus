@@ -18,7 +18,9 @@ B2B field-canvassing app. An admin imports restaurants and food trucks (CSV or a
 
 ## Status
 
-Deployed since 2026-10-12 on Cloudflare, behind our own login; the account setup is
+**Still under development, not shipped yet.** Deployed since 2026-10-12 on Cloudflare,
+behind our own login, but no admin or agent uses it in the field yet, so release steps
+that protect a phone's outbox have nothing to protect. The account setup is
 done once, by hand, see [deployment](docs/deployment.md). Production is still a trial:
 its data may be wiped and redeployed until the first field day whose visits are kept.
 See the [roadmap](docs/roadmap.md) for what is left of M6.

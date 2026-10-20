@@ -120,7 +120,7 @@ describe("GET /api/admin/recap", () => {
     expect(body).toEqual({
       date: "2026-06-17",
       activeAgents: 0,
-      rosterSize: 2,
+      rosterSize: 1,
       visitsToday: 0,
       lastReceivedAt: null,
       serverTime: NOW,
@@ -157,7 +157,7 @@ describe("GET /api/admin/recap", () => {
     const { body } = await recap();
 
     expect(body.activeAgents).toBe(1);
-    expect(body.rosterSize).toBe(2);
+    expect(body.rosterSize).toBe(1);
     // The agent's two visits to one door are one door-day; the sender off the roster has one.
     expect(body.visitsToday).toBe(2);
     expect(body.lastReceivedAt).toBe(NOW - 10_000);
@@ -167,8 +167,9 @@ describe("GET /api/admin/recap", () => {
     const prospectId = await seedProspect();
     await seedTournee(TEST_AGENT, NOW - 3_600_000);
     await receive(prospectId, NOW - 60_000, TEST_AGENT);
-    await seedTournee(TEST_ADMIN, NOW - 3_000_000);
-    await receive(prospectId, NOW - 50_000, TEST_ADMIN);
+    await seedUser("bob@example.com", "agent");
+    await seedTournee("bob@example.com", NOW - 3_000_000);
+    await receive(prospectId, NOW - 50_000, "bob@example.com");
     await seedUser("gone@example.com", "agent", false);
     await seedTournee("gone@example.com", NOW - 2_000_000);
     await receive(prospectId, NOW - 40_000, "gone@example.com");
@@ -200,6 +201,14 @@ describe("GET /api/admin/recap › actifs aujourd'hui (ADR-0036)", () => {
     expect(body.activeAgents).toBe(0);
   });
 
+  it("counts no admin's tournée, since the roster is agents only (ADR-0037)", async () => {
+    await seedTournee(TEST_ADMIN, NOW - 3_600_000);
+
+    const { body } = await recap();
+
+    expect(body.activeAgents).toBe(0);
+  });
+
   it("counts a deactivated user's tournée in neither", async () => {
     await seedUser("gone@example.com", "agent", false);
     await seedTournee("gone@example.com", NOW - 3_600_000);
@@ -211,7 +220,8 @@ describe("GET /api/admin/recap › actifs aujourd'hui (ADR-0036)", () => {
 
   it("is the dashboard's « Agents en tournée »", async () => {
     await seedTournee(TEST_AGENT, NOW - 3_600_000);
-    await seedTournee(TEST_ADMIN, NOW - 1_000);
+    await seedUser("bob@example.com", "agent");
+    await seedTournee("bob@example.com", NOW - 1_000);
 
     const dashboard = await workerFetch("http://localhost/api/admin/dashboard");
     const { agentsActiveToday } = (await dashboard.json()) as DashboardResponse;

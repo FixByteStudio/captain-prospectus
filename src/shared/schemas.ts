@@ -522,7 +522,7 @@ export const agentPositionSchema = z.object({
 export type AgentPosition = z.infer<typeof agentPositionSchema>;
 
 /**
- * Everyone a prospect can be assigned to: the active `users` rows (ADR-0029).
+ * Everyone a prospect can be assigned to: the active agents (ADR-0029, ADR-0037).
  */
 export const agentsResponseSchema = z.object({
   agents: z.array(z.object({ email: emailSchema, role: roleSchema })),

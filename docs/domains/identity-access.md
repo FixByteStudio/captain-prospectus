@@ -19,7 +19,7 @@ The Worker resolves identity in this order (`requireIdentity`, `src/worker/auth.
 
 Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admin/users` and
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
-dashboard rows, position gate) is the active `users` rows.
+dashboard rows) is the active **agents**, never an admin. `/api/agent/*` answers 403 to an admin (`requireAgent`, [ADR-0037](../adr/0037-admins-leave-the-field-side.md)).
 
 **A one-time code** enrols a device. An admin picks "Générer un code" on a user's row of the Agents
 page (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid

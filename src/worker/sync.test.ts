@@ -37,11 +37,14 @@ import { TEST_AGENT, resetTestUsers, seedUser } from "../../test/users";
 
 /**
  * Routes against a real D1, built by the real migrations.
- * DEV_USER_EMAIL is bound in vitest.config.ts, so these run as an identified
- * user exactly as localhost development does.
+ * DEV_USER_EMAIL is bound in vitest.config.ts; these run as the test agent, since
+ * /api/agent/* is agents only (ADR-0037).
  */
 
-const AGENT = "admin@example.com";
+const AGENT = TEST_AGENT;
+/** A second agent, for the tests where somebody else sends or owns. */
+const OTHER_AGENT = "other-agent@example.com";
+const SAVED_DEV_USER = env.DEV_USER_EMAIL;
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
   return workerFetch(`http://localhost${path}`, init);
@@ -98,13 +101,19 @@ beforeEach(async () => {
   await db.delete(prospects);
   await db.delete(scripts);
   await resetTestUsers();
+  await seedUser(OTHER_AGENT, "agent");
+  env.DEV_USER_EMAIL = AGENT;
+});
+
+afterEach(() => {
+  env.DEV_USER_EMAIL = SAVED_DEV_USER;
 });
 
 describe("GET /api/me", () => {
   it("returns the identity and the derived role", async () => {
     const response = await call("/api/me");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ email: AGENT, role: "admin" });
+    expect(await response.json()).toEqual({ email: AGENT, role: "agent" });
   });
 });
 
@@ -1029,6 +1038,34 @@ describe("GET /api/agent/prospects/:id/visits", () => {
     expect(response.status).toBe(404);
   });
 
+  it("answers an admin 403, even for a prospect that exists (ADR-0037)", async () => {
+    await seedProspect(PROSPECT);
+    env.DEV_USER_EMAIL = "admin@example.com";
+    const response = await call(`/api/agent/prospects/${PROSPECT}/visits`);
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: string }).error).toBe("forbidden");
+  });
+
+  it("answers an admin 403 on sync and writes nothing", async () => {
+    await seedProspect(PROSPECT);
+    env.DEV_USER_EMAIL = "admin@example.com";
+    const id = crypto.randomUUID();
+    const response = await sync({
+      visits: [
+        {
+          id,
+          prospectId: PROSPECT,
+          visitedAt: Date.now(),
+          flyerGiven: false,
+          outcome: "interested",
+          answers: {},
+        },
+      ],
+    });
+    expect(response.status).toBe(403);
+    expect(await getDb(env.DB).select().from(visits)).toHaveLength(0);
+  });
+
   it("returns the history newest first, matching the shared contract", async () => {
     await seedProspect(PROSPECT);
     await sync({
@@ -1097,7 +1134,7 @@ describe("GET /api/agent/prospects/:id/visits", () => {
  * where it belongs.
  */
 describe("POST /api/agent/sync — a visit for someone else's prospect", () => {
-  const OTHER = "agent@example.com";
+  const OTHER = OTHER_AGENT;
 
   const visitOf = (prospectId: string, outcome: Outcome) => ({
     id: crypto.randomUUID(),
@@ -1231,12 +1268,18 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
     ...(outcome === "follow_up" && { followUpAt: visitedAt + 7 * DAY }),
   });
 
-  function patch(id: string, body: Record<string, unknown>): Promise<Response> {
-    return call(`/api/admin/prospects/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  /** The admin's PATCH: sent as the test admin, then back to the agent. */
+  async function patch(id: string, body: Record<string, unknown>): Promise<Response> {
+    env.DEV_USER_EMAIL = "admin@example.com";
+    try {
+      return await call(`/api/admin/prospects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } finally {
+      env.DEV_USER_EMAIL = AGENT;
+    }
   }
 
   async function prospect(id: string) {
@@ -1367,7 +1410,7 @@ describe("POST /api/agent/sync — a late visit against a newer outcome", () => 
 });
 
 describe("agent position at sync (ADR-0028)", () => {
-  const AGENT_ONLY = "agent@example.com";
+  const AGENT_ONLY = AGENT;
   const reading = (capturedAt: number, lat = 50.85) => ({
     lat,
     lng: 4.35,
@@ -1379,10 +1422,6 @@ describe("agent position at sync (ADR-0028)", () => {
   beforeEach(async () => {
     await getDb(env.DB).delete(agentPositions);
   });
-  afterEach(() => {
-    env.DEV_USER_EMAIL = "admin@example.com";
-  });
-
   it("stores nothing for a body with no position", async () => {
     env.DEV_USER_EMAIL = AGENT_ONLY;
     expect((await sync({})).status).toBe(200);
@@ -1410,9 +1449,9 @@ describe("agent position at sync (ADR-0028)", () => {
     expect(rows[0]?.receivedAt).toBeLessThanOrEqual(after);
   });
 
-  it("stores nothing for an admin", async () => {
+  it("answers an admin 403 and stores no position", async () => {
     env.DEV_USER_EMAIL = "admin@example.com";
-    expect((await sync({ position: reading(Date.now() - 5_000) })).status).toBe(200);
+    expect((await sync({ position: reading(Date.now() - 5_000) })).status).toBe(403);
     expect(await stored()).toHaveLength(0);
   });
 
@@ -1488,11 +1527,6 @@ describe("agent position at sync (ADR-0028)", () => {
     expect(await stored()).toHaveLength(0);
   });
 
-  it("stores nothing when an admin syncs", async () => {
-    await sync({ position: reading(Date.now() - 5_000) });
-    expect(await stored()).toHaveLength(0);
-  });
-
   it("keeps the row on an older or equal reading and replaces it on a newer one", async () => {
     env.DEV_USER_EMAIL = AGENT_ONLY;
     const t = Date.now() - 20_000;
@@ -1519,7 +1553,7 @@ describe("agent position at sync (ADR-0028)", () => {
 });
 
 describe("tournée at sync (ADR-0036)", () => {
-  const OTHER = TEST_AGENT;
+  const OTHER = OTHER_AGENT;
 
   /**
    * Noon in Brussels, clear of midnight and of a DST switch: these tests put
@@ -2086,11 +2120,12 @@ describe("tournée at sync (ADR-0036)", () => {
     expect(body.tournee?.id).toBe(future.id);
   });
 
-  it("gives an admin their own tournée like an agent", async () => {
-    // AGENT is the dev admin.
+  it("answers an admin 403 and stores no tournée", async () => {
+    env.DEV_USER_EMAIL = "admin@example.com";
     const { t, stops } = await swipe(2);
-    const body = await bodyOf(await sync({ tournees: [t], stops }));
-    expect(body.tournee?.stops).toHaveLength(2);
+    expect((await sync({ tournees: [t], stops })).status).toBe(403);
+    expect(await getDb(env.DB).select().from(tournees)).toHaveLength(0);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(0);
   });
 
   it("ignores another agent's visit to a shared prospect", async () => {
@@ -2144,7 +2179,7 @@ describe("tournée at sync (ADR-0036)", () => {
 
   it("gives a second real session of the agent the same tournée", async () => {
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
-    await seedProspects(ids, TEST_AGENT);
+    await seedProspects(ids, AGENT);
     const t = tourneeOf();
     const stops = ids.map((id, i) => stopOf(t.id, id, i + 1));
     const post = async (cookie: string, body: Partial<SyncRequest>) =>

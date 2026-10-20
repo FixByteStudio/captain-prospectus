@@ -41,18 +41,18 @@ export function isLocalHost(hostname: string): boolean {
 }
 
 /**
- * The roster: active `users` rows, ordered by email (ADR-0029). Who may be
- * assigned, walk a round or appear on the dashboard; not who may sign in.
+ * The roster: active **agents**, ordered by email (ADR-0029, ADR-0037). Who may
+ * be assigned, walk a round or appear on the dashboard; not who may sign in.
  */
 export async function activeRoster(db: Db): Promise<{ email: string; role: Role }[]> {
   return db
     .select({ email: users.email, role: users.role })
     .from(users)
-    .where(eq(users.active, true))
+    .where(and(eq(users.active, true), eq(users.role, "agent")))
     .orderBy(users.email);
 }
 
-/** The active row for one email, or undefined: the same definition of "on the roster". */
+/** The active agent row for one email, or undefined: the same definition of "on the roster". */
 export async function activeRosterMember(
   db: Db,
   email: string,
@@ -60,7 +60,9 @@ export async function activeRosterMember(
   const [row] = await db
     .select({ email: users.email, role: users.role })
     .from(users)
-    .where(and(eq(users.email, email.toLowerCase()), eq(users.active, true)))
+    .where(
+      and(eq(users.email, email.toLowerCase()), eq(users.active, true), eq(users.role, "agent")),
+    )
     .limit(1);
   return row;
 }
@@ -139,7 +141,13 @@ export async function identityFromSession(
 
 /** DEV_USER_EMAIL's `users` row, or null when it has none or is inactive. */
 async function identityFromDevUser(env: Bindings, devUserEmail: string): Promise<Identity | null> {
-  return (await activeRosterMember(getDb(env.DB), devUserEmail.trim())) ?? null;
+  // Any active user, admin included: only the roster narrows to agents.
+  const [row] = await getDb(env.DB)
+    .select({ email: users.email, role: users.role })
+    .from(users)
+    .where(and(eq(users.email, devUserEmail.trim().toLowerCase()), eq(users.active, true)))
+    .limit(1);
+  return row ?? null;
 }
 
 /**
@@ -183,6 +191,19 @@ export const requireAdmin = createMiddleware<AppEnv>(async (c, next) => {
     throw new HTTPException(403, {
       res: Response.json(
         { error: "forbidden", message: "This page is for admins." },
+        { status: 403 },
+      ),
+    });
+  }
+  return next();
+});
+
+/** Field routes (ADR-0037): an admin does no tournée. Runs after requireIdentity. */
+export const requireAgent = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get("identity").role !== "agent") {
+    throw new HTTPException(403, {
+      res: Response.json(
+        { error: "forbidden", message: "This page is for agents." },
         { status: 403 },
       ),
     });
