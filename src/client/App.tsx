@@ -22,6 +22,7 @@ import { copy } from "./copy/field";
 import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
+import { AdminOfflineScreen } from "./auth/AdminOfflineScreen";
 import { cn } from "./lib/utils";
 import { brusselsPeriod } from "../shared/period";
 import { AccountMenu } from "./field/AccountMenu";
@@ -359,8 +360,12 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   // transition below — cannot pile up concurrent requests and burn quota
   // (free-tier-budget.md) on a session that is already waiting on one.
   const identityInFlight = useRef(false);
+  /** True while a re-check runs, so the Hors ligne screen's button reflects
+   * one started by the `online` effect too. */
+  const [checking, setChecking] = useState(false);
   const recheckIdentity = useCallback(() => {
     if (identityInFlight.current) return;
+    setChecking(true);
     // Set here, synchronously, not only in the effect below: the effect only
     // runs after React commits the `recheck` update, and two callers of
     // `recheckIdentity` in that window would both pass the guard and each
@@ -463,6 +468,7 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       .catch((error: unknown) => settle({ ok: false, error }))
       .finally(() => {
         identityInFlight.current = false;
+        setChecking(false);
       });
 
     return () => {
@@ -522,8 +528,13 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   // it happens to record. `entry` additionally requires a live network for
   // the tab and the `/` redirect, so an admin never sees a door that cannot
   // open (ADR-0019) — but an admin already on an /admin screen keeps it when
-  // the network drops (#97's offline-admin screen to design).
+  // the network drops. A cache-sourced admin gets the Hors ligne screen
+  // instead (ADR-0037).
   const { screens, entry } = adminAccess({ role: me.role, fromCache: identityFromCache, online });
+
+  // The cached role only picks which *offline* screen renders (invariant 10):
+  // it opens nothing, and only a live `/api/me` sets `screens`.
+  const adminOffline = identityFromCache && me.role === "admin";
 
   return (
     <SyncProvider
@@ -542,7 +553,7 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
           element={<FieldFrame adminOnline={entry} pwa={pwa} email={me.email} role={me.role} />}
         >
           <Route path="/round/*" element={<FieldRoutes />} />
-          {!screens && (
+          {!screens && !adminOffline && (
             <Route
               path="/admin/*"
               element={
@@ -578,6 +589,14 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
             }
           />
         </Route>
+
+        {/* Outside FieldFrame: no tabs, no avatar, no field side (ADR-0037). */}
+        {adminOffline && (
+          <Route
+            path="/admin/*"
+            element={<AdminOfflineScreen checking={checking} onRetry={recheckIdentity} />}
+          />
+        )}
 
         {/* Admin screens get their own frame instead of the field band. */}
         {screens && (

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mockup — admin Hors ligne screen (#591)</title>
+<style>
+  @font-face { font-family: "Archivo Variable"; src: url("file:///home/m0/PROJECTs/captain-prospectus/node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  /* Tokens copied from src/client/styles/app.css (light :root, then .dark). */
+  .light { --background:#f6f7f0; --foreground:#1b2a4a; --muted-foreground:#5a6478; --secondary:#e8eaef; --border:#d7dae2;
+           --primary:#c9a227; --primary-foreground:#1b2a4a; --primary-edge:#a8801a; --band:#1b2a4a; --band-foreground:#eef0f4; }
+  .dark  { --background:#101726; --foreground:#e7eaf0; --muted-foreground:#97a2b8; --secondary:#222b3d; --border:#2b3547;
+           --primary:#d9b43c; --primary-foreground:#141c2e; --primary-edge:#e6c65c; --band:#0b1120; --band-foreground:#e7eaf0; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 32px 36px; background:#e4e6df; font-family:"Archivo Variable", system-ui, sans-serif; color:#1b2a4a; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { font-size:13px; color:#5a6478; margin:0 0 22px; max-width:1180px; }
+  .row { display:flex; gap:26px; align-items:flex-start; margin-bottom:28px; }
+  .label { font-size:12px; font-weight:600; color:#5a6478; margin:0 0 8px; letter-spacing:.2px; }
+  .frame { display:flex; flex-direction:column; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(20,30,50,.18); background:var(--background); color:var(--foreground); }
+  .phone { width:375px; height:640px; }
+  .desk { width:900px; height:560px; }
+  .band { height:56px; background:var(--band); color:var(--band-foreground); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; }
+  .band img { height:28px; }
+  .word { font-weight:600; font-size:17px; }
+  main { padding:24px 16px; }
+  .empty { display:flex; flex-direction:column; align-items:center; gap:16px; padding:48px 0; text-align:center; max-width:28rem; margin:0 auto; }
+  .tile { width:64px; height:64px; border-radius:12px; background:var(--secondary); color:var(--muted-foreground); display:grid; place-items:center; }
+  .tile svg { width:28px; height:28px; }
+  .title { font-size:17px; font-weight:600; margin:0; }
+  .body { font-size:16px; color:var(--muted-foreground); margin:-8px 0 0; line-height:1.45; }
+  .btn { height:48px; padding:0 20px; border-radius:6px; font:inherit; font-size:16px; font-weight:500; display:inline-flex; align-items:center; gap:8px;
+         background:var(--primary); color:var(--primary-foreground); border:0; box-shadow:inset 0 0 0 1px var(--primary-edge); }
+  .btn.busy { opacity:.6; }
+  .btn svg { width:20px; height:20px; }
+  .spin { animation:none; }
+  .notes { width:300px; font-size:13px; line-height:1.5; color:#1b2a4a; }
+  .notes h2 { font-size:14px; margin:0 0 6px; }
+  .notes ul { margin:0 0 12px; padding-left:18px; }
+  .notes li { margin-bottom:5px; }
+</style>
+</head>
+<body>
+<h1>Admin Hors ligne screen — #591, story 2.3 (R6, ADR-0037)</h1>
+<p class="sub">Shown on any <code>/admin/*</code> when the identity came from the cache and records role admin. Ships in the entry chunk: the field band with the brand only (no avatar, no tabs, no sync dot: an admin has no sync), DESIGN.md's shared empty-state shape, one primary 48&nbsp;px button.</p>
+
+<div class="row">
+  <div>
+    <p class="label">Phone 375 — light · idle</p>
+    <div class="frame phone light">
+      <div class="band"><img src="file:///home/m0/.paseo/worktrees/2shdliov/elastic-yak/public/mark.svg" alt=""><span class="word">Captain Prospectus</span></div>
+      <main><div class="empty">
+        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg></span>
+        <p class="title">Vous êtes hors ligne</p>
+        <p class="body">Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.</p>
+        <button class="btn">Réessayer</button>
+      </div></main>
+    </div>
+  </div>
+  <div>
+    <p class="label">Phone 375 — light · Réessayer pressed, /api/me in flight</p>
+    <div class="frame phone light">
+      <div class="band"><img src="file:///home/m0/.paseo/worktrees/2shdliov/elastic-yak/public/mark.svg" alt=""><span class="word">Captain Prospectus</span></div>
+      <main><div class="empty">
+        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg></span>
+        <p class="title">Vous êtes hors ligne</p>
+        <p class="body">Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.</p>
+        <button class="btn busy" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Vérification…</button>
+      </div></main>
+    </div>
+  </div>
+  <div>
+    <p class="label">Phone 375 — dark · idle</p>
+    <div class="frame phone dark">
+      <div class="band"><img src="file:///home/m0/.paseo/worktrees/2shdliov/elastic-yak/public/mark.svg" alt=""><span class="word">Captain Prospectus</span></div>
+      <main><div class="empty">
+        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg></span>
+        <p class="title">Vous êtes hors ligne</p>
+        <p class="body">Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.</p>
+        <button class="btn">Réessayer</button>
+      </div></main>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <p class="label">Desktop 900+ — light · idle (same column, centred, max 28rem)</p>
+    <div class="frame desk light">
+      <div class="band"><img src="file:///home/m0/.paseo/worktrees/2shdliov/elastic-yak/public/mark.svg" alt=""><span class="word">Captain Prospectus</span></div>
+      <main><div class="empty">
+        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg></span>
+        <p class="title">Vous êtes hors ligne</p>
+        <p class="body">Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.</p>
+        <button class="btn">Réessayer</button>
+      </div></main>
+    </div>
+  </div>
+  <div class="notes">
+    <h2>Behaviour</h2>
+    <ul>
+      <li><b>Réessayer</b> calls the shell's existing <code>recheckIdentity</code> (one <code>/api/me</code>, shared in-flight guard). While it runs the button is disabled with a spinner and reads « Vérification… ».</li>
+      <li><b>Answer is live admin</b> → the admin chunk loads in place, same URL (the AdminFrameFallback band, then the dashboard).</li>
+      <li><b>Still unreachable</b> → back to idle « Réessayer ». No toast, no extra line: the screen already says what to do.</li>
+      <li><b>401</b> → <code>/login</code>, as today.</li>
+      <li>The network coming back re-checks on its own (today's online effect), so Réessayer is never the only way out.</li>
+      <li>No « Retour à la tournée » link: ADR-0037 removes the admin field side (story 4 removes the rest).</li>
+      <li>Admin already on a dashboard when the network drops (live identity) keeps today's offline <b>Alert</b> banner — not this screen.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>
