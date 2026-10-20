@@ -61,7 +61,6 @@ export function UsersList({
                     onNewPassphrase={
                       user.email === actions.self ? actions.onNewPassphrase : undefined
                     }
-                    onToggleRole={() => actions.onToggleRole(user)}
                     onDeactivate={() => actions.onDeactivate(user)}
                   />
                 </>

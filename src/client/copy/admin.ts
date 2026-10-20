@@ -42,8 +42,6 @@ export const adminCopy = {
     menu: (name: string) => `Actions pour ${name}`,
     generateCode: "Générer un code",
     newPassphrase: "Nouvelle phrase de passe",
-    makeAdmin: "Passer admin",
-    makeAgent: "Passer agent",
     deactivate: "Désactiver",
     reactivate: "Réactiver",
     lastAdmin: "Il faut au moins un administrateur actif.",
@@ -84,6 +82,8 @@ export const adminCopy = {
           : n === 1
             ? `1 prospect reste assigné à ${name}. Réassignez-le depuis « Prospects sans agent actif » au Tableau de bord.`
             : `${n} prospects restent assignés à ${name}. Réassignez-les depuis « Prospects sans agent actif » au Tableau de bord.`,
+      syncFirst:
+        "Demandez-lui d'abord de synchroniser son téléphone : une visite qui n'est pas encore partie ne pourra plus l'être.",
       always: "Ses appareils seront déconnectés et son code annulé. Vous pourrez le réactiver.",
       cancel: "Annuler",
       confirm: "Désactiver",
@@ -115,7 +115,6 @@ export const adminCopy = {
 
     toast: {
       added: "Utilisateur ajouté.",
-      roleChanged: "Rôle modifié.",
       deactivated: "Utilisateur désactivé.",
       reactivated: "Utilisateur réactivé.",
       revoked: "Appareil déconnecté.",

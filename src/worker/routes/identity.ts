@@ -2,10 +2,10 @@
  * Who may sign in, and as what — docs/domains/identity-access.md, ADR-0029.
  *
  * Mounted under /api/admin, behind `requireAdmin` (index.ts). Users are
- * deactivated, never deleted; the last active admin can be neither demoted nor
- * deactivated. A one-time code, and the signed-in admin's own passphrase, are
- * generated here and shown once; only their HMAC is stored, and nothing here
- * logs them. Demoting or deactivating a user clears their passphrase.
+ * deactivated, never deleted; the last active admin cannot be deactivated, and
+ * a role is fixed at creation (ADR-0037). A one-time code, and the signed-in
+ * admin's own passphrase, are generated here and shown once; only their HMAC is
+ * stored, and nothing here logs them. Deactivating a user clears their passphrase.
  *
  * Each user's devices are their live sessions with a public id (GH #307); an
  * admin revokes one by that id. The token's hash never leaves the Worker.
@@ -140,20 +140,16 @@ identityRoutes.patch(
     const body = c.req.valid("json");
     const db = getDb(c.env.DB);
 
-    // Only the fields in the body are SET, and the guard reads the row as it is
-    // when the UPDATE runs: no read-then-write, so concurrent PATCHes neither
-    // write stale values back nor both pass the last-admin check.
-    const set: Partial<typeof users.$inferInsert> = {};
-    if (body.role !== undefined) set.role = body.role;
-    if (body.active !== undefined) set.active = body.active;
-    // A passphrase belongs to an active admin: demoting or deactivating drops
-    // it in the same guarded UPDATE, so a refused PATCH keeps it.
-    if (body.role === "agent" || body.active === false) set.passphraseHash = null;
+    // The guard reads the row as it is when the UPDATE runs: no read-then-write,
+    // so two concurrent PATCHes cannot both pass the last-admin check.
+    // A passphrase belongs to an active admin: deactivating drops it in the same
+    // guarded UPDATE, so a refused PATCH keeps it.
+    const set: Partial<typeof users.$inferInsert> = { active: body.active };
+    if (!body.active) set.passphraseHash = null;
 
-    const newRole = body.role ?? null;
-    const newActive = body.active === undefined ? null : body.active ? 1 : 0;
+    // Only deactivating an active admin can leave none.
     const guard = sql`(NOT (${users.role} = 'admin' AND ${users.active} = 1)
-      OR (coalesce(${newRole}, ${users.role}) = 'admin' AND coalesce(${newActive}, ${users.active}) = 1)
+      OR ${body.active ? 1 : 0} = 1
       OR EXISTS (SELECT 1 FROM ${users} AS u WHERE u.role = 'admin' AND u.active = 1 AND u.email <> ${email}))`;
 
     const update = db
@@ -164,16 +160,15 @@ identityRoutes.patch(
     // Sessions and unused codes go only with a deactivation, and only if the
     // update landed.
     const nowInactive = sql`EXISTS (SELECT 1 FROM ${users} WHERE ${users.email} = ${email} AND ${users.active} = 0)`;
-    const [updated] =
-      body.active === false
-        ? await db.batch([
-            update,
-            db.delete(sessions).where(and(eq(sessions.userEmail, email), nowInactive)),
-            db
-              .delete(loginCodes)
-              .where(and(eq(loginCodes.userEmail, email), isNull(loginCodes.usedAt), nowInactive)),
-          ])
-        : [await update];
+    const [updated] = !body.active
+      ? await db.batch([
+          update,
+          db.delete(sessions).where(and(eq(sessions.userEmail, email), nowInactive)),
+          db
+            .delete(loginCodes)
+            .where(and(eq(loginCodes.userEmail, email), isNull(loginCodes.usedAt), nowInactive)),
+        ])
+      : [await update];
 
     if (updated.length === 0) {
       if (!(await userExists(db, email))) return c.json({ error: "not_found" }, 404);
@@ -222,7 +217,7 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
 /**
  * The signed-in admin's own passphrase, and nobody else's: no body, the email
  * is the caller's identity. Only its HMAC is stored, replacing the old one at
- * once; sessions stay as they are. If the admin was deactivated or demoted since
+ * once; sessions stay as they are. If the admin was deactivated since
  * the request began there is no row to write: 404, nothing written.
  */
 identityRoutes.post("/me/passphrase", async (c) => {

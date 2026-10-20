@@ -80,7 +80,9 @@ export function DeactivateDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{t.title(name)}</AlertDialogTitle>
           <AlertDialogDescription>
-            {fresh && user ? t.assigned(user.openProspects, name) : t.checking} {t.always}
+            {fresh && user ? t.assigned(user.openProspects, name) : t.checking}{" "}
+            {user?.role === "agent" && `${t.syncFirst} `}
+            {t.always}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

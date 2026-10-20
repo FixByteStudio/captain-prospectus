@@ -200,13 +200,15 @@ describe("POST /api/admin/users", () => {
 });
 
 describe("PATCH /api/admin/users/:email", () => {
-  it("changes a role, effective on the next request", async () => {
-    const adminSession = await adminCookie();
-    const agentSession = await testSessionCookie(TEST_AGENT);
-    expect((await call("/api/admin/users", agentSession)).status).toBe(403);
-
-    expect((await patch(TEST_AGENT, { role: "admin" }, adminSession)).status).toBe(204);
-    expect((await call("/api/admin/users", agentSession)).status).toBe(200);
+  it("refuses a body carrying a role, writing nothing", async () => {
+    const cookie = await adminCookie();
+    for (const body of [{ role: "admin" }, { role: "agent", active: false }, { foo: 1 }]) {
+      const response = await patch(TEST_AGENT, body, cookie);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "validation" });
+    }
+    const [row] = await db().select().from(users).where(eq(users.email, TEST_AGENT));
+    expect(row).toMatchObject({ role: "agent", active: true });
   });
 
   it("deactivates, deleting every session", async () => {
@@ -261,13 +263,11 @@ describe("PATCH /api/admin/users/:email", () => {
     expect(row).toMatchObject({ active: true, sessions: 0 });
   });
 
-  it("refuses to demote or deactivate the last active admin, writing nothing", async () => {
+  it("refuses to deactivate the last active admin, writing nothing", async () => {
     const cookie = await adminCookie();
-    for (const body of [{ role: "agent" }, { active: false }]) {
-      const response = await patch(TEST_ADMIN, body, cookie);
-      expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ error: "last_admin" });
-    }
+    const response = await patch(TEST_ADMIN, { active: false }, cookie);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "last_admin" });
     const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
     expect(row).toMatchObject({ role: "admin", active: true });
     expect((await call("/api/me", cookie)).status).toBe(200);
@@ -275,11 +275,9 @@ describe("PATCH /api/admin/users/:email", () => {
 
   it("accepts a change that leaves the only active admin an active admin", async () => {
     const cookie = await adminCookie();
-    for (const body of [{ active: true }, { role: "admin" }, { role: "admin", active: true }]) {
-      expect((await patch(TEST_ADMIN, body, cookie)).status).toBe(204);
-      const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
-      expect(row).toMatchObject({ role: "admin", active: true });
-    }
+    expect((await patch(TEST_ADMIN, { active: true }, cookie)).status).toBe(204);
+    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
+    expect(row).toMatchObject({ role: "admin", active: true });
   });
 
   it("does not count an inactive admin as another admin", async () => {
@@ -312,24 +310,15 @@ describe("PATCH /api/admin/users/:email", () => {
     expect((await call("/api/me", bobSession)).status).toBe(401);
   });
 
-  it("demoting an admin keeps their session but closes admin routes", async () => {
-    const adminSession = await adminCookie();
-    const other = await testSessionCookie(TEST_AGENT);
-    await db().update(users).set({ role: "admin" }).where(eq(users.email, TEST_AGENT));
-    expect((await patch(TEST_AGENT, { role: "agent" }, adminSession)).status).toBe(204);
-    expect((await call("/api/admin/users", other)).status).toBe(403);
-    expect((await call("/api/me", other)).status).toBe(200);
-  });
-
   it("lands two PATCHes on one user", async () => {
     const cookie = await adminCookie();
-    expect((await patch(TEST_AGENT, { role: "admin" }, cookie)).status).toBe(204);
     expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
+    expect((await patch(TEST_AGENT, { active: true }, cookie)).status).toBe(204);
     const [row] = await db().select().from(users).where(eq(users.email, TEST_AGENT));
-    expect(row).toMatchObject({ role: "admin", active: false });
+    expect(row).toMatchObject({ role: "agent", active: true });
   });
 
-  it("clears the passphrase on a demotion or a deactivation, and only then", async () => {
+  it("clears the passphrase on a deactivation, and only then", async () => {
     const cookie = await adminCookie();
     const hashOf = async () =>
       (
@@ -345,12 +334,8 @@ describe("PATCH /api/admin/users/:email", () => {
         .where(eq(users.email, TEST_AGENT));
 
     await give();
-    expect((await patch(TEST_AGENT, { role: "admin" }, cookie)).status).toBe(204);
     expect((await patch(TEST_AGENT, { active: true }, cookie)).status).toBe(204);
     expect(await hashOf()).toBe("a".repeat(64));
-
-    expect((await patch(TEST_AGENT, { role: "agent" }, cookie)).status).toBe(204);
-    expect(await hashOf()).toBeNull();
 
     await give();
     expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
@@ -363,9 +348,7 @@ describe("PATCH /api/admin/users/:email", () => {
       .update(users)
       .set({ passphraseHash: "b".repeat(64) })
       .where(eq(users.email, TEST_ADMIN));
-    for (const body of [{ role: "agent" }, { active: false }]) {
-      expect((await patch(TEST_ADMIN, body, cookie)).status).toBe(409);
-    }
+    expect((await patch(TEST_ADMIN, { active: false }, cookie)).status).toBe(409);
     const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
     expect(row?.passphraseHash).toBe("b".repeat(64));
   });
