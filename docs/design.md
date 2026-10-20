@@ -1639,11 +1639,8 @@ Tournée. A tournée already swiped today, on this phone or pulled from the
 server, skips straight to the app. None of the gate screens has a tab bar: the
 tabs are the app, and the app opens at the swipe. The band, its sync dot and
 the strip stay on every one of them, « Se reconnecter » included, because the
-sync is never gated. The admin side (`/admin`) has no gates, so an admin on a
-gate screen, when the account card's Tableau de bord row would show (`adminAccess(...).entry`),
-gets a `secondary` « Tableau de bord » button under the message or above the
-track: the one way back without a tab bar. An agent with nothing assigned has
-no Ajouter either; ADR-0036 gates the whole app on a tournée.
+sync is never gated. The gates are agent-only: an admin never reaches the field
+side (ADR-0037). An agent with nothing assigned has no Ajouter either; ADR-0036 gates the whole app on a tournée.
 
 **Two no-tournée messages, never one.** Both are the shared empty-state shape:
 a 64px `secondary` disc with a 28px icon, a title, one muted paragraph, centred,
@@ -1733,9 +1730,7 @@ repeats one-off readings (`getCurrentPosition`, never `watchPosition`) until one
 is precise enough: the threshold (`LOCATION_GATE_ACCURACY_M`), the cadence
 (`LOCATION_GATE_RETRY_MS`) and the fix's `enableHighAccuracy`
 (`LOCATION_GATE_HIGH_ACCURACY`) are named constants in `location-gate.ts`, set
-by the owner's pavement test. An admin's « Tableau de bord » link sits inside
-the dialog, under the Réglages line, because the dialog covers the one above
-the track. The status line (`role="status"`, polite) says where that stands:
+by the owner's pavement test. The status line (`role="status"`, polite) says where that stands:
 
 | State | Status line |
 |---|---|
@@ -2600,14 +2595,13 @@ inset again — on the visit, as a bar sticky in the form's own column (see
 one that has one — both `calc()`'d off `--spacing-tab-bar-height` and the
 safe-area inset rather than a guessed pixel figure.
 
-**Four tabs, for every role** (Carnet's slot shipped with entry 8, #504; the
+**Four tabs** (Carnet's slot shipped with entry 8, #504; the
 dashboard tab went with GH #561). Tournée, Carte, Carnet and Ajouter, in the
 order of the day (what is left, where it is, what is done, and the odd one
 out). Four tabs at 390px are about 97px each, well above the 48px minimum, and
 the labels stay whole. The tab bar exists only after the swipe ("Before the
-swipe", above). An admin's way to the dashboard is the account card's
-« Tableau de bord » row ("Account card", below), not a tab: a vertical card has
-room the bar never did.
+swipe", above). The field side is agent-only (ADR-0037), so no tab or card row
+leads to the dashboard.
 
 **A tab tap never silently discards a draft (#74).** `/round`'s own rule
 differs from every other tab's — it is an index route, so it must match only
@@ -2655,8 +2649,6 @@ roving focus.
                           │ prospectus.be          │  wraps before « @ »
                           │ Agent                  │  role, muted
                           ├────────────────────────┤
-                          │ ▦ Tableau de bord      │  online admin only
-                          ├────────────────────────┤
                           │ APPARENCE              │  overline
                           │ [▭]  [☀]  [☾]          │  Système · Clair · Sombre
                           ├────────────────────────┤
@@ -2667,9 +2659,7 @@ roving focus.
 `popover` surface (`bg-popover`), 1px border, `shadow-md`, `rounded-lg`, at least
 208px wide, never wider than the viewport minus 24px: a long address widens the
 card and then wraps before « @ ». Sections are separated by hairlines.
-« Tableau de bord » shows only for an online admin (`adminAccess(...).entry`):
-it closes the card, then runs through the leave guard (#74) to `/admin`, so a
-dirty form still asks first. « Apparence » is three native radio tiles of 48px
+« Apparence » is three native radio tiles of 48px
 (the field's `FieldRadioOption`, gold when checked) with a 16px Monitor, Sun or
 Moon icon and an `aria-label` instead of a visible one. A pick applies at once,
 with no reload. The checked tile reads `<html data-theme>`, Système when there

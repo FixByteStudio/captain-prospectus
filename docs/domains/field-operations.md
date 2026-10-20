@@ -75,8 +75,9 @@ load; if that fails, it falls back to the last identity `meta.identity` cached,
 so an agent standing where `/api/me` cannot be reached still gets their round
 instead of a blocked shell. The cached copy proves nothing by itself — the
 Worker re-derives identity from the session on every request
-(INVARIANT 10) — so a stale or tampered copy unlocks no admin route; a cached
-identity opens the field screens only, never `/admin/*`.
+(INVARIANT 10) — so a stale or tampered copy unlocks no admin route. The field
+side is agent-only: an admin, cached or live, never reaches it
+([ADR-0037](../adr/0037-admins-leave-the-field-side.md)).
 
 ### Local store (Dexie)
 | Table | Content |

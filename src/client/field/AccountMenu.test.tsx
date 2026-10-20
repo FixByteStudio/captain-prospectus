@@ -7,42 +7,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router";
 import { copy } from "../copy/field";
 import { THEME_STORAGE_KEY } from "../theme";
 import { BUILD } from "../version";
 import { AccountMenu } from "./AccountMenu";
-import { LeaveGuardProvider, useRegisterDirty } from "./leave-guard";
 
 const EMAIL = "marie.vandenbroucke@captain-prospectus.be";
 
-function CurrentPath() {
-  return <p data-testid="pathname">{useLocation().pathname}</p>;
-}
-
-function DirtyForm() {
-  useRegisterDirty(true);
-  return null;
-}
-
-function renderMenu({
-  role = "agent",
-  adminOnline = false,
-  children,
-}: {
-  role?: "agent" | "admin";
-  adminOnline?: boolean;
-  children?: React.ReactNode;
-} = {}) {
-  return render(
-    <MemoryRouter initialEntries={["/round"]}>
-      <LeaveGuardProvider>
-        <AccountMenu email={EMAIL} role={role} adminOnline={adminOnline} />
-        {children}
-        <CurrentPath />
-      </LeaveGuardProvider>
-    </MemoryRouter>,
-  );
+function renderMenu({ role = "agent" }: { role?: "agent" | "admin" } = {}) {
+  return render(<AccountMenu email={EMAIL} role={role} />);
 }
 
 // Matched without whitespace: the <wbr> before « @ » reads as a space in happy-dom's name computation.
@@ -67,13 +40,12 @@ describe("AccountMenu", () => {
     expect(button.textContent).toBe("MV");
   });
 
-  it("shows email, role, appearance and version for an agent, with no dashboard row", () => {
+  it("shows email, role, appearance and version for an agent", () => {
     renderMenu();
     const c = card();
     expect(within(c).getByText(copy.accountCard.role.agent)).toBeTruthy();
     expect(within(c).getByText(copy.accountCard.appearance, { selector: "p" })).toBeTruthy();
     expect(within(c).getByText(copy.accountCard.version(BUILD))).toBeTruthy();
-    expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
   });
 
   it("reads the version line as release · commit, or release · dev", () => {
@@ -91,10 +63,9 @@ describe("AccountMenu", () => {
     expect(email?.nextSibling?.textContent?.startsWith("@")).toBe(true);
   });
 
-  it("shows the role of an admin who is offline without the dashboard row", () => {
-    renderMenu({ role: "admin", adminOnline: false });
+  it("shows the role of an admin", () => {
+    renderMenu({ role: "admin" });
     expect(screen.getByText(copy.accountCard.role.admin)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
   });
 
   describe("Apparence", () => {
@@ -136,27 +107,6 @@ describe("AccountMenu", () => {
       expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
       expect(document.documentElement.dataset.theme).toBeUndefined();
       expect(radio(copy.accountCard.theme.system).checked).toBe(true);
-    });
-  });
-
-  describe("Tableau de bord", () => {
-    it("navigates to /admin when the form is clean", async () => {
-      const user = userEvent.setup();
-      renderMenu({ role: "admin", adminOnline: true });
-      await user.click(screen.getByRole("button", { name: copy.accountCard.dashboard }));
-      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
-    });
-
-    it("asks through the leave guard when the form is dirty, and stays on Annuler", async () => {
-      const user = userEvent.setup();
-      renderMenu({ role: "admin", adminOnline: true, children: <DirtyForm /> });
-      await user.click(screen.getByRole("button", { name: copy.accountCard.dashboard }));
-      expect(screen.getByRole("alertdialog")).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
-
-      await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
-      expect(screen.queryByRole("alertdialog")).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
     });
   });
 });

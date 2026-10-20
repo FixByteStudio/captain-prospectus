@@ -9,18 +9,15 @@
  * the avatar is always the last item of the band's row, at the right edge, and
  * CSS anchor positioning needs iOS 26.
  */
-import { useId, useRef, useState } from "react";
-import { LayoutGridIcon, MonitorIcon, MoonIcon, SunIcon, type LucideIcon } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useId, useState } from "react";
+import { MonitorIcon, MoonIcon, SunIcon, type LucideIcon } from "lucide-react";
 import { copy } from "../copy/field";
 import { initials } from "../format";
 import { cn } from "../lib/utils";
 import { applyThemeChoice, themeChoice, type ThemeChoice } from "../theme";
 import { BUILD } from "../version";
 import type { MeResponse } from "../../shared/schemas";
-import { buttonVariants } from "@/ui/button-variants";
 import { FieldRadioGroup, FieldRadioOption } from "@/ui/field-controls";
-import { useLeaveGuard } from "./leave-guard";
 
 const CHOICES: readonly { choice: ThemeChoice; label: string; icon: LucideIcon }[] = [
   { choice: "system", label: copy.accountCard.theme.system, icon: MonitorIcon },
@@ -50,33 +47,14 @@ function Divider() {
   return <hr className="bg-border -mx-1.5 my-1 h-px border-0" />;
 }
 
-export function AccountMenu({
-  email,
-  role,
-  adminOnline,
-}: {
-  email: string;
-  role: MeResponse["role"];
-  /** `adminAccess(...).entry`: the dashboard is useless without the network. */
-  adminOnline: boolean;
-}) {
+export function AccountMenu({ email, role }: { email: string; role: MeResponse["role"] }) {
   const cardId = useId();
   const emailId = useId();
-  const card = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-  const { leave } = useLeaveGuard();
   const [choice, setChoice] = useState<ThemeChoice>(currentChoice);
 
   const pick = (next: ThemeChoice) => {
     applyThemeChoice(next, document.documentElement);
     setChoice(next);
-  };
-
-  const openDashboard = () => {
-    // Closed first, so the leave dialog never opens under a light-dismiss layer.
-    // Optional: happy-dom has no Popover API (the tests keep the card in the DOM).
-    card.current?.hidePopover?.();
-    leave(() => navigate("/admin"));
   };
 
   return (
@@ -100,7 +78,6 @@ export function AccountMenu({
       {/* No display utility on the card: the UA hides a closed popover with
           `display: none`, and any `flex`/`grid` here would show it. */}
       <div
-        ref={card}
         id={cardId}
         popover="auto"
         role="region"
@@ -120,23 +97,6 @@ export function AccountMenu({
           {copy.accountCard.role[role]}
         </p>
         <Divider />
-
-        {adminOnline && (
-          <>
-            <button
-              type="button"
-              onClick={openDashboard}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "touch" }),
-                "text-label my-0.5 w-full justify-start gap-2 px-2.5",
-              )}
-            >
-              <LayoutGridIcon aria-hidden className="size-4" />
-              {copy.accountCard.dashboard}
-            </button>
-            <Divider />
-          </>
-        )}
 
         <p className="text-overline text-muted-foreground px-2.5 pt-2 pb-1.5 uppercase">
           {copy.accountCard.appearance}

@@ -13,12 +13,7 @@ import { LocationDialog } from "./LocationDialog";
 
 function renderDialog(
   status: LocationStatus,
-  {
-    open = true,
-    adminOnline = false,
-    onActivate = vi.fn(),
-    notice = undefined as string | undefined,
-  } = {},
+  { open = true, onActivate = vi.fn(), notice = undefined as string | undefined } = {},
 ) {
   const swipeRef = createRef<HTMLButtonElement>();
   const view = render(
@@ -30,7 +25,6 @@ function renderDialog(
         open={open}
         status={status}
         onActivate={onActivate}
-        adminOnline={adminOnline}
         swipeRef={swipeRef}
         notice={notice}
       />
@@ -106,16 +100,6 @@ describe("LocationDialog", () => {
     ).toBe(true);
   });
 
-  it("shows the dashboard link to an admin only", () => {
-    const { unmount } = renderDialog({ kind: "idle" }, { adminOnline: true });
-    expect(screen.getByRole("link", { name: copy.nav.tabs.dashboard }).getAttribute("href")).toBe(
-      "/admin",
-    );
-    unmount();
-    renderDialog({ kind: "idle" });
-    expect(screen.queryByRole("link")).toBeNull();
-  });
-
   it("hands focus to the swipe when it closes", async () => {
     const { rerender, swipeRef } = renderDialog({ kind: "idle" });
     rerender(
@@ -127,7 +111,6 @@ describe("LocationDialog", () => {
           open={false}
           status={{ kind: "passed" }}
           onActivate={() => {}}
-          adminOnline={false}
           swipeRef={swipeRef}
         />
       </MemoryRouter>,

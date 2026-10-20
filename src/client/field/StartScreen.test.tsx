@@ -47,10 +47,10 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>;
 }
 
-function renderStart(snapshot: SnapshotProspect[], adminOnline = false, from = "/round") {
+function renderStart(snapshot: SnapshotProspect[], from = "/round") {
   return render(
     <MemoryRouter initialEntries={[from]}>
-      <StartScreen snapshot={snapshot} adminOnline={adminOnline} />
+      <StartScreen snapshot={snapshot} />
       <Where />
     </MemoryRouter>,
   );
@@ -112,18 +112,6 @@ describe("the preview", () => {
 
     renderStart(Array.from({ length: 7 }, (_, i) => stop(i + 1)));
     expect(screen.queryByText(/autre/)).toBeNull();
-  });
-
-  it("offers an admin the way back, above the track and inside the dialog, and an agent nothing", () => {
-    const { unmount } = renderStart([stop(1)], true);
-    const links = screen.getAllByRole("link", { name: copy.nav.tabs.dashboard, hidden: true });
-    expect(links).toHaveLength(2);
-    expect(links.every((link) => link.getAttribute("href") === "/admin")).toBe(true);
-    // The one the agent can reach is inside the dialog, which covers the other.
-    expect(screen.getByRole("alertdialog").contains(screen.getByRole("link"))).toBe(true);
-    unmount();
-    renderStart([stop(1)], false);
-    expect(screen.queryByRole("link", { name: copy.nav.tabs.dashboard, hidden: true })).toBeNull();
   });
 });
 
@@ -229,7 +217,7 @@ describe("with a position", () => {
   it("starts at once on a keyboard activation: one tournée, stops numbered nearest-next, Tournée opens", async () => {
     const snapshot = [stop(3), stop(1), stop(2)];
     // From a deep link, so the pathname only becomes /round through `navigate`.
-    renderStart(snapshot, false, "/round/map");
+    renderStart(snapshot, "/round/map");
     expect(screen.getByTestId("where").textContent).toBe("/round/map");
     await waitFor(() => expect(swipe().getAttribute("aria-disabled")).toBeNull());
 

@@ -69,6 +69,8 @@ const stub = vi.hoisted(() => ({
   lastSyncAt: null as number | null,
   /** True to render the real add-prospect form instead of the dirty-form stand-in. */
   realAddProspect: false,
+  /** Renders of `SyncProvider`: an admin has none, because it makes no sync request (ADR-0037). */
+  syncRenders: 0,
 }));
 
 /** What a revoked session's `ApiError` carries. A fixture, not UI copy:
@@ -94,7 +96,10 @@ vi.mock("./api", async (importOriginal) => {
 });
 
 vi.mock("./field/useSync", () => ({
-  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
+  SyncProvider: ({ children }: { children: React.ReactNode }) => {
+    stub.syncRenders += 1;
+    return children;
+  },
   useSyncState: () => ({ ...stub.sync, lastSyncAt: stub.lastSyncAt, syncNow: async () => {} }),
 }));
 
@@ -207,6 +212,7 @@ beforeEach(async () => {
   stub.identityCalls = 0;
   stub.lastSyncAt = null;
   stub.realAddProspect = false;
+  stub.syncRenders = 0;
 });
 
 afterEach(async () => {
@@ -254,6 +260,37 @@ describe("App routing", () => {
     expect(fieldBand()).toBeNull();
   });
 
+  it("shows an agent no way to the dashboard, and runs the sync for them", async () => {
+    renderApp("/");
+
+    expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+    expect(screen.queryByText(copy.nav.dashboard)).toBeNull();
+    expect(stub.syncRenders).toBeGreaterThan(0);
+  });
+
+  it("sends a live admin from the field routes to /admin, and runs no sync for them", async () => {
+    stub.me = ADMIN;
+    const { unmount } = renderApp("/round/abc");
+
+    expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+    expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+    expect(fieldBand()).toBeNull();
+    unmount();
+
+    renderApp("/round");
+    expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+    expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+    expect(stub.syncRenders).toBe(0);
+  });
+
+  it("sends a live admin to /admin from an unknown path too", async () => {
+    stub.me = ADMIN;
+    renderApp("/nowhere");
+
+    expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+    expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+  });
+
   it("answers an agent on an admin route with the forbidden state, inside the field frame", async () => {
     renderApp("/admin/prospects");
 
@@ -267,7 +304,6 @@ describe("App routing", () => {
   });
 
   it("answers an unknown path with the not-found state, inside the field frame", async () => {
-    stub.me = ADMIN;
     renderApp("/nulle-part");
 
     expect(await screen.findByText(copy.errors.notFound)).toBeTruthy();
@@ -418,15 +454,6 @@ describe("The tournée gate", () => {
     expect(
       await screen.findByRole("button", { name: copy.start.swipeName, hidden: true }),
     ).toBeTruthy();
-    expect(fieldBand()).toBeNull();
-  });
-
-  it("gives an online admin the way back on a gate screen", async () => {
-    stub.me = ADMIN;
-    renderApp("/round");
-
-    const link = await screen.findByRole("link", { name: copy.nav.tabs.dashboard });
-    expect(link.getAttribute("href")).toBe("/admin");
     expect(fieldBand()).toBeNull();
   });
 
@@ -709,45 +736,12 @@ describe("The tournée gate", () => {
 });
 
 /**
- * The admin gate follows the network (spec-gh-115), rather than the
- * once-at-identity signal `App.tsx` used to compute. `screens` (invariant
- * 10, admin routes) and `entry` (the tab and the `/` redirect,
- * `field/identity.ts`'s `adminAccess`) are asserted separately here because
- * the bug this closes was exactly the two staying conflated.
+ * An admin has the dashboard and nothing else (ADR-0037). Only a live `/api/me`
+ * opens the admin frame (invariant 10); a cache-sourced admin sees the Hors
+ * ligne screen on any path, never the field side.
  */
-describe("The admin tab and routes follow the network", () => {
-  it("keeps the tab bar at four tabs for an online admin: the dashboard lives in the account card (GH #561)", async () => {
-    stub.me = ADMIN;
-    renderApp("/round");
-
-    const nav = await screen.findByRole("navigation", { name: copy.nav.tabsLabel });
-    expect(within(nav).getAllByRole("link")).toHaveLength(4);
-    expect(within(nav).queryByRole("link", { name: copy.nav.tabs.dashboard })).toBeNull();
-    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
-  });
-
-  it("hides the tab the instant the network drops and shows it again the instant it returns, with no second /api/me", async () => {
-    stub.me = ADMIN;
-    renderApp("/round");
-
-    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
-    expect(stub.identityCalls).toBe(1);
-
-    act(() => {
-      window.dispatchEvent(new Event("offline"));
-    });
-    expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-
-    act(() => {
-      window.dispatchEvent(new Event("online"));
-    });
-    expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
-    // A session the server already confirmed must not pay for going offline
-    // and back — deleting the re-check's `if (!offline) return` would.
-    expect(stub.identityCalls).toBe(1);
-  });
-
-  it("keeps an admin already on /admin when the network drops — offline hides only the tab", async () => {
+describe("The admin side", () => {
+  it("keeps an admin already on /admin when the network drops", async () => {
     stub.me = ADMIN;
     renderApp("/admin/prospects");
 
@@ -757,47 +751,44 @@ describe("The admin tab and routes follow the network", () => {
       window.dispatchEvent(new Event("offline"));
     });
 
-    // Still there: #97 owns what an offline admin screen then says, not this.
     expect(screen.getByTestId("admin-frame")).toBeTruthy();
     expect(fieldBand()).toBeNull();
   });
 
-  it("sends a live-confirmed admin to /round from /, not /admin, when the browser already reports no network at mount", async () => {
-    // Pins that `/`'s redirect reads `entry`, not `screens`: this admin is
-    // server-confirmed (`screens` true) but the browser never fires an
-    // `offline` event here — `navigator.onLine` is already false when the
-    // effect first reads it — so only `entry`'s own `online` check catches it.
-    const onlineSpy = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  it("sends a live-confirmed admin to /admin from /, even when the browser reports no network at mount", async () => {
+    // `/api/me` just reached the Worker, so the admin chunk can too.
+    const onlineSpy = mockOffline();
     try {
       stub.me = ADMIN;
-      const { unmount } = renderApp("/");
+      renderApp("/");
 
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
-      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-      unmount();
-
-      // `screens` is untouched by `online`: the same admin reaching /admin
-      // directly still gets the admin frame.
-      renderApp("/admin");
       expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+      expect(fieldBand()).toBeNull();
     } finally {
       onlineSpy.mockRestore();
     }
   });
 
-  it("sends a cache-started admin to the round with no tab, then unlocks both once a re-check confirms them, with no reload", async () => {
+  it("sends a cache-started admin from / and /round to the Hors ligne screen, then opens the frame once a re-check confirms them, with no reload", async () => {
     const onlineSpy = mockOffline();
     try {
       await setMeta(fieldDb, "identity", ADMIN);
       stub.me = ADMIN;
       stub.identityUnreachable = true;
-      renderApp("/");
+      const first = renderApp("/round");
 
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
-      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+      expect(fieldBand()).toBeNull();
+      first.unmount();
+
+      renderApp("/");
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+      expect(fieldBand()).toBeNull();
       expect(screen.queryByTestId("admin-frame")).toBeNull();
+      expect(stub.syncRenders).toBe(0);
 
       // The network returns and this time the server reaches back and confirms
       // the cached admin — the re-check's whole reason to exist.
@@ -806,13 +797,14 @@ describe("The admin tab and routes follow the network", () => {
         window.dispatchEvent(new Event("online"));
       });
 
-      expect(await screen.findByRole("button", { name: copy.accountCard.dashboard })).toBeTruthy();
+      expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
     } finally {
       onlineSpy.mockRestore();
     }
   });
 
-  it("leaves a cache-started admin unchanged when the re-check is unreachable again", async () => {
+  it("keeps a cache-started admin on the Hors ligne screen when the re-check is unreachable again", async () => {
     const onlineSpy = mockOffline();
     try {
       await setMeta(fieldDb, "identity", ADMIN);
@@ -820,27 +812,27 @@ describe("The admin tab and routes follow the network", () => {
       stub.identityUnreachable = true;
       renderApp("/");
 
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
       const callsBefore = stub.identityCalls;
 
       // Awaited: `settle`'s promise chain must flush before the negative
       // assertions below run, or they would also pass if the re-check had
-      // wrongly granted the tab (it just hasn't resolved yet).
+      // wrongly opened the frame (it just hasn't resolved yet).
       await act(async () => {
         window.dispatchEvent(new Event("online"));
       });
 
       // The re-check ran (falls back to the same cache) but changed nothing.
       expect(stub.identityCalls).toBeGreaterThan(callsBefore);
-      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
+      expect(screen.getByText(copy.adminOffline.title)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
       onlineSpy.mockRestore();
     }
   });
 
-  it("leaves a cache-started admin with no tab when the re-check answers agent", async () => {
+  it("gives a cache-started admin the agent's answer on /admin when the re-check answers agent", async () => {
     const onlineSpy = mockOffline();
     try {
       await setMeta(fieldDb, "identity", ADMIN);
@@ -848,7 +840,7 @@ describe("The admin tab and routes follow the network", () => {
       stub.identityUnreachable = true;
       renderApp("/");
 
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
 
       stub.identityUnreachable = false;
       stub.me = AGENT;
@@ -856,13 +848,14 @@ describe("The admin tab and routes follow the network", () => {
         window.dispatchEvent(new Event("online"));
       });
 
-      // The switch drops the admin's cached tournée and last pull with the rest
-      // of their cache (`clearAgentCache`), so the agent lands on the
-      // never-loaded gate, which has no tab bar and, for an agent, no
-      // « Tableau de bord » either.
-      expect(await screen.findByText(copy.start.neverLoadedTitle)).toBeTruthy();
-      expect(screen.queryByRole("button", { name: copy.accountCard.dashboard })).toBeNull();
-      expect(screen.getByTestId("pathname").textContent).toBe("/round");
+      // The redirect already put them on /admin, so a live agent gets that
+      // route's forbidden state in the field frame, with the way to the round.
+      expect(await screen.findByText(copy.errors.forbidden)).toBeTruthy();
+      expect(screen.getByTestId("pathname").textContent).toBe("/admin");
+      expect(screen.queryByText(copy.adminOffline.title)).toBeNull();
+      expect(screen.getByRole("link", { name: copy.visit.back }).getAttribute("href")).toBe(
+        "/round",
+      );
     } finally {
       onlineSpy.mockRestore();
     }
@@ -903,7 +896,7 @@ describe("The admin tab and routes follow the network", () => {
       stub.identityUnreachable = true;
       renderApp("/");
 
-      expect(await screen.findByRole("navigation", { name: copy.nav.tabsLabel })).toBeTruthy();
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
 
       // The network returns and the Worker answers 401: this session is revoked,
       // not merely unreachable, so the cache it would otherwise fall back to
