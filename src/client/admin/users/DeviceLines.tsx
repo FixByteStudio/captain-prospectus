@@ -4,7 +4,7 @@ import { copy } from "../../copy";
 import { formatDateTime, formatShortDate } from "../../format";
 import { Button } from "../../ui/button";
 
-const t = copy.agents.devices;
+const t = copy.users.devices;
 
 /** The chevron before an active row's name that opens its device lines. */
 export function ExpandButton({

@@ -14,8 +14,8 @@ import { AccountMenu } from "./AccountMenu";
 
 const EMAIL = "marie.vandenbroucke@captain-prospectus.be";
 
-function renderMenu({ role = "agent" }: { role?: "agent" | "admin" } = {}) {
-  return render(<AccountMenu email={EMAIL} role={role} />);
+function renderMenu() {
+  return render(<AccountMenu email={EMAIL} />);
 }
 
 // Matched without whitespace: the <wbr> before « @ » reads as a space in happy-dom's name computation.
@@ -40,10 +40,10 @@ describe("AccountMenu", () => {
     expect(button.textContent).toBe("MV");
   });
 
-  it("shows email, role, appearance and version for an agent", () => {
+  it("shows email, role, appearance and version", () => {
     renderMenu();
     const c = card();
-    expect(within(c).getByText(copy.accountCard.role.agent)).toBeTruthy();
+    expect(within(c).getByText(copy.accountCard.role)).toBeTruthy();
     expect(within(c).getByText(copy.accountCard.appearance, { selector: "p" })).toBeTruthy();
     expect(within(c).getByText(copy.accountCard.version(BUILD))).toBeTruthy();
   });
@@ -61,11 +61,6 @@ describe("AccountMenu", () => {
     renderMenu();
     const email = card().querySelector("wbr");
     expect(email?.nextSibling?.textContent?.startsWith("@")).toBe(true);
-  });
-
-  it("shows the role of an admin", () => {
-    renderMenu({ role: "admin" });
-    expect(screen.getByText(copy.accountCard.role.admin)).toBeTruthy();
   });
 
   describe("Apparence", () => {

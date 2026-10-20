@@ -6,7 +6,7 @@ import { copy } from "../../copy";
 export function failureToast(error: unknown) {
   toast.error(
     error instanceof ApiError && error.code === "last_admin"
-      ? copy.agents.lastAdmin
-      : copy.agents.toast.failed,
+      ? copy.users.lastAdmin
+      : copy.users.toast.failed,
   );
 }

@@ -43,12 +43,12 @@ export function UsersList({
                 </div>
                 <p className="text-muted-foreground text-meta truncate">
                   {user.email}
-                  {user.email === actions.self ? ` · ${copy.agents.you}` : ""}
+                  {user.email === actions.self ? ` · ${copy.users.you}` : ""}
                 </p>
               </div>
               {deactivated ? (
                 <Button variant="secondary" size="sm" onClick={() => actions.onReactivate(user)}>
-                  {copy.agents.reactivate}
+                  {copy.users.reactivate}
                 </Button>
               ) : (
                 <>

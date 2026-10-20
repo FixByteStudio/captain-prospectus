@@ -12,7 +12,7 @@ import {
 } from "../../ui/dialog";
 import { copyToClipboard } from "./copy-to-clipboard";
 
-const t = copy.agents.codeDialog;
+const t = copy.users.codeDialog;
 
 /**
  * The one time a code is shown (docs/design.md › Utilisateurs). Split 4 + 4 for

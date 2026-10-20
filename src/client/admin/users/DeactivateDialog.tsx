@@ -17,7 +17,7 @@ import { useUpdateUser, useUsers } from "../queries";
 import { failureToast } from "./failure-toast";
 import { displayName } from "./RowMenu";
 
-const t = copy.agents.deactivateDialog;
+const t = copy.users.deactivateDialog;
 
 /** Mounted only while a deactivation is pending, so mounting is "when it opens". */
 export function DeactivateDialog({
@@ -41,7 +41,7 @@ export function DeactivateDialog({
       if (!live) return;
       // Nothing to confirm against: say so rather than wait forever.
       if (!result.isSuccess || !result.data.users.some((u) => u.email === email)) {
-        toast.error(copy.agents.toast.failed);
+        toast.error(copy.users.toast.failed);
         onClose();
         return;
       }
@@ -63,7 +63,7 @@ export function DeactivateDialog({
       onClose();
       return;
     }
-    toast.success(copy.agents.toast.deactivated);
+    toast.success(copy.users.toast.deactivated);
     // App must re-read who you are, so a full load rather than a navigate.
     if (email === self) window.location.assign("/login");
     onClose();

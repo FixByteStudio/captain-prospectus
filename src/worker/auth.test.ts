@@ -346,7 +346,7 @@ describe("log hygiene", () => {
 });
 
 describe("POST /api/auth/login — code (GH #305)", () => {
-  /** Generates a code for `email` the way the Agents page does. */
+  /** Generates a code for `email` the way the Utilisateurs page does. */
   async function generate(email: string): Promise<LoginCodeResponse> {
     const response = await call(`/api/admin/users/${encodeURIComponent(email)}/code`, {
       method: "POST",
@@ -486,7 +486,7 @@ describe("POST /api/auth/login — code (GH #305)", () => {
 });
 
 describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
-  /** Generates the signed-in admin's own passphrase the way the Agents page does. */
+  /** Generates the signed-in admin's own passphrase the way the Utilisateurs page does. */
   async function generatePassphrase(email = TEST_ADMIN): Promise<string> {
     const response = await call("/api/admin/me/passphrase", {
       method: "POST",

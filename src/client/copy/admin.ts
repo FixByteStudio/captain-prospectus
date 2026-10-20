@@ -23,7 +23,7 @@ export const adminCopy = {
   },
 
   /** The Utilisateurs page (GH #304, #594; docs/design.md › Utilisateurs). */
-  agents: {
+  users: {
     title: "Utilisateurs",
     subtitle: "Qui peut se connecter, et sur quels appareils.",
     sections: { agent: "Agents", admin: "Administrateurs" },

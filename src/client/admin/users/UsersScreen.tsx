@@ -22,7 +22,7 @@ import { UsersList } from "./UsersList";
 import { UsersTable } from "./UsersTable";
 import type { UsersActions } from "./UsersTable";
 
-const t = copy.agents;
+const t = copy.users;
 
 /** Agents first: they are the rows an admin works with most (owner, 2026-10-20). */
 const SECTION_ORDER: readonly Role[] = ["agent", "admin"];
@@ -82,7 +82,7 @@ function UsersSection({
 }
 
 /** `/admin/users` — docs/design.md › Utilisateurs. `email` is the signed-in admin. */
-export function AgentsScreen({ email }: { email: string }) {
+export function UsersScreen({ email }: { email: string }) {
   const query = useUsers();
   const update = useUpdateUser();
   const isMobile = useIsMobile();

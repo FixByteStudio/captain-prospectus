@@ -1,7 +1,7 @@
 /**
- * A device's label for the Agents page ("iPhone · Safari", GH #307): a fixed
- * vocabulary picked from the User-Agent at login. Only the label is stored;
- * the raw header is never stored or logged (docs/security.md).
+ * A device's label for the Utilisateurs page ("iPhone · Safari", GH #307):
+ * a fixed vocabulary picked from the User-Agent at login. Only the label is
+ * stored; the raw header is never stored or logged (docs/security.md).
  */
 
 /**

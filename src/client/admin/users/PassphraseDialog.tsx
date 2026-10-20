@@ -23,7 +23,7 @@ import {
 import { useGeneratePassphrase } from "../queries";
 import { copyToClipboard } from "./copy-to-clipboard";
 
-const t = copy.agents.passphraseDialog;
+const t = copy.users.passphraseDialog;
 
 /**
  * The signed-in admin's own new passphrase (docs/design.md › Utilisateurs). The old
@@ -39,7 +39,7 @@ export function PassphraseDialog({ onClose }: { onClose: () => void }) {
     try {
       setPassphrase((await generate.mutateAsync()).passphrase);
     } catch {
-      toast.error(copy.agents.toast.failed);
+      toast.error(copy.users.toast.failed);
       onClose();
     }
   };
