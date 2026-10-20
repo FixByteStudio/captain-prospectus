@@ -1,6 +1,6 @@
 # ADR-0037: Admins leave the field side
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 - Deciders: owner
 - Amends: [ADR-0019](0019-admin-chunk-out-of-the-precache.md) (what an offline admin sees), [ADR-0028](0028-agent-position-at-sync.md) (an admin syncing from the field)
