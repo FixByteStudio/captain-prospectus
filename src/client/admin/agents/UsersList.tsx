@@ -14,10 +14,12 @@ import type { UsersActions } from "./UsersTable";
 export function UsersList({
   users,
   deactivated = false,
+  showRole = false,
   actions,
 }: {
   users: User[];
   deactivated?: boolean;
+  showRole?: boolean;
   actions: UsersActions;
 }) {
   return (
@@ -44,7 +46,7 @@ export function UsersList({
                 <p className="text-muted-foreground text-meta truncate">
                   {user.email}
                   {user.email === actions.self ? ` · ${copy.agents.you}` : ""}
-                  {` · ${copy.agents.roles[user.role]}`}
+                  {showRole ? ` · ${copy.agents.roles[user.role]}` : ""}
                 </p>
               </div>
               {deactivated ? (

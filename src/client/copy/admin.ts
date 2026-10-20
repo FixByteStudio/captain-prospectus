@@ -22,10 +22,12 @@ export const adminCopy = {
     reconnected: "Connexion rétablie.",
   },
 
-  /** The Agents page (GH #304, docs/design.md › Agents). */
+  /** The Utilisateurs page (GH #304, #594, docs/design.md › Utilisateurs). */
   agents: {
-    title: "Agents",
-    subtitle: "Qui peut se connecter, et avec quel rôle.",
+    title: "Utilisateurs",
+    subtitle: "Qui peut se connecter, et sur quels appareils.",
+    sections: { admins: "Administrateurs", agents: "Agents" },
+    noAgents: "Aucun agent actif. Ajoutez-en un avec « Ajouter un utilisateur ».",
     loading: "Chargement des utilisateurs…",
     loadFailed: "Impossible de charger les utilisateurs.",
     add: "Ajouter un utilisateur",
@@ -35,7 +37,7 @@ export const adminCopy = {
       enrolment: "Inscription",
       devices: "Appareils",
     },
-    roles: { agent: "Agent", admin: "Admin" },
+    roles: { agent: "Agent", admin: "Administrateur" },
     enrolled: "Inscrit",
     notEnrolled: "Pas encore inscrit",
     you: "Vous",
@@ -65,6 +67,7 @@ export const adminCopy = {
       email: "Adresse e-mail",
       name: "Nom",
       role: "Rôle",
+      roleHint: "Le rôle est fixé à la création : pour en changer, il faudra un autre compte.",
       submit: "Ajouter",
       cancel: "Annuler",
       emailInvalid: "Saisissez une adresse e-mail valide.",

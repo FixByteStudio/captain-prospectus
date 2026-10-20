@@ -1,4 +1,4 @@
-/** The Agents page (GH #304): docs/design.md › Agents, ADR-0029. */
+/** The Utilisateurs page (GH #304, #594): docs/design.md › Utilisateurs, ADR-0029. */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -116,13 +116,14 @@ async function openMenu(name: string) {
 }
 
 describe("AgentsScreen", () => {
-  it("lists active users as the server sent them, with badge and Vous", async () => {
+  it("lists active users by section, with badge and Vous", async () => {
     stubFetch([[LEA, ADMIN, user("old@example.com", { active: false })]]);
     renderScreen();
     const rows = await screen.findAllByRole("row");
-    expect(rows[1]?.textContent).toContain("Léa Dupont");
-    expect(rows[1]?.textContent).toContain(t.enrolled);
-    expect(rows[2]?.textContent).toContain(`sam@example.com · ${t.you}`);
+    // header, Sam | header, Léa
+    expect(rows[1]?.textContent).toContain(`sam@example.com · ${t.you}`);
+    expect(rows[3]?.textContent).toContain("Léa Dupont");
+    expect(rows[3]?.textContent).toContain(t.enrolled);
     expect(screen.queryByText("old@example.com")).toBeNull();
     expect(
       screen.getByRole("button", { name: t.deactivated(1) }).getAttribute("aria-expanded"),
@@ -156,6 +157,92 @@ describe("AgentsScreen", () => {
     await screen.findByText("Léa Dupont");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  describe("two sections (GH #594)", () => {
+    const MAX = user("max@example.com", { name: "Max", role: "admin" });
+    const OLD_ADMIN = user("old@example.com", { name: "Old", role: "admin", active: false });
+    const OLD_AGENT = user("tom@example.com", { name: "Tom", active: false });
+
+    it("shows Administrateurs then Agents, each with its count, and no Rôle column", async () => {
+      stubFetch([[LEA, ADMIN, MAX]]);
+      renderScreen();
+      const admins = await screen.findByRole("heading", { name: /Administrateurs/ });
+      const agents = screen.getByRole("heading", { name: /^Agents/ });
+      expect(admins.textContent).toContain("2");
+      expect(agents.textContent).toContain("1");
+      expect(
+        admins.compareDocumentPosition(agents) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      const tables = screen.getAllByRole("table");
+      expect(tables).toHaveLength(2);
+      for (const table of tables) {
+        expect(within(table).queryByRole("columnheader", { name: t.columns.role })).toBeNull();
+        expect(within(table).queryByText(t.roles.agent)).toBeNull();
+        expect(within(table).queryByText(t.roles.admin)).toBeNull();
+      }
+      expect(within(tables[0] as HTMLElement).getByText("Sam Owner")).toBeTruthy();
+      expect(within(tables[1] as HTMLElement).getByText("Léa Dupont")).toBeTruthy();
+    });
+
+    it("says there is no active agent, with a count of 0", async () => {
+      stubFetch([[ADMIN]]);
+      renderScreen();
+      const agents = await screen.findByRole("heading", { name: /^Agents/ });
+      expect(agents.textContent).toContain("0");
+      expect(screen.getByText(t.noAgents)).toBeTruthy();
+      expect(screen.getAllByRole("table")).toHaveLength(1);
+    });
+
+    it("says there is no active agent below 768px too", async () => {
+      setMobile(true);
+      stubFetch([[ADMIN]]);
+      renderScreen();
+      expect(await screen.findByText(t.noAgents)).toBeTruthy();
+    });
+
+    it("keeps the role in Désactivés", async () => {
+      stubFetch([[ADMIN, LEA, OLD_ADMIN, OLD_AGENT]]);
+      renderScreen();
+      await userEvent.click(await screen.findByRole("button", { name: t.deactivated(2) }));
+      const table = within(await screen.findByLabelText(t.deactivatedLabel)).getByRole("table");
+      expect(within(table).getByRole("columnheader", { name: t.columns.role })).toBeTruthy();
+      expect(within(table).getByText(t.roles.admin)).toBeTruthy();
+      expect(within(table).getByText(t.roles.agent)).toBeTruthy();
+    });
+
+    it("stacks the sections below 768px without the role in the meta line", async () => {
+      setMobile(true);
+      stubFetch([[ADMIN, LEA, OLD_AGENT]]);
+      renderScreen();
+      const adminsHeading = await screen.findByRole("heading", { name: /Administrateurs/ });
+      const agentsHeading = screen.getByRole("heading", { name: /^Agents/ });
+      const adminsSection = within(adminsHeading.parentElement as HTMLElement);
+      const agentsSection = within(agentsHeading.parentElement as HTMLElement);
+      expect(adminsSection.getByText("Sam Owner")).toBeTruthy();
+      expect(adminsSection.queryByText("Léa Dupont")).toBeNull();
+      expect(agentsSection.getByText("Léa Dupont")).toBeTruthy();
+      expect(agentsSection.queryByText("Sam Owner")).toBeNull();
+      expect(screen.queryByText(/ · Agent$/)).toBeNull();
+      expect(screen.queryByText(/ · Administrateur$/)).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: t.deactivated(1) }));
+      expect(await screen.findByText(/tom@example\.com · Agent/)).toBeTruthy();
+    });
+
+    it("asks for the role first, with its hint, and offers Agent then Administrateur", async () => {
+      stubFetch([[ADMIN]]);
+      renderScreen();
+      await userEvent.click(await screen.findByRole("button", { name: t.add }));
+      const dialog = await screen.findByRole("dialog");
+      const labels = within(dialog)
+        .getAllByText(/^(Rôle|Adresse e-mail|Nom)$/)
+        .map((el) => el.textContent);
+      expect(labels).toEqual([t.addDialog.role, t.addDialog.email, t.addDialog.name]);
+      expect(within(dialog).getByText(t.addDialog.roleHint)).toBeTruthy();
+      await userEvent.click(within(dialog).getByRole("combobox"));
+      const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+      expect(options).toEqual([t.roles.agent, t.roles.admin]);
+    });
   });
 
   describe("adding", () => {

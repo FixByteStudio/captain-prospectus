@@ -16,7 +16,7 @@ export function displayName(user: User): string {
 }
 
 /**
- * One row's actions (docs/design.md › Agents). "Générer un code" comes first,
+ * One row's actions (docs/design.md › Utilisateurs). "Générer un code" comes first,
  * on every active row, the admin's own included; "Nouvelle phrase de passe"
  * follows only when `onNewPassphrase` is given, which the caller does for the
  * signed-in admin's own row alone. Roles are fixed at creation, so there is no

@@ -30,7 +30,7 @@ export function ExpandButton({
 }
 
 /**
- * One user's devices (docs/design.md › Agents): label, enrolment and last-seen
+ * One user's devices (docs/design.md › Utilisateurs): label, enrolment and last-seen
  * dates in meta, then "Révoquer" — or "Cet appareil" for the session this page
  * is open on, which signs out through the avatar menu instead. `table` keeps
  * each line on one row; `list` (below 768px) wraps the dates under the label.

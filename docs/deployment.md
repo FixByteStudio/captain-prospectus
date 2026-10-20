@@ -90,7 +90,7 @@ and after every [fresh redeploy](#fresh-redeploy), in order:
    creates the owner as an admin.
 2. On the **Agents** page, pick "Nouvelle phrase de passe" on the owner's own row and keep what it shows:
    it appears once. It is the everyday admin sign-in; `BREAK_GLASS` stays for emergencies.
-3. Create every user on the Agents page, admins and agents, before anyone is assigned a prospect.
+3. Create every user on the Utilisateurs page, admins and agents, before anyone is assigned a prospect.
 4. Give each agent a code with "Générer un code" on their row. It works once, for 15 minutes.
 
 Then check, on production:

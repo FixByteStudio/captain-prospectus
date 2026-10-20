@@ -8,7 +8,15 @@ import { ApiError } from "../../api";
 import { copy } from "../../copy";
 import { Button } from "../../ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../../ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "../../ui/form";
 import { Input } from "../../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { Spinner } from "../../ui/spinner";
@@ -75,6 +83,30 @@ export function AddUserDialog({
           >
             <FormField
               control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t.addDialog.role}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(["agent", "admin"] as const).map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {t.roles[role]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{t.addDialog.roleHint}</FormDescription>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
@@ -108,29 +140,6 @@ export function AddUserDialog({
                     <Input autoComplete="off" {...field} />
                   </FormControl>
                   <FormMessage>{t.addDialog.nameRequired}</FormMessage>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t.addDialog.role}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(["agent", "admin"] as const).map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {t.roles[role]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </FormItem>
               )}
             />

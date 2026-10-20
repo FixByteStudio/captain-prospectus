@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mockup — Utilisateurs screen in two sections (#594)</title>
+<style>
+  @font-face { font-family: "Archivo Variable"; src: url("file:///home/m0/PROJECTs/captain-prospectus/node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  /* Tokens copied from src/client/styles/app.css (light :root). */
+  .light { --background:#f6f7f0; --foreground:#1b2a4a; --card:#fff; --muted-foreground:#5a6478; --secondary:#e8eaef; --border:#d7dae2;
+           --primary:#c9a227; --primary-foreground:#1b2a4a; --primary-edge:#a8801a; --success:#1f6f4a; --destructive:#8c2f39;
+           --tint-success:color-mix(in oklab, #1f6f4a 12%, #fff);
+           --band:#1b2a4a; --band-foreground:#eef0f4; --band-muted:#95a0b8; --band-accent:#ffffff14; --band-border:#ffffff1f; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 32px 36px; background:#e4e6df; font-family:"Archivo Variable", system-ui, sans-serif; color:#1b2a4a; font-size:14px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { font-size:13px; color:#5a6478; margin:0 0 22px; max-width:1300px; }
+  .row { display:flex; gap:26px; align-items:flex-start; margin-bottom:28px; }
+  .label { font-size:12px; font-weight:600; color:#5a6478; margin:0 0 8px; letter-spacing:.2px; }
+  .frame { display:flex; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(20,30,50,.18); background:var(--background); color:var(--foreground); }
+  .desk { width:1060px; height:900px; }
+  .phone { width:375px; height:720px; flex-direction:column; }
+  /* Admin sidebar (stub of the real one). */
+  .sidebar { width:220px; background:var(--band); color:var(--band-foreground); display:flex; flex-direction:column; flex-shrink:0; }
+  .head { height:56px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--band-border); }
+  .mark { width:28px; height:28px; border-radius:7px; background:var(--primary); display:grid; place-items:center; color:var(--primary-foreground); font-weight:800; font-size:13px; box-shadow:inset 0 0 0 1px var(--primary-edge); }
+  .word { font-weight:700; font-size:15px; }
+  .nav { padding:6px 8px; }
+  .group { font-size:10.5px; font-weight:600; letter-spacing:.9px; text-transform:uppercase; color:var(--band-muted); height:32px; display:flex; align-items:center; padding:10px 8px 0; }
+  .item { height:36px; display:flex; align-items:center; gap:10px; padding:0 8px; border-radius:6px; font-size:14px; }
+  .item.active { background:var(--primary); color:var(--primary-foreground); box-shadow:inset 0 0 0 1px var(--primary-edge); font-weight:600; }
+  .item svg { width:16px; height:16px; }
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .top { height:56px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 16px; gap:8px; color:var(--muted-foreground); font-size:13px; flex-shrink:0; }
+  .avatar { margin-left:auto; width:32px; height:32px; border-radius:50%; background:var(--primary); box-shadow:inset 0 0 0 1px var(--primary-edge); color:var(--primary-foreground); font-size:12px; font-weight:700; display:grid; place-items:center; }
+  .page { padding:24px; display:flex; flex-direction:column; gap:16px; overflow:hidden; }
+  .page > * { flex-shrink:0; }
+  .desk table { table-layout:fixed; }
+  .desk col.c2 { width:170px; } .desk col.c3 { width:110px; } .desk col.c4 { width:110px; }
+  .phone .page { padding:20px 12px; gap:14px; }
+  .sh { display:flex; align-items:flex-start; gap:12px; }
+  .sh .t { font-size:1.2rem; font-weight:600; margin:0; }
+  .sh .l { color:var(--muted-foreground); margin:2px 0 0; }
+  .btn { height:36px; padding:0 14px; border-radius:6px; font:inherit; font-weight:500; display:inline-flex; align-items:center; gap:6px; border:0; white-space:nowrap; }
+  .btn.def { background:var(--primary); color:var(--primary-foreground); box-shadow:inset 0 0 0 1px var(--primary-edge); margin-left:auto; }
+  .btn.sec { background:var(--secondary); color:var(--foreground); height:32px; font-size:13px; }
+  .btn.ghost { background:transparent; color:var(--foreground); padding:0 8px; }
+  .btn.out { background:var(--card); color:var(--foreground); box-shadow:inset 0 0 0 1px var(--border); }
+  .btn svg { width:16px; height:16px; }
+  /* Section heading: the new part. */
+  .sec-h { display:flex; align-items:baseline; gap:8px; margin:6px 0 -6px; }
+  .sec-h h3 { font-size:1rem; font-weight:600; margin:0; }
+  .sec-h .n { color:var(--muted-foreground); font-size:.875rem; font-variant-numeric:tabular-nums; }
+  .surface { background:var(--card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-weight:500; color:var(--muted-foreground); font-size:13px; height:40px; padding:0 8px; border-bottom:1px solid var(--border); }
+  td { padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  th:first-child, td:first-child { padding-left:14px; }
+  th:last-child, td:last-child { padding-right:14px; width:40px; }
+  .r { text-align:right; }
+  .tnum { font-variant-numeric:tabular-nums; }
+  .user { display:flex; align-items:center; gap:6px; }
+  .chev { width:28px; height:28px; display:grid; place-items:center; color:var(--muted-foreground); flex-shrink:0; }
+  .chev svg { width:16px; height:16px; }
+  .nm { font-weight:500; margin:0; }
+  .em { color:var(--muted-foreground); font-size:.75rem; margin:0; }
+  .badge { display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:6px; font-size:12px; font-weight:500; white-space:nowrap; }
+  .b-ok { background:var(--tint-success); color:var(--success); }
+  .b-no { background:var(--secondary); color:var(--foreground); }
+  .dots { width:32px; height:32px; display:grid; place-items:center; color:var(--foreground); }
+  .dots svg { width:16px; height:16px; }
+  .dev td { background:transparent; }
+  .devline { display:flex; align-items:center; gap:16px; padding-left:34px; font-size:13px; }
+  .devline .m { color:var(--muted-foreground); font-size:.75rem; }
+  .devline .btn { margin-left:auto; height:28px; font-size:13px; }
+  .muted { color:var(--muted-foreground); }
+  /* Phone list rows. */
+  ul.list { list-style:none; margin:0; padding:0; }
+  ul.list li { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  ul.list li:last-child { border-bottom:0; }
+  .grow { flex:1; min-width:0; }
+  .l1 { display:flex; align-items:center; gap:8px; }
+  .pband { height:56px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; flex-shrink:0; }
+  .burger { width:32px; height:32px; display:grid; place-items:center; }
+  /* Dialog. */
+  .overlay { position:relative; width:520px; height:480px; background:rgba(16,23,38,.45); border-radius:10px; display:grid; place-items:center; box-shadow:0 6px 18px rgba(20,30,50,.18); }
+  .dialog { width:440px; background:var(--card); color:var(--foreground); border-radius:10px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.25); display:flex; flex-direction:column; gap:16px; }
+  .dialog h4 { margin:0; font-size:1.05rem; font-weight:600; }
+  .fld { display:flex; flex-direction:column; gap:6px; }
+  .fld label { font-weight:500; font-size:.875rem; }
+  .inp { height:36px; border:1px solid var(--border); border-radius:6px; padding:0 10px; display:flex; align-items:center; justify-content:space-between; background:var(--card); }
+  .desc { color:var(--muted-foreground); font-size:.75rem; margin:0; }
+  .foot { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+  .foot .btn.def { margin-left:0; }
+  .notes { width:340px; font-size:13px; line-height:1.5; }
+  .notes h2 { font-size:14px; margin:0 0 6px; }
+  .notes ul { margin:0 0 12px; padding-left:18px; }
+  .notes li { margin-bottom:5px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-dash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+  <symbol id="i-cr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-cd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+</svg>
+
+<h1>Utilisateurs — two sections (#594, story 2.6)</h1>
+<p class="sub">Light theme, tokens from app.css. The Agents screen becomes « Utilisateurs » (title and sidebar label) at the same <code>/admin/users</code>. Rows split into two sections, each a heading with its count and its own Surface; the Rôle column goes since the section says it. Désactivés stays one list under both sections, with the role kept in it.</p>
+
+<div class="row">
+  <div>
+    <p class="label">≥768px — desktop</p>
+    <div class="frame desk light">
+      <aside class="sidebar">
+        <div class="head"><div class="mark">CP</div><div class="word">Captain Prospectus</div></div>
+        <div class="nav">
+          <div class="group">Pilotage</div>
+          <div class="item"><svg><use href="#i-dash"/></svg>Tableau de bord</div>
+          <div class="item active"><svg><use href="#i-users"/></svg>Utilisateurs</div>
+          <div class="item"><svg><use href="#i-route"/></svg>Tournée du jour</div>
+          <div class="group">Prospection</div>
+          <div class="item"><svg><use href="#i-store"/></svg>Prospects</div>
+        </div>
+      </aside>
+      <div class="main">
+        <div class="top">Pilotage › Utilisateurs<div class="avatar">SO</div></div>
+        <div class="page">
+          <div class="sh">
+            <div><p class="t">Utilisateurs</p><p class="l">Qui peut se connecter, et sur quels appareils.</p></div>
+            <button class="btn def">Ajouter un utilisateur</button>
+          </div>
+
+          <div class="sec-h"><h3>Administrateurs</h3><span class="n">2</span></div>
+          <div class="surface">
+            <table>
+              <colgroup><col><col class="c2"><col class="c3"><col style="width:54px"></colgroup><tr><th>Utilisateur</th><th>Inscription</th><th class="r">Appareils</th><th></th></tr>
+              <tr><td><div class="user"><span class="chev"><svg><use href="#i-cr"/></svg></span><div><p class="nm">Nadia Benali</p><p class="em">nadia@example.com</p></div></div></td>
+                  <td><span class="badge b-ok">Inscrit</span></td><td class="r tnum">1</td><td><span class="dots"><svg><use href="#i-dots"/></svg></span></td></tr>
+              <tr><td><div class="user"><span class="chev"><svg><use href="#i-cr"/></svg></span><div><p class="nm">Sam Owner</p><p class="em">sam@example.com · Vous</p></div></div></td>
+                  <td><span class="badge b-ok">Inscrit</span></td><td class="r tnum">2</td><td><span class="dots"><svg><use href="#i-dots"/></svg></span></td></tr>
+            </table>
+          </div>
+
+          <div class="sec-h"><h3>Agents</h3><span class="n">3</span></div>
+          <div class="surface">
+            <table>
+              <colgroup><col><col class="c2"><col class="c3"><col style="width:54px"></colgroup><tr><th>Utilisateur</th><th>Inscription</th><th class="r">Appareils</th><th></th></tr>
+              <tr><td><div class="user"><span class="chev"><svg><use href="#i-cd"/></svg></span><div><p class="nm">Léa Dupont</p><p class="em">lea@example.com</p></div></div></td>
+                  <td><span class="badge b-ok">Inscrit</span></td><td class="r tnum">2</td><td><span class="dots"><svg><use href="#i-dots"/></svg></span></td></tr>
+              <tr class="dev"><td colspan="4"><div class="devline"><span>iPhone · Safari</span><span class="m">Inscrit le 24/09/2026</span><span class="m">Vu le 07/10/2026 15:24</span><button class="btn ghost">Révoquer</button></div></td></tr>
+              <tr class="dev"><td colspan="4"><div class="devline"><span>Android · Chrome</span><span class="m">Inscrit le 02/10/2026</span><span class="m">Vu le 06/10/2026 18:02</span><button class="btn ghost">Révoquer</button></div></td></tr>
+              <tr><td><div class="user"><span class="chev"><svg><use href="#i-cr"/></svg></span><div><p class="nm">Marc Peeters</p><p class="em">marc@example.com</p></div></div></td>
+                  <td><span class="badge b-no">Pas encore inscrit</span></td><td class="r tnum">0</td><td><span class="dots"><svg><use href="#i-dots"/></svg></span></td></tr>
+              <tr><td><div class="user"><span class="chev"><svg><use href="#i-cr"/></svg></span><div><p class="nm">Yasmine El Idrissi</p><p class="em">yasmine@example.com</p></div></div></td>
+                  <td><span class="badge b-ok">Inscrit</span></td><td class="r tnum">1</td><td><span class="dots"><svg><use href="#i-dots"/></svg></span></td></tr>
+            </table>
+          </div>
+
+          <div><button class="btn ghost"><svg><use href="#i-cd"/></svg>Désactivés (1)</button></div>
+          <div class="surface">
+            <table>
+              <colgroup><col><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>Utilisateur</th><th>Rôle</th><th>Inscription</th><th></th></tr>
+              <tr><td><div><p class="nm muted">Tom Janssens</p><p class="em">tom@example.com</p></div></td>
+                  <td class="muted">Agent</td><td><span class="badge b-no">Pas encore inscrit</span></td><td><button class="btn sec">Réactiver</button></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>What changes</h2>
+    <ul>
+      <li>Title, sidebar item and breadcrumb read « Utilisateurs »; the URL stays <code>/admin/users</code>.</li>
+      <li>Lede becomes « Qui peut se connecter, et sur quels appareils. » — the role is no longer something you set here.</li>
+      <li>Two sections in this order: <b>Administrateurs</b>, then <b>Agents</b>. Each heading carries its active count in muted tabular figures, then its own Surface with the same columns minus Rôle.</li>
+      <li>Rows, expansion, device lines and the row menu are unchanged (no role item since #593).</li>
+      <li>With no active agent, the Agents section shows one muted line: « Aucun agent actif. Ajoutez-en un avec « Ajouter un utilisateur ». » The Administrateurs section is never empty (the reader is one).</li>
+      <li><b>Désactivés</b> stays one collapsible list under both sections, and keeps its Rôle column, since it mixes both roles.</li>
+    </ul>
+    <h2>Ajouter un utilisateur</h2>
+    <ul>
+      <li>« Rôle » moves first and gets a description: the role is set once, here.</li>
+      <li>Options read « Agent » (default) and « Administrateur ».</li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <p class="label">&lt;768px — phone</p>
+    <div class="frame phone light">
+      <div class="pband"><span class="burger"><svg width="18" height="18"><use href="#i-menu"/></svg></span><span class="muted" style="font-size:13px">Utilisateurs</span><div class="avatar">SO</div></div>
+      <div class="page">
+        <div class="sh">
+          <div><p class="t">Utilisateurs</p><p class="l">Qui peut se connecter, et sur quels appareils.</p></div>
+        </div>
+        <button class="btn def" style="margin-left:0; align-self:flex-start">Ajouter un utilisateur</button>
+
+        <div class="sec-h"><h3>Administrateurs</h3><span class="n">2</span></div>
+        <div class="surface"><ul class="list">
+          <li><span class="chev"><svg><use href="#i-cr"/></svg></span><div class="grow"><div class="l1"><p class="nm">Nadia Benali</p><span class="badge b-ok">Inscrit</span></div><p class="em">nadia@example.com</p></div><span class="tnum muted">1</span><span class="dots"><svg><use href="#i-dots"/></svg></span></li>
+          <li><span class="chev"><svg><use href="#i-cr"/></svg></span><div class="grow"><div class="l1"><p class="nm">Sam Owner</p><span class="badge b-ok">Inscrit</span></div><p class="em">sam@example.com · Vous</p></div><span class="tnum muted">2</span><span class="dots"><svg><use href="#i-dots"/></svg></span></li>
+        </ul></div>
+
+        <div class="sec-h"><h3>Agents</h3><span class="n">3</span></div>
+        <div class="surface"><ul class="list">
+          <li><span class="chev"><svg><use href="#i-cr"/></svg></span><div class="grow"><div class="l1"><p class="nm">Léa Dupont</p><span class="badge b-ok">Inscrit</span></div><p class="em">lea@example.com</p></div><span class="tnum muted">2</span><span class="dots"><svg><use href="#i-dots"/></svg></span></li>
+          <li><span class="chev"><svg><use href="#i-cr"/></svg></span><div class="grow"><div class="l1"><p class="nm">Marc Peeters</p><span class="badge b-no">Pas encore inscrit</span></div><p class="em">marc@example.com</p></div><span class="tnum muted">0</span><span class="dots"><svg><use href="#i-dots"/></svg></span></li>
+          <li><span class="chev"><svg><use href="#i-cr"/></svg></span><div class="grow"><div class="l1"><p class="nm">Yasmine El Idrissi</p><span class="badge b-ok">Inscrit</span></div><p class="em">yasmine@example.com</p></div><span class="tnum muted">1</span><span class="dots"><svg><use href="#i-dots"/></svg></span></li>
+        </ul></div>
+
+        <div><button class="btn ghost"><svg><use href="#i-cr"/></svg>Désactivés (1)</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="label">Ajouter un utilisateur — role set once</p>
+    <div class="overlay light">
+      <div class="dialog">
+        <h4>Ajouter un utilisateur</h4>
+        <div class="fld"><label>Rôle</label><div class="inp"><span>Agent</span><svg width="16" height="16" style="color:var(--muted-foreground)"><use href="#i-cd"/></svg></div>
+          <p class="desc">Le rôle est fixé à la création : pour en changer, il faudra un autre compte.</p></div>
+        <div class="fld"><label>Adresse e-mail</label><div class="inp"></div></div>
+        <div class="fld"><label>Nom</label><div class="inp"></div></div>
+        <div class="foot"><button class="btn out">Annuler</button><button class="btn def">Ajouter</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>Phone</h2>
+    <ul>
+      <li>Same two sections, stacked; the header's button wraps under the lede as today.</li>
+      <li>The second meta line drops « · Agent / · Admin »: the section heading says it. Désactivés rows keep it.</li>
+    </ul>
+    <h2>Not in this story</h2>
+    <ul>
+      <li>The row menu's « Nouvelle phrase de passe » (epic 3 replaces the passphrase).</li>
+      <li>Dark theme is the same tokens swapped; no new colour.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

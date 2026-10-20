@@ -45,10 +45,13 @@ export function UserCell({ user, self, muted }: { user: User; self: string; mute
 export function UsersTable({
   users,
   deactivated = false,
+  showRole = false,
   actions,
 }: {
   users: User[];
   deactivated?: boolean;
+  /** Only the mixed Désactivés list; the active sections say the role in their heading. */
+  showRole?: boolean;
   actions: UsersActions;
 }) {
   return (
@@ -56,9 +59,9 @@ export function UsersTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="w-full min-w-48 pl-3.5">{copy.agents.columns.user}</TableHead>
-          <TableHead>{copy.agents.columns.role}</TableHead>
-          <TableHead>{copy.agents.columns.enrolment}</TableHead>
-          <TableHead className="text-right">
+          {showRole && <TableHead>{copy.agents.columns.role}</TableHead>}
+          <TableHead className="w-44">{copy.agents.columns.enrolment}</TableHead>
+          <TableHead className="w-28 text-right">
             {deactivated ? "" : copy.agents.columns.devices}
           </TableHead>
           <TableHead className="w-10" />
@@ -84,9 +87,11 @@ export function UsersTable({
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {copy.agents.roles[user.role]}
-                </TableCell>
+                {showRole && (
+                  <TableCell className="text-muted-foreground">
+                    {copy.agents.roles[user.role]}
+                  </TableCell>
+                )}
                 <TableCell>
                   <EnrolmentBadge user={user} />
                 </TableCell>
@@ -117,7 +122,7 @@ export function UsersTable({
               </TableRow>
               {open && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="pr-3.5 pl-11">
+                  <TableCell colSpan={showRole ? 5 : 4} className="pr-3.5 pl-11">
                     <DeviceLines
                       devices={user.devices}
                       variant="table"

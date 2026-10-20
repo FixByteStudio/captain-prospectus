@@ -26,7 +26,7 @@ import { copyToClipboard } from "./copy-to-clipboard";
 const t = copy.agents.passphraseDialog;
 
 /**
- * The signed-in admin's own new passphrase (docs/design.md › Agents). The old
+ * The signed-in admin's own new passphrase (docs/design.md › Utilisateurs). The old
  * one stops working the moment the server answers, so it asks first; then the
  * one time the passphrase is shown, in five groups of four that the server's
  * normaliser ignores. Mounted only while the flow runs.

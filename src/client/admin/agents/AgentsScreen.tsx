@@ -23,7 +23,15 @@ import type { UsersActions } from "./UsersTable";
 
 const t = copy.agents;
 
-/** `/admin/users` — docs/design.md › Agents. `email` is the signed-in admin. */
+function SectionHeading({ label, count }: { label: string; count: number }) {
+  return (
+    <h3 className="text-heading">
+      {label} <span className="text-muted-foreground tnum">{count}</span>
+    </h3>
+  );
+}
+
+/** `/admin/users` — docs/design.md › Utilisateurs. `email` is the signed-in admin. */
 export function AgentsScreen({ email }: { email: string }) {
   const query = useUsers();
   const update = useUpdateUser();
@@ -117,6 +125,7 @@ export function AgentsScreen({ email }: { email: string }) {
           const active = users.filter((u) => u.active);
           const deactivated = users.filter((u) => !u.active);
           const activeAdmins = active.filter((u) => u.role === "admin");
+          const activeAgents = active.filter((u) => u.role === "agent");
           const actions: UsersActions = {
             self: email,
             lastAdmin: activeAdmins.length === 1 ? (activeAdmins[0]?.email ?? null) : null,
@@ -132,9 +141,23 @@ export function AgentsScreen({ email }: { email: string }) {
           const Rows = isMobile ? UsersList : UsersTable;
           return (
             <>
-              <Surface className="overflow-hidden">
-                <Rows users={active} actions={actions} />
-              </Surface>
+              <div className="flex flex-col gap-2">
+                <SectionHeading label={t.sections.admins} count={activeAdmins.length} />
+                <Surface className="overflow-hidden">
+                  <Rows users={activeAdmins} actions={actions} />
+                </Surface>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <SectionHeading label={t.sections.agents} count={activeAgents.length} />
+                {activeAgents.length > 0 ? (
+                  <Surface className="overflow-hidden">
+                    <Rows users={activeAgents} actions={actions} />
+                  </Surface>
+                ) : (
+                  <p className="text-muted-foreground">{t.noAgents}</p>
+                )}
+              </div>
 
               {deactivated.length > 0 && (
                 <div className="flex flex-col gap-2">
@@ -149,7 +172,7 @@ export function AgentsScreen({ email }: { email: string }) {
                   </Button>
                   {showDeactivated && (
                     <Surface className="overflow-hidden" aria-label={t.deactivatedLabel}>
-                      <Rows users={deactivated} deactivated actions={actions} />
+                      <Rows users={deactivated} deactivated showRole actions={actions} />
                     </Surface>
                   )}
                 </div>

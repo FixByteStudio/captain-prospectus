@@ -11,7 +11,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 |---|---|---|---|
 | **Prospect** | Prospect | A business we want to canvass (restaurant, café, food truck…) | lead, venue, entity |
 | **Agent** | Agent | Field person doing visits | rep, user, worker |
-| **Admin** | Admin | Person who imports, assigns, configures scripts | manager |
+| **Admin** | Administrateur | Person who imports, assigns, configures scripts | manager |
 | **User** | Utilisateur | Anyone who may sign in: an admin or an agent, one row of `users` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Never a synonym for agent | account, member |
 | **Visit** | Visite | One physical attempt at a prospect. A revisit is a new visit | check-in (that's the action) |
 | **Outcome** | Résultat | Result of a visit: `no_contact`, `interested`, `not_interested`, `follow_up`, `converted` | result |
@@ -59,7 +59,7 @@ Every client path is an English slug, whatever the French label on screen. A new
 | Add prospect | Ajouter | `/round/new` |
 | Visit form | Nouvelle visite | `/round/:id` |
 | Dashboard | Tableau de bord | `/admin` |
-| Users | Agents | `/admin/users` |
+| Users | Utilisateurs | `/admin/users` |
 | Prospects | Prospects | `/admin/prospects` |
 | Import | Import | `/admin/import` |
 | Duplicates | Doublons | `/admin/duplicates` |
