@@ -39,24 +39,22 @@ export function RowMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={copy.agents.menu(displayName(user))}>
+        <Button variant="ghost" size="icon" aria-label={copy.users.menu(displayName(user))}>
           <MoreVerticalIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={onGenerateCode}>{copy.agents.generateCode}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onGenerateCode}>{copy.users.generateCode}</DropdownMenuItem>
         {onNewPassphrase && (
-          <DropdownMenuItem onSelect={onNewPassphrase}>
-            {copy.agents.newPassphrase}
-          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onNewPassphrase}>{copy.users.newPassphrase}</DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" disabled={isLastAdmin} onSelect={onDeactivate}>
-          {copy.agents.deactivate}
+          {copy.users.deactivate}
         </DropdownMenuItem>
         {isLastAdmin && (
           <p className="text-muted-foreground text-meta max-w-56 px-2 py-1.5">
-            {copy.agents.lastAdmin}
+            {copy.users.lastAdmin}
           </p>
         )}
       </DropdownMenuContent>

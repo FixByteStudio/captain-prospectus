@@ -16,7 +16,6 @@ import { initials } from "../format";
 import { cn } from "../lib/utils";
 import { applyThemeChoice, themeChoice, type ThemeChoice } from "../theme";
 import { BUILD } from "../version";
-import type { MeResponse } from "../../shared/schemas";
 import { FieldRadioGroup, FieldRadioOption } from "@/ui/field-controls";
 
 const CHOICES: readonly { choice: ThemeChoice; label: string; icon: LucideIcon }[] = [
@@ -47,7 +46,7 @@ function Divider() {
   return <hr className="bg-border -mx-1.5 my-1 h-px border-0" />;
 }
 
-export function AccountMenu({ email, role }: { email: string; role: MeResponse["role"] }) {
+export function AccountMenu({ email }: { email: string }) {
   const cardId = useId();
   const emailId = useId();
   const [choice, setChoice] = useState<ThemeChoice>(currentChoice);
@@ -93,9 +92,7 @@ export function AccountMenu({ email, role }: { email: string; role: MeResponse["
         <p id={emailId} className="px-2.5 pt-2 text-xs font-semibold break-words">
           <Email email={email} />
         </p>
-        <p className="text-muted-foreground px-2.5 pt-0.5 pb-2 text-xs">
-          {copy.accountCard.role[role]}
-        </p>
+        <p className="text-muted-foreground px-2.5 pt-0.5 pb-2 text-xs">{copy.accountCard.role}</p>
         <Divider />
 
         <p className="text-overline text-muted-foreground px-2.5 pt-2 pb-1.5 uppercase">

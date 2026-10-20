@@ -173,15 +173,7 @@ function FieldRoutes() {
  * brand. Admin screens get their own frame instead of this one: `AdminApp`
  * renders as a sibling route, not nested inside `FieldFrame`.
  */
-function FieldFrame({
-  pwa,
-  email,
-  role,
-}: {
-  pwa: PwaState;
-  email: string;
-  role: MeResponse["role"];
-}) {
+function FieldFrame({ pwa, email }: { pwa: PwaState; email: string }) {
   const now = useFieldNow();
   // `FieldFrame` also wraps the forbidden and not-found fallbacks (neither is
   // under /round), so the subtitle names a tab only when there is one.
@@ -230,7 +222,7 @@ function FieldFrame({
         <span className="ml-auto md:ml-0">
           <SyncDot />
         </span>
-        <AccountMenu email={email} role={role} />
+        <AccountMenu email={email} />
       </Band>
 
       {!hideUpdatePrompt && <UpdatePrompt pwa={pwa} />}
@@ -551,7 +543,7 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
 
         {/* The field-only band. The forbidden and not-found fallbacks live
             here too, since neither screen is admin chrome. */}
-        <Route element={<FieldFrame pwa={pwa} email={me.email} role={me.role} />}>
+        <Route element={<FieldFrame pwa={pwa} email={me.email} />}>
           <Route path="/round/*" element={<FieldRoutes />} />
           <Route
             path="/admin/*"

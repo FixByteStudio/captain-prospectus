@@ -22,7 +22,8 @@ export const copy = {
   /** The account card the band avatar opens (AccountMenu.tsx, GH #561). Not
    * `account`: the admin copy owns that key, and the full aggregator spreads it over this one. */
   accountCard: {
-    role: { agent: "Agent", admin: "Administrateur" },
+    /** Only an agent reaches the field side (ADR-0037). */
+    role: "Agent",
     appearance: "Apparence",
     theme: { system: "Système", light: "Clair", dark: "Sombre" },
     /** « Version 0.1.0 · a605114 », or « · dev » for a build with no commit (version.ts). */

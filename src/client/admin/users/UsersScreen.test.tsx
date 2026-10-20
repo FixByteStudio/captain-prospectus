@@ -11,9 +11,9 @@ import { toast } from "sonner";
 import { Toaster } from "../../ui/sonner";
 import { adminKeys } from "../queries";
 import { createAdminQueryClient } from "../query-client";
-import { AgentsScreen } from "./AgentsScreen";
+import { UsersScreen } from "./UsersScreen";
 
-const t = copy.agents;
+const t = copy.users;
 
 function setMobile(mobile: boolean) {
   return vi.spyOn(window, "matchMedia").mockImplementation(
@@ -91,7 +91,7 @@ function renderScreen() {
   render(
     <MemoryRouter>
       <QueryClientProvider client={client}>
-        <AgentsScreen email="sam@example.com" />
+        <UsersScreen email="sam@example.com" />
         <Toaster />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -115,7 +115,7 @@ async function openMenu(name: string) {
   await userEvent.click(await screen.findByRole("button", { name: t.menu(name) }));
 }
 
-describe("AgentsScreen", () => {
+describe("UsersScreen", () => {
   it("lists active users as the server sent them, with badge and Vous", async () => {
     stubFetch([[LEA, ADMIN, user("old@example.com", { active: false })]]);
     renderScreen();

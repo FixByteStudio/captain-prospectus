@@ -212,7 +212,6 @@ export function useCreateUser() {
   return useMutation({
     mutationFn: (input: UserCreate) =>
       apiFetch<User>("/api/admin/users", { method: "POST", body: JSON.stringify(input) }),
-    // Not awaited (query-client.ts): after a self-deactivation the refetch would 403 and flash the failed state.
     onSuccess: () => {
       void invalidate();
     },
@@ -227,6 +226,7 @@ export function useUpdateUser() {
         method: "PATCH",
         body: JSON.stringify(input.update),
       }),
+    // Not awaited (query-client.ts): after a self-deactivation the refetch would 403 and flash the failed state.
     onSuccess: () => {
       void invalidate();
     },

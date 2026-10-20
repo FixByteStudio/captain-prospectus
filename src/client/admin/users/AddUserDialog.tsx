@@ -17,7 +17,7 @@ import { useCreateUser } from "../queries";
 /** The shared rules, picked — never a second copy (ADR-0018). The parse trims and lowercases the email. */
 const addSchema = z.pick(userCreateSchema, { email: true, name: true, role: true });
 
-const t = copy.agents;
+const t = copy.users;
 
 export function AddUserDialog({
   open,

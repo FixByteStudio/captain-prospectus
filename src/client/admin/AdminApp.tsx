@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { copy } from "../copy";
 import { Toaster } from "../ui/sonner";
 import { AdminLayout } from "./AdminLayout";
-import { AgentsScreen } from "./agents/AgentsScreen";
+import { UsersScreen } from "./users/UsersScreen";
 import { DashboardScreen } from "./dashboard/DashboardScreen";
 import { DuplicatesScreen } from "./DuplicatesScreen";
 import { OrphansScreen } from "./OrphansScreen";
@@ -39,7 +39,7 @@ export function AdminApp({ email, updatePrompt }: { email: string; updatePrompt:
       <AdminLayout banner={updatePrompt} email={email}>
         <Routes>
           <Route index element={<DashboardScreen />} />
-          <Route path="users" element={<AgentsScreen email={email} />} />
+          <Route path="users" element={<UsersScreen email={email} />} />
           <Route path="prospects" element={<ProspectsScreen />} />
           <Route path="import" element={<ImportScreen />} />
           <Route path="duplicates" element={<DuplicatesScreen />} />

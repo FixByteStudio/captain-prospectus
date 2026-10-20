@@ -449,6 +449,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
   summary: Changing a user's role agent→admin (`src/worker/routes/identity.ts:155`) leaves their prospects off every sync pull and their outbox behind a 403.
   evidence: Roster and /api/agent/* are agent-only since GH #590; the role toggle stays until the epic #579 story "roles are fixed at creation" removes it.
+  closed_by: GH #593 (`e8d51abfb6d3783c0e9b967e44c1e262032f61be`) — `userUpdateSchema` is `{ active }` only, so a role can no longer change after creation. Recorded by GH #595.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
   summary: `scripts/seed.mjs:17` and `/api/dev/seed` assign seeded prospects, visits and positions to DEV_USER_EMAIL, which defaults to the dev admin.
   evidence: An admin is no longer assignable (ADR-0037), so local seed data lands on a non-agent and shows as « sans agent actif ».

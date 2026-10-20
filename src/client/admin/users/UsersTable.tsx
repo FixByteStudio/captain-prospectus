@@ -35,7 +35,7 @@ export function UserCell({ user, self, muted }: { user: User; self: string; mute
       </p>
       <p className="text-muted-foreground text-meta truncate">
         {user.email}
-        {user.email === self ? ` · ${copy.agents.you}` : ""}
+        {user.email === self ? ` · ${copy.users.you}` : ""}
       </p>
     </div>
   );
@@ -55,12 +55,12 @@ export function UsersTable({
     <Table className="min-w-xl table-fixed">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className="pl-3.5">{copy.agents.columns.user}</TableHead>
-          <TableHead className="w-48">{copy.agents.columns.enrolment}</TableHead>
+          <TableHead className="pl-3.5">{copy.users.columns.user}</TableHead>
+          <TableHead className="w-48">{copy.users.columns.enrolment}</TableHead>
           {/* A deactivated row has no devices but a wider Réactiver: the two
               swap width so Inscription lines up with the active table above. */}
           <TableHead className={cn("text-right", deactivated ? "w-12" : "w-28")}>
-            {deactivated ? "" : copy.agents.columns.devices}
+            {deactivated ? "" : copy.users.columns.devices}
           </TableHead>
           <TableHead className={deactivated ? "w-32" : "w-16"} />
         </TableRow>
@@ -98,7 +98,7 @@ export function UsersTable({
                       size="sm"
                       onClick={() => actions.onReactivate(user)}
                     >
-                      {copy.agents.reactivate}
+                      {copy.users.reactivate}
                     </Button>
                   ) : (
                     <RowMenu
