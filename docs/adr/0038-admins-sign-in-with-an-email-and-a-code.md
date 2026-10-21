@@ -1,6 +1,6 @@
 # ADR-0038: Admins sign in with an email and a code
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 - Deciders: owner
 - Amends: [ADR-0029](0029-own-login-instead-of-cloudflare-access.md) (decisions 3, 5 and 7, and the
