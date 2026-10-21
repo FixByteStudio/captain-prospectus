@@ -1,7 +1,7 @@
 ---
 tracker_id: "579"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/579"
-tracker_status: backlog
+tracker_status: done
 type: epic
 title: "Admins leave the field side"
 parent: initiative-admin-field-separated
@@ -9,13 +9,14 @@ covers: [R2, R3, R4, R5, R6, R7, R8, R12]
 after: []
 assignee: ""
 risk: medium
+status: done
 ---
 
 # Admins leave the field side
 
 ## Description
 
-Today an admin can sync from the field (`/api/agent` checks only for an identity), read any prospect's visits (`agent.ts:342`), be assigned prospects (`admin.ts:163`: "an admin may well walk a round"), and falls back to the field side when offline (ADR-0019). The admin's position is never stored (`agent.ts:284`), so an admin's tournée never shows on the round view. The owner decided admins do no tournée: an admin who canvasses uses an agent account. Roles become fixed at creation, the Agents screen becomes Utilisateurs in two sections, and an offline admin sees a Hors ligne screen instead of the field side.
+Today an admin can sync from the field (`/api/agent` checks only for an identity), read any prospect's visits (`agent.ts:342`), be assigned prospects (`admin.ts:163`: "an admin may well walk a round"), and falls back to the field side when offline (ADR-0019). The admin's position is never stored (`agent.ts:284`), so an admin's tournée never shows on the round view. The owner decided admins do no tournée: an admin who canvasses uses an agent account. Roles become fixed at creation, the Agents screen becomes Utilisateurs in tabs, and an offline admin sees a Hors ligne screen instead of the field side.
 
 ## Outcome
 
@@ -29,7 +30,7 @@ An admin account only ever reaches the dashboard, and every visit, tournée and 
 - R5: the admin field side and every link to it are removed, server and client, with their tests and the done backlog 010's pinned behaviour.
 - R6: an offline admin sees « Vous êtes hors ligne », « Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez. » and one Réessayer button.
 - R7: roles are fixed at creation; the role toggle and the self-demotion jump go; the deactivation confirmation asks for a sync first.
-- R8: the Utilisateurs screen at `/admin/users` lists Administrateurs and Agents in two sections; Ajouter un utilisateur sets the role once.
+- R8: the Utilisateurs screen at `/admin/users` lists Agents and Administrateurs in two tabs; Ajouter un utilisateur sets the role once.
 - R12: an ADR amending ADR-0019 (offline admin) and ADR-0028 (admin syncing from the field) is accepted before the other stories are cut.
 
 ## Done when
@@ -37,7 +38,7 @@ An admin account only ever reaches the dashboard, and every visit, tournée and 
 1. An admin session gets 403 from `POST /api/agent/sync`, and assigning a prospect to an admin is refused on PATCH, bulk assign and import.
 2. A grep for `adminAccess`, `adminOnline` and `role !== "admin"` in `src/worker/routes/agent.ts` and `src/client` finds nothing, and each client PR quotes the precache total against its 1,000 KiB ceiling.
 3. An admin signed in on a phone opens `/admin` from `/login`, `/` and the installed PWA; offline, it shows the Hors ligne screen.
-4. The Utilisateurs screen shows two sections and no role toggle, matching the mockup the owner approved.
+4. The Utilisateurs screen shows Agents and Administrateurs in tabs and no role toggle, matching the mockups the owner approved (#607).
 5. The amending ADR is accepted, the epic is on production through CI, and `docs/design.md`, `docs/domains/identity-access.md`, `docs/domains/field-operations.md`, `docs/glossary.md` and `docs/api.md` match what shipped.
 
 ## Boundaries
@@ -66,3 +67,5 @@ The agent and assignment routes, the client's identity gate and field frame, the
 - Decision (2026-10-20): the release step of ADR-0037 (each admin who walked a round syncs from the field before the 403 ships) is story 2's hitl step, done before it merges.
 - Decision (2026-10-20): a closing refactor sweep (7) after every other story; no end-to-end suite, since the source has no test plan.
 - Decision (2026-10-20): R4's import part needs no work, since an import cannot set an assignee; story 2 covers PATCH and bulk assign.
+- Decision (2026-10-21): the Utilisateurs screen ships as tabs (#607), not two sections as story 6 first shipped it (#603); R8 and Done when #4 are amended to match. The ADR-0037 body keeps its original wording.
+- Closed (2026-10-21): closure check run against Done when 1–5 with code, docs and production through CI (Deploy run on 02871bc succeeded). `docs/domains/identity-access.md`'s permissions table still showed admins syncing and reading any visit history; fixed in the closing change.

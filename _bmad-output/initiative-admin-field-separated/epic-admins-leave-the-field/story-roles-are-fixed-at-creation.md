@@ -1,7 +1,7 @@
 ---
 tracker_id: "593"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/593"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "Roles are fixed at creation"

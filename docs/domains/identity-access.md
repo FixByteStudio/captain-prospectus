@@ -56,8 +56,8 @@ ended ([data-model](../data-model.md)).
 ## Permissions
 | Action | Agent | Admin |
 |---|---|---|
-| Sync own list, log visits, add field prospects | ✓ | ✓ |
-| Read visit history of a prospect | own assigned | all |
+| Sync own list, log visits, add field prospects ([ADR-0037](../adr/0037-admins-leave-the-field-side.md)) | ✓ | |
+| Read visit history of a prospect | own assigned | |
 | Import, edit, assign prospects | | ✓ |
 | Edit scripts | | ✓ |
 | Live visit feed | | ✓ |

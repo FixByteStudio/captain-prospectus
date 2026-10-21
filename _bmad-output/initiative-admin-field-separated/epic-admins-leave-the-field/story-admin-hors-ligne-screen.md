@@ -1,7 +1,7 @@
 ---
 tracker_id: "591"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/591"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "Admin Hors ligne screen"
