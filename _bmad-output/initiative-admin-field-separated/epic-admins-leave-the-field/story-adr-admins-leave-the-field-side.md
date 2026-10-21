@@ -1,7 +1,7 @@
 ---
 tracker_id: "582"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/582"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "ADR: admins leave the field side"

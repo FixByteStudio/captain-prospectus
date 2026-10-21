@@ -1,7 +1,7 @@
 ---
 tracker_id: "581"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/581"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "Rename every client route slug to English"

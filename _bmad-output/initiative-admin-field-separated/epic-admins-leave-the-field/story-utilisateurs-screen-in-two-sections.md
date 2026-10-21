@@ -1,7 +1,7 @@
 ---
 tracker_id: "594"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/594"
-tracker_status: backlog
+tracker_status: done
 id: 6
 type: story
 title: "Utilisateurs screen in two sections"

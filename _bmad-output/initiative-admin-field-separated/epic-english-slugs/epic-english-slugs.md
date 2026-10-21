@@ -1,7 +1,7 @@
 ---
 tracker_id: "578"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/578"
-tracker_status: backlog
+tracker_status: done
 type: epic
 title: "Every client URL slug is English"
 parent: initiative-admin-field-separated
@@ -9,6 +9,7 @@ covers: [R1]
 after: []
 assignee: ""
 risk: low
+status: done
 ---
 
 # Every client URL slug is English

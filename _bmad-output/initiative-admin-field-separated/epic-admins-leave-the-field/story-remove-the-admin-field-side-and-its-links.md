@@ -1,7 +1,7 @@
 ---
 tracker_id: "592"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/592"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Remove the admin field side and its links"
