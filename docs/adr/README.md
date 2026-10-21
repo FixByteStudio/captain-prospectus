@@ -43,6 +43,6 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0035](0035-serve-the-app-on-a-domain-we-already-own.md) | Serve the app on a domain we already own | accepted |
 | [0036](0036-a-swipe-freezes-each-agents-numbered-tournee.md) | A morning swipe freezes each agent's numbered tournée | accepted |
 | [0037](0037-admins-leave-the-field-side.md) | Admins leave the field side | accepted |
-| [0038](0038-admins-sign-in-with-an-email-and-a-code.md) | Admins sign in with an email and a code | proposed |
+| [0038](0038-admins-sign-in-with-an-email-and-a-code.md) | Admins sign in with an email and a code | accepted |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, open a PR.
