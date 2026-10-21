@@ -1,7 +1,8 @@
 ---
 tracker_id: "580"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/580"
-tracker_status: backlog
+tracker_status: in-progress
+status: in-progress
 type: epic
 title: "Admins sign in with an email and a code"
 parent: initiative-admin-field-separated
@@ -53,3 +54,8 @@ The login page, the auth routes, the codes and users tables, the Code généré 
 - Decision (2026-10-19): only the ADR story is planned now; the rest is cut once the ADR is accepted.
 - Decision (2026-10-19): the ADR story waits on 2.1 only because both take the next ADR number and edit docs/adr/README.md; the implementation stories pin the epic `after` when they are cut.
 - Waits on epic-admins-leave-the-field because: both edit the Utilisateurs screen's row menu.
+- Decision (2026-10-21): first story (tracer bullet) is 3.2, the role-checked login with the `admin` kind, through schema, Worker and login form. The chain is 3.2 → 3.3 → 3.4 with no parallel lane: 3.3 shares auth.ts, schemas.ts and auth.test.ts with 3.2, and its grep only passes after both.
+- Decision (2026-10-21): the CodeDialog line for admins rides with the passphrase removal in 3.3, not on its own: both edit the tabbed UsersScreen (#607) and design.md › Utilisateurs.
+- Decision (2026-10-21): between the merges of 3.2 and 3.3, Nouvelle phrase de passe still issues a passphrase no form accepts; accepted while the data stage is disposable and the owner is the only admin.
+- Decision (2026-10-21): no mockups. The admin form's Phrase de passe → Code and the CodeDialog line for admins are copy-only (owner); everything else is removal.
+- Decision (2026-10-21): a refactor sweep (3.4) closes the epic and confirms the Done when on production.

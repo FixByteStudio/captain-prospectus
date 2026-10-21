@@ -1,7 +1,7 @@
 ---
 tracker_id: "583"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/583"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "ADR: admins sign in with an email and a code"

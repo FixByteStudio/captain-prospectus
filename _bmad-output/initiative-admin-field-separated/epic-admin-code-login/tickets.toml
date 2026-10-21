@@ -12,3 +12,40 @@ after = ["2.1"]
 hitl = true
 risk = "low"
 unknown = "Whether a code typed on the admin form with OWNER_EMAIL is tried as break-glass first or as a code first when both could match."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Each sign-in form checks the role"
+description = "Replaces the `passphrase` login kind with `{ kind: \"admin\", email, code }` in schemas.ts and auth.ts, where the conditional UPDATE that spends a code accepts only an agent's code on the agent form and only the typed admin's code on the admin form (anything else the same 401, the code left unspent), break-glass tried first on the raw text; LoginScreen's admin form asks for Adresse e-mail and Code, with its copy in copy/field.ts, and api.md, identity-access.md, security.md and design.md › The login page follow."
+verify = "auth.test.ts shows an admin's email and code open an admin session on the admin kind while the same code on the code kind gets 401 and still works afterwards, an agent's code or another admin's email on the admin kind gets 401, and OWNER_EMAIL plus BREAK_GLASS still signs in; on `pnpm dev` an admin signs in with email and a fresh code and lands on /admin."
+covers = ["R9", "R10", "R11"]
+after = [1]
+hitl = false
+risk = "medium"
+unknown = "The exact French of the admin form's lede and refusal (adminLede, adminRefused) once it asks for a code; the builder asks the owner."
+references = ["docs/adr/0038-admins-sign-in-with-an-email-and-a-code.md, Decision 2 and 3", "src/worker/routes/auth.ts", "src/client/auth/LoginScreen.tsx"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Utilisateurs offers codes only"
+description = "Removes the passphrase everywhere it is left after 2 — POST /api/admin/me/passphrase, newPassphrase, passphraseResponseSchema, useGeneratePassphrase, PassphraseDialog, Nouvelle phrase de passe in RowMenu, UsersTable, UsersList and the tabbed UsersScreen, the clear-on-deactivate branch, the copy, and one migration dropping users.passphrase_hash — and adds to CodeDialog, on an admin's row only, a line telling them to sign in through Accès administrateur with their email, which needs the user's role in UsersScreen's issued state; data-model.md, design.md › Utilisateurs, deployment.md and security.md follow."
+verify = "`grep -ri passphrase src` finds nothing, drizzle/ has exactly one new migration and it drops passphrase_hash, and UsersScreen.test.tsx shows the Accès administrateur line in the code dialog from the Administrateurs tab and not from the Agents tab."
+covers = ["R9", "R11"]
+after = [2, "2.6"]
+hitl = false
+risk = "low"
+unknown = "Whether drizzle-kit emits a plain DROP COLUMN or rebuilds the users table; migration-guard reviews either."
+references = [".claude/skills/d1-migration/SKILL.md", "src/client/admin/users/UsersScreen.tsx", "src/client/admin/users/CodeDialog.tsx"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Refactor sweep"
+description = "Cleanup only across what 2 and 3 touched, scoped when pulled from their build records and the review findings they deferred, and confirms the epic's Done when: on production through CI, and the six docs it names match what shipped."
+verify = "Typecheck, tests and build pass, every deferred finding is fixed or has an issue, and the epic's four Done-when checks hold on production."
+covers = ["R9", "R10", "R11"]
+after = [2, 3]
+hitl = false
+risk = "low"
