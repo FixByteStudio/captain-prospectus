@@ -1,6 +1,6 @@
 # ADR-0033: Rollout rules wait until the data stage is protected
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 - Deciders: mohss, Claude
 - Amends: [ADR-0005](0005-d1-with-drizzle.md), [ADR-0007](0007-offline-first-insert-only-sync.md)
