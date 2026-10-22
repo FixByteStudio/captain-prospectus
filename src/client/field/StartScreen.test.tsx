@@ -225,7 +225,8 @@ describe("with a position", () => {
     await userEvent.keyboard("{Enter}");
 
     await waitFor(() => expect(syncNow).toHaveBeenCalled());
-    expect(screen.getByTestId("where").textContent).toBe("/round");
+    // `navigate` runs after `syncNow`, so the path can lag on a slow runner (GH #617).
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/round"));
 
     const tournees = await fieldDb.outboxTournees.toArray();
     expect(tournees).toHaveLength(1);
