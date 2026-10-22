@@ -24,9 +24,9 @@ dashboard rows) is the active **agents**, never an admin. `/api/agent/*` answers
 **A one-time code** enrols a device. An admin picks "Générer un code" on a user's row of the Agents
 page (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
 15 minutes and once ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
-deactivating the user cancels it too. On `/login`'s default form the agent types it as given; the
+deactivating the user cancels it too. On `/login`'s default form the agent types it as given (an admin's code is refused there); the
 server reads it case-insensitively, ignoring spaces and hyphens, with I/L read as 1 and O as 0
-(`src/shared/credential.ts`). The code opens a session with the user's own role. A wrong, expired,
+(`src/shared/credential.ts`). A code opens a session only on the form of its user's role, with that role's lifetime. A wrong, expired,
 used, superseded or deactivated-user code gets the same 401. Only the code's HMAC is stored and
 nothing logs it.
 
@@ -36,17 +36,16 @@ admin, or puts it back as one, and opens a session. Both are set by the owner or
 repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
 `POST /api/auth/logout` deletes the device's session.
 
-**An admin's passphrase** is the same admin form, for everyday sign-ins. An admin picks "Nouvelle
-phrase de passe" on their own row of the Utilisateurs page, and only there: after a confirmation, the
-server generates 20 Crockford base32 characters (100 bits), shows them once and stores only their
-HMAC ([api](../api.md#admin)). Nobody chooses a passphrase or sees another user's. Generating a new
-one replaces the old at once; sessions stay. The login tries break-glass first, then the user's
-passphrase, read like a code (case, spaces and hyphens ignored, I/L as 1, O as 0): it opens a
-30-day admin session for an active admin whose hash matches. Deactivating a user clears
-their passphrase. Every refusal — unknown email, no passphrase, deactivated, agent, wrong
-passphrase — gets the same 401 after the same work, and nothing logs a passphrase or its hash.
+**An admin's code** is the same admin form, for everyday sign-ins ([ADR-0038](../adr/0038-admins-sign-in-with-an-email-and-a-code.md)).
+An admin generates a code on their own row of the Utilisateurs page, or another admin does, and types
+it with their email under "Accès administrateur". Each form serves one role: the agent form accepts
+only an active agent's code, the admin form only an active admin's code whose user is the email typed.
+The role check sits in the statement that spends the code, so a code typed on the wrong form is
+refused and stays live for the right one. Every refusal (wrong form, wrong email, wrong, expired or
+used code) gets the same 401 and counts against the throttle. The login tries break-glass first, on
+the text as typed. « Nouvelle phrase de passe » still exists but no form takes it until #611 removes it.
 
-After 10 failed logins (codes and passphrases alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
+After 10 failed logins (every kind alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
 foreign gets 403, so no other site can act with a user's session ([api](../api.md)).
 

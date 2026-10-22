@@ -1496,7 +1496,7 @@ chunk, for a tab icon the `.ico` already serves.
 ## The login page
 
 `/login` is where everyone signs in: an agent with a one-time code, an admin
-with an email and a passphrase ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
+with an email and a one-time code, each form checking the role ([ADR-0038](adr/0038-admins-sign-in-with-an-email-and-a-code.md)).
 It serves both sides but ships in the field shell, since a phone with a
 revoked session must reach it offline-installed. So the field rules hold:
 its strings live in `copy/field`, its inputs and labels are native, its
@@ -1512,12 +1512,12 @@ the 1,000 KiB precache.
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 │           Connexion            │     │           Connexion            │
 │   Entrez le code que vous a    │     │   Connectez-vous avec votre    │
-│   donné un administrateur.     │     │   adresse e-mail et votre…     │
+│   donné un administrateur.     │     │   adresse e-mail et un code…   │
 │                                │     │                                │
 │ Code                           │     │ Adresse e-mail                 │
 │ [ K7QM 2XPA               ]    │     │ [ sam@example.com         ]    │
-│                                │     │ Phrase de passe                │
-│ [        Se connecter       ]  │     │ [ ••••••••••••••••••••••  ]    │
+│                                │     │ Code                           │
+│ [        Se connecter       ]  │     │ [ ••••••••                ]    │
 │                                │     │                                │
 │     Accès administrateur       │     │ [        Se connecter       ]  │
 └────────────────────────────────┘     │        Retour au code          │
@@ -1553,20 +1553,21 @@ the 1,000 KiB precache.
   the lock is per connection, and moves focus to the first field.
   It is screen state, not a URL.
 - **The admin form** has the lede "Connectez-vous avec votre adresse e-mail
-  et votre phrase de passe." and two fields: "Adresse e-mail" (`type="email"`,
-  `autocomplete="username"`) and "Phrase de passe" (`type="password"`,
-  `autocomplete="current-password"`), so a password manager offers to save
-  the generated passphrase and fills both next time. Break-glass is this
+  et un code généré par un administrateur." and two fields: "Adresse e-mail"
+  (`type="email"`, `autocomplete="username"`) and "Code" (`type="password"`,
+  `autocomplete="one-time-code"`): masked so break-glass never shows on
+  screen, and `one-time-code` asks password managers not to offer to save it. Break-glass is this
   same form; nothing on screen names it.
 - **Validation** is a shadcn `form` over react-hook-form like every other
   form (ADR-0018), with a `z.pick` of the login schema as resolver; it only
-  checks that a field is filled: "Saisissez votre code.", "Saisissez votre
-  adresse e-mail.", "Saisissez votre phrase de passe."
+  checks that a field is filled: "Saisissez votre code." under either Code
+  field, "Saisissez votre adresse e-mail."
 - **A refused sign-in** (401) shows a destructive `Alert` above the button
   and keeps what was typed. For a code: "Ce code ne fonctionne pas. Il a
   peut-être expiré ou déjà servi : demandez-en un nouveau." For the admin
-  form, one sentence whichever part was wrong: "Adresse e-mail ou phrase de
-  passe incorrecte." A request that never reached the server says
+  form, one sentence whichever part was wrong, the role included: "Adresse
+  e-mail ou code incorrect. Le code a peut-être expiré ou déjà servi :
+  demandez-en un nouveau." A request that never reached the server says
   "Connexion impossible. Vérifiez le réseau et réessayez."; any other
   failure (a 5xx) says "Connexion impossible pour le moment. Réessayez dans
   un instant.", and a 426 shows the usual update prompt instead ("Mettre à

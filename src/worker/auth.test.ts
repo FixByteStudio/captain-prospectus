@@ -8,9 +8,7 @@ import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
 import { testSession, testSessionCookie } from "../../test/session";
 import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import { DAY_MS, LOGIN_WINDOW_MS } from "../shared/constants";
-import { normaliseCredential } from "../shared/credential";
-import type { LoginCodeResponse, PassphraseResponse } from "../shared/schemas";
-import { beforeStatement } from "../../test/d1-hook";
+import type { LoginCodeResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 
 /**
@@ -59,7 +57,7 @@ function tokenFrom(response: Response): string {
 }
 
 async function signIn(): Promise<string> {
-  const response = await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS });
+  const response = await login({ kind: "admin", email: OWNER, code: BREAK_GLASS });
   expect(response.status).toBe(200);
   return tokenFrom(response);
 }
@@ -88,9 +86,9 @@ afterEach(() => {
 describe("POST /api/auth/login — break-glass", () => {
   it("opens an admin session for OWNER_EMAIL in any case, with the secret as typed", async () => {
     const response = await login({
-      kind: "passphrase",
+      kind: "admin",
       email: "  Owner@Example.COM ",
-      passphrase: BREAK_GLASS,
+      code: BREAK_GLASS,
     });
 
     expect(response.status).toBe(200);
@@ -128,16 +126,16 @@ describe("POST /api/auth/login — break-glass", () => {
 
   it("refuses a wrong email and a wrong secret with the same body, and opens nothing", async () => {
     const wrongEmail = await login({
-      kind: "passphrase",
+      kind: "admin",
       email: "someone@example.com",
-      passphrase: BREAK_GLASS,
+      code: BREAK_GLASS,
     });
-    const wrongSecret = await login({ kind: "passphrase", email: OWNER, passphrase: "nope" });
+    const wrongSecret = await login({ kind: "admin", email: OWNER, code: "nope" });
     // Same length as the real one, differing only in its last character.
     const nearMiss = await login({
-      kind: "passphrase",
+      kind: "admin",
       email: OWNER,
-      passphrase: `${BREAK_GLASS.slice(0, -1)}X`,
+      code: `${BREAK_GLASS.slice(0, -1)}X`,
     });
 
     expect(wrongEmail.status).toBe(401);
@@ -151,11 +149,11 @@ describe("POST /api/auth/login — break-glass", () => {
     expect(await db().select().from(users).where(eq(users.email, OWNER))).toHaveLength(0);
   });
 
-  it("does not trim the passphrase", async () => {
+  it("does not trim the code", async () => {
     const response = await login({
-      kind: "passphrase",
+      kind: "admin",
       email: OWNER,
-      passphrase: ` ${BREAK_GLASS}`,
+      code: ` ${BREAK_GLASS}`,
     });
     expect(response.status).toBe(401);
   });
@@ -163,10 +161,10 @@ describe("POST /api/auth/login — break-glass", () => {
   it.each([
     ["an unknown kind", { kind: "passkey" }],
     ["an empty code", { kind: "code", code: "" }],
-    ["a missing passphrase", { kind: "passphrase", email: OWNER }],
-    ["a missing email", { kind: "passphrase", passphrase: BREAK_GLASS }],
-    ["an empty passphrase", { kind: "passphrase", email: OWNER, passphrase: "" }],
-    ["no kind", { email: OWNER, passphrase: BREAK_GLASS }],
+    ["a missing code", { kind: "admin", email: OWNER }],
+    ["a missing email", { kind: "admin", code: BREAK_GLASS }],
+    ["an empty code", { kind: "admin", email: OWNER, code: "" }],
+    ["no kind", { email: OWNER, code: BREAK_GLASS }],
   ])("answers 400 to %s", async (_label, body) => {
     const response = await login(body);
     expect(response.status).toBe(400);
@@ -176,14 +174,14 @@ describe("POST /api/auth/login — break-glass", () => {
     const response = await call("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "kind=passphrase",
+      body: "kind=admin",
     });
     expect(response.status).toBe(400);
   });
 
   it("fails closed with 500 when AUTH_PEPPER is missing", async () => {
     env.AUTH_PEPPER = undefined;
-    const response = await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS });
+    const response = await login({ kind: "admin", email: OWNER, code: BREAK_GLASS });
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: "misconfigured" });
     expect(await db().select().from(sessions)).toHaveLength(0);
@@ -196,7 +194,7 @@ describe("POST /api/auth/login — break-glass", () => {
     ["BREAK_GLASS", ""],
   ] as const)("refuses with 401 when %s is %j", async (name, value) => {
     env[name] = value;
-    const response = await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS });
+    const response = await login({ kind: "admin", email: OWNER, code: BREAK_GLASS });
     expect(response.status).toBe(401);
     expect(await db().select().from(sessions)).toHaveLength(0);
   });
@@ -329,13 +327,13 @@ describe("log hygiene", () => {
     }
 
     const token = await signIn();
-    await login({ kind: "passphrase", email: OWNER, passphrase: "wrong" });
+    await login({ kind: "admin", email: OWNER, code: "wrong" });
     await login({ kind: "code", code: "x" });
     await me(cookie(token));
     await me(cookie("bogus"));
     await call("/api/auth/logout", { method: "POST", headers: cookie(token) });
     env.AUTH_PEPPER = undefined;
-    await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS });
+    await login({ kind: "admin", email: OWNER, code: BREAK_GLASS });
 
     const hash = await hmacHex(PEPPER, token);
     const logged = JSON.stringify(calls);
@@ -385,20 +383,6 @@ describe("POST /api/auth/login — code (GH #305)", () => {
     const { code } = await generate(TEST_AGENT);
     const lookalike = code.replace(/1/g, "l").replace(/0/g, "o");
     expect((await login({ kind: "code", code: lookalike })).status).toBe(200);
-  });
-
-  it("gives an admin's own code an admin session with the admin lifetime", async () => {
-    const { code } = await generate(TEST_ADMIN);
-    const response = await login({ kind: "code", code });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
-    expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
-    const [session] = await db()
-      .select()
-      .from(sessions)
-      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
-    expect(session?.userEmail).toBe(TEST_ADMIN);
-    expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
   });
 
   it("refuses a wrong code with 401 unauthorized and opens nothing", async () => {
@@ -485,170 +469,105 @@ describe("POST /api/auth/login — code (GH #305)", () => {
   });
 });
 
-describe("POST /api/auth/login — generated passphrase (GH #306)", () => {
-  /** Generates the signed-in admin's own passphrase the way the Utilisateurs page does. */
-  async function generatePassphrase(email = TEST_ADMIN): Promise<string> {
-    const response = await call("/api/admin/me/passphrase", {
+describe("POST /api/auth/login — each form checks the role (ADR-0038)", () => {
+  async function generate(email: string): Promise<string> {
+    const response = await call(`/api/admin/users/${encodeURIComponent(email)}/code`, {
       method: "POST",
-      headers: { Cookie: await testSessionCookie(email) },
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
     });
-    expect(response.status).toBe(200);
-    return ((await response.json()) as PassphraseResponse).passphrase;
+    expect(response.status).toBe(201);
+    return ((await response.json()) as LoginCodeResponse).code;
   }
 
-  /** "K7QM2XPA…" as an admin might type it: lowercase, hyphen-grouped, O for 0. */
-  const typed = (passphrase: string) =>
-    (passphrase.match(/.{4}/g) ?? []).join("-").toLowerCase().replace(/0/g, "o");
+  const unspent = async () => (await db().select().from(loginCodes))[0]?.usedAt === null;
 
-  it("opens a 30-day admin session from the passphrase typed loosely", async () => {
-    // Fixed, with both 0 and 1, so O-for-0 and I/L-for-1 are exercised on every run.
-    const passphrase = "K7QM2XPA9DWE10TN8B01";
-    await db()
-      .update(users)
-      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
-      .where(eq(users.email, TEST_ADMIN));
-
-    const response = await login({
-      kind: "passphrase",
-      email: ` ${TEST_ADMIN.toUpperCase()} `,
-      passphrase: "k7qm-2xpa-9dwe-iotn-8bol",
+  async function expectSameRefusal(response: Response) {
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: "unauthorized",
+      message: "This code does not work.",
     });
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+  }
 
+  it("opens a 30-day admin session for an admin's code with their email, typed loosely", async () => {
+    const code = await generate(TEST_ADMIN);
+    const loose = `${code.slice(0, 4).toLowerCase()} ${code.slice(4).toLowerCase()}`;
+    const response = await login({
+      kind: "admin",
+      email: ` ${TEST_ADMIN.toUpperCase()} `,
+      code: loose,
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
     expect(response.headers.get("Set-Cookie")).toContain(`Max-Age=${(30 * DAY_MS) / 1000}`);
-    const [session] = await db().select().from(sessions);
+    const [session] = await db()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, await hmacHex(PEPPER, tokenFrom(response))));
     expect(session?.userEmail).toBe(TEST_ADMIN);
     expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
-    expect((await me(cookie(tokenFrom(response)))).status).toBe(200);
+    expect(await unspent()).toBe(false);
   });
 
-  it("works with break-glass configured but missed, and without it", async () => {
-    const passphrase = await generatePassphrase();
-    const body = { kind: "passphrase", email: TEST_ADMIN, passphrase };
-    expect((await login(body)).status).toBe(200);
-    env.BREAK_GLASS = undefined;
-    env.OWNER_EMAIL = undefined;
-    expect((await login(body)).status).toBe(200);
+  it("refuses an admin's code on the agent form, unspent, and takes it on the admin form", async () => {
+    const code = await generate(TEST_ADMIN);
+    await expectSameRefusal(await login({ kind: "code", code }));
+    expect(await unspent()).toBe(true);
+    expect((await login({ kind: "admin", email: TEST_ADMIN, code })).status).toBe(200);
   });
 
-  it("lets the owner sign in with a generated passphrase as well as break-glass", async () => {
-    await signIn();
-    const passphrase = await generatePassphrase(OWNER);
-    expect((await login({ kind: "passphrase", email: OWNER, passphrase })).status).toBe(200);
-    expect(
-      (await login({ kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS })).status,
-    ).toBe(200);
+  it("refuses an agent's code on the admin form, unspent, and takes it on the agent form", async () => {
+    const code = await generate(TEST_AGENT);
+    await expectSameRefusal(await login({ kind: "admin", email: TEST_AGENT, code }));
+    expect(await unspent()).toBe(true);
+    expect((await login({ kind: "code", code })).status).toBe(200);
   });
 
-  it("refuses the old passphrase once a new one is generated", async () => {
-    const old = await generatePassphrase();
-    const fresh = await generatePassphrase();
-    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: old })).status).toBe(
-      401,
-    );
-    expect((await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: fresh })).status).toBe(
-      200,
-    );
+  it("refuses another admin's email, unspent", async () => {
+    const code = await generate(TEST_ADMIN);
+    await expectSameRefusal(await login({ kind: "admin", email: OWNER, code }));
+    expect(await unspent()).toBe(true);
+    expect((await login({ kind: "admin", email: TEST_ADMIN, code })).status).toBe(200);
   });
 
-  it("refuses every failure with the same body and opens no session", async () => {
-    const passphrase = await generatePassphrase();
-    const agentHash = await hmacHex(PEPPER, normaliseCredential(passphrase));
-    await db()
-      .insert(users)
-      .values([
-        {
-          email: "gone@x.be",
-          role: "admin",
-          active: false,
-          passphraseHash: agentHash,
-          createdAt: 1,
-        },
-        { email: "nohash@x.be", role: "admin", active: true, createdAt: 1 },
-      ]);
-    // An agent row holding a hash is not reachable through the routes, but must still be refused.
-    await db().update(users).set({ passphraseHash: agentHash }).where(eq(users.email, TEST_AGENT));
-    await db().delete(sessions);
-
-    // The generated passphrase can already end in "X"; always change the last character.
-    const wrongLast = passphrase.endsWith("A") ? "B" : "A";
-    const responses = await Promise.all([
-      login({ kind: "passphrase", email: "unknown@x.be", passphrase }),
-      login({ kind: "passphrase", email: "nohash@x.be", passphrase }),
-      login({ kind: "passphrase", email: "gone@x.be", passphrase }),
-      login({ kind: "passphrase", email: TEST_AGENT, passphrase }),
-      login({
-        kind: "passphrase",
-        email: TEST_ADMIN,
-        passphrase: `${passphrase.slice(0, -1)}${wrongLast}`,
-      }),
-      login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "0".repeat(64) }),
-    ]);
-    const bodies = await Promise.all(responses.map((r) => r.text()));
-    expect(responses.map((r) => r.status)).toEqual([401, 401, 401, 401, 401, 401]);
-    expect(new Set(bodies).size).toBe(1);
-    expect(responses.every((r) => r.headers.get("Set-Cookie") === null)).toBe(true);
-    expect(await db().select().from(sessions)).toEqual([]);
+  it("refuses the code of an admin deactivated since", async () => {
+    const code = await generate(TEST_ADMIN);
+    await db().update(users).set({ active: false }).where(eq(users.email, TEST_ADMIN));
+    await expectSameRefusal(await login({ kind: "admin", email: TEST_ADMIN, code }));
+    expect(await unspent()).toBe(true);
   });
 
-  it.each([
-    ["deactivated", { active: false }],
-    ["demoted", { role: "agent" as const }],
-    ["given a new passphrase", { passphraseHash: "f".repeat(64) }],
-  ])("opens no session for an admin %s after the read, before the insert", async (_, change) => {
-    const passphrase = await generatePassphrase();
-    await db().delete(sessions);
-    let changed = false;
-    const hooked = beforeStatement(env.DB, /^insert into "sessions"/i, async () => {
-      changed = true;
-      await db().update(users).set(change).where(eq(users.email, TEST_ADMIN));
-    });
-
-    const response = await workerFetch(
-      `${HOST}/api/auth/login`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "passphrase", email: TEST_ADMIN, passphrase }),
-      },
-      { DB: hooked },
-    );
-
-    expect(changed).toBe(true);
-    expect(response.status).toBe(401);
-    expect(response.headers.get("Set-Cookie")).toBeNull();
-    expect(await db().select().from(sessions)).toEqual([]);
+  it("lets the owner sign in with a code from their own row as well as break-glass", async () => {
+    await db().insert(users).values({ email: OWNER, role: "admin", active: true, createdAt: 1 });
+    const code = await generate(OWNER);
+    expect((await login({ kind: "admin", email: OWNER, code })).status).toBe(200);
+    expect((await login({ kind: "admin", email: OWNER, code: BREAK_GLASS })).status).toBe(200);
   });
 
-  it("stores only the HMAC of the passphrase and never logs it", async () => {
+  it("refuses break-glass on the agent form", async () => {
+    await expectSameRefusal(await login({ kind: "code", code: BREAK_GLASS }));
+  });
+
+  it("never logs the code", async () => {
     const calls: unknown[][] = [];
     for (const level of ["log", "info", "warn", "error", "debug"] as const) {
       vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
         calls.push(args);
       });
     }
-    const passphrase = await generatePassphrase();
-    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: typed(passphrase) });
-    await login({ kind: "passphrase", email: TEST_ADMIN, passphrase: "wrong" });
-
-    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
-    const hash = await hmacHex(PEPPER, passphrase);
-    expect(row?.passphraseHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(row?.passphraseHash).toBe(hash);
-    expect(JSON.stringify(row)).not.toContain(passphrase);
-    const logged = JSON.stringify(calls);
-    for (const secret of [passphrase, typed(passphrase), hash]) {
-      expect(logged).not.toContain(secret);
-    }
+    const code = await generate(TEST_ADMIN);
+    await login({ kind: "admin", email: TEST_ADMIN, code: "WRONG000" });
+    await login({ kind: "admin", email: TEST_ADMIN, code });
+    expect(JSON.stringify(calls)).not.toContain(code);
   });
 });
 
 describe("login throttle (CAP-7)", () => {
   const IP_A = "203.0.113.7";
   const IP_B = "198.51.100.23";
-  const VALID = { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS };
-  const WRONG = { kind: "passphrase", email: OWNER, passphrase: "wrong" };
+  const VALID = { kind: "admin", email: OWNER, code: BREAK_GLASS };
+  const WRONG = { kind: "admin", email: OWNER, code: "wrong" };
   // One minute into a window, so 14 minutes of it remain.
   const NOW = 1_000 * LOGIN_WINDOW_MS + 60_000;
 
@@ -714,15 +633,15 @@ describe("login throttle (CAP-7)", () => {
     expect((await loginFrom(IP_A, VALID)).status).toBe(429);
   });
 
-  it("counts a refused generated passphrase", async () => {
+  it("counts a refused admin code", async () => {
     for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
-      const body = { kind: "passphrase", email: TEST_ADMIN, passphrase: "ZZZZ-ZZZZ" };
+      const body = { kind: "admin", email: TEST_ADMIN, code: "ZZZZ-ZZZZ" };
       expect((await loginFrom(IP_A, body)).status).toBe(401);
     }
     expect((await loginFrom(IP_A, VALID)).status).toBe(429);
   });
 
-  it("counts a refused code like a refused passphrase", async () => {
+  it("counts a refused code like a refused admin code", async () => {
     for (let i = 0; i < LOGIN_MAX_FAILURES; i++) {
       expect((await loginFrom(IP_A, { kind: "code", code: "ZZZZZZZZ" })).status).toBe(401);
     }
@@ -911,7 +830,7 @@ describe("device sessions (GH #307)", () => {
 
   it("stores an id and the device label on a break-glass login", async () => {
     const response = await loginAs(
-      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
+      { kind: "admin", email: OWNER, code: BREAK_GLASS },
       IPHONE_SAFARI,
     );
     expect(response.status).toBe(200);
@@ -935,16 +854,13 @@ describe("device sessions (GH #307)", () => {
     expect(row && row.expiresAt - row.createdAt).toBe(90 * DAY_MS);
   });
 
-  it("stores an id and the device label on a generated-passphrase login", async () => {
-    const passphrase = "K7QM2XPA9DWE10TN8B01";
-    await db()
-      .update(users)
-      .set({ passphraseHash: await hmacHex(PEPPER, passphrase) })
-      .where(eq(users.email, TEST_ADMIN));
-    const response = await loginAs(
-      { kind: "passphrase", email: TEST_ADMIN, passphrase },
-      WINDOWS_EDGE,
-    );
+  it("stores an id and the device label on an admin-code login", async () => {
+    const generated = await call(`/api/admin/users/${encodeURIComponent(TEST_ADMIN)}/code`, {
+      method: "POST",
+      headers: { Cookie: await testSessionCookie(TEST_ADMIN) },
+    });
+    const { code } = (await generated.json()) as LoginCodeResponse;
+    const response = await loginAs({ kind: "admin", email: TEST_ADMIN, code }, WINDOWS_EDGE);
     expect(response.status).toBe(200);
     const row = await sessionOf(response);
     expect(row?.id).toMatch(/^[0-9a-f]{32}$/);
@@ -952,7 +868,7 @@ describe("device sessions (GH #307)", () => {
   });
 
   it("stores a null label for an empty or bot User-Agent, and distinct ids", async () => {
-    const body = { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS };
+    const body = { kind: "admin", email: OWNER, code: BREAK_GLASS };
     const bare = await sessionOf(await loginAs(body));
     const bot = await sessionOf(
       await loginAs(body, "Googlebot/2.1 (+http://www.google.com/bot.html)"),
@@ -1054,11 +970,8 @@ describe("device sessions (GH #307)", () => {
     }
     const ua = `${IPHONE_SAFARI} marker-7f3a`;
 
-    const response = await loginAs(
-      { kind: "passphrase", email: OWNER, passphrase: BREAK_GLASS },
-      ua,
-    );
-    await loginAs({ kind: "passphrase", email: OWNER, passphrase: "wrong" }, ua);
+    const response = await loginAs({ kind: "admin", email: OWNER, code: BREAK_GLASS }, ua);
+    await loginAs({ kind: "admin", email: OWNER, code: "wrong" }, ua);
     await call("/api/me", { headers: { ...cookie(tokenFrom(response)), "User-Agent": ua } });
 
     expect(JSON.stringify(calls)).not.toContain("marker-7f3a");

@@ -100,24 +100,17 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 /* ------------------------------------------------------------- /api/auth/login */
 
 /**
- * ADR-0029: one route, discriminated on the credential, never on the role.
- * `passphrase` (break-glass, or an admin's generated passphrase) and `code` (a
- * one-time code) exist; `passkey` is a later additive member.
+ * ADR-0038: one route, and a kind names the form, each serving one role: `code`
+ * is the agent form, `admin` the admin form. `passkey` is a later additive member.
  *
  * The email is trimmed and lowercased but not format-checked: it is only ever
  * compared with a stored address, and a refusal must read the same whichever
- * part was wrong. The passphrase is kept as typed — a trim here would change
- * what the exact break-glass comparison sees; the server normalises it only
- * for the generated-passphrase check (shared/credential.ts).
+ * part was wrong. The code is kept as typed — a trim here would change what the
+ * exact break-glass comparison sees; the server normalises it for the code
+ * check only (shared/credential.ts).
  */
 /** A typed credential's cap. Its own number, not `shortText`'s: a credential is never trimmed to fit. */
 const CREDENTIAL_MAX = 200;
-
-export const passphraseLoginSchema = z.object({
-  kind: z.literal("passphrase"),
-  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(EMAIL_MAX)),
-  passphrase: z.string().check(z.minLength(1), z.maxLength(CREDENTIAL_MAX)),
-});
 
 /**
  * A one-time code, sent as typed: the server normalises it (shared/credential.ts),
@@ -128,10 +121,14 @@ export const codeLoginSchema = z.object({
   code: z.string().check(z.minLength(1), z.maxLength(CREDENTIAL_MAX)),
 });
 
-export const loginRequestSchema = z.discriminatedUnion("kind", [
-  passphraseLoginSchema,
-  codeLoginSchema,
-]);
+/** The admin form: the email typed, and a code or the break-glass secret as typed. */
+export const adminLoginSchema = z.object({
+  kind: z.literal("admin"),
+  email: z.string().check(z.trim(), z.toLowerCase(), z.minLength(1), z.maxLength(EMAIL_MAX)),
+  code: codeLoginSchema.shape.code,
+});
+
+export const loginRequestSchema = z.discriminatedUnion("kind", [codeLoginSchema, adminLoginSchema]);
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 /* -------------------------------------------------------------------- scripts */
