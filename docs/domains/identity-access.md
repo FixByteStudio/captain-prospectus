@@ -21,8 +21,8 @@ Who may sign in, and as what, is managed by admins through `GET`/`POST /api/admi
 `PATCH /api/admin/users/:email` ([api](../api.md#admin)). The roster (assign menu, assignee check, rounds,
 dashboard rows) is the active **agents**, never an admin. `/api/agent/*` answers 403 to an admin (`requireAgent`, [ADR-0037](../adr/0037-admins-leave-the-field-side.md)).
 
-**A one-time code** enrols a device. An admin picks "Générer un code" on a user's row of the Agents
-page (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
+**A one-time code** enrols a device. An admin picks "Générer un code" on an active user's row of the
+Utilisateurs page, on either tab (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
 15 minutes and once ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
 deactivating the user cancels it too. On `/login`'s default form the agent types it as given (an admin's code is refused there); the
 server reads it case-insensitively, ignoring spaces and hyphens, with I/L read as 1 and O as 0

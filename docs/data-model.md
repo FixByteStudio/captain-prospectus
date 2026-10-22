@@ -180,7 +180,8 @@ deletes rows with `expires_at` in the past, however long since the session was l
 random bits); only the HMAC-SHA-256 under `AUTH_PEPPER` of its normalised form
 (`src/shared/credential.ts`) is stored, never the code. Generating deletes the user's unused codes in
 the same batch, so at most one works. A login spends a code with one conditional `UPDATE … SET
-used_at` (unused, unexpired, user active), so of two racing logins only one gets the row. Used and
+used_at` (unused, unexpired, user active, and the role and email the form asks for:
+[api](api.md#sign-in)), so of two racing logins only one gets the row. Used and
 expired rows go in the nightly sweep: it deletes every row past `expires_at`, and a used code expires
 15 minutes after it was made.
 
