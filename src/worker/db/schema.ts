@@ -341,8 +341,6 @@ export const users = sqliteTable("users", {
   name: text("name"),
   role: text("role", { enum: ROLES }).notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
-  /** HMAC-SHA-256 hex under AUTH_PEPPER; admins only. */
-  passphraseHash: text("passphrase_hash"),
   createdAt: integer("created_at").notNull(),
 });
 

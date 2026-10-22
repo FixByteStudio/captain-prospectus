@@ -101,11 +101,6 @@ export function newLoginCode(): string {
   return crockfordRandom(8);
 }
 
-/** An admin's passphrase (identity-access.md): 20 Crockford characters, 100 bits. */
-export function newPassphrase(): string {
-  return crockfordRandom(20);
-}
-
 /** One named cookie from a Cookie header, or null. */
 export function readCookie(header: string | null | undefined, name: string): string | null {
   if (!header) return null;

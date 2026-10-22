@@ -453,3 +453,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
   summary: `scripts/seed.mjs:17` and `/api/dev/seed` assign seeded prospects, visits and positions to DEV_USER_EMAIL, which defaults to the dev admin.
   evidence: An admin is no longer assignable (ADR-0037), so local seed data lands on a non-agent and shows as « sans agent actif ».
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-gh-611-utilisateurs-offers-codes-only.md`
+  summary: `.claude/agents/security-reviewer.md:14-15` still lists passphrases among stored secrets and log-hygiene items.
+  evidence: grep after #611 finds it there only (outside ADRs and drizzle history); agent-context file, so deferred to its own issue.

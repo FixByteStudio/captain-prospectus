@@ -610,12 +610,6 @@ export const loginCodeResponseSchema = z.object({
 });
 export type LoginCodeResponse = z.infer<typeof loginCodeResponseSchema>;
 
-/** POST /api/admin/me/passphrase: the only time the passphrase is ever shown. */
-export const passphraseResponseSchema = z.object({
-  passphrase: z.string(),
-});
-export type PassphraseResponse = z.infer<typeof passphraseResponseSchema>;
-
 /** A stop's number, fixed at the swipe: gaps stay gaps (ADR-0036). */
 const tourneeStopNumberSchema = z.int().check(z.positive(), z.lte(TOURNEE_STOP_NUMBER_MAX));
 

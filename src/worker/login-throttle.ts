@@ -1,5 +1,5 @@
 /**
- * CAP-7: guessing codes or passphrases is throttled per IP, in a D1 table
+ * CAP-7: guessing codes is throttled per IP, in a D1 table
  * rather than the rate-limiting binding (ADR-0029).
  *
  * Windows are fixed, not sliding: one row per IP per window, and "until the

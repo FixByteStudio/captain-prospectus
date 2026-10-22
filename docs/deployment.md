@@ -36,7 +36,7 @@ terminal, after `npx wrangler login`. An agent runs neither.
    reason, and because the owner's address does not belong in the repo. Set them after the first deploy,
    since a secret needs the Worker to exist:
    - `AUTH_PEPPER`: a long random value (`openssl rand -hex 32`) that keys every stored hash. Nobody needs
-     to read it. **Changing it signs everyone out and voids every code and passphrase**, so set it once.
+     to read it. **Changing it signs everyone out and voids every code**, so set it once.
    - `BREAK_GLASS`: another `openssl rand -hex 32`, copied into the owner's offline password store before
      it is pasted. This is the owner's way in when nothing else works, typed exactly as stored.
    - `OWNER_EMAIL`: the owner's email.
@@ -88,8 +88,8 @@ and after every [fresh redeploy](#fresh-redeploy), in order:
 
 1. Open `/login`, choose "Accès administrateur" and sign in with `OWNER_EMAIL` and `BREAK_GLASS`. That
    creates the owner as an admin.
-2. On the **Utilisateurs** page, pick "Nouvelle phrase de passe" on the owner's own row and keep what it shows:
-   it appears once. It is the everyday admin sign-in; `BREAK_GLASS` stays for emergencies.
+2. To enrol another device of the owner, pick "Générer un code" on the owner's own row of the **Utilisateurs**
+   page: the code appears once and works once. `BREAK_GLASS` stays for emergencies.
 3. Create every user on the Utilisateurs page, admins and agents, before anyone is assigned a prospect.
 4. Give each agent a code with "Générer un code" on their row. It works once, for 15 minutes.
 
@@ -165,7 +165,7 @@ loses less.
 4. `npx wrangler d1 execute captain-prospectus --remote --file=backup.sql`, into the empty database: the export carries
    the schema, so no migration runs first. Then `npx wrangler d1 migrations list captain-prospectus --remote` must show
    nothing left to apply, unless `main` has gained a migration since the export.
-5. Open the pull request for that branch; merging it deploys. Users, passphrases and sessions come back with the
+5. Open the pull request for that branch; merging it deploys. Users, codes and sessions come back with the
    data, since `AUTH_PEPPER` belongs to the Worker.
 
 ## Mobile install

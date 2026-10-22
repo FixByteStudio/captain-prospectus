@@ -15,18 +15,17 @@ risk: low
 
 ## Description
 
-Removes the passphrase everywhere it is left after 2 — POST /api/admin/me/passphrase, newPassphrase, passphraseResponseSchema, useGeneratePassphrase, PassphraseDialog, Nouvelle phrase de passe in RowMenu, UsersTable, UsersList and the tabbed UsersScreen, the clear-on-deactivate branch, the copy, and one migration dropping users.passphrase_hash — and adds to CodeDialog, on an admin's row only, a line telling them to sign in through Accès administrateur with their email, which needs the user's role in UsersScreen's issued state; data-model.md, design.md › Utilisateurs, deployment.md and security.md follow.
+Removes the passphrase everywhere it is left after 2 — POST /api/admin/me/passphrase, newPassphrase, passphraseResponseSchema, useGeneratePassphrase, PassphraseDialog, Nouvelle phrase de passe in RowMenu, UsersTable, UsersList and the tabbed UsersScreen, the clear-on-deactivate branch, the copy, and one migration dropping users.passphrase_hash; data-model.md, design.md › Utilisateurs, deployment.md and security.md follow.
 
 ## Acceptance Criteria
 
-Verify: `grep -ri passphrase src` finds nothing, drizzle/ has exactly one new migration and it drops passphrase_hash, and UsersScreen.test.tsx shows the Accès administrateur line in the code dialog from the Administrateurs tab and not from the Agents tab.
+Verify: `grep -ri passphrase src` finds nothing, drizzle/ has exactly one new migration and it drops passphrase_hash, and UsersScreen.test.tsx shows your own row's menu on the Administrateurs tab holding Générer un code and Désactiver only. No line is added to CodeDialog (owner, 2026-10-22).
 
 ## References
 
 - parent — _bmad-output/initiative-admin-field-separated/epic-admin-code-login/epic-admin-code-login.md
 - skill — .claude/skills/d1-migration/SKILL.md
 - code — src/client/admin/users/UsersScreen.tsx
-- code — src/client/admin/users/CodeDialog.tsx
 
 ## Notes
 

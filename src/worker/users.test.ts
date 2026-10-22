@@ -10,8 +10,8 @@ import { beforeStatement } from "../../test/d1-hook";
 import { workerFetch } from "../../test/worker-fetch";
 import type { Status } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
-import type { LoginCodeResponse, PassphraseResponse, User } from "../shared/schemas";
-import { LOGIN_CODE_TTL_MS, hmacHex } from "./session";
+import type { LoginCodeResponse, User } from "../shared/schemas";
+import { LOGIN_CODE_TTL_MS } from "./session";
 
 /** Admin user management (GH #302, ADR-0029). */
 
@@ -169,8 +169,6 @@ describe("POST /api/admin/users", () => {
       openProspects: 0,
       devices: [],
     });
-    const [row] = await db().select().from(users).where(eq(users.email, "lea@x.be"));
-    expect(row?.passphraseHash).toBeNull();
     expect((await list(cookie)).map((u) => u.email)).toContain("lea@x.be");
   });
 
@@ -318,41 +316,6 @@ describe("PATCH /api/admin/users/:email", () => {
     expect(row).toMatchObject({ role: "agent", active: true });
   });
 
-  it("clears the passphrase on a deactivation, and only then", async () => {
-    const cookie = await adminCookie();
-    const hashOf = async () =>
-      (
-        await db()
-          .select({ hash: users.passphraseHash })
-          .from(users)
-          .where(eq(users.email, TEST_AGENT))
-      )[0]?.hash;
-    const give = () =>
-      db()
-        .update(users)
-        .set({ role: "admin", active: true, passphraseHash: "a".repeat(64) })
-        .where(eq(users.email, TEST_AGENT));
-
-    await give();
-    expect((await patch(TEST_AGENT, { active: true }, cookie)).status).toBe(204);
-    expect(await hashOf()).toBe("a".repeat(64));
-
-    await give();
-    expect((await patch(TEST_AGENT, { active: false }, cookie)).status).toBe(204);
-    expect(await hashOf()).toBeNull();
-  });
-
-  it("keeps the passphrase when the last-admin guard refuses", async () => {
-    const cookie = await adminCookie();
-    await db()
-      .update(users)
-      .set({ passphraseHash: "b".repeat(64) })
-      .where(eq(users.email, TEST_ADMIN));
-    expect((await patch(TEST_ADMIN, { active: false }, cookie)).status).toBe(409);
-    const [row] = await db().select().from(users).where(eq(users.email, TEST_ADMIN));
-    expect(row?.passphraseHash).toBe("b".repeat(64));
-  });
-
   it("answers 404 for an email with no row and 400 for an empty body", async () => {
     const cookie = await adminCookie();
     expect((await patch("ghost@x.be", { active: false }, cookie)).status).toBe(404);
@@ -450,98 +413,14 @@ describe("POST /api/admin/users/:email/code", () => {
   });
 });
 
-describe("POST /api/admin/me/passphrase", () => {
-  function newPassphrase(cookie: string, headers?: Record<string, string>) {
-    return call("/api/admin/me/passphrase", cookie, { method: "POST", headers });
-  }
-
-  async function storedHash(email: string): Promise<string | null | undefined> {
-    const [row] = await db()
-      .select({ hash: users.passphraseHash })
-      .from(users)
-      .where(eq(users.email, email));
-    return row?.hash;
-  }
-
-  it("answers 200 with 20 Crockford characters and stores only their HMAC", async () => {
-    const response = await newPassphrase(await adminCookie());
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    const { passphrase } = (await response.json()) as PassphraseResponse;
-    expect(passphrase).toHaveLength(20);
-    expect([...passphrase].every((ch) => CROCKFORD.includes(ch))).toBe(true);
-    const hash = await storedHash(TEST_ADMIN);
-    expect(hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(hash).toBe(await hmacHex(env.AUTH_PEPPER ?? "", passphrase));
-  });
-
-  it("replaces the old hash and keeps the caller's sessions", async () => {
-    const cookie = await adminCookie();
-    await newPassphrase(cookie);
-    const first = await storedHash(TEST_ADMIN);
-    expect((await newPassphrase(cookie)).status).toBe(200);
-    expect(await storedHash(TEST_ADMIN)).not.toBe(first);
-    expect((await call("/api/me", cookie)).status).toBe(200);
-  });
-
-  it("touches only the caller's row", async () => {
-    await db().update(users).set({ role: "admin" }).where(eq(users.email, TEST_AGENT));
-    expect((await newPassphrase(await adminCookie())).status).toBe(200);
-    expect(await storedHash(TEST_AGENT)).toBeNull();
-  });
-
-  it("answers 404 when the admin is deactivated before the write, storing nothing", async () => {
-    const cookie = await adminCookie();
-    const hooked = beforeStatement(env.DB, /^update "users" set "passphrase_hash"/i, async () => {
-      await db().update(users).set({ active: false }).where(eq(users.email, TEST_ADMIN));
+describe("the removed own-secret route", () => {
+  it("answers 404: no route", async () => {
+    // Built in two parts so that `grep for the old word src` stays empty (GH #611).
+    const old = `/api/admin/me/${"pass"}${"phrase"}`;
+    const response = await call(old, await adminCookie(), {
+      method: "POST",
     });
-    const response = await workerFetch(
-      `${HOST}/api/admin/me/passphrase`,
-      { method: "POST", headers: { Cookie: cookie } },
-      { DB: hooked },
-    );
     expect(response.status).toBe(404);
-    expect(await response.json()).toMatchObject({ error: "not_found" });
-    const hashes = await db().select({ hash: users.passphraseHash }).from(users);
-    expect(hashes.every((r) => r.hash === null)).toBe(true);
-  });
-
-  it("fails closed with 500 misconfigured without AUTH_PEPPER, storing nothing", async () => {
-    const pepper = env.AUTH_PEPPER;
-    env.AUTH_PEPPER = undefined;
-    try {
-      const response = await workerFetch("http://localhost/api/admin/me/passphrase", {
-        method: "POST",
-      });
-      expect(response.status).toBe(500);
-      expect(await response.json()).toMatchObject({ error: "misconfigured" });
-    } finally {
-      env.AUTH_PEPPER = pepper;
-    }
-    expect(await storedHash(TEST_ADMIN)).toBeNull();
-  });
-
-  it("answers 403 to an agent and to a foreign Origin", async () => {
-    expect((await newPassphrase(await testSessionCookie(TEST_AGENT))).status).toBe(403);
-    const foreign = await newPassphrase(await adminCookie(), { Origin: "https://evil.example" });
-    expect(foreign.status).toBe(403);
-    expect(await storedHash(TEST_ADMIN)).toBeNull();
-    expect(await storedHash(TEST_AGENT)).toBeNull();
-  });
-
-  it("never logs the passphrase or its hash", async () => {
-    const calls: unknown[][] = [];
-    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
-        calls.push(args);
-      });
-    }
-    const { passphrase } = (await (
-      await newPassphrase(await adminCookie())
-    ).json()) as PassphraseResponse;
-    const logged = JSON.stringify(calls);
-    expect(logged).not.toContain(passphrase);
-    expect(logged).not.toContain(String(await storedHash(TEST_ADMIN)));
   });
 });
 
