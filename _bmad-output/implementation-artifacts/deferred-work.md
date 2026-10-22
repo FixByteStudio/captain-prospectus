@@ -333,6 +333,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-306-admin-passphrase.md`
   summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
   evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.
+  narrowed_by: GH #612 — the passphrase login is gone (#610, #611); only the code generate route's guarded insert is left to test.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
   summary: No test exercises a migration's backfill against rows that exist before it runs (e.g. 0012's `sessions.id` backfill).
   evidence: test/setup-worker.ts applies every migration once to an empty database, so a broken backfill UPDATE passes CI; checked by hand on a scratch SQLite file for #307.
@@ -457,3 +458,4 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-611-utilisateurs-offers-codes-only.md`
   summary: `.claude/agents/security-reviewer.md:14-15` still lists passphrases among stored secrets and log-hygiene items.
   evidence: grep after #611 finds it there only (outside ADRs and drizzle history); agent-context file, so deferred to its own issue.
+  closed_by: GH #612 — closes #615; the checklist names codes, session tokens and IPs only.
