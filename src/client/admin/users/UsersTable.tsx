@@ -14,8 +14,6 @@ export type UsersActions = {
   /** Set when exactly one active admin row is listed. */
   lastAdmin: string | null;
   onGenerateCode: (user: User) => void;
-  /** Only ever offered on the `self` row: a passphrase is shown to its owner alone. */
-  onNewPassphrase: () => void;
   onDeactivate: (user: User) => void;
   onReactivate: (user: User) => void;
   /** Emails whose device lines are open. */
@@ -105,9 +103,6 @@ export function UsersTable({
                       user={user}
                       isLastAdmin={user.email === actions.lastAdmin}
                       onGenerateCode={() => actions.onGenerateCode(user)}
-                      onNewPassphrase={
-                        user.email === actions.self ? actions.onNewPassphrase : undefined
-                      }
                       onDeactivate={() => actions.onDeactivate(user)}
                     />
                   )}

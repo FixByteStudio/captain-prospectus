@@ -74,9 +74,7 @@ describe("loginRequestSchema — admin", () => {
     expect(loginRequestSchema.safeParse({ kind: "admin", ...rest }).success).toBe(false);
   });
 
-  it("rejects the removed passphrase kind", () => {
-    expect(
-      loginRequestSchema.safeParse({ kind: "passphrase", email: "a@b.c", passphrase: "x" }).success,
-    ).toBe(false);
+  it("rejects an unknown kind", () => {
+    expect(loginRequestSchema.safeParse({ kind: "other", email: "a@b.c" }).success).toBe(false);
   });
 });

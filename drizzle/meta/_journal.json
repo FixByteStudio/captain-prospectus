@@ -141,6 +141,13 @@
       "when": 1792417512032,
       "tag": "0019_powerful_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1792666557620,
+      "tag": "0020_workable_human_fly",
+      "breakpoints": true
     }
   ]
 }

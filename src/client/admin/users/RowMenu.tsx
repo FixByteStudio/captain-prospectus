@@ -17,23 +17,19 @@ export function displayName(user: User): string {
 
 /**
  * One row's actions (docs/design.md › Utilisateurs). "Générer un code" comes first,
- * on every active row, the admin's own included; "Nouvelle phrase de passe"
- * follows only when `onNewPassphrase` is given, which the caller does for the
- * signed-in admin's own row alone. Roles are fixed at creation, so there is no
- * role item (ADR-0037). The last active admin cannot be deactivated, and says
- * why under the item.
+ * on every active row, the admin's own included. Roles are fixed at creation, so
+ * there is no role item (ADR-0037). The last active admin cannot be deactivated,
+ * and says why under the item.
  */
 export function RowMenu({
   user,
   isLastAdmin,
   onGenerateCode,
-  onNewPassphrase,
   onDeactivate,
 }: {
   user: User;
   isLastAdmin: boolean;
   onGenerateCode: () => void;
-  onNewPassphrase?: () => void;
   onDeactivate: () => void;
 }) {
   return (
@@ -45,9 +41,6 @@ export function RowMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={onGenerateCode}>{copy.users.generateCode}</DropdownMenuItem>
-        {onNewPassphrase && (
-          <DropdownMenuItem onSelect={onNewPassphrase}>{copy.users.newPassphrase}</DropdownMenuItem>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" disabled={isLastAdmin} onSelect={onDeactivate}>
           {copy.users.deactivate}

@@ -1354,14 +1354,13 @@ and there is no Rôle column. Mockups: forge
   out. With no session, the expanded row says "Aucun appareil inscrit." A
   session whose User-Agent gave no summary is labelled "Appareil inconnu".
 - **The row menu** (`DropdownMenu`, `MoreVertical`) holds, in order:
-  "Générer un code"; "Nouvelle phrase de passe", on the signed-in admin's own
-  row only; and, after a separator, "Désactiver" in
+  "Générer un code" and, after a separator, "Désactiver" in
   `destructive`. There is no role item: a role is fixed at creation
   ([ADR-0037](adr/0037-admins-leave-the-field-side.md)). On the last active
   admin's row, "Désactiver" is disabled with "Il faut au moins un
   administrateur actif." in meta under it; should the server still refuse
   (another admin acted first), that sentence is the error toast. Any other
-  failed action on this page — add, revoke, code, passphrase, deactivate,
+  failed action on this page — add, revoke, code, deactivate,
   reactivate — keeps the screen as it was and toasts "L'action n'a pas abouti. Réessayez."
 - **The code `Dialog`.** Titled "Code pour {nom}". The eight characters in
   `text-display`, tabular, split 4 + 4 by a space ("K7QM 2XPA" — the
@@ -1374,16 +1373,6 @@ and there is no Rôle column. Mockups: forge
   a `default` "Terminé". Closing it any way
   is fine: the code still works until it expires or is used. An admin enrols
   another of their own devices with the same item on their own row.
-- **The passphrase `Dialog`.** Only ever for the signed-in admin's own
-  passphrase, so the secret is shown to its owner alone; another admin first
-  enrols with a code, then makes their own. Since the old passphrase stops
-  working at once, the item asks first in an `AlertDialog`: "Remplacer votre
-  phrase de passe ?", "L'ancienne cessera de fonctionner dès que la nouvelle
-  s'affiche.", "Annuler" and "Remplacer". Then a `Dialog` titled "Votre phrase de passe",
-  the twenty characters in five groups of four ("K7QM 2XPA 9DWE R4TN 8BCH") in
-  `text-display`, tabular. Under it: "Enregistrez-la dans votre gestionnaire
-  de mots de passe : elle ne sera plus affichée. L'ancienne ne fonctionne
-  plus." Then "Copier" (toast "Phrase de passe copiée.") and "Terminé".
 - **Deactivating asks first**, in an `AlertDialog`: "Désactiver {nom} ?",
   then one of "{n} prospects restent assignés à {nom}. Réassignez-les depuis
   « Prospects sans agent actif » au Tableau de bord.", "1 prospect reste

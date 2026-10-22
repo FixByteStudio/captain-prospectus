@@ -59,3 +59,4 @@ The login page, the auth routes, the codes and users tables, the Code généré 
 - Decision (2026-10-21): between the merges of 3.2 and 3.3, Nouvelle phrase de passe still issues a passphrase no form accepts; accepted while the data stage is disposable and the owner is the only admin.
 - Decision (2026-10-21): no mockups. The admin form's Phrase de passe → Code and the CodeDialog line for admins are copy-only (owner); everything else is removal.
 - Decision (2026-10-21): a refactor sweep (3.4) closes the epic and confirms the Done when on production.
+- Decision (2026-10-22): R11's code-dialog line is dropped (owner). An admin who types their code on the agent form gets the same refusal as an agent with a wrong code, and the code stays unspent; `CodeDialog` is unchanged.

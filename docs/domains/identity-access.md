@@ -43,7 +43,7 @@ only an active agent's code, the admin form only an active admin's code whose us
 The role check sits in the statement that spends the code, so a code typed on the wrong form is
 refused and stays live for the right one. Every refusal (wrong form, wrong email, wrong, expired or
 used code) gets the same 401 and counts against the throttle. The login tries break-glass first, on
-the text as typed. « Nouvelle phrase de passe » still exists but no form takes it until #611 removes it.
+the text as typed.
 
 After 10 failed logins (every kind alike) from one IP in a 15-minute window, that IP's logins get 429 until the window
 ends, even a valid one. Any `/api` request other than `GET` or `HEAD` whose `Origin` is missing or
@@ -64,7 +64,6 @@ ended ([data-model](../data-model.md)).
 | Manage users: add one, with a role fixed at creation ([ADR-0037](../adr/0037-admins-leave-the-field-side.md)); deactivate or reactivate | | ✓ |
 | Generate a one-time code for any user, their own row included | | ✓ |
 | Revoke one device's session | | ✓ |
-| Regenerate one's own passphrase | | ✓ |
 
 ## Local development
 `DEV_USER_EMAIL` in `.dev.vars` impersonates a user. It is honoured **only** when the request host is `localhost`, `127.0.0.1` or `[::1]`, and only after a session cookie, which wins. So on localhost with it set, « Se déconnecter » ends the session and `/login` signs you straight back in as that user; unset it to try the login. The role comes from that email's `users` row; no row, or an inactive one, is a 401. `pnpm db:seed:local` inserts `admin@example.com` (admin) and `agent@example.com` (agent), and never changes a row that already exists.

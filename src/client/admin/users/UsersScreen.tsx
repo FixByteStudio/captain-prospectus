@@ -16,7 +16,6 @@ import { useGenerateCode, useRevokeSession, useUpdateUser, useUsers } from "../q
 import { AddUserDialog } from "./AddUserDialog";
 import { CodeDialog } from "./CodeDialog";
 import { DeactivateDialog } from "./DeactivateDialog";
-import { PassphraseDialog } from "./PassphraseDialog";
 import { failureToast } from "./failure-toast";
 import { displayName } from "./RowMenu";
 import { UsersList } from "./UsersList";
@@ -88,7 +87,6 @@ export function UsersScreen({ email }: { email: string }) {
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const generate = useGenerateCode();
   const [issued, setIssued] = useState<{ name: string; code: LoginCodeResponse } | null>(null);
-  const [replacingPassphrase, setReplacingPassphrase] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const revokeSession = useRevokeSession();
   const [revoking, setRevoking] = useState<Set<string>>(() => new Set());
@@ -176,7 +174,6 @@ export function UsersScreen({ email }: { email: string }) {
             self: email,
             lastAdmin: activeAdmins.length === 1 ? (activeAdmins[0]?.email ?? null) : null,
             onGenerateCode: (user) => void generateCode(user),
-            onNewPassphrase: () => setReplacingPassphrase(true),
             onDeactivate: (user) => setDeactivating(user.email),
             onReactivate: (user) => void reactivate(user),
             expanded,
@@ -222,7 +219,6 @@ export function UsersScreen({ email }: { email: string }) {
       {issued && (
         <CodeDialog name={issued.name} issued={issued.code} onClose={() => setIssued(null)} />
       )}
-      {replacingPassphrase && <PassphraseDialog onClose={() => setReplacingPassphrase(false)} />}
       {deactivating && (
         <DeactivateDialog email={deactivating} self={email} onClose={() => setDeactivating(null)} />
       )}
