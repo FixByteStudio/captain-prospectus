@@ -1,6 +1,6 @@
 # ADR-0031: The precache ceiling counts every precached entry
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Deciders: owner
 - Amends: [ADR-0026](0026-budget-the-field-precache-not-the-entry-chunk.md), the basis of its 1,000 KiB ceiling
