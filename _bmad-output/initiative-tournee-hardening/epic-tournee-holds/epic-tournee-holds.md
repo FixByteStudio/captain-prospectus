@@ -1,7 +1,8 @@
 ---
 tracker_id: "538"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/538"
-tracker_status: backlog
+tracker_status: done
+status: done
 type: epic
 title: "The numbered tournée holds under failed, late and racing syncs"
 parent: initiative-tournee-hardening
@@ -87,3 +88,4 @@ The sync route and contract, `writeTournees` and the tournée tables, the Visite
 - Assumption: R2 rewords `docs/security.md` line 43 beside ADR-0028. The previous retro's item 7 named `field-operations.md`, which carries no such promise; `security.md` does.
 - Unknown: whether R11 needs a new field in the sync response. Entry 4's builder settles it while planning.
 - Parked: F17 (the admin round re-derives `left`) and the retro's unverified findings. The retro deferred them, and they are not in actions 2, 3, 4, 6 or 8.
+- Closed (2026-10-22): closure check passed on R1–R16 and every Done when; stories #539–#543 merged as #545–#549 and reached production through the Deploy runs of 2026-10-17. No work dropped.

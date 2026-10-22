@@ -1,7 +1,8 @@
 ---
 tracker_id: "5"
 remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/5"
-tracker_status: backlog
+tracker_status: done
+status: done
 type: initiative
 title: "The numbered tournée holds under failed, late and racing syncs"
 parent: none
@@ -48,3 +49,4 @@ The sync route and contract, the tournée tables, the Visites feed, the duplicat
 - Decision (2026-10-17): a new initiative with one epic. The owner chose not to reopen `initiative-daily-tournee`, which was archived as closed on 2026-10-16 (milestone #4 is still open on GitHub).
 - Decision (2026-10-17): no platform-baseline epic. The platform is in production; this initiative fixes a shipped feature.
 - Parked: retro actions 1 (the owner's pavement test), 5 (done by #536), 7 (done by the owner's decision), 9 (tracker hygiene) and 10 (process). The owner did not select them for this initiative.
+- Closed (2026-10-22): closure check passed on every Done when; the suite passes on main (3,066 tests). Done when 4 holds except for #545, which merged while CodeRabbit was still processing; #545 is the change that added the wait-for-the-bot line, so the rule postdates it.

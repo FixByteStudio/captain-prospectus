@@ -1,7 +1,7 @@
 ---
 tracker_id: "543"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/543"
-tracker_status: backlog
+tracker_status: done
 id: 5
 type: story
 title: "The tests pin the door-day readers, the wire schemas and the outbox drain"
