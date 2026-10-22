@@ -1,7 +1,8 @@
 ---
 tracker_id: "572"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/572"
-tracker_status: backlog
+tracker_status: dropped
+status: dropped
 id: 1   # tracker_id and remote are written at publish on a tracker
 type: story
 title: "Wording for an /admin route when /api/me fails while the browser is online"
@@ -70,6 +71,7 @@ An agent or admin who opens an `/admin/*` route on a cached identity while the b
 - Decision (2026-10-18): EXPERIENCE.md § State Patterns gets one row for the new state, beside the offline one, in addition to the identity-access.md line.
 - Captive portal, checked 2026-10-18: a portal's redirect fails as an opaque redirect (status 0) and a portal's 200 HTML page fails JSON parsing. Both are non-401 failures, so both reach the same cache-sourced page as a Worker 5xx. One sentence covers all three. It must not name the server as the cause, because with a portal the server was never reached.
 - Risk low: a copy change that shows at once on the page, and a revert is clean.
+- Dropped: obsolete after ADR-0037 (triage 2026-10-22). A cache-sourced admin on `/admin/*` always gets the Hors ligne screen, with no field band; only an agent typing an `/admin/*` URL while `/api/me` fails online still reads the offline sentence (`src/client/App.tsx:553-561`), and the owner accepts that wording. Closed as not planned on GitHub.
 
 ## Plan
 
