@@ -1,7 +1,8 @@
 ---
 tracker_id: "6"
 remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/6"
-tracker_status: backlog
+tracker_status: done
+status: done
 type: initiative
 title: "Admin and field, separated"
 parent: none
@@ -68,3 +69,4 @@ Client routing, the admin Utilisateurs screen, the login page, the auth and agen
 - Decision (2026-10-19): strict English slugs, `/round` included, though the glossary's English word is Tournée. The code keeps `tournee`.
 - Decision (2026-10-19): roles fixed at creation (Winston's proposal) replaces refusing a promotion while work is assigned.
 - Decision (2026-10-19): the code-generated dialog, the admin login form and the deactivation confirmation already exist; they change copy only, with no mockup. Two mockups are needed: Utilisateurs and the admin Hors ligne screen, one at a time, before their stories are built.
+- Closed (2026-10-22): closure check passed on R1–R12 and every Done when; epics #578, #579 and #580 are done and on production through CI. R11 ships without the code-dialog line the owner dropped in epic #580. Deferred as separate issues: #597, #605, #617, #619.

@@ -1,7 +1,7 @@
 ---
 tracker_id: "541"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/541"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "The earliest swipe wins, whichever phone syncs first"

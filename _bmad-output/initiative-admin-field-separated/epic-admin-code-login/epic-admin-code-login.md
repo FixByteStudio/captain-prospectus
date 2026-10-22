@@ -1,8 +1,8 @@
 ---
 tracker_id: "580"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/580"
-tracker_status: in-progress
-status: in-progress
+tracker_status: done
+status: done
 type: epic
 title: "Admins sign in with an email and a code"
 parent: initiative-admin-field-separated
@@ -26,7 +26,7 @@ Every sign-in uses a one-time code, and break-glass is the only other way in, us
 
 - R9: the admin form takes Adresse e-mail and Code; the passphrase is removed (the `passphrase_hash` column, `PassphraseDialog`, Nouvelle phrase de passe, the passphrase check and schema, their throttle and session branches, and copy). The admin route stays: it takes email + code, or break-glass.
 - R10: the agent form accepts only an agent's code; the admin form only an admin's code for the email typed; anything else gets the same 401 as a wrong code.
-- R11: an admin generates a code for themselves or another admin from Utilisateurs; the code dialog (`CodeDialog.tsx`, « Code pour {name} ») tells an admin to use Accès administrateur with their email. Break-glass is unchanged: `OWNER_EMAIL` plus the raw `BREAK_GLASS`, tested before the code is normalised.
+- R11: an admin generates a code for themselves or another admin from Utilisateurs; `CodeDialog.tsx` is unchanged (its admin line was dropped, Decision 2026-10-22). Break-glass is unchanged: `OWNER_EMAIL` plus the raw `BREAK_GLASS`, tested before the code is normalised.
 - R12: an ADR amending ADR-0029 (decisions 3 and 7, and an alternatives row for codes only) is accepted before the other stories are cut.
 
 ## Done when
@@ -60,3 +60,4 @@ The login page, the auth routes, the codes and users tables, the Code généré 
 - Decision (2026-10-21): no mockups. The admin form's Phrase de passe → Code and the CodeDialog line for admins are copy-only (owner); everything else is removal.
 - Decision (2026-10-21): a refactor sweep (3.4) closes the epic and confirms the Done when on production.
 - Decision (2026-10-22): R11's code-dialog line is dropped (owner). An admin who types their code on the agent form gets the same refusal as an agent with a wrong code, and the code stays unspent; `CodeDialog` is unchanged.
+- Closed (2026-10-22): closure check passed on R9–R12 and every Done when; stories #583, #610, #611 and #612 are done and on production through the Deploy run on c187e9b. The dropped code-dialog line is the only scope change; ADR-0038's follow-up list still names it (#619).

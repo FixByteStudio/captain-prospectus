@@ -1,7 +1,7 @@
 ---
 tracker_id: "610"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/610"
-tracker_status: backlog
+tracker_status: done
 id: 2
 type: story
 title: "Each sign-in form checks the role"

@@ -1,7 +1,7 @@
 ---
 tracker_id: "540"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/540"
-tracker_status: backlog
+tracker_status: done
 id: 2
 type: story
 title: "A failed tournée write no longer fails the sync, and the ledger counts stay whole"

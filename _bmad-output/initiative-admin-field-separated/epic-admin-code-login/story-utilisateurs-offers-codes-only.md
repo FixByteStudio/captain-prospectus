@@ -1,7 +1,7 @@
 ---
 tracker_id: "611"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/611"
-tracker_status: backlog
+tracker_status: done
 id: 3
 type: story
 title: "Utilisateurs offers codes only"

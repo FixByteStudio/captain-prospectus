@@ -1,7 +1,7 @@
 ---
 tracker_id: "542"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/542"
-tracker_status: backlog
+tracker_status: done
 id: 4
 type: story
 title: "Stop numbers are unique in the database and joiners show « Nouveau » on any clock"

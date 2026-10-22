@@ -1,7 +1,7 @@
 ---
 tracker_id: "539"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/539"
-tracker_status: backlog
+tracker_status: done
 id: 1
 type: story
 title: "The release checklist waits for the review bot"
