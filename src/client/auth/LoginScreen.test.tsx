@@ -73,11 +73,11 @@ async function toAdmin(user = userEvent.setup()) {
   await user.click(screen.getByRole("button", { name: copy.login.toAdmin }));
 }
 
-async function fillAndSubmit(email = OWNER, passphrase = "secret phrase") {
+async function fillAndSubmit(email = OWNER, code = "secret phrase") {
   const user = userEvent.setup();
   await toAdmin(user);
   await user.type(screen.getByLabelText(copy.login.email), email);
-  await user.type(screen.getByLabelText(copy.login.passphrase), passphrase);
+  await user.type(screen.getByLabelText(copy.login.code), code);
   await user.click(screen.getByRole("button", { name: copy.login.submit }));
 }
 
@@ -92,7 +92,7 @@ afterEach(async () => {
 });
 
 describe("LoginScreen — admin form", () => {
-  it("sends the passphrase kind and lands an admin on /admin", async () => {
+  it("sends the admin kind and lands an admin on /admin", async () => {
     const calls = stubFetch(json(200, { email: OWNER, role: "admin" }));
     renderLogin();
 
@@ -103,10 +103,10 @@ describe("LoginScreen — admin form", () => {
     expect(calls[0]?.url).toBe("/api/auth/login");
     expect(calls[0]?.init?.method).toBe("POST");
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
-      kind: "passphrase",
+      kind: "admin",
       email: OWNER,
       // Kept as typed: the server compares it exactly.
-      passphrase: " as typed ",
+      code: " as typed ",
     });
   });
 
@@ -125,7 +125,7 @@ describe("LoginScreen — admin form", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe(copy.login.adminRefused);
     expect((screen.getByLabelText(copy.login.email) as HTMLInputElement).value).toBe(OWNER);
-    expect((screen.getByLabelText(copy.login.passphrase) as HTMLInputElement).value).toBe("wrong");
+    expect((screen.getByLabelText(copy.login.code) as HTMLInputElement).value).toBe("wrong");
   });
 
   it("says the network failed when the request never reached the server", async () => {
@@ -142,6 +142,14 @@ describe("LoginScreen — admin form", () => {
     expect((await screen.findByRole("alert")).textContent).toBe(copy.login.failed);
   });
 
+  it("masks the Code field and asks password managers not to save it", async () => {
+    renderLogin();
+    await toAdmin();
+    const input = screen.getByLabelText(copy.login.code);
+    expect(input.getAttribute("type")).toBe("password");
+    expect(input.getAttribute("autocomplete")).toBe("one-time-code");
+  });
+
   it("asks for each empty field and sends nothing", async () => {
     const calls = stubFetch(json(200, { email: OWNER, role: "admin" }));
     renderLogin();
@@ -151,7 +159,7 @@ describe("LoginScreen — admin form", () => {
     await user.click(screen.getByRole("button", { name: copy.login.submit }));
 
     expect(await screen.findByText(copy.login.emailRequired)).toBeTruthy();
-    expect(screen.getByText(copy.login.passphraseRequired)).toBeTruthy();
+    expect(screen.getByText(copy.login.codeRequired)).toBeTruthy();
     expect(calls).toHaveLength(0);
   });
 

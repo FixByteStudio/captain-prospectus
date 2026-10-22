@@ -70,7 +70,7 @@ describe("requireSameOrigin", () => {
     const login = await rawFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "passphrase", email: "a@b.c", passphrase: "x" }),
+      body: JSON.stringify({ kind: "admin", email: "a@b.c", code: "x" }),
     });
     expect(login.status).toBe(403);
     const logout = await rawFetch("/api/auth/logout", { method: "POST" });

@@ -57,3 +57,26 @@ describe("loginRequestSchema — code", () => {
     expect(loginRequestSchema.safeParse({ kind: "code", code }).success).toBe(false);
   });
 });
+
+describe("loginRequestSchema — admin", () => {
+  it("lowercases and trims the email but keeps the code as typed", () => {
+    expect(loginRequestSchema.parse({ kind: "admin", email: " A@B.C ", code: " x " })).toEqual({
+      kind: "admin",
+      email: "a@b.c",
+      code: " x ",
+    });
+  });
+
+  it.each([
+    ["an email over the cap", { email: `${"a".repeat(320)}@b.c`, code: "x" }],
+    ["a code over 200 characters", { email: "a@b.c", code: "A".repeat(201) }],
+  ])("rejects %s", (_name, rest) => {
+    expect(loginRequestSchema.safeParse({ kind: "admin", ...rest }).success).toBe(false);
+  });
+
+  it("rejects the removed passphrase kind", () => {
+    expect(
+      loginRequestSchema.safeParse({ kind: "passphrase", email: "a@b.c", passphrase: "x" }).success,
+    ).toBe(false);
+  });
+});

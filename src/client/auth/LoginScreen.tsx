@@ -3,7 +3,7 @@
  *
  * The code form is the default: an agent types the one-time code an admin
  * generated, as typed — the server normalises it. "Accès administrateur" swaps
- * in the admin form, which is also break-glass (`OWNER_EMAIL` plus
+ * in the admin form, which also takes break-glass (`OWNER_EMAIL` plus
  * `BREAK_GLASS`), and nothing on screen names it. The swap is screen state,
  * not a URL. A meta line under the lede counts the visits still in the outbox
  * (read once, never written: INVARIANT 5), and a 426 raises the usual update
@@ -36,15 +36,15 @@ import { useOnline } from "../hooks/use-online";
 import type { PwaState } from "../pwa";
 import { LOGIN_WINDOW_MS } from "../../shared/constants";
 import {
+  adminLoginSchema,
   codeLoginSchema,
   meResponseSchema,
-  passphraseLoginSchema,
   type LoginRequest,
 } from "../../shared/schemas";
 
 /** Only "is it filled" is the client's to judge; the server judges the rest. */
 const codeFormSchema = z.pick(codeLoginSchema, { code: true });
-const adminFormSchema = z.pick(passphraseLoginSchema, { email: true, passphrase: true });
+const adminFormSchema = z.pick(adminLoginSchema, { email: true, code: true });
 type CodeForm = z.infer<typeof codeFormSchema>;
 type AdminForm = z.infer<typeof adminFormSchema>;
 
@@ -89,7 +89,7 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
   });
   const adminForm = useForm({
     resolver: standardSchemaResolver(adminFormSchema),
-    defaultValues: { email: "", passphrase: "" },
+    defaultValues: { email: "", code: "" },
   });
   // Either form: a swap mid-request must not free the other's button or word
   // the answer in the wrong form's terms, so the swap waits too.
@@ -181,7 +181,7 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
   };
 
   const signInWithCode = (values: CodeForm) => signIn({ kind: "code", ...values });
-  const signInAsAdmin = (values: AdminForm) => signIn({ kind: "passphrase", ...values });
+  const signInAsAdmin = (values: AdminForm) => signIn({ kind: "admin", ...values });
 
   // One Alert slot: offline, then the lockout, then a refusal (design.md).
   const alert = !online
@@ -331,22 +331,20 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
                   />
                   <FormField
                     control={adminForm.control}
-                    name="passphrase"
+                    name="code"
                     render={({ field }) => (
                       <FormItem className="gap-0">
-                        <FormLabel className={labelClass}>{copy.login.passphrase}</FormLabel>
+                        <FormLabel className={labelClass}>{copy.login.code}</FormLabel>
                         <FormControl>
                           <Input
                             touch
                             className="mt-1.5"
                             type="password"
-                            autoComplete="current-password"
+                            autoComplete="one-time-code"
                             {...field}
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5">
-                          {copy.login.passphraseRequired}
-                        </FormMessage>
+                        <FormMessage className="mt-1.5">{copy.login.codeRequired}</FormMessage>
                       </FormItem>
                     )}
                   />

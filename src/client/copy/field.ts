@@ -260,14 +260,13 @@ export const copy = {
       "Ce code ne fonctionne pas. Il a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
     toAdmin: "Accès administrateur",
     toCode: "Retour au code",
-    adminLede: "Connectez-vous avec votre adresse e-mail et votre phrase de passe.",
+    adminLede: "Connectez-vous avec votre adresse e-mail et un code généré par un administrateur.",
     email: "Adresse e-mail",
-    passphrase: "Phrase de passe",
     submit: "Se connecter",
     emailRequired: "Saisissez votre adresse e-mail.",
-    passphraseRequired: "Saisissez votre phrase de passe.",
-    /** One sentence whichever part was wrong (ADR-0029). */
-    adminRefused: "Adresse e-mail ou phrase de passe incorrecte.",
+    /** One sentence whichever part was wrong (ADR-0038). */
+    adminRefused:
+      "Adresse e-mail ou code incorrect. Le code a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
     unreachable: "Connexion impossible. Vérifiez le réseau et réessayez.",
     failed: "Connexion impossible pour le moment. Réessayez dans un instant.",
     offline: "Hors ligne. Connectez-vous dès que le réseau revient.",

@@ -632,7 +632,7 @@ describe("the auth rows sweep (CAP-10)", () => {
     const refused = await workerFetch("https://captain.example/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip },
-      body: JSON.stringify({ kind: "passphrase", email: TEST_ADMIN, passphrase: "wrong" }),
+      body: JSON.stringify({ kind: "admin", email: TEST_ADMIN, code: "wrong" }),
     });
     expect(refused.status).toBe(429);
   });
