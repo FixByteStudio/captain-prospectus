@@ -1509,7 +1509,7 @@ the 1,000 KiB precache.
 │ [        Se connecter       ]  │     │ [ ••••••••                ]    │
 │                                │     │                                │
 │     Accès administrateur       │     │ [        Se connecter       ]  │
-└────────────────────────────────┘     │        Retour au code          │
+└────────────────────────────────┘     │            Retour              │
                                        └────────────────────────────────┘
    ━━━ the card's 4px gold top edge
 ```
@@ -1537,7 +1537,7 @@ the 1,000 KiB precache.
   it; the client never rewrites or rejects it.
 - **"Accès administrateur" swaps the form.** A ghost Button under the card's
   primary action, never a switch control: it replaces the code form in place
-  with the admin one, whose own ghost Button "Retour au code" swaps back. The
+  with the admin one, whose own ghost Button "Retour" swaps back. The
   swap clears a refused sign-in's Alert but keeps the lockout Alert, since
   the lock is per connection, and moves focus to the first field.
   It is screen state, not a URL.
