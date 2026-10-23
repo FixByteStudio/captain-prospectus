@@ -186,7 +186,8 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
   const code = newLoginCode();
   const codeHash = await hmacHex(pepper, normaliseCredential(code));
   const now = Date.now();
-  const expiresAt = now + LOGIN_CODE_TTL_MS;
+  // The role is read in the insert's own SELECT, like the active check.
+  const expiresAt = sql`${now} + CASE ${users.role} WHEN 'admin' THEN ${LOGIN_CODE_TTL_MS.admin} ELSE ${LOGIN_CODE_TTL_MS.agent} END`;
 
   const [, inserted] = await db.batch([
     db.delete(loginCodes).where(and(eq(loginCodes.userEmail, email), isNull(loginCodes.usedAt))),
@@ -195,16 +196,17 @@ identityRoutes.post("/users/:email/code", validate("param", agentEmailParamSchem
       .select(
         sql`SELECT ${codeHash}, ${users.email}, ${now}, ${expiresAt}, NULL FROM ${users} WHERE ${users.email} = ${email} AND ${users.active} = 1`,
       )
-      .returning({ email: loginCodes.userEmail }),
+      .returning({ expiresAt: loginCodes.expiresAt }),
   ]);
 
-  if (inserted.length === 0) {
+  const [row] = inserted;
+  if (!row) {
     if (!(await userExists(db, email))) return c.json({ error: "not_found" }, 404);
     return c.json({ error: "user_inactive", message: "This user is deactivated." }, 409);
   }
   // The code in clear: nothing may keep a copy.
   c.header("Cache-Control", "no-store");
-  return c.json<LoginCodeResponse>({ code, expiresAt }, 201);
+  return c.json<LoginCodeResponse>({ code, expiresAt: row.expiresAt }, 201);
 });
 
 /**

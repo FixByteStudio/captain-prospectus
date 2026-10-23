@@ -23,7 +23,7 @@ dashboard rows) is the active **agents**, never an admin. `/api/agent/*` answers
 
 **A one-time code** enrols a device. An admin picks "Générer un code" on an active user's row of the
 Utilisateurs page, on either tab (their own row included) and reads or sends the code: 8 Crockford base32 characters, valid
-15 minutes and once ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
+24 hours for an agent and 1 hour for an admin, and once ([ADR-0039](../adr/0039-a-codes-lifetime-depends-on-its-role.md)) ([api](../api.md#admin)). Generating a new one cancels the user's unused one, and
 deactivating the user cancels it too. On `/login`'s default form the agent types it as given (an admin's code is refused there); the
 server reads it case-insensitively, ignoring spaces and hyphens, with I/L read as 1 and O as 0
 (`src/shared/credential.ts`). A code opens a session only on the form of its user's role, with that role's lifetime. A wrong, expired,

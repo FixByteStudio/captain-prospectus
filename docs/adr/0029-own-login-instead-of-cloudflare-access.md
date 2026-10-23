@@ -53,7 +53,7 @@ remove Cloudflare Access.
    and a fourth À traiter row, "Prospects sans agent actif", leads to reassigning them. The last
    active admin cannot be deactivated or demoted.
 2. **Agents sign in with a one-time code** that an admin generates: 8 characters of Crockford
-   base32 (40 bits), valid for 15 minutes, usable once, typed into the app rather than opened as a
+   base32 (40 bits), valid for 15 minutes (24 hours for an agent, 1 hour for an admin since [ADR-0039](0039-a-codes-lifetime-depends-on-its-role.md)), usable once, typed into the app rather than opened as a
    link. It enrols that device. A user has at most one live code: a new one deletes the unused
    ones.
 3. **Admins sign in with email and a generated passphrase**, shown once and regenerable, never
