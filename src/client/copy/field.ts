@@ -259,7 +259,7 @@ export const copy = {
     codeRefused:
       "Ce code ne fonctionne pas. Il a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
     toAdmin: "Accès administrateur",
-    toCode: "Retour au code",
+    toCode: "Retour",
     adminLede: "Connectez-vous avec votre adresse e-mail et un code généré par un administrateur.",
     email: "Adresse e-mail",
     submit: "Se connecter",
