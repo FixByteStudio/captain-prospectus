@@ -439,11 +439,11 @@ describe("POST /api/auth/login — code (GH #305)", () => {
     expect(await agentSessions()).toHaveLength(1);
   });
 
-  it("answers 15 minutes from generation in expiresAt", async () => {
+  it("answers 24 hours from generation in an agent's expiresAt", async () => {
     const before = Date.now();
     const { expiresAt } = await generate(TEST_AGENT);
-    expect(expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
-    expect(expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+    expect(expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS.agent);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS.agent);
   });
 
   it("never logs the code nor stores it in plaintext", async () => {

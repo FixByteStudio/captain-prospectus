@@ -8,10 +8,9 @@ import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
 import worker from "./index";
 import { beforeStatement } from "../../test/d1-hook";
 import { workerFetch } from "../../test/worker-fetch";
-import type { Status } from "../shared/constants";
+import { HOUR_MS, type Status } from "../shared/constants";
 import { CROCKFORD } from "../shared/credential";
 import type { LoginCodeResponse, User } from "../shared/schemas";
-import { LOGIN_CODE_TTL_MS } from "./session";
 
 /** Admin user management (GH #302, ADR-0029). */
 
@@ -324,18 +323,29 @@ describe("PATCH /api/admin/users/:email", () => {
 });
 
 describe("POST /api/admin/users/:email/code", () => {
-  it("answers 201 with an 8-character Crockford code that expires in 15 minutes", async () => {
+  it("answers 201 with an 8-character Crockford code that expires in 24 hours for an agent", async () => {
     const before = Date.now();
     const response = await generate(TEST_AGENT, await adminCookie());
     expect(response.status).toBe(201);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = (await response.json()) as LoginCodeResponse;
     expect(body.code).toMatch(new RegExp(`^[${CROCKFORD}]{8}$`));
-    expect(body.expiresAt).toBeGreaterThanOrEqual(before + LOGIN_CODE_TTL_MS);
-    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + LOGIN_CODE_TTL_MS);
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + 24 * HOUR_MS);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 24 * HOUR_MS);
 
     const [row] = await db().select().from(loginCodes);
     expect(row).toMatchObject({ userEmail: TEST_AGENT, expiresAt: body.expiresAt, usedAt: null });
+  });
+
+  it("gives an admin's code 1 hour", async () => {
+    const before = Date.now();
+    const response = await generate(TEST_ADMIN, await adminCookie());
+    expect(response.status).toBe(201);
+    const { expiresAt } = (await response.json()) as LoginCodeResponse;
+    expect(expiresAt).toBeGreaterThanOrEqual(before + HOUR_MS);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now() + HOUR_MS);
+    const [row] = await db().select().from(loginCodes);
+    expect(row).toMatchObject({ userEmail: TEST_ADMIN, expiresAt });
   });
 
   it("deletes the user's older unused codes and keeps other users' codes", async () => {

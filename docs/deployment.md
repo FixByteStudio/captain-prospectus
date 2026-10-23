@@ -91,7 +91,7 @@ and after every [fresh redeploy](#fresh-redeploy), in order:
 2. To enrol another device of the owner, pick "Générer un code" on the owner's own row of the **Utilisateurs**
    page: the code appears once and works once. `BREAK_GLASS` stays for emergencies.
 3. Create every user on the Utilisateurs page, admins and agents, before anyone is assigned a prospect.
-4. Give each agent a code with "Générer un code" on their row. It works once, for 15 minutes.
+4. Give each agent a code with "Générer un code" on their row. It works once, for 24 hours.
 
 Then check, on production:
 - The owner's session survives a reload.

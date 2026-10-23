@@ -135,7 +135,7 @@ erDiagram
     text code_hash PK "HMAC-SHA-256 hex of the normalised code"
     text user_email FK
     int created_at
-    int expires_at "created_at + 15 min"
+    int expires_at "created_at + 24 h (agent) or 1 h (admin)"
     int used_at "nullable; set by the login that spends it"
   }
   IMPORTS {
@@ -183,7 +183,7 @@ the same batch, so at most one works. A login spends a code with one conditional
 used_at` (unused, unexpired, user active, and the role and email the form asks for:
 [api](api.md#sign-in)), so of two racing logins only one gets the row. Used and
 expired rows go in the nightly sweep: it deletes every row past `expires_at`, and a used code expires
-15 minutes after it was made.
+when its role's lifetime (24 h for an agent, 1 h for an admin) runs out.
 
 `imports` and `import_batches` are the import log ([ADR-0030](adr/0030-the-server-keeps-an-import-log.md)).
 The first batch of a run writes the `imports` row (`started_at` is the server's `now`); every batch
