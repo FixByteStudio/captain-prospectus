@@ -555,6 +555,23 @@ describe("UsersScreen", () => {
       expect(dialog.textContent).toContain(t.deactivateDialog.always);
     });
 
+    it("refetches the list once when the dialog opens, not on every render", async () => {
+      const calls = stubFetch([[ADMIN, LEA]]);
+      renderScreen();
+      await openMenu("Léa Dupont");
+      const listGets = () =>
+        calls.filter((c) => c.method === "GET" && c.path === "/api/admin/users").length;
+      const before = listGets();
+      await userEvent.click(await screen.findByRole("menuitem", { name: t.deactivate }));
+      const dialog = await screen.findByRole("alertdialog");
+      await waitFor(() =>
+        expect(dialog.textContent).toContain(t.deactivateDialog.assigned(3, "Léa Dupont")),
+      );
+      // A loop is thousands of GETs in 1.5 s; give it time to start.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(listGets() - before).toBe(1);
+    });
+
     it("leaves the sync sentence out for an admin", async () => {
       const max = user("max@example.com", { role: "admin" });
       stubFetch([

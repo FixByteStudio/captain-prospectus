@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { User } from "../../../shared/schemas";
 import { copy } from "../../copy";
@@ -33,16 +33,23 @@ export function DeactivateDialog({
   const update = useUpdateUser();
   const [fresh, setFresh] = useState(false);
 
-  // The count must be the server's now, not the list's from minutes ago.
+  // Callers pass an inline arrow, new on every render: keep it out of the refetch effect's deps.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // The count must be the server's now, not the list's from minutes ago. Joining a fetch already
+  // in flight (the observer's own mount starts one) keeps it to one GET.
   const { refetch } = users;
   useEffect(() => {
     let live = true;
-    void refetch().then((result) => {
+    void refetch({ cancelRefetch: false }).then((result) => {
       if (!live) return;
       // Nothing to confirm against: say so rather than wait forever.
       if (!result.isSuccess || !result.data.users.some((u) => u.email === email)) {
         toast.error(copy.users.toast.failed);
-        onClose();
+        onCloseRef.current();
         return;
       }
       setFresh(true);
@@ -50,7 +57,7 @@ export function DeactivateDialog({
     return () => {
       live = false;
     };
-  }, [refetch, email, onClose]);
+  }, [refetch, email]);
 
   const user: User | undefined = users.data?.users.find((u) => u.email === email);
   const name = user ? displayName(user) : email;
