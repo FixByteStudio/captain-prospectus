@@ -100,6 +100,34 @@ describe("runSync — what clears the outbox", () => {
     await runSync({ db, identity: AGENT, fetchFn: respondWith(okResponse()) });
     expect(await db.outboxVisits.count()).toBe(1);
   });
+
+  it("deletes only the field prospects the server listed, and sends both — INVARIANT 5", async () => {
+    const prospect = (name: string): FieldProspect => ({
+      id: crypto.randomUUID(),
+      name,
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+    });
+    const kept = prospect("Le camion gardé");
+    const listed = prospect("Le camion accepté");
+    await db.outboxProspects.bulkAdd([kept, listed]);
+    const requests: SyncRequest[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)) as SyncRequest);
+      const accepted = { prospects: [listed.id], visits: [], tournees: [], stops: [] };
+      return new Response(JSON.stringify(okResponse({ accepted })), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const result = await runSync({ db, identity: AGENT, fetchFn });
+
+    expect(requests[0]?.prospects.map((p) => p.id).sort()).toEqual([kept.id, listed.id].sort());
+    expect(result).toMatchObject({ status: "ok", acceptedProspects: 1 });
+    expect((await db.outboxProspects.toArray()).map((p) => p.id)).toEqual([kept.id]);
+  });
 });
 
 /**
