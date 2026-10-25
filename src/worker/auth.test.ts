@@ -114,8 +114,8 @@ describe("POST /api/auth/login — break-glass", () => {
     expect(session && session.expiresAt - session.createdAt).toBe(30 * DAY_MS);
   });
 
-  it("puts a deactivated or demoted owner back as an active admin", async () => {
-    await db().insert(users).values({ email: OWNER, role: "agent", active: false, createdAt: 1 });
+  it("puts a deactivated admin owner back as an active admin", async () => {
+    await db().insert(users).values({ email: OWNER, role: "admin", active: false, createdAt: 1 });
 
     await signIn();
 
@@ -123,6 +123,29 @@ describe("POST /api/auth/login — break-glass", () => {
     expect(user).toMatchObject({ role: "admin", active: true, createdAt: 1 });
     expect(await db().select().from(sessions)).toHaveLength(1);
   });
+
+  // Roles are fixed at creation: an agent row named by OWNER_EMAIL is not promoted.
+  it.each([
+    ["an active", true],
+    ["a deactivated", false],
+  ])(
+    "refuses %s agent row named by OWNER_EMAIL, with the shared 401 and no write",
+    async (_label, active) => {
+      await db().insert(users).values({ email: OWNER, role: "agent", active, createdAt: 1 });
+      const before = await db().select().from(users).where(eq(users.email, OWNER));
+
+      const refused = await login({ kind: "admin", email: OWNER, code: BREAK_GLASS });
+      // The reference refusal: a wrong secret on the same form.
+      const reference = await login({ kind: "admin", email: OWNER, code: "nope" });
+
+      expect(refused.status).toBe(401);
+      expect(refused.headers.get("Set-Cookie")).toBeNull();
+      expect(await refused.text()).toBe(await reference.text());
+      expect(await db().select().from(users).where(eq(users.email, OWNER))).toEqual(before);
+      expect(await db().select().from(sessions)).toHaveLength(0);
+      expect(await db().select().from(loginCodes)).toHaveLength(0);
+    },
+  );
 
   it("refuses a wrong email and a wrong secret with the same body, and opens nothing", async () => {
     const wrongEmail = await login({
