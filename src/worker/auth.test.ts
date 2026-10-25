@@ -1,13 +1,13 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { loginAttempts, loginCodes, sessions, users } from "./db/schema";
 import { LOGIN_MAX_FAILURES, throttleKey } from "./login-throttle";
 import { LOGIN_CODE_TTL_MS, SESSION_COOKIE, hmacHex } from "./session";
 import { testSession, testSessionCookie } from "../../test/session";
-import { TEST_ADMIN, TEST_AGENT, seedTestUsers } from "../../test/users";
-import { DAY_MS, LOGIN_WINDOW_MS } from "../shared/constants";
+import { TEST_ADMIN, TEST_AGENT, seedTestUsers, seedUser } from "../../test/users";
+import { CLIENT_VERSION, DAY_MS, HOUR_MS, LOGIN_WINDOW_MS } from "../shared/constants";
 import type { LoginCodeResponse } from "../shared/schemas";
 import { workerFetch } from "../../test/worker-fetch";
 
@@ -313,6 +313,50 @@ describe("requireIdentity", () => {
   });
 });
 
+// ADR-0037: an admin does no tournée. sync.test.ts proves the 403 through the
+// DEV_USER_EMAIL bypass; these send a real D1 session, with the bypass unset.
+describe("requireAgent — an admin session on the field API (ADR-0037)", () => {
+  const PROSPECT = "11111111-1111-4111-8111-111111111111";
+
+  const syncAs = (headers: Record<string, string>) =>
+    call("/api/agent/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ clientVersion: CLIENT_VERSION }),
+    });
+
+  beforeEach(() => {
+    env.DEV_USER_EMAIL = undefined;
+  });
+
+  it("answers 403 on /api/agent/sync, with the same session that opens /api/admin", async () => {
+    const headers = { Cookie: await testSessionCookie(TEST_ADMIN) };
+
+    const response = await syncAs(headers);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "forbidden" });
+    // Not a dead session: the same cookie is who it says and may use the admin API.
+    expect(await (await me(headers)).json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+    expect((await call("/api/admin/users", { headers })).status).toBe(200);
+  });
+
+  it("answers 403 on the visits route, even for a prospect id", async () => {
+    const headers = { Cookie: await testSessionCookie(TEST_ADMIN) };
+    const response = await call(`/api/agent/prospects/${PROSPECT}/visits`, { headers });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "forbidden" });
+  });
+
+  it("lets an agent session through both routes, so the 403 above is the role and not the setup", async () => {
+    const headers = { Cookie: await testSessionCookie(TEST_AGENT) };
+    expect((await syncAs(headers)).status).toBe(200);
+    expect((await call(`/api/agent/prospects/${PROSPECT}/visits`, { headers })).status).not.toBe(
+      403,
+    );
+  });
+});
+
 describe("POST /api/auth/logout", () => {
   it("deletes this session, clears the cookie, and the next /api/me is 401", async () => {
     const token = await signIn();
@@ -568,9 +612,92 @@ describe("POST /api/auth/login — each form checks the role (ADR-0038)", () => 
     expect((await login({ kind: "admin", email: OWNER, code: BREAK_GLASS })).status).toBe(200);
   });
 
-  it("refuses break-glass on the agent form", async () => {
+  it("refuses break-glass on the agent form and writes no users, sessions or codes row", async () => {
+    const usersBefore = await db().select().from(users);
+
     await expectSameRefusal(await login({ kind: "code", code: BREAK_GLASS }));
+
+    // The agent form has no email, so it must not create the owner's row either.
+    expect(await db().select().from(users)).toEqual(usersBefore);
+    expect(await db().select().from(users).where(eq(users.email, OWNER))).toEqual([]);
+    expect(await db().select().from(sessions)).toEqual([]);
+    expect(await db().select().from(loginCodes)).toEqual([]);
   });
+
+  describe("an admin's code lasts 1 hour from the minute it was minted", () => {
+    const T0 = 1_800_000_000_000;
+
+    // Absolute times, not the `expiresAt` the route answered: a swapped TTL
+    // branch moves both together and a relative check would follow it.
+    it("is taken 1 ms before the hour is up", async () => {
+      vi.spyOn(Date, "now").mockReturnValue(T0);
+      const code = await generate(TEST_ADMIN);
+
+      vi.spyOn(Date, "now").mockReturnValue(T0 + HOUR_MS - 1);
+      expect((await login({ kind: "admin", email: TEST_ADMIN, code })).status).toBe(200);
+    });
+
+    it("is refused at the hour, unspent", async () => {
+      vi.spyOn(Date, "now").mockReturnValue(T0);
+      const code = await generate(TEST_ADMIN);
+
+      vi.spyOn(Date, "now").mockReturnValue(T0 + HOUR_MS);
+      const sessionsBefore = await db().select().from(sessions);
+      await expectSameRefusal(await login({ kind: "admin", email: TEST_ADMIN, code }));
+      expect(await unspent()).toBe(true);
+      expect(await db().select().from(sessions)).toEqual(sessionsBefore);
+    });
+
+    it("leaves an agent's code its 24 hours", async () => {
+      vi.spyOn(Date, "now").mockReturnValue(T0);
+      const code = await generate(TEST_AGENT);
+
+      vi.spyOn(Date, "now").mockReturnValue(T0 + 24 * HOUR_MS - 1);
+      expect((await login({ kind: "code", code })).status).toBe(200);
+    });
+  });
+
+  it("keeps two admins' live codes apart: each opens its own admin only", async () => {
+    const SECOND = "second-admin@example.com";
+    await seedUser(SECOND, "admin");
+    const first = await generate(TEST_ADMIN);
+    const second = await generate(SECOND);
+    const liveCodes = async () =>
+      (await db().select().from(loginCodes).where(isNull(loginCodes.usedAt))).length;
+    expect(await liveCodes()).toBe(2);
+
+    // Each code with the other admin's email: refused, both still live.
+    await expectSameRefusal(await login({ kind: "admin", email: SECOND, code: first }));
+    await expectSameRefusal(await login({ kind: "admin", email: TEST_ADMIN, code: second }));
+    expect(await liveCodes()).toBe(2);
+
+    const own = await login({ kind: "admin", email: SECOND, code: second });
+    expect(await own.json()).toEqual({ email: SECOND, role: "admin" });
+    // The other admin's code is untouched by that sign-in.
+    expect(await liveCodes()).toBe(1);
+    const mine = await login({ kind: "admin", email: TEST_ADMIN, code: first });
+    expect(await mine.json()).toEqual({ email: TEST_ADMIN, role: "admin" });
+  });
+
+  // No route changes a role (userUpdateSchema allows `active` only), so the flip is
+  // made behind the route's back. The spend reads the role as it is then, not as it
+  // was at mint.
+  it.each([
+    ["an agent promoted to admin", TEST_AGENT, "admin", "code"],
+    ["an admin demoted to agent", TEST_ADMIN, "agent", "admin"],
+  ] as const)(
+    "refuses the code of %s on the form of its old role, unspent",
+    async (_label, email, newRole, oldKind) => {
+      const code = await generate(email);
+      await db().update(users).set({ role: newRole }).where(eq(users.email, email));
+
+      const body = oldKind === "admin" ? { kind: oldKind, email, code } : { kind: oldKind, code };
+      const sessionsBefore = await db().select().from(sessions);
+      await expectSameRefusal(await login(body));
+      expect(await unspent()).toBe(true);
+      expect(await db().select().from(sessions)).toEqual(sessionsBefore);
+    },
+  );
 
   it("never logs the code", async () => {
     const calls: unknown[][] = [];

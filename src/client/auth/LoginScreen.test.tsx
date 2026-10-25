@@ -271,6 +271,38 @@ describe("LoginScreen — code form", () => {
     // What was typed in the code form is still there.
     expect(codeInput().value).toBe("nope");
   });
+
+  // The admin Code field may hold the break-glass secret. Both forms live in the
+  // screen's state, so a swap must neither lend that value to the code form nor
+  // send it from there; going back finds it where it was typed, like the code form.
+  it("keeps what was typed in the admin form across a swap, and sends none of it from the code form", async () => {
+    const calls = stubFetch(json(401, { error: "unauthorized", message: "x" }));
+    renderLogin();
+    const user = userEvent.setup();
+    const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+
+    await toAdmin(user);
+    await user.type(field(copy.login.email), OWNER);
+    await user.type(field(copy.login.code), "break-glass-secret");
+
+    await user.click(screen.getByRole("button", { name: copy.login.toCode }));
+    expect(field(copy.login.code).value).toBe("");
+    await user.type(field(copy.login.code), "k7qm2xpa");
+    await user.click(screen.getByRole("button", { name: copy.login.submit }));
+    await screen.findByRole("alert");
+
+    expect(calls).toHaveLength(1);
+    const sent = String(calls[0]?.init?.body);
+    expect(JSON.parse(sent)).toEqual({ kind: "code", code: "k7qm2xpa" });
+    expect(sent).not.toContain("break-glass-secret");
+    expect(sent).not.toContain(OWNER);
+
+    await toAdmin(user);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(field(copy.login.email).value).toBe(OWNER);
+    expect(field(copy.login.code).value).toBe("break-glass-secret");
+    expect(field(copy.login.code).type).toBe("password");
+  });
 });
 
 describe("LoginScreen — lockout", () => {

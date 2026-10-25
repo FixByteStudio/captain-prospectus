@@ -27,6 +27,28 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
+    // ADR-0037: the field side has no admin branch. The Worker refuses an admin on
+    // /api/agent/* in requireAgent and the shell sends one to /admin before any field
+    // code runs, so a comparison with "admin" here is a second, divergent gate.
+    // Tests may name the role; the allowed place for the check is auth.ts and App.tsx.
+    files: ["src/worker/routes/agent.ts", "src/client/field/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...[
+          'BinaryExpression[left.value="admin"]',
+          'BinaryExpression[right.value="admin"]',
+          'SwitchCase[test.value="admin"]',
+        ].map((selector) => ({
+          selector,
+          message:
+            "No admin branch on the field side (ADR-0037): requireAgent and App.tsx decide who gets here.",
+        })),
+      ],
+    },
+  },
+  {
     // src/shared is imported by the Worker: no DOM, no Worker-only globals.
     files: ["src/shared/**/*.ts"],
     languageOptions: { globals: {} },

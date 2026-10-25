@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -54,6 +54,14 @@ describe("wrangler.jsonc", () => {
   it("keeps observability on, which the release checklist depends on", () => {
     const observability = readWranglerConfig().observability as { enabled?: boolean };
     expect(observability.enabled).toBe(true);
+  });
+});
+
+describe("web manifest", () => {
+  it("opens the installed app at /", () => {
+    // The installed-PWA entry: / redirects each role to its side (ADR-0037), so a
+    // deeper start_url would pin one role's page for the other.
+    expect(readFileSync("vite.config.ts", "utf8")).toMatch(/\bstart_url:\s*"\/"/);
   });
 });
 
@@ -216,5 +224,31 @@ describe("CI", () => {
     // ADR-0023, #34: an artifact is a copy of every visit note on a third party.
     expect(backup).not.toContain("upload-artifact");
     expect(backup).toContain("r2 object put");
+  });
+});
+
+describe("retired words", () => {
+  /**
+   * The passphrase sign-in is gone (ADR-0038, GH #611), and its name stays out of
+   * `src`, so a revived path shows up as a failing check, not a grep someone must
+   * remember. Each allowed file is listed with how many times it may say the word.
+   */
+  const ALLOWED: Record<string, number> = {
+    // The test that the removed login kind is still refused.
+    "src/shared/schemas.test.ts": 1,
+  };
+
+  const TEXT_FILE = /\.(?:ts|tsx|js|mjs|css|json|html|svg|md)$/;
+
+  it("keeps the word passphrase out of src, but for the named test", () => {
+    const found: Record<string, number> = {};
+    for (const entry of readdirSync("src", { recursive: true, encoding: "utf8" })) {
+      if (!TEXT_FILE.test(entry)) continue;
+      const path = `src/${entry.replaceAll("\\", "/")}`;
+      const count = readFileSync(path, "utf8").match(/passphrase/gi)?.length ?? 0;
+      if (count > 0) found[path] = count;
+    }
+
+    expect(found).toEqual(ALLOWED);
   });
 });

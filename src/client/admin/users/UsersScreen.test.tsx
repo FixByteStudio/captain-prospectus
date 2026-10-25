@@ -495,22 +495,22 @@ describe("UsersScreen", () => {
   });
 
   describe("fixed roles", () => {
-    it("offers no role item in the menu", async () => {
+    // The whole item set, so a role toggle re-added under any label fails (ADR-0037).
+    it("offers an agent's row exactly Générer un code and Désactiver", async () => {
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
       await openMenu("Léa Dupont");
-      await screen.findAllByRole("menuitem");
-      expect(screen.queryByRole("menuitem", { name: /Passer (admin|agent)/ })).toBeNull();
+      const items = await screen.findAllByRole("menuitem");
+      expect(items.map((i) => i.textContent)).toEqual([t.generateCode, t.deactivate]);
     });
 
-    it("offers no role item below 768px either", async () => {
+    it("offers an agent's row exactly those two below 768px too", async () => {
       setMobile(true);
       stubFetch([[ADMIN, LEA]]);
       renderScreen();
-      await showAdmins();
-      await openMenu("Sam Owner");
-      await screen.findAllByRole("menuitem");
-      expect(screen.queryByRole("menuitem", { name: /Passer (admin|agent)/ })).toBeNull();
+      await openMenu("Léa Dupont");
+      const items = await screen.findAllByRole("menuitem");
+      expect(items.map((i) => i.textContent)).toEqual([t.generateCode, t.deactivate]);
     });
 
     it("disables Désactiver on the last active admin, with the reason", async () => {
