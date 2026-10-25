@@ -25,6 +25,7 @@ import { copy } from "./copy";
 import { brusselsPeriod } from "../shared/period";
 import { formatBrusselsWeekday } from "./format";
 import { fieldDb, getMeta, setMeta } from "./field/db";
+import { runSync } from "./field/sync";
 import type { SyncState } from "./field/useSync";
 
 type SyncStub = Pick<SyncState, "status" | "running" | "pending">;
@@ -779,6 +780,8 @@ describe("The admin side", () => {
       const first = renderApp("/round");
 
       expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+      // The body is what tells the admin why, so the App shows it, not just the title.
+      expect(screen.getByText(copy.adminOffline.body)).toBeTruthy();
       expect(screen.getByTestId("pathname").textContent).toBe("/admin");
       expect(fieldBand()).toBeNull();
       first.unmount();
@@ -1063,6 +1066,133 @@ describe("The admin side", () => {
       expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
     } finally {
       onlineSpy.mockRestore();
+    }
+  });
+});
+
+/**
+ * Invariant 5 for an identity that no longer syncs (ADR-0037): the rows an admin
+ * once queued stay in Dexie whatever the Worker or the shell does next. Every
+ * table is compared whole, so a deleted, re-stamped or emptied row fails, not
+ * just a lower count. The sync engine's own 403 case uses an agent
+ * (`field/sync.test.ts`); this one is the admin's, at the shell.
+ */
+describe("An admin identity's outbox rows survive a 403 and an App visit (invariant 5)", () => {
+  const OUTBOXES = [
+    fieldDb.outboxVisits,
+    fieldDb.outboxProspects,
+    fieldDb.outboxTournees,
+    fieldDb.outboxStops,
+  ] as const;
+
+  async function seedOutbox() {
+    const tourneeId = crypto.randomUUID();
+    const prospectId = crypto.randomUUID();
+    const stamp = (writtenBy: string) => ({ writtenBy });
+    await fieldDb.outboxVisits.bulkAdd([
+      { ...visit(), ...stamp(ADMIN.email) },
+      { ...visit(), ...stamp(AGENT.email) },
+    ]);
+    await fieldDb.outboxProspects.add({
+      id: prospectId,
+      name: "Le Bistrot",
+      type: "restaurant",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+      ...stamp(ADMIN.email),
+    });
+    await fieldDb.outboxTournees.add({
+      id: tourneeId,
+      startedAt: 1_700_000_000_000,
+      ...stamp(ADMIN.email),
+    });
+    await fieldDb.outboxStops.add({
+      id: crypto.randomUUID(),
+      tourneeId,
+      prospectId,
+      number: 1,
+      addedAt: 1_700_000_000_000,
+      ...stamp(ADMIN.email),
+    });
+  }
+
+  const snapshot = () => Promise.all(OUTBOXES.map((table) => table.orderBy("id").toArray()));
+
+  let before: Awaited<ReturnType<typeof snapshot>>;
+
+  beforeEach(async () => {
+    await Promise.all(OUTBOXES.map((table) => table.clear()));
+    await seedOutbox();
+    before = await snapshot();
+    expect(before.map((rows) => rows.length)).toEqual([2, 1, 1, 1]);
+  });
+
+  afterEach(async () => {
+    await Promise.all(OUTBOXES.map((table) => table.clear()));
+  });
+
+  it.each([401, 403])(
+    "keeps every row, whole, when the Worker answers %i to the sync",
+    async (status) => {
+      const fetchFn = (async () => new Response("{}", { status })) as unknown as typeof fetch;
+
+      const result = await runSync({ db: fieldDb, identity: ADMIN.email, fetchFn });
+
+      expect(result.status).toBe("unauthorized");
+      expect(await snapshot()).toEqual(before);
+    },
+  );
+
+  // Each case renders the App and waits for the screen that ends its identity
+  // check, so the row comparison runs after the shell is done, not before.
+  it.each([
+    [
+      "a live admin on the field route",
+      async () => {
+        renderApp("/round");
+        await screen.findByTestId("admin-frame");
+      },
+    ],
+    [
+      "a live admin on the admin side",
+      async () => {
+        renderApp("/admin/prospects");
+        await screen.findByTestId("admin-frame");
+      },
+    ],
+    [
+      "an admin whose session the Worker revoked",
+      async () => {
+        stub.identityUnauthorized = true;
+        renderApp("/round");
+        await screen.findByText(copy.login.title);
+      },
+    ],
+    [
+      "a cache-started admin, offline",
+      async () => {
+        await setMeta(fieldDb, "identity", ADMIN);
+        stub.identityUnreachable = true;
+        renderApp("/round");
+        await screen.findByText(copy.adminOffline.title);
+      },
+    ],
+  ])("keeps every row, whole, for %s", async (label, visitApp) => {
+    const offline = label.includes("offline") ? mockOffline() : null;
+    try {
+      stub.me = ADMIN;
+      await visitApp();
+      // The shell's own async bookkeeping (confirm, release) has settled.
+      await act(async () => {});
+
+      expect(await snapshot()).toEqual(before);
+      // An admin is never handed to the sync engine (ADR-0037).
+      expect(stub.syncRenders).toBe(0);
+    } finally {
+      offline?.mockRestore();
     }
   });
 });

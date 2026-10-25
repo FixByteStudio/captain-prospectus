@@ -424,10 +424,10 @@ describe("POST /api/admin/users/:email/code", () => {
 });
 
 describe("the removed own-secret route", () => {
-  it("answers 404: no route", async () => {
-    // Built in two parts so that `grep for the old word src` stays empty (GH #611).
-    const old = `/api/admin/me/${"pass"}${"phrase"}`;
-    const response = await call(old, await adminCookie(), {
+  // Nothing is mounted under /api/admin/me/ (GH #611). The old route's name is
+  // kept out of src by config.test.ts, so this asserts the prefix, not the name.
+  it.each(["secret", "code"])("answers 404 to POST /api/admin/me/%s: no route", async (leaf) => {
+    const response = await call(`/api/admin/me/${leaf}`, await adminCookie(), {
       method: "POST",
     });
     expect(response.status).toBe(404);

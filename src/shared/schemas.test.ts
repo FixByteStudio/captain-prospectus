@@ -77,4 +77,10 @@ describe("loginRequestSchema — admin", () => {
   it("rejects an unknown kind", () => {
     expect(loginRequestSchema.safeParse({ kind: "other", email: "a@b.c" }).success).toBe(false);
   });
+
+  // The one occurrence of the removed kind's name that config.test.ts allows in src.
+  it("rejects the removed login kind", () => {
+    const removed = { kind: "passphrase", email: "a@b.c", code: "x" };
+    expect(loginRequestSchema.safeParse(removed).success).toBe(false);
+  });
 });
