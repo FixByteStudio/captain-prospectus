@@ -95,16 +95,31 @@ authRoutes.post("/login", loginThrottle, validate("json", loginRequestSchema), a
         const role = "admin" as const;
         const session = await newSession(pepper, owner, role, now, label);
 
-        // Break-glass creates the owner, or puts a deactivated or demoted owner back
-        // as an active admin (ADR-0029 decision 7). One batch, so a session never
-        // exists for a user row that was not written.
-        await db.batch([
+        // Break-glass creates the owner, or puts a deactivated admin owner back as
+        // active (ADR-0029 decision 7). It never touches an agent row: roles are fixed
+        // at creation, so the upsert only updates an admin row and the session is
+        // selected from an active admin row. One batch, so an agent row sees no write
+        // and no session, and the refusal is the shared 401 below.
+        const [, opened] = await db.batch([
           db
             .insert(users)
             .values({ email: owner, role, active: true, createdAt: now })
-            .onConflictDoUpdate({ target: users.email, set: { role, active: true } }),
-          db.insert(sessions).values(session.row),
+            .onConflictDoUpdate({
+              target: users.email,
+              set: { active: true },
+              setWhere: eq(users.role, role),
+            }),
+          db
+            .insert(sessions)
+            .select(
+              sql`SELECT ${session.row.tokenHash}, ${owner}, ${now}, ${now}, ${session.row.expiresAt},
+                  ${session.row.id}, ${label}
+                  FROM ${users}
+                  WHERE ${users.email} = ${owner} AND ${users.role} = ${role} AND ${users.active} = 1`,
+            )
+            .returning({ id: sessions.id }),
         ]);
+        if (opened.length === 0) throw unauthorized(REFUSED);
 
         c.header("Set-Cookie", session.cookie);
         return c.json<MeResponse>({ email: owner, role });

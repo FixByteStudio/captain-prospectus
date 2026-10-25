@@ -1,0 +1,151 @@
+# The stories of epic-retro-follow-ups (epic id 1), in build order.
+# Entry ids equal the slice numbers of slices.md (S1-S11). `labels` is this repo's own key: the area and extra labels sent at publish.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Break-glass refuses an agent row"
+description = "S1, CAP-7 (579/2, 580/2, F-A, S-7; owner decision): break-glass in src/worker/routes/auth.ts no longer promotes an existing agent row named by OWNER_EMAIL, so \"roles are fixed at creation\" has no exception; it answers the same 401 body as the other login refusals with no Set-Cookie (580/S-3 stays true) and writes nothing, while a deactivated admin owner is still reinstated; code and tests only, the docs line goes to entry 9, and no spend-time lifetime check is added (580 question 5)."
+verify = "A Worker test runs break-glass with OWNER_EMAIL naming an active agent and gets the shared 401 body, no Set-Cookie and no new or changed users or sessions row; a second test shows a deactivated admin owner reinstated as before."
+covers = ["CAP-7"]
+after = []
+hitl = false
+risk = "medium"
+labels = ["area:worker"]
+unknown = "Whether break-glass on a deactivated agent row is refused too; the spec says only an existing agent row, so the builder refuses any agent row unless the owner says otherwise."
+
+[[entry]]
+id = 2
+type = "story"
+title = "Tests and lint pin what the admin-field split and the code login loosened"
+description = "S2, CAP-2 to CAP-6 (579/3, 580/5; F-B, F-E, V-4, C-4, C-8, V-3, V-5, D-4): a Worker test sends a real admin D1 session with DEV_USER_EMAIL unset and gets 403 on /api/agent/sync and the visits route, in src/worker/auth.test.ts rather than sync.test.ts, which entries 4 and 6 edit (CAP-2); a lint rule or test fails on role !== \"admin\" in agent.ts or a client field file and on the word passphrase in src, and the \"pass\" + \"phrase\" string leaves users.test.ts (CAP-3); a client test shows an admin identity keeps every outbox row across a 403 and an App visit, in the App tests rather than src/client/field/sync.test.ts, which entries 3 and 6 edit (CAP-4); the Utilisateurs row menu is asserted as an exact item set in place of the /Passer (admin|agent)/ assertions, optionally with a start_url manifest test and an App-level Hors ligne body assertion (CAP-5); and the sign-in tests pin a rejected passphrase kind, an admin code spent just before and at 1 h, two real admins with live codes, a role flip between mint and spend, break-glass on the agent form leaving no users or sessions row (the form-level check only; entry 1 owns the Worker-level refusal test), and the admin form's state on swap (CAP-6)."
+verify = "Five hand mutations each turn pnpm lint or pnpm test red: role !== \"admin\" added to src/worker/routes/agent.ts, the word passphrase added to a file in src, any outbox row deleted on an admin 403, a role toggle re-added to the Utilisateurs row menu under a new label, and the TTL CASE branches swapped in src/worker/routes/identity.ts."
+covers = ["CAP-2", "CAP-3", "CAP-4", "CAP-5", "CAP-6"]
+after = [1]
+hitl = false
+risk = "medium"
+labels = ["area:worker", "area:field", "area:admin", "area:ci"]
+unknown = "Whether the Done-when greps are best kept by an ESLint rule (no-restricted-syntax or a custom rule in eslint.config.js) or by a test that scans src; and how CAP-6's rejected passphrase kind test coexists with CAP-3's ban on the word: assumed one named allowlist entry for that test, in place of the \"pass\" + \"phrase\" trick at src/worker/users.test.ts:429, unless the owner prefers otherwise."
+
+[[entry]]
+id = 3
+type = "story"
+title = "A test pins the prospect outbox drain"
+description = "S3, CAP-1 (538/1, N9): a client test in the field sync tests sends two field prospects, has the server list only one in accepted, and shows the other stays in the outbox (invariant 5), so the mutation \"delete every prospect sent\" in src/client/field/sync.ts fails a test where it survives today."
+verify = "pnpm test passes, and changing the prospect drain in src/client/field/sync.ts to delete every sent prospect makes the new test fail."
+covers = ["CAP-1"]
+after = []
+hitl = false
+risk = "low"
+labels = ["area:field"]
+unknown = "None known; the stop drain test of #543 is the pattern."
+
+[[entry]]
+id = 4
+type = "story"
+title = "The Visites feed cursor follows stamp order"
+description = "S4, CAP-16 (538/4, N2, N3), the two-deferral enabler that closes the #540 and #528 deferrals: a sync that stamps received_at early and commits late can no longer be skipped by the Visites feed cursor, whether received_at is stamped at insert or compared another way (the story's call), and a reason-filtered delta poll that is truncated advances nextSince past dropped door-days; the sync contract does not change; docs/api.md follows if the feed's response or cursor changes; the #540 and #528 entries in _bmad-output/implementation-artifacts/deferred-work.md are closed; and the PR names the feed's tie query and seed path as it leaves them, which entry 6 plans from the code."
+verify = "A Worker test with S1 stamped 1000 / committed 1800 and S2 stamped 1200 / committed 1300 lists both syncs' visits over successive polls, and a truncated reason= poll advances nextSince."
+covers = ["CAP-16"]
+after = []
+hitl = false
+risk = "medium"
+labels = ["area:worker", "area:admin", "enabler"]
+unknown = "Whether stamping received_at at insert fits the 10 ms CPU budget and the 100-parameter batches, or the cursor must compare a commit order instead."
+notes = ["S4 and S5 are the two-deferral enablers."]
+
+[[entry]]
+id = 5
+type = "story"
+title = "One precache figure: the check:precache line"
+description = "S5, CAP-17 (580/8, 579/9, P-3), the two-deferral enabler: the only precache number a PR author sees is the check:precache line against the 1,000 KiB ceiling (ADR-0031), by making a clean pnpm build end with that line or by adding it to the CI job summary (the story picks unless the owner prefers one), and .github/pull_request_template.md tells authors to paste it, and the UI line of CLAUDE.md that says every PR quotes the precache total names that line; entries 7 and 8 quote it."
+verify = "A clean pnpm build, or the CI job summary of the story's own PR, ends with the check:precache line against 1,000 KiB, and the PR template and CLAUDE.md ask for that line and no other precache figure."
+covers = ["CAP-17"]
+after = []
+hitl = false
+risk = "low"
+labels = ["area:ci", "enabler"]
+unknown = "Which of the two places the line lands in; the spec leaves it to the story unless the owner prefers one."
+notes = ["S4 and S5 are the two-deferral enablers."]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Finish R15 and clear the day-boundary test residue"
+description = "S6, CAP-18 (538/6, N8, N11, N12, N13), the CAP-18 list of slices.md: query-plan tests plan the statements the code runs (todayTournee reads, the owned/known lookups in writeTournees, doorDaysOn, doorDaysCounts, and the feed's tie query and seed path entry 4 leaves, in place of the hand-typed binds at admin.test.ts:2201 and :2227); the parity test takes its day key from twoPeriodsDayKey or days.dayOf with a visit within an hour of each clock switch and a doorDayCounts DST case; the position tests in sync.test.ts fake the clock; and it adds the stop-number lower bound on the wire (V8), the admin-round test with both clocks ahead (V6), the runSync « Nouveau » test with the phone ahead of serverTime (V5), a failure in the stops insert beside R3's tournée insert, and a measured doorDayCounts with a row in docs/free-tier-budget.md (invariant 13)."
+verify = "Every line of the CAP-18 list in slices.md has a test or is marked done in the PR, pnpm test passes, and docs/free-tier-budget.md has a doorDayCounts row with its measured cost."
+covers = ["CAP-18"]
+after = [3, 4]
+hitl = false
+risk = "low"
+labels = ["area:worker", "area:field", "area:docs"]
+unknown = "Whether every listed reader can be planned from Drizzle's toSQL(), or some must be exported as SQL builders first (the open question #543 left)."
+
+[[entry]]
+id = 7
+type = "story"
+title = "A failed admin chunk load shows a recoverable state instead of throwing"
+description = "S7 = #562, widened to CAP-13 (579/5, C-2, C-3): a failed admin chunk renders AdminOfflineScreen, a failed « Réessayer » says the admin is still offline, the deferred-work.md:376 wording is fixed, and a timeout on the gate's /api/me is considered; entry 9 mirrors its final wording into EXPERIENCE.md and docs/design.md; the owner reviews the wording, and the PR quotes the check:precache line."
+verify = "Tests show a rejected admin chunk renders AdminOfflineScreen and a failed « Réessayer » shows the still-offline line from copy; #562 lists all four items; the PR quotes the check:precache line."
+covers = ["CAP-13"]
+after = [2, 5]
+hitl = true
+risk = "low"
+labels = ["area:admin"]
+unknown = "Whether a timeout on the gate's /api/me is worth adding; the builder decides and records why."
+notes = ["S7 = existing #562, reuse that issue, don't open a duplicate.", "hitl: PR says \"Refs #n\", I close."]
+
+[[entry]]
+id = 8
+type = "story"
+title = "The code dialog shows the day and the login forms read a 400 as a refusal"
+description = "S8, CAP-14 (580/3, D-1, D-2) and CAP-15 (580/7, R-7): a 24-hour code in the code dialog shows its day, not just a time; a 400 on the agent or the admin login form reads as a refusal rather than « Réessayez dans un instant », with every string in copy/ (copy/field for the field-reachable form); docs/design.md:1367 follows; and the code generate route's guarded-insert remainder of the #306 deferral at deferred-work.md:333-336 names an issue or is closed with a test; the owner reviews the wording, and the PR quotes the check:precache line."
+verify = "Dialog tests at +1 h and +24 h per role, a 400 test on both login forms, design.md:1367 updated, deferred-work.md's #306 entry names an issue or a test, and the PR quotes the check:precache line."
+covers = ["CAP-14", "CAP-15"]
+after = [2, 5]
+hitl = true
+risk = "low"
+labels = ["area:admin", "area:field"]
+unknown = "Whether the #306 remainder can be tested without a D1 hook the route does not expose; if not, it becomes an issue."
+notes = ["hitl: PR says \"Refs #n\", I close."]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Docs pass: docs, ADRs, glossary, comments and planning files match what shipped"
+description = "S9, CAP-8 (579/2, 580/1, F-G, S-1), CAP-9 (579/4, 580/6, 538/2), CAP-10 (580/6, R-2, R-3), CAP-11 (579/4), CAP-12 (580/6, R-4) and entry 1's docs line: one line in ADR-0038 or ADR-0039 and one in docs/domains/identity-access.md say an admin can mint a code for any active user, agent or admin, and sign in as them, and that nothing records it (CAP-8); identity-access.md says break-glass refuses an agent row; every line of the CAP-9 list in slices.md is changed or struck; ADR-0038 notes the dropped dialog line, points to ADR-0039 for the unchanged lifetime and strikes its promise about ADR-0029 decisions 1 and 4, closing #619 (CAP-10); EXPERIENCE.md stops sending an offline admin to the field side at :23, :72, :80, :88, :120, :123, :189 and :264, closing #621 (CAP-11); the dropped dialog line leaves _bmad-output/initiative-admin-field-separated/epic-admin-code-login/tickets.toml entry 3 and epic-580-context.md:21,32,38, and initiative-admin-field-separated.md:47 stops saying no passphrase exists in the docs, since ADR-0029 and ADR-0038 keep the word as history (CAP-12, R-4); EXPERIENCE.md:189 and docs/design.md take entry 7's final offline wording; it waits on entry 2 for the names and comments its tests settle, on entry 4 for docs/api.md and the received_at docs, and on entries 1, 7 and 8 for the code they change; no code behaviour or schema changes."
+verify = "Each CAP-9 line is ticked or struck in the PR, a grep of EXPERIENCE.md for the admin-in-the-field wording finds nothing, the ADR-0038 and identity-access.md lines exist, #619 and #621 close on merge, and pnpm lint passes."
+covers = ["CAP-7", "CAP-8", "CAP-9", "CAP-10", "CAP-11", "CAP-12"]
+after = [1, 2, 4, 7, 8]
+hitl = true
+risk = "low"
+labels = ["area:docs"]
+unknown = "Which of the optional CAP-9 lines (the C-7 copy, the AdminOfflineScreen raw button comment, the security.md and deployment.md:94 code-lifetime lines, constants.ts:172) the builder takes; each is ticked or struck in the PR."
+notes = ["The CAP-8 docs line is hitl: PR says \"Refs #n\", I close.", "S9 closes #619 and #621 — link them, don't duplicate."]
+
+[[entry]]
+id = 10
+type = "story"
+title = "The process lines the retros keep asking for are written down once"
+description = "S10, CAP-19 (579/6, 579/7, 580/9, 580/10, 538/10): CLAUDE.md or the bmad-build skill says a hitl PR says Refs #n unless it is the owner's acceptance, and that branches push with git push -u origin HEAD; the release-checklist review-bot line (line 11) is reworded or backed so a PR can meet it; the build skill lists the review bot's actionable comments before \"ready to merge\"; the d1-migration skill and docs/deployment.md say what a failed unique-index migration on an unconstrained table means and that a fresh redeploy is the remedy; and a spec that says \"whatever the phone's clock\" includes a midnight-crossing skew (bmad-spec or the build skill); it does not touch the PR template entry 5 owns."
+verify = "A grep finds each of the five lines in CLAUDE.md or the named skill, and docs/deployment.md names the fresh redeploy for a failed unique-index migration."
+covers = ["CAP-19"]
+after = [9]
+hitl = false
+risk = "low"
+labels = ["area:docs"]
+unknown = "Whether CodeRabbit reviews every PR here: the repo has no .coderabbit config, yet 538/3 names three CodeRabbit comments; the builder checks recent PRs before choosing between rewording release-checklist line 11 and making the bot review the repo."
+
+[[entry]]
+id = 11
+type = "story"
+title = "The architect settles which clock decides \"today\""
+description = "S11, CAP-20 (538/5, N1; owner: architect first): the architect writes one decision, an ADR through the new-adr skill or a recorded \"no ADR\" note, that says which clock decides \"today\" when the phone and the server disagree on the Brussels date, including #496's far-behind-clock case; it changes no code, and the implementation stories are cut from it afterwards, not in this epic."
+verify = "An ADR in docs/adr, or a dated \"no ADR\" note in this epic's Notes and docs/domains/field-operations.md, answers N1 for a phone ahead of and far behind the server across midnight Brussels."
+covers = ["CAP-20"]
+after = []
+hitl = false
+risk = "medium"
+labels = ["area:docs"]
+unknown = "Whether the answer is hard to reverse (ADR-0024) or fits a line in field-operations.md."
+notes = ["S11 (day rule) is architect-only; no implementation story after it until its ADR lands."]
