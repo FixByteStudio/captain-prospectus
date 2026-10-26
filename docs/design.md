@@ -299,7 +299,10 @@ The **Hors ligne screen** (ADR-0037, R6) is what a cached admin identity sees on
 `secondary` tile with `WifiOff`, title, muted sentence) and one primary touch-size
 « Réessayer » button. While the re-check runs the button is disabled, `aria-busy`
 and shows the `Spinner` before « Vérification… »; a failed re-check returns to the
-same screen with no toast. It ships in the entry chunk.
+same screen with no toast, and a line under the sentence says it is still offline
+(`role="status"`). When the browser reports a network but `/api/me` failed, the
+title and sentence read « Le serveur ne répond pas » instead (admin screen only). The same screen is
+the recovery state of a failed admin chunk load. It ships in the entry chunk.
 
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build

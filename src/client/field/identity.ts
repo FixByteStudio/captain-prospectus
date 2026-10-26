@@ -15,6 +15,13 @@ import { ApiError } from "../api";
 import { meResponseSchema, type MeResponse } from "../../shared/schemas";
 import { copy } from "../copy/field";
 
+/**
+ * How long the gate waits on `/api/me` before treating it as unreachable. Long
+ * enough for a slow mobile link to answer, short enough that an admin on a dead
+ * one reaches the Hors ligne screen instead of a blank band (spec-gh-562).
+ */
+export const IDENTITY_TIMEOUT_MS = 10_000;
+
 export type IdentityFetchResult = { ok: true; body: unknown } | { ok: false; error: unknown };
 
 export type IdentityOutcome =

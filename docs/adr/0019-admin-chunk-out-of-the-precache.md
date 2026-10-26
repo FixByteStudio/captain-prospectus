@@ -83,7 +83,9 @@ the field visit form needs it with no signal.
   `aria-busy` paragraph with no error path or retry — so a failed chunk fetch
   hangs as a blank screen rather than saying so. That is a **known gap this ADR
   accepts and does not close**; it wants an error boundary around the admin
-  `Suspense`, which is its own change.
+  `Suspense`, which is its own change. *Closed by GH #562: `AdminChunkBoundary`
+  shows the Hors ligne screen ([ADR-0037](0037-admins-leave-the-field-side.md)), and
+  its « Réessayer » asks for the chunk again.*
 - **A new admin-only lazy chunk would silently be precached again**, because the
   glob names `AdminApp-*` rather than expressing "admin-only". `config.test.ts`
   asserts the ignore exists; it cannot assert that it is still sufficient. Any PR

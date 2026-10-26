@@ -22,6 +22,7 @@ import { copy } from "./copy/field";
 import type { MeResponse } from "../shared/schemas";
 import { usePwa, type PwaState } from "./pwa";
 import { buttonVariants } from "@/ui/button-variants";
+import { AdminChunkBoundary } from "./auth/AdminChunkBoundary";
 import { AdminOfflineScreen } from "./auth/AdminOfflineScreen";
 import { cn } from "./lib/utils";
 import { brusselsPeriod } from "../shared/period";
@@ -45,7 +46,7 @@ import {
   releaseUnconfirmed,
   setMeta,
 } from "./field/db";
-import { resolveIdentity } from "./field/identity";
+import { IDENTITY_TIMEOUT_MS, resolveIdentity } from "./field/identity";
 import { useOnline } from "./hooks/use-online";
 import { LoginScreen } from "./auth/LoginScreen";
 
@@ -59,10 +60,11 @@ import { LoginScreen } from "./auth/LoginScreen";
  * ADR-0014). The field screens stay in the entry chunk for that reason.
  *
  * `lazy` wants a default export and this repo uses named ones, hence the remap.
+ * `AdminChunkBoundary` owns the `lazy`: a failed load there is the Hors ligne
+ * screen with a retry, not a throw past the page.
  */
-const AdminApp = lazy(() =>
-  import("./admin/AdminApp").then((module) => ({ default: module.AdminApp })),
-);
+const loadAdminApp = () =>
+  import("./admin/AdminApp").then((module) => ({ default: module.AdminApp }));
 
 /**
  * The round is what an agent needs the moment the app opens; the visit form
@@ -347,8 +349,13 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
   /** True while a re-check runs, so the Hors ligne screen's button reflects
    * one started by the `online` effect too. */
   const [checking, setChecking] = useState(false);
+  /** The Hors ligne screen's own « Réessayer » was pressed and its answer is pending. */
+  const manualRetry = useRef(false);
+  /** That press got no live answer: the screen says so, instead of looking unchanged. */
+  const [retryFailed, setRetryFailed] = useState(false);
+  /** False when a check is already in flight and this call started none. */
   const recheckIdentity = useCallback(() => {
-    if (identityInFlight.current) return;
+    if (identityInFlight.current) return false;
     setChecking(true);
     // Set here, synchronously, not only in the effect below: the effect only
     // runs after React commits the `recheck` update, and two callers of
@@ -356,7 +363,14 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
     // queue an increment.
     identityInFlight.current = true;
     setRecheck((n) => n + 1);
+    return true;
   }, []);
+
+  const retryFromScreen = useCallback(() => {
+    // Only a check this press started is credited to it.
+    manualRetry.current = recheckIdentity();
+    setRetryFailed(false);
+  }, [recheckIdentity]);
 
   const navigate = useNavigate();
   // The identity effect below must not re-run (and re-ask `/api/me`) each time
@@ -386,6 +400,8 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
     identityInFlight.current = true;
 
     const settle = async (result: Parameters<typeof resolveIdentity>[0]) => {
+      const manual = manualRetry.current;
+      manualRetry.current = false;
       const cached = await getMeta(fieldDb, "identity");
       if (cancelled) return;
       const outcome = resolveIdentity(result, cached);
@@ -440,6 +456,8 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       }
       setMe(outcome.identity);
       setIdentityFromCache(outcome.offline);
+      // Reset by any other answer too, so the line never outlives its press.
+      setRetryFailed(manual && outcome.offline);
       // The cached copy is never treated as proof, online or offline: the
       // Worker re-derives identity from the session on every
       // request (INVARIANT 10). Only overwrite the cache with a live answer,
@@ -447,10 +465,22 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
       if (!outcome.offline) void setMeta(fieldDb, "identity", outcome.identity);
     };
 
-    apiFetch<unknown>("/api/me")
+    // A hung request must end like any other unreachable one: the cache path
+    // (identity.ts), which never revokes or confirms anyone. Not in `apiFetch`:
+    // other callers keep the browser's own limit.
+    const timeout = new AbortController();
+    // Only with a cached identity to fall back on: a first run with none has
+    // nothing better to show than the answer, however slow.
+    const timer = setTimeout(() => {
+      void getMeta(fieldDb, "identity").then((cached) => {
+        if (cached) timeout.abort();
+      });
+    }, IDENTITY_TIMEOUT_MS);
+    apiFetch<unknown>("/api/me", { signal: timeout.signal })
       .then((body) => settle({ ok: true, body }))
       .catch((error: unknown) => settle({ ok: false, error }))
       .finally(() => {
+        clearTimeout(timer);
         identityInFlight.current = false;
         setChecking(false);
       });
@@ -518,11 +548,19 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
             // The cached role only picks this static screen (invariant 10): it
             // opens no route or data. Only a live `/api/me` opens the frame.
             identityFromCache ? (
-              <AdminOfflineScreen checking={checking} onRetry={recheckIdentity} />
+              <AdminOfflineScreen
+                checking={checking}
+                onRetry={retryFromScreen}
+                // The browser's flag only words this screen; it opens nothing.
+                variant={online ? "unreached" : "offline"}
+                stillFailing={retryFailed}
+              />
             ) : (
-              <Suspense fallback={<AdminFrameFallback />}>
-                <AdminApp email={me.email} updatePrompt={<UpdatePrompt pwa={pwa} />} />
-              </Suspense>
+              <AdminChunkBoundary load={loadAdminApp} fallback={<AdminFrameFallback />}>
+                {(AdminApp) => (
+                  <AdminApp email={me.email} updatePrompt={<UpdatePrompt pwa={pwa} />} />
+                )}
+              </AdminChunkBoundary>
             )
           }
         />
@@ -552,7 +590,8 @@ function GatedApp({ pwa }: { pwa: PwaState }) {
               // the network's answer, never the permission one
               // (EXPERIENCE.md § State Patterns, Offline after a reload).
               // The same sentence shows when `/api/me` failed with the
-              // browser online: that case has no wording of its own yet.
+              // browser online: only the admin's Hors ligne screen has its
+              // own wording for that case (copy.adminOffline.unreached).
               identityFromCache ? (
                 <FieldEmptyState
                   icon={WifiOffIcon}

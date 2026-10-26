@@ -21,4 +21,24 @@ describe("AdminOfflineScreen", () => {
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(button.getAttribute("aria-busy")).toBe("true");
   });
+
+  it("says it is still offline after a failed retry, but not while checking", () => {
+    const { rerender } = render(
+      <AdminOfflineScreen checking={false} onRetry={() => {}} stillFailing />,
+    );
+    expect(screen.getByText(copy.adminOffline.stillOffline)).toBeTruthy();
+    rerender(<AdminOfflineScreen checking onRetry={() => {}} stillFailing />);
+    expect(screen.queryByText(copy.adminOffline.stillOffline)).toBeNull();
+  });
+
+  it("words the online-but-unreached variant without saying offline", () => {
+    render(
+      <AdminOfflineScreen checking={false} onRetry={() => {}} variant="unreached" stillFailing />,
+    );
+    expect(screen.getByText(copy.adminOffline.unreached.title)).toBeTruthy();
+    expect(screen.getByText(copy.adminOffline.unreached.body)).toBeTruthy();
+    expect(screen.getByText(copy.adminOffline.unreached.stillUnreached)).toBeTruthy();
+    expect(screen.queryByText(copy.adminOffline.title)).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
 });
