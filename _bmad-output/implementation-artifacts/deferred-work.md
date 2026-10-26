@@ -102,6 +102,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-115-admin-tab-offline.md`
   summary: With `navigator.onLine` stuck true on a dead uplink the Tableau de bord tab stays, and tapping it fetches the un-precached admin chunk; a rejected lazy import then throws past `Suspense` rather than hanging as ADR-0019 describes.
   evidence: ADR-0019's Consequences already accept the failed-chunk case but describe it as a blank `aria-busy` hang; there is no error boundary around the admin `Suspense` (`App.tsx`). #115's gate reads the browser's signal, which a captive portal or an associated-but-dead AP does not flip. #97 owns the offline-admin screen, and the error boundary is named in ADR-0019 as its own change.
+  closed_by: GH #562 — `auth/AdminChunkBoundary.tsx` shows the Hors ligne screen when the admin chunk fails and « Réessayer » imports it again; the chunk load never reads `navigator.onLine`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-115-admin-tab-offline.md`
   summary: The client now carries four distinct notions of "offline" — sync reachability, identity cache-sourcing, `useOnline`'s window events, and a raw `navigator.onLine` read.
   evidence: `field/sync.ts:141` (`status: "offline"`), `field/identity.ts`'s `offline` outcome, `hooks/use-online.ts`, and `field/SyncIndicator.tsx:132`. Three predate #115, which adds the fourth. Collapsing the event-based one onto the sync engine's reachability status would remove a signal rather than add one, but it changes what the tab follows and needs its own decision.
@@ -375,6 +376,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-209-offline-after-reload-page.md`
   summary: An `/admin/*` route on a cached identity says « Hors ligne. Cette page a besoin du réseau… » even when the browser is online and `/api/me` failed (a Worker 5xx, a captive portal), while the strip above it says « Vérification de votre session… ».
   evidence: `App.tsx` keys the page on `identityFromCache`, which `resolveIdentity` sets for every non-401 failure. EXPERIENCE.md § State Patterns gives one sentence for the state; a second one for "reached nothing, but not offline" is the owner's wording to choose. Before GH #209 story 3 the same case read « Vous n'avez pas accès à cette page. », which was worse.
+  closed_by: GH #562 — the owner chose the wording on 2026-10-26: a cached admin on an online browser reads « Le serveur ne répond pas » (`copy.adminOffline.unreached`). The cached agent's page is unchanged; backlog #572 was dropped for it.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-404-sync-batch-size.md`
   summary: Sync CPU with field prospects in the payload is unmeasured; the dedupe lookup is one statement per field prospect (GH #449).

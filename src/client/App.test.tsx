@@ -25,6 +25,7 @@ import { copy } from "./copy";
 import { brusselsPeriod } from "../shared/period";
 import { formatBrusselsWeekday } from "./format";
 import { fieldDb, getMeta, setMeta } from "./field/db";
+import { IDENTITY_TIMEOUT_MS } from "./field/identity";
 import { runSync } from "./field/sync";
 import type { SyncState } from "./field/useSync";
 
@@ -72,6 +73,8 @@ const stub = vi.hoisted(() => ({
   realAddProspect: false,
   /** Renders of `SyncProvider`: an admin has none, because it makes no sync request (ADR-0037). */
   syncRenders: 0,
+  /** True while the admin chunk's `import()` should reject (spec-gh-562). */
+  adminChunkFails: false,
 }));
 
 /** What a revoked session's `ApiError` carries. A fixture, not UI copy:
@@ -83,9 +86,15 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>();
   return {
     ...actual,
-    apiFetch: () => {
+    apiFetch: (_path: string, init?: RequestInit) => {
       stub.identityCalls += 1;
-      if (stub.identityPending) return new Promise(() => {});
+      // Settles like the real fetch when the gate's timeout aborts it.
+      if (stub.identityPending)
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError")),
+          );
+        });
       if (stub.identityUnauthorized)
         return Promise.reject(new actual.ApiError(401, "unauthorized", REVOKED_MESSAGE));
       // Not an ApiError: a bare failure is "unreachable", which with no cached
@@ -127,10 +136,14 @@ vi.mock("./field/AddProspectScreen", async (importOriginal) => {
   };
 });
 
+// A getter, so `lazy`'s `module.AdminApp` read rejects the import on demand.
 vi.mock("./admin/AdminApp", () => ({
-  AdminApp: ({ updatePrompt }: { email: string; updatePrompt: React.ReactNode }) => (
-    <div data-testid="admin-frame">{updatePrompt}</div>
-  ),
+  get AdminApp() {
+    if (stub.adminChunkFails) throw new Error("Failed to fetch dynamically imported module");
+    return ({ updatePrompt }: { email: string; updatePrompt: React.ReactNode }) => (
+      <div data-testid="admin-frame">{updatePrompt}</div>
+    );
+  },
 }));
 
 /** The router's own pathname, so a redirect is asserted, not inferred. */
@@ -211,6 +224,7 @@ beforeEach(async () => {
   stub.identityUnreachable = false;
   stub.identityUnauthorized = false;
   stub.identityCalls = 0;
+  stub.adminChunkFails = false;
   stub.lastSyncAt = null;
   stub.realAddProspect = false;
   stub.syncRenders = 0;
@@ -827,7 +841,8 @@ describe("The admin side", () => {
 
       // The re-check ran (falls back to the same cache) but changed nothing.
       expect(stub.identityCalls).toBeGreaterThan(callsBefore);
-      expect(screen.getByText(copy.adminOffline.title)).toBeTruthy();
+      // The `online` event also moved the screen to its online-but-unreached wording.
+      expect(screen.getByText(copy.adminOffline.unreached.title)).toBeTruthy();
       expect(screen.getByTestId("pathname").textContent).toBe("/admin");
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
@@ -940,14 +955,14 @@ describe("The admin side", () => {
     }
   });
 
-  it("gives the same screen when /api/me fails while the browser reports a network", async () => {
+  it("keeps the Hors ligne screen, in its unreached wording, when /api/me fails while the browser reports a network", async () => {
     // A Worker 5xx or a captive portal: cache-sourced with no `offline` event.
     await setMeta(fieldDb, "identity", ADMIN);
     stub.me = ADMIN;
     stub.identityUnreachable = true;
     renderApp("/admin/prospects");
 
-    expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+    expect(await screen.findByText(copy.adminOffline.unreached.title)).toBeTruthy();
     expect(screen.queryByText(copy.errors.forbidden)).toBeNull();
     expect(screen.queryByTestId("admin-frame")).toBeNull();
   });
@@ -1018,6 +1033,148 @@ describe("The admin side", () => {
       expect(screen.queryByTestId("admin-frame")).toBeNull();
     } finally {
       onlineSpy.mockRestore();
+    }
+  });
+
+  it("shows the Hors ligne screen when the admin chunk fails, even with the browser reporting a network, then loads the admin at the same URL on Réessayer", async () => {
+    stub.me = ADMIN;
+    stub.adminChunkFails = true;
+    renderApp("/admin/prospects");
+
+    // navigator.onLine is true here: the chunk failure does not read it (AC 4).
+    expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+    expect(screen.getByText(copy.adminOffline.body)).toBeTruthy();
+    expect(screen.queryByText(copy.adminOffline.unreached.title)).toBeNull();
+    expect(screen.queryByTestId("admin-frame")).toBeNull();
+
+    stub.adminChunkFails = false;
+    await userEvent.click(screen.getByRole("button", { name: copy.adminOffline.retry }));
+
+    expect(await screen.findByTestId("admin-frame")).toBeTruthy();
+    expect(screen.queryByText(copy.adminOffline.title)).toBeNull();
+    expect(screen.getByTestId("pathname").textContent).toBe("/admin/prospects");
+  });
+
+  it("keeps the Hors ligne screen and says it is still offline when the admin chunk fails again", async () => {
+    stub.me = ADMIN;
+    stub.adminChunkFails = true;
+    renderApp("/admin");
+
+    await userEvent.click(await screen.findByRole("button", { name: copy.adminOffline.retry }));
+
+    expect(await screen.findByText(copy.adminOffline.stillOffline)).toBeTruthy();
+    expect(screen.getByText(copy.adminOffline.title)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: copy.adminOffline.retry }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("says it is still offline when the identity re-check behind Réessayer fails again", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin");
+
+      expect(screen.queryByText(copy.adminOffline.stillOffline)).toBeNull();
+      await userEvent.click(await screen.findByRole("button", { name: copy.adminOffline.retry }));
+
+      expect(await screen.findByText(copy.adminOffline.stillOffline)).toBeTruthy();
+      expect(screen.getByText(copy.adminOffline.title)).toBeTruthy();
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("shows no still-offline line when a re-check nobody pressed fails", async () => {
+    const onlineSpy = mockOffline();
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityUnreachable = true;
+      renderApp("/admin");
+      expect(await screen.findByText(copy.adminOffline.title)).toBeTruthy();
+
+      const callsBefore = stub.identityCalls;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+      });
+      await waitFor(() => expect(stub.identityCalls).toBeGreaterThan(callsBefore));
+
+      expect(await screen.findByText(copy.adminOffline.unreached.title)).toBeTruthy();
+      expect(screen.queryByText(copy.adminOffline.stillOffline)).toBeNull();
+      expect(screen.queryByText(copy.adminOffline.unreached.stillUnreached)).toBeNull();
+    } finally {
+      onlineSpy.mockRestore();
+    }
+  });
+
+  it("keeps waiting on a first-run /api/me with no cached identity, whatever the timeout", async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    const timers = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation(((handler: TimerHandler, ms?: number, ...args: unknown[]) =>
+        realSetTimeout(
+          handler,
+          ms === IDENTITY_TIMEOUT_MS ? 0 : ms,
+          ...args,
+        )) as typeof setTimeout);
+    try {
+      stub.identityPending = true;
+      renderApp("/round");
+      await waitFor(() =>
+        expect(timers).toHaveBeenCalledWith(expect.any(Function), IDENTITY_TIMEOUT_MS),
+      );
+      await act(async () => {
+        await new Promise((resolve) => realSetTimeout(resolve, 50));
+      });
+      expect(screen.queryByText(copy.errors.offlineFirstRun)).toBeNull();
+    } finally {
+      stub.identityPending = false;
+      timers.mockRestore();
+    }
+  });
+
+  it("words a failed /api/me with the browser online as the server not answering, and a failed retry as still not answering", async () => {
+    await setMeta(fieldDb, "identity", ADMIN);
+    stub.me = ADMIN;
+    stub.identityUnreachable = true;
+    renderApp("/admin");
+
+    expect(await screen.findByText(copy.adminOffline.unreached.title)).toBeTruthy();
+    expect(screen.getByText(copy.adminOffline.unreached.body)).toBeTruthy();
+    expect(screen.queryByText(copy.adminOffline.title)).toBeNull();
+
+    // The online flag already queued a re-check of its own; wait for its Réessayer.
+    await userEvent.click(await screen.findByRole("button", { name: copy.adminOffline.retry }));
+    expect(await screen.findByText(copy.adminOffline.unreached.stillUnreached)).toBeTruthy();
+  });
+
+  it("sends a /api/me that never answers to the Hors ligne screen once the timeout elapses", async () => {
+    // Only the gate's timer is shortened (matched by its duration); Dexie and
+    // Testing Library keep the real clock.
+    const realSetTimeout = globalThis.setTimeout;
+    const timers = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation(((handler: TimerHandler, ms?: number, ...args: unknown[]) =>
+        realSetTimeout(
+          handler,
+          ms === IDENTITY_TIMEOUT_MS ? 0 : ms,
+          ...args,
+        )) as typeof setTimeout);
+    try {
+      await setMeta(fieldDb, "identity", ADMIN);
+      stub.me = ADMIN;
+      stub.identityPending = true;
+      renderApp("/admin");
+
+      expect(await screen.findByText(copy.adminOffline.unreached.title)).toBeTruthy();
+      expect(timers).toHaveBeenCalledWith(expect.any(Function), IDENTITY_TIMEOUT_MS);
+      expect(screen.queryByTestId("admin-frame")).toBeNull();
+    } finally {
+      stub.identityPending = false;
+      timers.mockRestore();
     }
   });
 

@@ -297,6 +297,15 @@ export const copy = {
     body: "Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez.",
     retry: "Réessayer",
     checking: "Vérification…",
+    /** A « Réessayer » that failed again, so the press is not mistaken for nothing. */
+    stillOffline: "Toujours hors ligne. Réessayez quand la connexion revient.",
+    /** The browser reports a network but `/api/me` failed (a Worker error, a
+     * captive portal): « hors ligne » would be wrong, and so would « accès ». */
+    unreached: {
+      title: "Le serveur ne répond pas",
+      body: "Le tableau de bord n'a pas pu joindre le serveur. Réessayez dans un instant.",
+      stillUnreached: "Le serveur ne répond toujours pas. Réessayez dans un instant.",
+    },
   },
 
   /** The service worker has a new build waiting (registerType: "prompt"). */

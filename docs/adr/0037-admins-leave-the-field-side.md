@@ -48,7 +48,8 @@ We will **make the field side agent-only and the dashboard admin-only.**
 - **An offline admin sees a Hors ligne screen** — « Vous êtes hors ligne », « Le
   tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez. » and one
   Réessayer button — never the field side. It ships in the entry chunk, so it renders
-  without the admin chunk; ADR-0019's precache rule is unchanged.
+  without the admin chunk; ADR-0019's precache rule is unchanged. It is also what a
+  failed admin chunk load shows, with a retry that asks for the chunk again (GH #562).
 - **Roles are fixed at creation.** The role toggle and the self-demotion jump go.
   Changing someone's role means a new account and deactivating the old one; the
   deactivation confirmation asks for a sync first.

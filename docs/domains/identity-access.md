@@ -132,10 +132,22 @@ Hors ligne screen instead (ADR-0037, R6, `auth/AdminOfflineScreen.tsx`): «
 Vous êtes hors ligne », « Le tableau de bord a besoin du réseau. Reconnectez-vous
 puis réessayez. » and one « Réessayer » button that re-runs the identity check
 (« Vérification… » while it runs; a 401 still opens `/login`), outside the field
-frame and with no link to the round. The cached role only picks which *offline*
-screen renders; it opens nothing, and it never says "access denied". Either
-page also shows when `/api/me` failed with the browser online (a Worker error,
-a captive portal), where "Hors ligne" is loose; the band's strip names that case ("Vérification de votre session…").
+frame and with no link to the round. A « Réessayer » that gets no live answer adds the line
+« Toujours hors ligne. Réessayez quand la connexion revient. », so the press is not silent. The
+cached role only picks which *offline* screen renders; it opens nothing, and it never says
+"access denied". When `/api/me` failed with the browser online (a Worker error, a captive
+portal), the cached **admin** gets the same screen in its *unreached* wording: « Le serveur ne
+répond pas », « Le tableau de bord n'a pas pu joindre le serveur. Réessayez dans un instant. » and,
+after a failed « Réessayer », « Le serveur ne répond toujours pas. Réessayez dans un instant. ».
+The cached **agent** keeps the page above in that case. With an identity cached, the gate gives `/api/me` 10 s
+(`IDENTITY_TIMEOUT_MS`) and then treats it as unreachable, so a hang reaches this screen too; a
+first run with nothing cached keeps waiting.
+
+**A failed admin chunk gets the same Hors ligne screen** (`auth/AdminChunkBoundary.tsx`): a live
+admin whose `AdminApp-*.js` request fails, offline or on a stale hash after a deploy, sees it with
+the offline wording whatever the browser's online flag says, and « Réessayer » imports the chunk
+again and opens the admin at the same URL, with no reload. The chunk stays out of the precache
+([ADR-0019](../adr/0019-admin-chunk-out-of-the-precache.md)).
 
 The cached identity is a rendering convenience, never proof: the Worker
 re-derives identity on every request from the session regardless of what the client claims to be. Its only other effect is that if the identity that
