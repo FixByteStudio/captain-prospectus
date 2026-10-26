@@ -362,6 +362,20 @@ Each figure follows from a constant or query on `main`, named in brackets. The e
   nothing new 0.09 ms. The warm extra is the larger answer (every visit of each door-day) and the
   Brussels day of each visit, computed in the Worker. Inside the budget, but the cold first request
   leaves about 1 ms of headroom on local hardware, as on other routes (GH #404).
+- **The duplicates sweep and `doorDayCounts`, measured** (retro 538/6 N8, GH #638, 2026-10-26).
+  `node --expose-gc scripts/measure-duplicates-cpu.mjs` (after `pnpm db:migrate:local`; it seeds its
+  own pairs in a copy of the local D1) times `GET /api/admin/prospects/duplicates` through the session,
+  on a full page of 100 pairs (200 prospects, a renamed twin on each door), in two legs alternating
+  over three rounds: no visit, and 4 visits a prospect over 3 Brussels days (14 days across the
+  prospects, so `Intl` has 14 to find). `doorDayCounts` is the difference. Ryzen 9 7900, Node 24.21.0,
+  300 warm requests a leg, a minor GC before each request, three runs: Worker median 1.43–1.57 ms
+  without visits and 2.46–2.48 ms with, so **`doorDayCounts` costs 0.9–1.05 ms** for 200 prospects and
+  800 visits; p95 2.9–3.9 ms and worst request 8.0–9.7 ms (without the GC the worst is 16–25 ms in
+  three runs, one outlier in 300, and the medians are the same). D1's time, not billed, is a median
+  0.6–1.0 ms. **The route's cold first request is over budget locally: 15.1–15.7 ms (17.7–18.5
+  without the GC), with no visit at all**, so it is the scan and the pairing of 200 prospects and the
+  process's first use (GH #568), not the door-day counts. A cold isolate on a full page is unmeasured
+  in production (GH #404, #652). Re-measure when `doorDayCounts`, the page size or the scan changes.
 - **Tableau de bord's query plans** (GH #113, `EXPLAIN=1` on the same script). Ten statements at
   GH #113, eleven since GH #177, the
   largest with 11 bound parameters (20 since ADR-0036; the plans below are the pre-door-day ones, each range read

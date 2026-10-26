@@ -33,6 +33,7 @@ import type {
   Script,
   ScriptsResponse,
 } from "../shared/schemas";
+import { only, planOf, recordingDb, scans, type Recorded } from "../../test/query-plan";
 import { workerFetch } from "../../test/worker-fetch";
 import { beforeStatement } from "../../test/d1-hook";
 import { resetTestUsers, seedUser } from "../../test/users";
@@ -2175,57 +2176,36 @@ describe("GET /api/admin/visits", () => {
       const id = await seedVisit("Pizza Roma", at(10), "no_contact");
       await addVisit(id, { receivedAt: at(16), outcome: "converted" });
 
-      const seen: string[] = [];
-      const recording = new Proxy(env.DB, {
-        get(target, prop) {
-          if (prop === "prepare") {
-            return (query: string) => (seen.push(query), target.prepare(query));
-          }
-          const value: unknown = Reflect.get(target, prop);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
+      // The statement the route prepared and what it bound, not a copy of either.
+      const seen: Recorded[] = [];
       const response = await workerFetch("http://localhost/api/admin/visits", undefined, {
-        DB: recording,
+        DB: recordingDb(seen),
       });
       expect(response.status).toBe(200);
 
-      const siblings = seen.filter((q) => q.includes("json_each(?)"));
-      expect(siblings).toHaveLength(1);
-      const [query = ""] = siblings;
+      const statement = only(seen, /json_each\(\?\)/);
       // The JSON array of door-days, and the greatest touched arrival.
-      expect((query.match(/\?/g) ?? []).length).toBe(2);
-      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query}`)
-        .bind(JSON.stringify([[AGENT, id, DAY, NEXT_DAY]]), at(16))
-        .all<{ detail: string }>();
-      expect(results.some((r) => r.detail.includes("visits_prospect_visited_idx"))).toBe(true);
+      expect((statement.sql.match(/\?/g) ?? []).length).toBe(2);
+      expect(statement.params).toEqual([JSON.stringify([[AGENT, id, DAY, NEXT_DAY]]), at(16)]);
+      const plan = await planOf(statement);
+      expect(plan.some((d) => d.includes("visits_prospect_visited_idx"))).toBe(true);
+      expect(scans(plan, "visits")).toEqual([]);
     });
 
     it("pages a delta poll on the feed clock's index (GH #528)", async () => {
       await seedVisit("Pizza Roma", at(10), "no_contact");
 
-      const seen: string[] = [];
-      const recording = new Proxy(env.DB, {
-        get(target, prop) {
-          if (prop === "prepare") {
-            return (query: string) => (seen.push(query), target.prepare(query));
-          }
-          const value: unknown = Reflect.get(target, prop);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
+      const seen: Recorded[] = [];
       const response = await workerFetch("http://localhost/api/admin/visits?since=1", undefined, {
-        DB: recording,
+        DB: recordingDb(seen),
       });
       expect(response.status).toBe(200);
 
-      const touched = seen.filter((q) => q.includes("coalesce") && !q.includes("json_each"));
-      expect(touched).toHaveLength(1);
-      const [query = ""] = touched;
-      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query}`)
-        .bind(1, 501)
-        .all<{ detail: string }>();
-      expect(results.some((r) => r.detail.includes("visits_listed_idx"))).toBe(true);
+      const statement = only(seen, /order by coalesce\(/, /limit \?/);
+      expect(statement.params[0]).toBe(1);
+      const plan = await planOf(statement);
+      expect(plan.some((d) => d.includes("visits_listed_idx"))).toBe(true);
+      expect(scans(plan, "visits")).toEqual([]);
     });
   });
 
@@ -2317,8 +2297,17 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
     updatedAt: now,
   });
 
-  /** A tournée started `startedAt` for AGENT, one stop per [number, prospect id]. */
-  async function swipe(startedAt: number, stops: [number, string][], agent = AGENT) {
+  /**
+   * A tournée started `startedAt` for AGENT, one stop per [number, prospect id].
+   * `clientStartedAt` is the phone's own stamp, which differs from `startedAt`
+   * when the phone's clock was ahead and the server clamped it (invariant 12).
+   */
+  async function swipe(
+    startedAt: number,
+    stops: [number, string][],
+    agent = AGENT,
+    clientStartedAt = startedAt,
+  ) {
     const db = getDb(env.DB);
     const id = crypto.randomUUID();
     await db.insert(tournees).values({
@@ -2326,7 +2315,7 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       agentEmail: agent,
       dayStart: brusselsMidnightDaysFromNow(startedAt, 0),
       startedAt,
-      clientStartedAt: startedAt,
+      clientStartedAt,
       receivedAt: startedAt,
     });
     if (stops.length === 0) return;
@@ -2383,6 +2372,32 @@ describe("GET /api/admin/agents/:email/round (ADR-0028)", () => {
       await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
     );
     expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([one, two]);
+  });
+
+  it("returns the swipe whose phone clock was earliest when both phones ran ahead", async () => {
+    const db = getDb(env.DB);
+    const now = Date.now();
+    const ids = [1, 2].map(() => crypto.randomUUID());
+    const [one, two] = ids as [string, string];
+    await db.insert(prospects).values(
+      ids.map((id, i) => ({
+        ...base(now),
+        id,
+        name: `Stop ${i + 1}`,
+        dedupeKey: `round:ahead:${i + 1}`,
+        status: "assigned" as const,
+        assignedTo: AGENT,
+      })),
+    );
+    // Both phones were ahead, so the server clamped each `startedAt` to its own sync's
+    // clock: the first sync's is the earlier. The phone clocks tell the other way round.
+    await swipe(now - 2_000, [[1, one]], AGENT, now + 2 * 3_600_000);
+    await swipe(now - 1_000, [[1, two]], AGENT, now + 3_600_000);
+    const body = agentRoundResponseSchema.parse(
+      await (await call(`/api/admin/agents/${AGENT}/round`)).json(),
+    );
+    expect(body.tournee?.stops.map((s) => s.prospect.id)).toEqual([two]);
+    expect(body.tournee?.startedAt).toBe(now - 1_000);
   });
 
   it("gives no rows before the swipe, whatever is assigned: no fallback to open prospects", async () => {

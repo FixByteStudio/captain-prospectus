@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { prospects, visits, visitsOrphaned } from "./db/schema";
-import { doorDaysBetween, doorDaysOn, doorDaysTouched } from "./door-days";
-import { DAY_MS, type Outcome } from "../shared/constants";
-import { brusselsMidnightDaysFromNow } from "../shared/period";
+import { doorDayCounts, doorDaysBetween, doorDaysOn, doorDaysTouched } from "./door-days";
+import { periodDays, twoPeriodsDayKey } from "./routes/admin";
+import type { Outcome } from "../shared/constants";
+import { brusselsMidnightDaysFromNow, brusselsPeriod } from "../shared/period";
 import { resetTestUsers } from "../../test/users";
 
 /**
@@ -19,8 +20,10 @@ const A = "agent@example.com";
 const B = "second.agent@example.com";
 
 const HOUR = 3_600_000;
+// The two clock changes of 2026, both at 01:00 UTC.
 const SPRING = Date.parse("2026-03-29T01:00:00.000Z");
 const AUTUMN = Date.parse("2026-10-25T01:00:00.000Z");
+const MINUTE = 60_000;
 const at = (iso: string) => Date.parse(iso);
 
 /** Brussels midnight starting the given calendar date, from noon UTC of that date. */
@@ -84,61 +87,105 @@ async function seedVisit(
   });
 }
 
-describe("the door-day readers", () => {
-  it("give the same (agent, prospect, day, latest outcome) over both clock changes", async () => {
-    const p1 = await seedProspect("Un");
-    const p2 = await seedProspect("Deux");
-    const p3 = await seedProspect("Trois");
+/**
+ * The dataset the three readers and `doorDayCounts` must agree on: both clock
+ * changes of 2026, a correction, a tie, two agents, and visits within an hour
+ * either side of each change.
+ */
+async function seedClockChangeDataset() {
+  const p1 = await seedProspect("Un");
+  const p2 = await seedProspect("Deux");
+  const p3 = await seedProspect("Trois");
+  const p4 = await seedProspect("Quatre");
+  const p5 = await seedProspect("Cinq");
 
-    // The 23 h day, 2026-03-29: a correction, then 23:30 and the next midnight.
-    await seedVisit(p1, A, at("2026-03-29T08:00:00.000Z"), "no_contact");
-    await seedVisit(p1, A, at("2026-03-29T09:00:00.000Z"), "interested");
-    await seedVisit(p1, A, at("2026-03-29T21:30:00.000Z"), "not_interested");
-    await seedVisit(p1, A, at("2026-03-29T22:30:00.000Z"), "converted"); // 00:30 on the 30th
-    // The 25 h day, 2026-10-25.
-    await seedVisit(p2, A, at("2026-10-24T22:30:00.000Z"), "no_contact"); // 00:30
-    await seedVisit(p2, A, at("2026-10-25T22:30:00.000Z"), "interested"); // 23:30
-    await seedVisit(p2, A, at("2026-10-25T23:30:00.000Z"), "converted"); // 00:30 on the 26th
-    // A visited_at tie: the later arrival decides, then the greater id.
-    const tie = at("2026-10-25T10:00:00.000Z");
-    await seedVisit(p3, A, tie, "no_contact", tie + 5, "00000000-0000-4000-8000-000000000001");
-    await seedVisit(p3, A, tie, "interested", tie + 9, "00000000-0000-4000-8000-000000000002");
-    await seedVisit(p3, A, tie, "converted", tie + 9, "00000000-0000-4000-8000-000000000003");
-    // Another agent on the same doors and days.
-    await seedVisit(p1, B, at("2026-03-29T10:00:00.000Z"), "not_interested");
-    await seedVisit(p2, B, at("2026-10-25T22:45:00.000Z"), "no_contact");
+  // The 23 h day, 2026-03-29: a correction, then 23:30 and the next midnight.
+  await seedVisit(p1, A, at("2026-03-29T08:00:00.000Z"), "no_contact");
+  await seedVisit(p1, A, at("2026-03-29T09:00:00.000Z"), "interested");
+  await seedVisit(p1, A, at("2026-03-29T21:30:00.000Z"), "not_interested");
+  await seedVisit(p1, A, at("2026-03-29T22:30:00.000Z"), "converted"); // 00:30 on the 30th
+  // The 25 h day, 2026-10-25.
+  await seedVisit(p2, A, at("2026-10-24T22:30:00.000Z"), "no_contact"); // 00:30
+  await seedVisit(p2, A, at("2026-10-25T22:30:00.000Z"), "interested"); // 23:30
+  await seedVisit(p2, A, at("2026-10-25T23:30:00.000Z"), "converted"); // 00:30 on the 26th
+  // A visited_at tie: the later arrival decides, then the greater id.
+  const tie = at("2026-10-25T10:00:00.000Z");
+  await seedVisit(p3, A, tie, "no_contact", tie + 5, "00000000-0000-4000-8000-000000000001");
+  await seedVisit(p3, A, tie, "interested", tie + 9, "00000000-0000-4000-8000-000000000002");
+  await seedVisit(p3, A, tie, "converted", tie + 9, "00000000-0000-4000-8000-000000000003");
+  // Another agent on the same doors and days.
+  await seedVisit(p1, B, at("2026-03-29T10:00:00.000Z"), "not_interested");
+  await seedVisit(p2, B, at("2026-10-25T22:45:00.000Z"), "no_contact");
+  // Within an hour either side of each change (01:00 UTC, 02:00 or 03:00 in Brussels,
+  // so far from midnight): one door-day per change, the latest visit deciding,
+  // whichever side of the change it fell on. A day boundary near the change is
+  // p1's and p2's, at 22:30 and 23:30 UTC.
+  const around = async (prospect: string, change: number, outcomes: Outcome[]) => {
+    const offsets = [-55, -5, 5, 55];
+    for (const [i, outcome] of outcomes.entries()) {
+      await seedVisit(prospect, A, change + (offsets[i] ?? 0) * MINUTE, outcome);
+    }
+  };
+  await around(p4, SPRING, ["no_contact", "follow_up", "interested", "converted"]);
+  await around(p5, AUTUMN, ["no_contact", "follow_up", "interested", "not_interested"]);
+  return { p1, p2, p3, p4, p5 };
+}
 
-    const days = ["2026-03-29", "2026-03-30", "2026-10-24", "2026-10-25", "2026-10-26"].map(
-      dayStartOf,
-    );
-    const expected: string[] = [];
-    for (const agent of [A, B]) {
-      for (const dayStart of days) {
-        for (const d of await doorDaysOn(getDb(env.DB), { dayStart, agentEmail: agent })) {
-          expected.push(`${agent}|${d.prospectId}|${dayStart}|${d.outcome}`);
-        }
+const DAYS = ["2026-03-29", "2026-03-30", "2026-10-24", "2026-10-25", "2026-10-26"].map(dayStartOf);
+
+/** Every (agent, prospect, day, latest outcome) the day-by-day reader finds. */
+async function doorDaysByDay(): Promise<string[]> {
+  const found: string[] = [];
+  for (const agent of [A, B]) {
+    for (const dayStart of DAYS) {
+      for (const d of await doorDaysOn(getDb(env.DB), { dayStart, agentEmail: agent })) {
+        found.push(`${agent}|${d.prospectId}|${dayStart}|${d.outcome}`);
       }
     }
-    expect(expected.length).toBe(7);
+  }
+  return found;
+}
 
-    // The Brussels day number of an instant, with this range's two changes.
-    const offset = (t: number) => (t >= SPRING && t < AUTUMN ? 2 * HOUR : HOUR);
-    const keyOfDayStart = new Map(days.map((d) => [Math.floor((d + offset(d)) / DAY_MS), d]));
-    const between = await getDb(env.DB).all<{
-      agent_email: string;
-      prospect_id: string;
-      day: number;
-      outcome: Outcome;
-    }>(
+describe("the door-day readers", () => {
+  // The period the dashboard would hold at the fixed clock: its two halves each
+  // carry one clock change (`periodOffsets` allows one per half), the spring one
+  // in the previous period and the autumn one in the current.
+  const PERIOD = 110;
+  const { from, to, previousFrom } = brusselsPeriod(FAKE_NOW, PERIOD);
+  /** A key of the production day builders back to the Brussels midnight it names. */
+  const dayStartOfKey = (key: number) => brusselsMidnightDaysFromNow(from, key);
+
+  type Between = { agent_email: string; prospect_id: string; day: number; outcome: Outcome };
+  const line = (r: Between) =>
+    `${r.agent_email}|${r.prospect_id}|${dayStartOfKey(r.day)}|${r.outcome}`;
+
+  it("give the same (agent, prospect, day, latest outcome) over both clock changes", async () => {
+    await seedClockChangeDataset();
+    // Every seeded day is inside the period under test, or the keys below would not map back.
+    expect(previousFrom).toBeLessThan(DAYS[0] ?? 0);
+    expect(DAYS[4] ?? 0).toBeLessThan(to);
+
+    const expected = await doorDaysByDay();
+    expect(expected.length).toBe(9);
+
+    // The dashboard's own key builder, over both periods at once.
+    const between = await getDb(env.DB).all<Between>(
       sql`select agent_email, prospect_id, day, outcome from (${doorDaysBetween({
-        from: at("2026-03-01T00:00:00.000Z"),
-        to: at("2026-11-30T00:00:00.000Z"),
-        dayKey: (t) =>
-          sql`cast((${t} + case when ${t} >= ${SPRING} and ${t} < ${AUTUMN} then ${2 * HOUR} else ${HOUR} end) / ${DAY_MS} as integer)`,
+        from: previousFrom,
+        to,
+        dayKey: twoPeriodsDayKey({ from, to, previousFrom }, PERIOD),
       })})`,
     );
-    const viaBetween = between.map(
-      (r) => `${r.agent_email}|${r.prospect_id}|${keyOfDayStart.get(r.day)}|${r.outcome}`,
+    const viaBetween = between.map(line);
+
+    // The single-period builder (`periodDays`), over the current period alone.
+    const days = periodDays(from, to, PERIOD);
+    const current = await getDb(env.DB).all<Between>(
+      sql`select agent_email, prospect_id, day, outcome from (${doorDaysBetween({
+        from,
+        to,
+        dayKey: days.dayOf,
+      })})`,
     );
 
     const touched = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 100 });
@@ -149,8 +196,70 @@ describe("the door-day readers", () => {
 
     expect(viaBetween.sort()).toEqual([...expected].sort());
     expect(viaTouched.sort()).toEqual([...expected].sort());
-    // The tie went to the latest arrival, then the greater id.
-    expect(expected).toContain(`${A}|${p3}|${dayStartOf("2026-10-25")}|converted`);
+    expect(current.map(line).sort()).toEqual(
+      expected.filter((e) => Number(e.split("|")[2]) >= from).sort(),
+    );
+  });
+
+  it("find the tie on a visited_at to the latest arrival, then the greater id", async () => {
+    const { p3 } = await seedClockChangeDataset();
+    expect(await doorDaysByDay()).toContain(`${A}|${p3}|${dayStartOf("2026-10-25")}|converted`);
+  });
+
+  it("keep visits within an hour of a clock change in one door-day, the latest deciding", async () => {
+    const { p4, p5 } = await seedClockChangeDataset();
+    const found = await doorDaysByDay();
+    expect(found).toContain(`${A}|${p4}|${dayStartOf("2026-03-29")}|converted`);
+    expect(found).toContain(`${A}|${p5}|${dayStartOf("2026-10-25")}|not_interested`);
+    // One door-day each, however far the change fell between their visits.
+    expect(found.filter((l) => l.includes(`|${p4}|`))).toHaveLength(1);
+    expect(found.filter((l) => l.includes(`|${p5}|`))).toHaveLength(1);
+  });
+
+  it("give doorDayCounts the same door-days per prospect", async () => {
+    const ids = await seedClockChangeDataset();
+    const perProspect = new Map<string, number>();
+    for (const l of await doorDaysByDay()) {
+      const prospect = l.split("|")[1] ?? "";
+      perProspect.set(prospect, (perProspect.get(prospect) ?? 0) + 1);
+    }
+
+    const counts = await doorDayCounts(getDb(env.DB), Object.values(ids));
+    expect(Object.fromEntries(counts)).toEqual(Object.fromEntries(perProspect));
+    // p1: A on the 29th and the 30th, B on the 29th.
+    expect(counts.get(ids.p1)).toBe(3);
+  });
+});
+
+describe("doorDayCounts on a clock-change day", () => {
+  it("counts 00:30 and 23:30 on the 25 h day as one door-day, and 00:30 the next as a second", async () => {
+    const p = await seedProspect("Tard");
+    await seedVisit(p, A, at("2026-10-24T22:30:00.000Z"), "no_contact"); // 00:30 on the 25th
+    await seedVisit(p, A, at("2026-10-25T22:30:00.000Z"), "interested"); // 23:30, 24 h later
+    expect((await doorDayCounts(getDb(env.DB), [p])).get(p)).toBe(1);
+
+    await seedVisit(p, A, at("2026-10-25T23:30:00.000Z"), "converted"); // 00:30 on the 26th
+    expect((await doorDayCounts(getDb(env.DB), [p])).get(p)).toBe(2);
+  });
+
+  it("counts 00:30 and 23:30 on the 23 h day as one door-day, and 00:30 the next as a second", async () => {
+    const p = await seedProspect("Tôt");
+    await seedVisit(p, A, at("2026-03-28T23:30:00.000Z"), "no_contact"); // 00:30 on the 29th
+    await seedVisit(p, A, at("2026-03-29T21:30:00.000Z"), "interested"); // 23:30, 22 h later
+    expect((await doorDayCounts(getDb(env.DB), [p])).get(p)).toBe(1);
+
+    await seedVisit(p, A, at("2026-03-29T22:30:00.000Z"), "converted"); // 00:30 on the 30th
+    expect((await doorDayCounts(getDb(env.DB), [p])).get(p)).toBe(2);
+  });
+
+  it("counts an agent's two days and another agent's one day apart, and a prospect with none as absent", async () => {
+    const p = await seedProspect("Un");
+    const none = await seedProspect("Deux");
+    await seedVisit(p, A, at("2026-10-25T10:00:00.000Z"), "no_contact");
+    await seedVisit(p, B, at("2026-10-25T10:00:00.000Z"), "no_contact");
+    const counts = await doorDayCounts(getDb(env.DB), [p, none, p]);
+    expect(counts.get(p)).toBe(2);
+    expect(counts.has(none)).toBe(false);
   });
 });
 
