@@ -137,7 +137,7 @@ At Brussels midnight the gates come back. A visit form that is open at midnight 
   tournée is inserted with `onConflictDoNothing` on its id, and the earliest `client_started_at`
   of the day is read.
 - **Stop rows** hold the tournée, the prospect, the number and the time the stop was added.
-  They are unique per tournée and prospect. The phone sends them through the outbox, the
+  They are unique per tournée and prospect, and per tournée and number. The phone sends them through the outbox, the
   snapshot at the swipe and a joiner when it appears. Nothing is updated. A stop that left is
   derived from the prospect's assignment and status, never written.
 - The sync response returns today's tournée and its stops. A second phone or a reinstalled

@@ -97,7 +97,8 @@ export type SessionCaller = { identity: Identity; sessionId: string; cookie: str
  *
  * Within SESSION_SLIDE_MS of the last slide nothing is written. Past it, one
  * conditional UPDATE slides the session; of two requests racing on it only
- * the one that gets a row back re-sends the cookie. The TTL is the role's now, so a demoted admin slides to an agent's.
+ * the one that gets a row back re-sends the cookie. The TTL is the role's, which
+ * is fixed at creation (ADR-0037).
  */
 export async function identityFromSession(
   env: Bindings,

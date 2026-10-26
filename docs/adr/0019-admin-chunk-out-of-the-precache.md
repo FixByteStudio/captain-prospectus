@@ -37,6 +37,9 @@ Two facts make the admin chunk different from the field ones:
   a live `/api/me` answer. An admin with no network is shown the field side,
   whatever role the cached identity records (`docs/domains/identity-access.md`).
   Precaching the chunk buys nothing, because the router will not render it.
+  *([ADR-0037](0037-admins-leave-the-field-side.md) removed that fallback: an offline admin now
+  sees the Hors ligne screen, not the field side. The argument still holds, since the router
+  still does not render the chunk for a cache-sourced identity.)*
 - **Every admin screen is a network screen.** The prospect list, the import, the
   duplicate sweep, the script editor and the live feed are all a query away from
   D1. There is no offline admin experience to preserve — unlike the round, the

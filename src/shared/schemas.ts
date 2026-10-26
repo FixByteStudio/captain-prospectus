@@ -562,7 +562,7 @@ export const deviceSchema = z.object({
 });
 export type Device = z.infer<typeof deviceSchema>;
 
-/** One row of the Agents list: every user, active or not (ADR-0029). */
+/** One row of the Utilisateurs list: every user, active or not (ADR-0029). */
 export const userSchema = z.object({
   email: emailSchema,
   /** Null for a row created before names were asked for, e.g. the owner's break-glass row. */

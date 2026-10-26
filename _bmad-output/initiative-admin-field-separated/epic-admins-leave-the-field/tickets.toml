@@ -64,9 +64,9 @@ unknown = "None known; the copy of the deactivation sentence is written in the s
 [[entry]]
 id = 6
 type = "story"
-title = "Utilisateurs screen in two sections"
-description = "Turns the Agents screen into Utilisateurs at /admin/users, after the owner approves its mockup, listing Administrateurs and Agents in two sections with the role chosen once in Ajouter un utilisateur, and updates docs/design.md and docs/glossary.md; delivers R8 and what epic 3 needs from this epic."
-verify = "A screen test shows the two sections with no role toggle, the dev server's /admin/users matches the approved mockup, and the PR quotes the precache total."
+title = "Utilisateurs screen in tabs"
+description = "Turns the Agents screen into Utilisateurs at /admin/users, after the owner approves its mockup, listing Agents and Administrateurs in two tabs (first built as two sections, amended to tabs by the owner on 2026-10-21, #607) with the role chosen once in Ajouter un utilisateur, and updates docs/design.md and docs/glossary.md; delivers R8 and what epic 3 needs from this epic."
+verify = "A screen test shows the two tabs with no role toggle, the dev server's /admin/users matches the approved mockup, and the PR quotes the precache total."
 covers = ["R8"]
 after = [5]
 hitl = true

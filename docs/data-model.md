@@ -118,7 +118,7 @@ erDiagram
   USERS {
     text email PK "lowercased"
     text name "nullable"
-    text role "admin | agent"
+    text role "admin | agent, fixed at creation"
     int active "boolean, default 1"
     int created_at
   }
@@ -164,7 +164,7 @@ erDiagram
 ```
 
 `users` and `sessions` are our own login ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)).
-A user is deactivated, never deleted. The browser holds a random 32-byte token in the
+A user is deactivated, never deleted, and `role` is set once, at creation ([ADR-0037](adr/0037-admins-leave-the-field-side.md)). The browser holds a random 32-byte token in the
 `__Host-cp_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`); only its
 HMAC-SHA-256 under `AUTH_PEPPER` is stored, so a leaked table opens no session. A session
 counts while `expires_at` is in the future and its user is `active`; the role is read from
@@ -279,6 +279,7 @@ been told it is `accepted` and has dropped it, so this table is the only copy.
 | `visits(visited_at)` | the dashboard's period counts, across every prospect and agent |
 | `tournees(agent_email, day_start, client_started_at, id)` | the sync pull's "today's tournée": the earliest swipe of the agent's day |
 | `tournee_stops(tournee_id, prospect_id)` unique | one stop per prospect per tournée; a tournée's stops |
+| `tournee_stops(tournee_id, number)` unique | one prospect per number in a tournée; of two joiners under one number the first stored keeps it |
 | `tournee_stops(prospect_id)` | the foreign key to `prospects` |
 | `scripts(is_active)` | the sync pull's "which script is live" |
 | `scripts(is_active)` unique **where `is_active = 1`** | "exactly one active script at a time" |

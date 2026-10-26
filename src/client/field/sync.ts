@@ -40,7 +40,7 @@ export type SyncStatus =
   | "ok"
   /** No network. Keep everything, try again later. */
   | "offline"
-  /** The Worker answered 401 or 403: the session is gone (403 is only the cross-origin check). Keep the outbox, drop the cached round (GH #35); `/login` is the way back. */
+  /** The Worker answered 401 or 403: the session is gone (a 403 is the cross-origin check or `requireAgent` refusing an admin; both are read the same). Keep the outbox, drop the cached round (GH #35); `/login` is the way back. */
   | "unauthorized"
   /** Build too old (426). Keep everything; update the service worker. */
   | "upgrade"

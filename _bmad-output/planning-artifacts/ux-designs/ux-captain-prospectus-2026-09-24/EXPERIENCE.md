@@ -20,7 +20,7 @@ sources:
 This is one product with two surfaces, built on shadcn/ui + Tailwind CSS v4 (ADR-0014). `DESIGN.md` is the visual identity reference; this file specifies behaviour, and only where it departs from shadcn's defaults.
 
 - **Admin** is a responsive web dashboard. It is designed for a laptop, and also works on a tablet and a phone. It is online only (ADR-0019), uses TanStack Query (ADR-0013), and polls live data every 15 s (ADR-0010).
-- **Field** is an offline-first PWA for phones and tablets. Dexie acts as a cache plus an outbox; agents only ever insert (ADR-0007, invariant 2). The admin goes out in the field too, and gets one extra tab.
+- **Field** is an offline-first PWA for phones and tablets. Dexie acts as a cache plus an outbox; agents only ever insert (ADR-0007, invariant 2). The field side is agents only (ADR-0037): an admin does no tournée and never sees it, offline either.
 - **Language.** Every user-facing string is French and lives in `src/client/copy.ts`. Code, database values and docs stay in English (invariant 15). The words come from the glossary.
 - **Theme.** Light and dark, following the system, with a manual toggle on the admin side.
 - **Dependencies before build.** None of these are UX decisions, but the screens below depend on them:
@@ -69,7 +69,6 @@ The sidebar has three groups. A count badge shows the number waiting in a queue.
 | **Visite — étape 2: Questions** | "Continuer" | Script questions and notes (skipped when there is no script) |
 | **Enregistrer cette visite ?** | "Enregistrer la visite" | Summary, then save to the outbox |
 | **Ajouter un prospect** | Tab "Ajouter" | Add a place that isn't on the list |
-| **Tableau de bord** | Tab, **admins only** | Opens the admin app (online only) |
 | **Page introuvable / accès hors ligne** | Bad link, or first launch offline | Recover |
 
 On a phone, the tabs sit at the bottom. From tablet width they move into the navy band. Tournée and Carte show a two-pane layout on tablet (see Responsive & Platform).
@@ -85,7 +84,7 @@ On a phone, the tabs sit at the bottom. From tablet width they move into the nav
 - See what was done today, reopen a stop → Carnet.
 - Record a visit → Visite.
 - Add a place → Ajouter.
-- Admin in the field → Tableau de bord tab.
+- Admin who canvasses → an agent account on the field side (ADR-0037), not a tab.
 - Admin checks an agent's round → admin Tournée du jour.
 
 Two surfaces have no stated need yet: notifications (open question) and search (to be built later).
@@ -117,10 +116,10 @@ Brand voice lives in `DESIGN.md`. The rules of microcopy:
 | Area | Strings |
 |---|---|
 | Admin shell | Groups "Pilotage", "Prospects", "Terrain" · avatar menu "Se déconnecter" · search "Rechercher un prospect…" · "Notifications" · "Thème clair" / "Thème sombre" · aria "Ouvrir le menu" / "Réduire le menu" |
-| Admin shell — réseau et accès | Offline banner "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." · offline on an admin route after a reload "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." The button the second needs — "Retour à la tournée" — and "Vous n'avez pas accès à cette page." are already in `copy.ts`. |
+| Admin shell — réseau et accès | Offline banner "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." · the Hors ligne screen an admin sees with no live answer (`copy.adminOffline`, State Patterns below) · offline on a typed `/admin/*` route after a reload, for a cached **agent** only, "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." The button that one needs — "Retour à la tournée" — and "Vous n'avez pas accès à cette page." are already in `copy.ts`. |
 | Tableau de bord | "Tableau de bord" · "Où en est la prospection." · "7 jours" / "30 jours" / "90 jours" · "Prospects ouverts" · "Visites" · "Convertis" · "Taux de conversion" · "{+12,4 %} vs période précédente" · "Visites dans le temps" · "Pipeline par statut" · "{412} prospects" · "Activité par agent" (columns Agent · Visites · Convertis · À relancer · Prospects ouverts) · "À traiter" · "Relances dues" → "Voir" · "Visites à rattacher" → "Rattacher" · "Doublons" "{3} paires" → "Fusionner" · "Dernières visites" · "Tout voir" |
 | Prospects, Visites | "Exporter en CSV" · Visites strip: "Taux de conversion", "Flyers remis", "Relances dues sous 7 jours", "Agents en tournée" |
-| Field shell | Tabs "Tournée", "Carte", "Carnet", "Ajouter", "Tableau de bord" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
+| Field shell | Tabs "Tournée", "Carte", "Carnet", "Ajouter" · strip button "Se reconnecter" (plus the existing "Mettre à jour") |
 | Avant le départ (`docs/design.md` › Before the swipe) | "Aucune tournée aujourd'hui" · "Aucun prospect ne vous est assigné pour l'instant. Votre tournée s'affichera ici dès qu'un admin vous en assigne." · "Tournée pas encore chargée" · "Connectez-vous à internet une fois pour récupérer votre tournée. Elle restera ensuite disponible hors ligne." · "{Mercredi 14 octobre}" · "Les arrêts seront numérotés au départ, du plus proche au plus loin." · "et {13} autres arrêts" / "et 1 autre arrêt" · "Glisser pour commencer la tournée" · button name "Commencer la tournée" · "En attente de votre position" · "Démarrage…" · "Impossible de commencer la tournée sur cet appareil. Libérez de l'espace de stockage, puis réessayez." |
 | Localisation | "Activez la localisation" · "Votre position fixe l'ordre des arrêts pour la journée." · "Activer" · "Refusée ? Ouvrez Réglages › Localisation, puis revenez ici." · "Précision : {350} m. On affine…" · "La localisation est refusée sur ce téléphone." · "Position introuvable. Sortez à découvert si possible, puis touchez Activer." (plus the existing "Recherche de votre position…") |
 | Tournée / Carte | "{15} sur {20}" · aria "{15} arrêts faits sur {20}" · aria "Arrêt {16} · {name}" · "Nouveau" (outline badge) · "Tous les arrêts sont faits." · "Retrouvez-les dans Carnet." · "Ouvrir le carnet" · "Plus aucun arrêt dans votre tournée aujourd'hui." · "Carte indisponible hors ligne. La liste reste à jour." · "Voir la liste" · aria "Me recentrer" |
@@ -185,8 +184,9 @@ Behaviour only. Visual specs are in `DESIGN.md › Components`.
 | Loading | Admin, every screen | Skeletons shaped like the content: 4 KPI blocks, the chart area, 6–8 table rows. |
 | Load failed | Admin | An inline Alert where the content would be, e.g. "Impossible de charger les prospects. Réessayez.", with "Réessayer". |
 | Action done / failed | Admin | A Sonner toast at bottom right: "3 prospects assignés", "Version 3 enregistrée et activée.", "L'assignation a échoué. Réessayez." Toasts are for things the admin *did*. |
-| Offline | Admin | A full-width Alert takes the update banner's slot: "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." Panels keep their last-loaded values instead of each flipping to a Load-failed Alert. No button — the 15 s poll retries on its own, and the banner goes as soon as an answer comes back. A network drop while the admin chunk is still loading (ADR-0019: it is not precached) gets the same sentence with "Réessayer". |
-| Offline, after a reload | Admin routes | "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." with "Retour à la tournée", in the field band. A reload with no network can only open the precached field shell (ADR-0019), where `/api/me` is unreachable and the cached identity opens the field shell no matter which role it records. This is not the permission-denied state below, and must not borrow its words. |
+| Offline | Admin | A full-width Alert takes the update banner's slot: "Hors ligne. Les données affichées ne changent plus et se rafraîchiront au retour du réseau." Panels keep their last-loaded values instead of each flipping to a Load-failed Alert. No button — the 15 s poll retries on its own, and the banner goes as soon as an answer comes back. A failed load of the admin chunk (ADR-0019: it is not precached) shows the Hors ligne screen of the next row instead, and its « Réessayer » asks for the chunk again. |
+| Offline, after a reload | Admin routes, an **admin** | An admin whose `/api/me` gets no live answer (a reload with no network; the admin chunk is not precached, ADR-0019) sees the Hors ligne screen (ADR-0037, `AdminOfflineScreen`), never the field side: the brand-only band, then « Vous êtes hors ligne », « Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez. » and one « Réessayer » button (« Vérification… » while it checks). A « Réessayer » that gets no live answer adds « Toujours hors ligne. Réessayez quand la connexion revient. ». With the browser online but `/api/me` failing, it reads « Le serveur ne répond pas » and « Le tableau de bord n'a pas pu joindre le serveur. Réessayez dans un instant. », then « Le serveur ne répond toujours pas. Réessayez dans un instant. ». It has no link to the round. |
+| Offline, after a reload | Admin routes, a cached **agent** | Only an agent: "Hors ligne. Cette page a besoin du réseau. Votre tournée reste accessible." with "Retour à la tournée", in the field band, when the agent types an `/admin/*` URL. This is not the permission-denied state below, and must not borrow its words. |
 | Session expired | Admin | Any admin query, mutation or CSV export that gets the Worker's 401 opens `/login` at once, so a write on an expired session cannot look like it worked. A half-filled import or script draft is lost without a prompt, and signing in again lands on Tableau de bord, not on the screen the 401 interrupted. This file does not specify `/login`: `docs/design.md` § The login page does. Until Access is gone, its redirect is a separate case (`identity-access.md`). |
 | Not an admin | Admin routes | A signed-in agent gets the field band and an empty state with a lock icon: "Vous n'avez pas accès à cette page." with "Retour à la tournée". The route never renders the admin shell, and the Worker answers 403 on every `/api/admin/*` call whatever the client renders (invariant 10, `identity-access.md`). |
 | New build available | Admin, Field | A banner: "Une nouvelle version est disponible." with "Plus tard" and "Mettre à jour". The admin offline banner takes this slot ahead of it; they never both apply, since a build cannot be fetched offline. |
@@ -261,7 +261,7 @@ Visual contrast is in `DESIGN.md` and asserted in `palette.test.ts`.
 | 768–1023px (tablet) | The sidebar collapses to icons. KPIs go 2×2; the chart and panels stack. | Tabs move into the navy band. Tournée: list left, next stop right. Carte: list left, map right. Visite: form left, history and map right. Save confirmation becomes a centred dialog. |
 | ≥ 1024px | Full sidebar. The dashboard grid from DESIGN.md. | Same as tablet. |
 
-The field PWA installs from the phone browser; on a phone, safe-area insets apply to the band and to the tab bar. The admin app is not cached for offline use (ADR-0019) — § State Patterns says what an offline admin sees, before and after a reload. The service worker never caches `/api/*` (invariant 8).
+The field PWA installs from the phone browser; on a phone, safe-area insets apply to the band and to the tab bar. The admin app is not cached for offline use (ADR-0019) — § State Patterns says what an offline admin sees, before and after a reload: a banner, then the Hors ligne screen, never the field side. The service worker never caches `/api/*` (invariant 8).
 
 ## Dashboard metrics
 

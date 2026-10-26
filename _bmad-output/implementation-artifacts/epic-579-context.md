@@ -13,7 +13,7 @@ Admins do no tournée: an admin who canvasses uses an agent account. After this 
 - Story 3: Admin Hors ligne screen
 - Story 4: Remove the admin field side and its links
 - Story 5: Roles are fixed at creation
-- Story 6: Utilisateurs screen in two sections
+- Story 6: Utilisateurs screen in tabs
 - Story 7: Refactor sweep
 
 ## Requirements & Constraints
@@ -24,7 +24,7 @@ Admins do no tournée: an admin who canvasses uses an agent account. After this 
 - An admin landing on `/`, `/login` or the installed PWA (`start_url` `/`) goes to `/admin`. Landing logic lives in `LoginScreen.tsx` `landingFor` and the `/` redirect.
 - An offline admin sees « Vous êtes hors ligne », « Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez. » and one Réessayer button, never the field side.
 - Roles are fixed at creation: no role toggle, no self-demotion jump. Changing a role means a new account and deactivating the old one; the deactivation confirmation asks for a sync first.
-- `/admin/users` (Utilisateurs) lists Administrateurs and Agents in two sections; Ajouter un utilisateur sets the role once.
+- `/admin/users` (Utilisateurs) lists Agents and Administrateurs in two tabs (#607); Ajouter un utilisateur sets the role once.
 - Every client PR quotes the precache total against its 1,000 KiB ceiling.
 - Docs must match what ships: `docs/design.md`, `docs/domains/identity-access.md`, `docs/domains/field-operations.md`, `docs/glossary.md`, `docs/api.md`.
 - Out of scope: login credentials and passphrase (another epic); the admin round view's content.

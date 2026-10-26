@@ -169,8 +169,9 @@ export const SYNC_VISITS_PER_BATCH = 50;
 export const SYNC_BYTES_PER_BATCH = 393_216;
 export const SYNC_PROSPECTS_PER_REQUEST = 100;
 /**
- * A tournée is one per agent per Brussels day (ADR-0036); a week's worth covers a
- * phone that was offline for days. A bigger stop snapshot drains over passes.
+ * A phone queues one tournée per Brussels day (ADR-0036; the server stores every
+ * swipe and reads the earliest); a week's worth covers a phone that was offline
+ * for days. A bigger stop snapshot drains over passes.
  */
 export const SYNC_TOURNEES_PER_REQUEST = 7;
 export const SYNC_STOPS_PER_REQUEST = 250;

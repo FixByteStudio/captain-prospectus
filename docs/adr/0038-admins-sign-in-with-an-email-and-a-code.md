@@ -3,8 +3,8 @@
 - Status: accepted
 - Date: 2026-10-19
 - Deciders: owner
-- Amends: [ADR-0029](0029-own-login-instead-of-cloudflare-access.md) (decisions 3, 5 and 7, and the
-  passphrase in decisions 1 and 4)
+- Amends: [ADR-0029](0029-own-login-instead-of-cloudflare-access.md) (decisions 3, 5 and 7;
+  decisions 1 and 4 keep their passphrase mentions as history)
 
 ## Context
 
@@ -39,7 +39,8 @@ Other facts:
 We will **sign admins in with their email and a one-time code, and remove the passphrase.**
 
 1. **One credential.** Every user, admin or agent, signs in with a one-time code as ADR-0029
-   decision 2 defines it (format, lifetime, normaliser and « one live code » unchanged). An admin
+   decision 2 defines it (format, lifetime, normaliser and « one live code » unchanged; the
+   lifetime has since become per role, [ADR-0039](0039-a-codes-lifetime-depends-on-its-role.md)). An admin
    gets one from their own row on Utilisateurs, on a device already signed in, or from another
    admin. The passphrase goes: `users.passphrase_hash`, `POST /api/admin/me/passphrase`, the
    dialog, its schema and copy.
@@ -85,10 +86,15 @@ We will **sign admins in with their email and a one-time code, and remove the pa
   costs a trip to a signed-in one.
 - A code typed on the wrong form stays live, so the user retries on the right form without asking
   for a new one; the attempt still counts against the throttle.
-- ADR-0029's decisions 1 and 4 lose their passphrase mentions with this change; decision 12
-  stays amended by ADR-0034.
+- **Harder:** an admin can mint a code for any active user, an agent or another admin, and sign
+  in as them. Nothing records who minted a code, and the owner accepted that. A record of the
+  minter, or a restriction on the target, would need a new ADR.
+- ~~ADR-0029's decisions 1 and 4 lose their passphrase mentions with this change;~~ *Not carried
+  out: ADR-0029 keeps the word in decisions 1 and 4 as history, and its status line points
+  here.* Decision 12 stays amended by ADR-0034.
 - Follow-up stories, cut once this is accepted: the role-checked login and the `admin` kind; the
-  admin form and the code dialog (« Code pour {name} » tells an admin to use Accès administrateur
-  with their email); removing the passphrase and its column. Each updates `docs/design.md` (the
+  admin form and the code dialog (~~« Code pour {name} » tells an admin to use Accès
+  administrateur with their email~~ *dropped by the owner on 2026-10-22: the dialog gets no such
+  line, GH #619*); removing the passphrase and its column. Each updates `docs/design.md` (the
   login page), `docs/domains/identity-access.md`, `docs/api.md`, `docs/data-model.md`,
   `docs/security.md` or `docs/deployment.md` as it ships.

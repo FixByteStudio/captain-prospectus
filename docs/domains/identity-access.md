@@ -30,10 +30,18 @@ server reads it case-insensitively, ignoring spaces and hyphens, with I/L read a
 used, superseded or deactivated-user code gets the same 401. Only the code's HMAC is stored and
 nothing logs it.
 
+**Minting is not recorded.** An admin can generate a code for any active user, an agent or another
+admin, and sign in as them on that user's form. Nothing records who generated a code or that it was
+used this way; the only trace is the new device on the user's row of Utilisateurs
+([ADR-0038](../adr/0038-admins-sign-in-with-an-email-and-a-code.md)).
+
 **Break-glass** is the admin form, behind "Accès administrateur" on `/login`. In it, `OWNER_EMAIL` (any case,
 surrounding spaces ignored) with `BREAK_GLASS` (exactly as typed) creates `OWNER_EMAIL` as an active
-admin, or puts it back as one, and opens a session. Both are set by the owner or CI, never in the
-repo; the owner keeps `BREAK_GLASS` offline. A wrong email and a wrong secret get the same 401.
+admin, or puts a deactivated admin owner back as active, and opens a session. It never touches an
+agent: roles are fixed at creation, so an `OWNER_EMAIL` that names an agent row, active or not, gets
+the same 401 as any refusal and nothing is written (no `users` change, no session, no cookie). Both
+are set by the owner or CI, never in the repo; the owner keeps `BREAK_GLASS` offline. A wrong email
+and a wrong secret get the same 401.
 `POST /api/auth/logout` deletes the device's session.
 
 **An admin's code** is the same admin form, for everyday sign-ins ([ADR-0038](../adr/0038-admins-sign-in-with-an-email-and-a-code.md)).
@@ -73,7 +81,7 @@ Sessions expire or are revoked. The app shell is cached by the service worker, s
 
 **One 401 means a lost session** (`apiFetch`: a plain 401 status, `ApiError` status 401, code `unauthorized`). It means `/login` is the way back: at launch the app drops the cache as below and opens `/login` (`replace`), the re-check of a cache-started session does the same through the leave guard (drop and jump wait for "Quitter"; "Annuler" keeps the form), the sync strip's button opens `/login` through the leave guard (so a dirty form asks first), and any admin query, mutation or CSV export that gets one opens `/login`. Nothing on these paths touches the outbox. `apiFetch` and `downloadCsv` keep `redirect: "manual"` as a guard: a redirect comes back opaque and is an ordinary failure (`ApiError` status 0, code `error`, the caller's failure message), never read as a lost session. `/login` asks `/api/me` once on mount: a device that still has an identity goes to its landing; a 401, an opaque redirect or a network error leaves the form.
 
-**The sync strip's "Se reconnecter" opens `/login`** by router navigation, through the leave guard, so it needs no network (GH #470). A 403 at sync is read as a 401 (its only source is the cross-origin check); a redirect comes back opaque and is an ordinary failed sync, with the cache kept. The outbox is untouched either way — INVARIANT 5.
+**The sync strip's "Se reconnecter" opens `/login`** by router navigation, through the leave guard, so it needs no network (GH #470). A 403 at sync is read as a 401 (it comes from the cross-origin check or from `requireAgent` refusing an admin session, and the client treats both alike); a redirect comes back opaque and is an ordinary failed sync, with the cache kept. The outbox is untouched either way — INVARIANT 5.
 
 **The identity-error frame has no button.** It shows only the errors with no way back, such as a phone that has never reached the server; a 401 never reaches it.
 

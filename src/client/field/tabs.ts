@@ -25,8 +25,8 @@ export type FieldTab = {
 };
 
 /**
- * Tournée, Carte, Carnet and Ajouter, for every role. An admin's way to the
- * dashboard is the account card (`AccountMenu.tsx`, GH #561), not a fifth tab.
+ * Tournée, Carte, Carnet and Ajouter. The field side is agent-only
+ * (ADR-0037), so no tab leads to the admin side.
  */
 export function fieldTabs(): readonly FieldTab[] {
   return [

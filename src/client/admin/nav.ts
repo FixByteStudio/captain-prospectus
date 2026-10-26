@@ -39,14 +39,15 @@ export type NavGroup = {
  * under `/admin/*` today (the index included) — it does not read
  * AdminApp.tsx, so update both together if a route there ever changes.
  *
- * Pilotage holds Tableau de bord since GH #107, Agents since GH #304.
+ * Pilotage holds Tableau de bord since GH #107, Utilisateurs since GH #304
+ * (it was Agents until ADR-0037).
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: copy.nav.groups.pilotage,
     items: [
       { label: copy.nav.dashboard, path: "/admin", icon: LayoutGrid, end: true },
-      { label: copy.nav.agents, path: "/admin/users", icon: Users },
+      { label: copy.nav.users, path: "/admin/users", icon: Users },
     ],
   },
   {

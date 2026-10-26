@@ -41,6 +41,8 @@ We will **make the field side agent-only and the dashboard admin-only.**
   `agent.ts` go.
 - **Assignment targets an active agent only**, on every write that sets
   `assignedTo`: PATCH, bulk assign and import. `/api/admin/agents` lists agents only.
+  *(Import sets no assignee, it writes `assignedTo: null`, so only PATCH and bulk assign
+  check one.)*
 - **The admin field side is removed with every link to it**: `adminAccess`, the
   `adminOnline` prop chain, the avatar card's Tableau de bord, and the `/` redirect
   that sends an offline admin to the field. An admin landing on `/`, `/login` or the
@@ -54,7 +56,9 @@ We will **make the field side agent-only and the dashboard admin-only.**
   Changing someone's role means a new account and deactivating the old one; the
   deactivation confirmation asks for a sync first.
 - **The Agents screen becomes Utilisateurs** at `/admin/users`, in two sections,
-  Administrateurs and Agents. Ajouter un utilisateur sets the role, once.
+  Administrateurs and Agents. Ajouter un utilisateur sets the role, once. *(Shipped as two
+  tabs, Agents first and the default, by the owner's amendment of 2026-10-21 (#607); see
+  [design](../design.md#utilisateurs).)*
 
 **The 403 is not a sync contract change.** The request and response shapes are
 untouched, and the client already handles 403 by keeping the outbox. Neither
@@ -63,7 +67,9 @@ untouched, and the client already handles 403 by keeping the outbox. Neither
 **Visits already in an admin phone's outbox are kept, not lost.** After the deploy
 they cannot sync, and they stay on the phone (INVARIANT 5). Before the release, the
 owner has each admin who walked a round sync from the field; the release checklist
-for this epic carries that step. A user deactivated with an outbox is handled the
+for this epic carries that step. *(The owner skipped it on 2026-10-20 (PR #598): the app is not
+yet used in the field, so no admin phone is known to hold an outbox. The release checklist
+does not carry the step.)* A user deactivated with an outbox is handled the
 way the epic already decided: reactivate, sync, deactivate again — no new code.
 
 ## Alternatives considered

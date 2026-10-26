@@ -10,8 +10,8 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | Term | French (UI) | Meaning | Not |
 |---|---|---|---|
 | **Prospect** | Prospect | A business we want to canvass (restaurant, café, food truck…) | lead, venue, entity |
-| **Agent** | Agent | Field person doing visits | rep, user, worker |
-| **Admin** | Admin | Person who imports, assigns, configures scripts | manager |
+| **Agent** | Agent | Field person doing visits; the only role that does a tournée ([ADR-0037](adr/0037-admins-leave-the-field-side.md)) | rep, user, worker |
+| **Admin** | Admin | Person who imports, assigns, configures scripts. An admin does no tournée; one who canvasses uses an agent account ([ADR-0037](adr/0037-admins-leave-the-field-side.md)). On Utilisateurs the admins' tab reads « Administrateurs » and the agents' « Agents » | manager |
 | **User** | Utilisateur | Anyone who may sign in: an admin or an agent, one row of `users` ([ADR-0029](adr/0029-own-login-instead-of-cloudflare-access.md)). Never a synonym for agent | account, member |
 | **Visit** | Visite | One physical attempt at a prospect. A revisit is a new visit | check-in (that's the action) |
 | **Outcome** | Résultat | Result of a visit: `no_contact`, `interested`, `not_interested`, `follow_up`, `converted` | result |
@@ -27,7 +27,7 @@ lives in `src/client/copy.ts` and the `copy/` modules it re-exports (field-reach
 | **Sync** | Synchronisation | One request that pushes pending local writes and pulls the agent's list | |
 | **Data stage** | — (internal) | Whether stored data and installed phones must survive a change: `disposable` (no, the default before real field work) or `protected` (yes). Set by the owner in `CLAUDE.md` ([ADR-0033](adr/0033-rollout-rules-wait-for-protected-data.md)) | prod mode, environment, live |
 | **Dedupe key** | — (internal) | Stable key that makes re-imports update instead of duplicate | |
-| **Tournée** | Tournée | One agent's stops for one Brussels calendar day, at most one per agent per day. A morning swipe freezes it from the agent's open work and numbers it nearest-next; the server keeps it as inserts only ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | route |
+| **Tournée** | Tournée | One agent's stops for one Brussels calendar day. A morning swipe freezes it from the agent's open work and numbers it nearest-next; the server keeps every swipe as inserts only and reads the earliest of the day ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | route |
 | **Stop** | Arrêt | One prospect in a tournée, with the number it took at the swipe, or the next number if it joined later. The number never changes; a stop that leaves unvisited leaves a gap. The field UI counts arrêts, never visites ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | visite (on the field side), door |
 | **Door-day** | — (internal; the admin UI still says « visites ») | One agent, one prospect and one Brussels day; its outcome is that day's latest visit. What the admin figures, the Visites ledger and Carnet count ([ADR-0036](adr/0036-a-swipe-freezes-each-agents-numbered-tournee.md)) | visit (a door-day can hold several) |
 | **Today list** | Tournée du jour | The field screen ([Screens](#screens)): today's tournée's stops with no visit today, in number order, the next one on a card ([design](design.md#next-stop-card)) | route |

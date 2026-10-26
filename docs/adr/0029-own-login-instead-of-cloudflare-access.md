@@ -1,6 +1,6 @@
 # ADR-0029: Sign in through our own login, not Cloudflare Access
 
-- Status: accepted — decision 12 amended by [ADR-0034](0034-launch-on-our-own-login-alone.md); decisions 3, 5 and 7 amended by [ADR-0038](0038-admins-sign-in-with-an-email-and-a-code.md)
+- Status: accepted — decision 12 amended by [ADR-0034](0034-launch-on-our-own-login-alone.md); decisions 3, 5 and 7 amended by [ADR-0038](0038-admins-sign-in-with-an-email-and-a-code.md), which removes the passphrase (its mentions in decisions 1 and 4 stay below as history); the Agents page is Utilisateurs since [ADR-0037](0037-admins-leave-the-field-side.md)
 - Date: 2026-10-07
 - Deciders: mohss, Claude
 - Supersedes: [ADR-0006](0006-cloudflare-access-auth.md). Amends: [ADR-0012](0012-workers-dev-hostname.md)
