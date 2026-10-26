@@ -8,7 +8,7 @@ description: Pre-merge and post-deploy checklist for a Captain Prospectus releas
 ## Before merge
 Merging deploys: the `Deploy` workflow starts by itself once CI passes on `main` (`docs/deployment.md`).
 - [ ] CI green (typecheck, tests, build).
-- [ ] CodeRabbit finished; each actionable comment answered or filed.
+- [ ] CodeRabbit: if it reviewed, it finished and each actionable comment is answered or filed; if it posted a « skipped » notice (« fewer than 10 stars » on almost every PR here), the PR description says so.
 - [ ] Migration reviewed by `migration-guard`; when the data stage is protected, safe for the deployed Worker.
 - [ ] Sync contract change? Followed `sync-contract-change`.
 - [ ] Security-relevant? Reviewed by `security-reviewer`.

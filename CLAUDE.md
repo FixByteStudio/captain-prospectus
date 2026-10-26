@@ -83,6 +83,8 @@ Each is one line; its reasons live behind the link.
 - Typecheck, tests and build pass.
 - Docs updated in the same change when behaviour, API or data model changed (`docs/api.md`, `docs/data-model.md`, domain docs).
 - A decision that is hard to reverse → new ADR ([ADR-0024](docs/adr/0024-adrs-only-for-hard-to-reverse-decisions.md) sets the bar). Anything smaller → the PR description and one line in the doc that owns the rule.
+- A PR for a `hitl` story says `Refs #n`, not `Closes #n`, unless the PR is itself the owner's acceptance (an ADR accepted, say): the owner closes the story.
+- Push a branch with `git push -u origin HEAD`, so the remote branch takes the local name and one commit makes one PR.
 - Commit messages follow Conventional Commits (`feat(field-ops): …`), and every commit ends with the trailer
   `Co-Authored-By: m0hss <dev.fixbyte@proton.me>` (beside any agent attribution line).
 

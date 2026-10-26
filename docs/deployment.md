@@ -127,6 +127,7 @@ Migrations run **before** the new code. Once the data stage is `protected`, each
   on `main`: the next merge deploys `main` as it stands, the bad commit included.
 - **Data**: D1 Time Travel: `npx wrangler d1 time-travel restore captain-prospectus --timestamp=<unix>`. Retention window depends on the plan; check the D1 docs. Restore overwrites the database; export first.
 - A destructive migration (drop/rename column) is never rolled back by code rollback alone. That is why, once the data stage is `protected`, contract steps ship separately. While it is `disposable`, the fix is a [fresh redeploy](#fresh-redeploy).
+- A migration that adds a unique index to a table whose writes were unconstrained fails with `UNIQUE constraint failed` when the table already holds duplicates. The `Deploy` run stops at its migration step with the old Worker still serving, and every later run fails the same way. While the data stage is `disposable`, the remedy is a [fresh redeploy](#fresh-redeploy), not a repair script.
 
 ## Fresh redeploy
 Only while the data stage is `disposable`, and only by the owner: an agent never runs any of this.
