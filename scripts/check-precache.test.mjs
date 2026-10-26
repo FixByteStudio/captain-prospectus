@@ -72,6 +72,22 @@ describe("check-precache.mjs", () => {
     expect(result.stdout).toContain("3 entries (3.00 KiB)");
   });
 
+  it("ends its output with the summary line, the one precache figure a PR quotes (ADR-0031)", () => {
+    const root = makeFixture({
+      swBody: '{url:"a.js",revision:null},{url:"b.css",revision:"x"}',
+      files: { "a.js": 1024, "b.css": 2048 },
+    });
+    roots.push(root);
+
+    const result = run(root, { ceilingKiB: 1000 });
+
+    expect(result.stdout.trimEnd().split("\n").at(-1)).toBe(
+      "check:precache — 2 entries (3.00 KiB) against a 1000 KiB ceiling [root " +
+        root +
+        ", ceiling overridden]",
+    );
+  });
+
   it("counts the web-manifest icons and manifest.webmanifest, which Workbox's own total leaves out", () => {
     // GH #88, ADR-0031: a phone downloads them on install, so the ceiling sees them.
     const root = makeFixture({

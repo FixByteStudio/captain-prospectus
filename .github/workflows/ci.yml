@@ -29,5 +29,6 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run typecheck
       - run: pnpm test
+      # `build` ends with check:precache (package.json), so the job log ends
+      # with the one precache figure a PR quotes (ADR-0031).
       - run: pnpm run build
-      - run: pnpm run check:precache

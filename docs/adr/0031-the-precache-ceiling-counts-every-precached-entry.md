@@ -40,6 +40,9 @@ that `dist/client/sw.js` lists**, including the web-manifest icons and `manifest
   981.06 KiB. The second one is the figure that counts and the one PRs quote.
 - **Headroom is 18.94 KiB**, not the 48.44 KiB Workbox's line suggests. The next field change has to
   make room before it adds weight.
+- **`pnpm build` ends with that line** (GH #637): the build script runs `check:precache` after
+  `vite build` and prints its summary last, below Workbox's own. PRs paste that line and no other
+  precache figure, and `ci.yml` has no separate step for it.
 - **Icons are budgeted like code.** A larger or additional manifest icon now moves the total and can
   fail CI.
 - `check-precache.mjs` no longer reads `globPatterns` from `vite.config.ts`, so it has one input fewer
