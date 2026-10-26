@@ -249,7 +249,7 @@ once, rather than waiting for the next trigger.
 
 `GET /api/admin/visits?since=&from=&to=&limit=` backs the admin's live feed,
 polled every 15 s. `since` is the paging cursor — exclusive, "what's new since
-I last asked" — while `from`/`to` (GH #176) narrow it to a range, inclusive at
+I last asked", a position in insertion order and not a time — while `from`/`to` (GH #176) narrow it to a range, inclusive at
 both ends; all three bounds apply together. Like the export, the range reads
 **`received_at`, not `visited_at`**, for the same reason (INVARIANT 12).
 

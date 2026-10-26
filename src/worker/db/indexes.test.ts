@@ -275,9 +275,9 @@ describe("the duplicates' door-day counts", () => {
   });
 });
 
-// Pinned as they stand on `main`. The Visites feed cursor story (#636) changes the seed and tie
-// reads, and updates these tests with it; the delta poll and `json_each` plans are in admin.test.ts.
-describe("the live feed's seed and tie reads", () => {
+// The live feed pages on the visits rowid (#636): the table's own b-tree, so no index
+// serves it. The delta poll and `json_each` plans are in admin.test.ts.
+describe("the live feed's seed read", () => {
   const seen: Recorded[] = [];
 
   beforeEach(async () => {
@@ -285,7 +285,7 @@ describe("the live feed's seed and tie reads", () => {
     vi.setSystemTime(NOON);
     await clearTables();
     seen.length = 0;
-    // Three visits arriving in one sync: one `received_at`, so a limit of 2 cuts the group.
+    // Three visits from one sync, one `received_at`: a limit of 2 cuts between them.
     for (const id of await seedProspects(3, TEST_AGENT)) await seedVisit(id, NOON - 5_000, NOON);
   });
 
@@ -300,27 +300,20 @@ describe("the live feed's seed and tie reads", () => {
     expect(response.status).toBe(200);
   }
 
-  // A fresh tab reads the newest page: ordered by the feed clock, so
-  // visits_listed_idx, never a sort of every visit ever stored.
-  it("seeds the newest page from visits_listed_idx", async () => {
+  // A fresh tab reads the newest page: the rowid walked backward and stopped at the
+  // limit, never a sort of every visit ever stored. Rowids are unique, so there is
+  // no second statement for a tie group at the cut.
+  it("seeds the newest page by walking the rowid backward", async () => {
     await feed("?limit=2");
-    const statement = only(seen, /^select .* from "visits" order by coalesce\(.*\) desc limit \?/s);
+    const statement = only(
+      seen,
+      /^select .* from "visits" order by "visits"\."rowid" desc limit \?/s,
+    );
     expect(statement.params.length).toBeGreaterThan(0);
     const plan = await planOf(statement);
-    expect(plan.some((d) => d.includes("visits_listed_idx"))).toBe(true);
-    // An ordered walk of the index that stops at the limit, not a scan then a sort.
-    expect(
-      scans(plan, "visits").filter((d) => !d.includes("USING INDEX visits_listed_idx")),
-    ).toEqual([]);
+    expect(plan).toEqual(["SCAN visits"]);
     expect(plan.some((d) => d.includes("USE TEMP B-TREE FOR ORDER BY"))).toBe(false);
-  });
-
-  it("takes the tie group at a cut from visits_listed_idx", async () => {
-    await feed("?since=1&limit=2");
-    const statement = only(seen, /^select .* from "visits" where \(.* > \? and .* = \?\)$/s);
-    expect(statement.params).toContain(NOON);
-    const plan = await planOf(statement);
-    expect(plan.some((d) => d.includes("visits_listed_idx"))).toBe(true);
-    expect(scans(plan, "visits")).toEqual([]);
+    // The seed and the whole-door-days read: nothing else touches visits.
+    expect(seen.filter((s) => /(from|join) "visits"/.test(s.sql))).toHaveLength(2);
   });
 });

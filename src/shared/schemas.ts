@@ -840,9 +840,10 @@ export type AdminDoorDayVisit = z.infer<typeof adminDoorDayVisitSchema>;
  * `visitedAt`, `outcome`, `refusalReason`, `notes` and `followUpAt` are the
  * latest visit's (the one rule in `src/worker/door-days.ts`), `flyerGiven` is
  * true when any visit gave one, and `receivedAt` is the greatest among the
- * visits: the server's clock, which the feed orders by and pages on, because a
- * phone's can be wrong (INVARIANT 12). `visits` is the whole day, oldest first,
- * so its last entry is the row's latest visit.
+ * visits: the server's clock, which the feed orders by because a phone's can
+ * be wrong (INVARIANT 12). It does not page on it: `nextSince` is a position.
+ * `visits` is the whole day, oldest first, so its last entry is the row's
+ * latest visit.
  *
  * `key` is the door-day's identity as the server joins it (agent, prospect and
  * day start), so the client keys and merges rows without rebuilding the day.
@@ -857,7 +858,7 @@ export const adminDoorDaySchema = z.object({
   /** The Brussels midnight that starts the door-day. */
   dayStart: epochMsSchema,
   ...doorDayVisitShape,
-  /** Greatest feed clock of the visits (repair time if repaired): the cursor. */
+  /** Greatest feed clock of the visits (repair time if repaired): the display order. */
   listedAt: epochMsSchema,
   visits: z.array(adminDoorDayVisitSchema).check(z.minLength(1)),
 });
@@ -867,6 +868,8 @@ export const adminVisitsResponseSchema = z.object({
   doorDays: z.array(adminDoorDaySchema).check(z.maxLength(ADMIN_VISITS_PAGE_SIZE)),
   /** More visits matched than `limit`, so the window may hold door-days not listed. */
   truncated: z.boolean(),
+  /** Where the read reached: the `since` for the next poll (the one sent, if nothing matched). */
+  nextSince: z.number().check(z.int(), z.nonnegative()),
   /** The server's clock as it answered, so the client never derives one. */
   serverTime: epochMsSchema,
 });
@@ -889,9 +892,8 @@ const reversedRangeRefine = z.refine<{ from?: number; to?: number }>(
  * `since` and narrow to a range. Optional and undefined by default — omitted,
  * neither bound applies, unlike the export's 30-day default window.
  *
- * `since` deliberately keeps its looser `z.coerce.number()`: it is a cursor
- * already deployed to clients, and tightening it to `epochMsQuerySchema`
- * would not be additive (docs/api.md › Conventions).
+ * `since` is the `nextSince` of the last answer, a position in insertion order
+ * and not a time, so it is not an `epochMsQuerySchema`.
  *
  * `reason` is one `refusalReasonSchema` value, optional like the export's: the
  * feed keeps the door-days whose latest visit has it (R12), the export the

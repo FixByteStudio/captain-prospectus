@@ -436,6 +436,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-540-tournee-write-isolation.md`
   summary: The Visites feed cursor can pass visits from a sync that stamped an earlier `received_at` but committed after a later one.
   evidence: Sync stamps `received_at` with its request-start `now`; two concurrent syncs, or a repaired orphan keeping its old `received_at`, can land below a cursor already advanced. Pre-existing, found in the #540 review.
+  closed_by: GH #636 — the feed's cursor is the `visits` rowid, sent as `nextSince`, so a sync that stamped early and committed late is listed on the next poll. The sync contract and `received_at` are unchanged.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-541-earliest-swipe-wins.md`
   summary: Pin `todayTournee`'s `ORDER BY client_started_at, id LIMIT 1` with a query-plan test that it uses `tournees_agent_day_started_idx` and no temp b-tree sort.
@@ -450,6 +451,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-528-repaired-orphan-visites-live-feed.md`
   summary: A feed-clock stamp taken at request start can land below a cursor already lifted by a write that committed first, so that visit is skipped by an open ledger.
   evidence: Sync and repair both read `now` before their awaits and insert later; a poll between a later-stamped commit and an earlier-stamped one moves `since` past the earlier one. Low likelihood with two agents and one admin.
+  closed_by: GH #636 — same change: the cursor is an insertion position, not a clock, so repair and sync order no longer matter to it.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-590-agent-only-field-api-and-assignment.md`
   summary: Changing a user's role agent→admin (`src/worker/routes/identity.ts:155`) leaves their prospects off every sync pull and their outbox behind a 403.
   evidence: Roster and /api/agent/* are agent-only since GH #590; the role toggle stays until the epic #579 story "roles are fixed at creation" removes it.
