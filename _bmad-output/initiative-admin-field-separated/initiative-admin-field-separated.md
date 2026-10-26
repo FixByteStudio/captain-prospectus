@@ -44,7 +44,7 @@ Source: the owner's decisions in the party-mode session of 2026-10-19 (board ite
 1. No route in `src/client` has a French slug, and the glossary names each slug.
 2. An admin session gets 403 from `/api/agent/*`, cannot be assigned a prospect, and opens `/admin` from `/login`, `/` and an installed PWA; an offline admin sees the Hors ligne screen.
 3. The Utilisateurs screen lists admins and agents apart, with no role toggle, and its URL is `/admin/users`.
-4. An admin signs in with email and code; no passphrase exists in the code, the schema or the docs; break-glass still opens `OWNER_EMAIL`.
+4. An admin signs in with email and code; no passphrase exists in the code or the schema, and the docs name it only as history (ADR-0029, ADR-0038); break-glass still opens `OWNER_EMAIL`.
 5. Each change is on production through CI, with `docs/design.md`, `docs/glossary.md`, `docs/api.md`, `docs/data-model.md` and `docs/domains/identity-access.md` matching what shipped.
 
 ## Boundaries

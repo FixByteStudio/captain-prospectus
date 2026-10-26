@@ -24,7 +24,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0016](0016-autonomous-overnight-agent-runs.md) | Autonomous overnight agent runs, bounded by the repo | accepted |
 | [0017](0017-zod-mini-for-the-shared-wire-contract.md) | Write the shared wire contract in `zod/mini` | accepted |
 | [0018](0018-one-form-stack.md) | One form stack — react-hook-form everywhere, the field route included | accepted |
-| [0019](0019-admin-chunk-out-of-the-precache.md) | Keep the admin chunk out of the service worker precache | accepted |
+| [0019](0019-admin-chunk-out-of-the-precache.md) | Keep the admin chunk out of the service worker precache | accepted — what an offline admin sees amended by 0037 |
 | [0020](0020-google-places-as-a-second-map-provider.md) | Google Places as a second map-import provider | accepted |
 | [0021](0021-visits-derive-status-only-for-the-assignee.md) | A visit derives prospect status only when its author is the assignee | superseded by 0022 |
 | [0022](0022-quarantine-visits-the-server-cannot-take.md) | Quarantine a visit the server cannot take, and let the admin repair it | accepted |
@@ -33,7 +33,7 @@ One decision per file, numbered, never edited after acceptance except to change 
 | [0025](0025-admin-status-outlives-older-visits.md) | An admin's manual status is not undone by an older visit | accepted |
 | [0026](0026-budget-the-field-precache-not-the-entry-chunk.md) | Budget the field route by its precache, not its entry chunk | accepted — ceiling basis amended by 0031 |
 | [0027](0027-interested-is-its-own-closed-status.md) | An "Intéressé" visit gives the prospect its own closed status | accepted |
-| [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | accepted |
+| [0028](0028-agent-position-at-sync.md) | The phone sends its last reading of the day with each sync | accepted — amended by 0036 and 0037 |
 | [0029](0029-own-login-instead-of-cloudflare-access.md) | Sign in through our own login, not Cloudflare Access | accepted — decision 12 amended by 0034, decisions 3, 5 and 7 by 0038, decision 2 by 0039 |
 | [0030](0030-the-server-keeps-an-import-log.md) | The server keeps an import log | accepted |
 | [0031](0031-the-precache-ceiling-counts-every-precached-entry.md) | The precache ceiling counts every precached entry | accepted |

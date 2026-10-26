@@ -54,6 +54,7 @@ export function AdminOfflineScreen({
               {words.still}
             </p>
           )}
+          {/* ui/button's Radix Slot would join the entry chunk; use buttonVariants (ADR-0015). */}
           <button
             type="button"
             className={buttonVariants({ size: "touch" })}

@@ -297,12 +297,19 @@ account card ("Account card" below).
 The **Hors ligne screen** (ADR-0037, R6) is what a cached admin identity sees on
 `/admin/*`: the brand-only band (no tabs, no avatar), the empty-state shape (64px
 `secondary` tile with `WifiOff`, title, muted sentence) and one primary touch-size
-« Réessayer » button. While the re-check runs the button is disabled, `aria-busy`
-and shows the `Spinner` before « Vérification… »; a failed re-check returns to the
-same screen with no toast, and a line under the sentence says it is still offline
-(`role="status"`). When the browser reports a network but `/api/me` failed, the
-title and sentence read « Le serveur ne répond pas » instead (admin screen only). The same screen is
-the recovery state of a failed admin chunk load. It ships in the entry chunk.
+« Réessayer » button. The title reads « Vous êtes hors ligne » and the sentence
+« Le tableau de bord a besoin du réseau. Reconnectez-vous puis réessayez. » While
+the re-check runs the button is disabled, `aria-busy` and shows the `Spinner`
+before « Vérification… »; a failed re-check returns to the same screen with no
+toast, and a line under the sentence (`role="status"`) reads « Toujours hors
+ligne. Réessayez quand la connexion revient. » When the browser reports a network
+but `/api/me` failed, the screen reads « Le serveur ne répond pas » and « Le
+tableau de bord n'a pas pu joindre le serveur. Réessayez dans un instant. », and
+the line after a failed « Réessayer » is « Le serveur ne répond toujours pas.
+Réessayez dans un instant. » (admin screen only). The same screen, in the offline
+wording whatever the browser's online flag says, is the recovery state of a failed
+admin chunk load, and « Réessayer » asks for the chunk again. It ships in the
+entry chunk and has no link to the field side.
 
 `AdminLayout`'s banner slot, between the top bar and `<main>`, holds one of
 two mutually exclusive things (GH #209): the update prompt when a build

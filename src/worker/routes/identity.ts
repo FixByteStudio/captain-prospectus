@@ -36,7 +36,7 @@ export const identityRoutes = new Hono<AppEnv>();
 const nameOrder = new Intl.Collator("fr", { sensitivity: "base" });
 
 /**
- * The Agents list's rows, or one of them. `sessionId` is the caller's own
+ * The Utilisateurs list's rows, or one of them. `sessionId` is the caller's own
  * session, flagged `current` among the devices.
  */
 async function userRows(db: Db, sessionId: string | undefined, email?: string): Promise<User[]> {

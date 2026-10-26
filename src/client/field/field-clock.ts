@@ -71,10 +71,10 @@ const getServerSnapshot = () => 0;
  * the last successful sync of this session, the moment these screens mounted
  * and the last Brussels midnight the phone crossed while mounted, all on the
  * phone's clock like the swipe's `startedAt`. The mount time matters when the
- * frame remounts after midnight (an admin back from `/admin`, offline) with
- * yesterday's sync still the last one. `meta.lastSyncAt` is the server's clock
- * and only answers "has a pull ever succeeded?". The tick is a timestamp, so a
- * sync after midnight cannot pull "now" back to yesterday.
+ * frame remounts after midnight with yesterday's sync still the last one.
+ * `meta.lastSyncAt` is the server's clock and only answers "has a pull ever
+ * succeeded?". The tick is a timestamp, so a sync after midnight cannot pull
+ * "now" back to yesterday.
  */
 export function useFieldNow(): number {
   const { lastSyncAt } = useSyncState();

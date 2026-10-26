@@ -66,7 +66,8 @@ sweep.**
   negative and capped (INVARIANT 6).
 - **One row per agent.** The table is `agent_positions`, keyed by the agent's
   verified email (INVARIANT 10). Only an assignable agent's position is stored; an
-  admin syncing from the field route stores none.
+  admin syncing from the field route stores none. *(Moot since
+  [ADR-0037](0037-admins-leave-the-field-side.md): an admin cannot sync.)*
 - **The write is an upsert, and this ADR is the doc that allows it (INVARIANT 4).**
   The upsert is one statement, `onConflictDoUpdate … where excluded.captured_at >
   agent_positions.captured_at`, so two syncs in flight cannot race. The comparison

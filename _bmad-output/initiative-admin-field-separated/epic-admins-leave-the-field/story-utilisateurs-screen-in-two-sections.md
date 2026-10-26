@@ -4,7 +4,7 @@ remote: "https://github.com/FixByteStudio/captain-prospectus/issues/594"
 tracker_status: done
 id: 6
 type: story
-title: "Utilisateurs screen in two sections"
+title: "Utilisateurs screen in tabs"
 parent: epic-admins-leave-the-field
 covers: [R8]
 after: [5]
@@ -12,15 +12,15 @@ hitl: true
 risk: low
 ---
 
-# Utilisateurs screen in two sections
+# Utilisateurs screen in tabs
 
 ## Description
 
-Turns the Agents screen into Utilisateurs at /admin/users, after the owner approves its mockup, listing Administrateurs and Agents in two sections with the role chosen once in Ajouter un utilisateur, and updates docs/design.md and docs/glossary.md; delivers R8 and what epic 3 needs from this epic.
+Turns the Agents screen into Utilisateurs at /admin/users, after the owner approves its mockup, listing Agents and Administrateurs in two tabs (first built as two sections, amended to tabs by the owner on 2026-10-21, #607) with the role chosen once in Ajouter un utilisateur, and updates docs/design.md and docs/glossary.md; delivers R8 and what epic 3 needs from this epic.
 
 ## Acceptance Criteria
 
-Verify: A screen test shows the two sections with no role toggle, the dev server's /admin/users matches the approved mockup, and the PR quotes the precache total.
+Verify: A screen test shows the two tabs with no role toggle, the dev server's /admin/users matches the approved mockup, and the PR quotes the precache total.
 
 ## References
 

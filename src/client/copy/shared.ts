@@ -32,7 +32,7 @@ export const sharedCopy = {
 
   nav: {
     dashboard: "Tableau de bord",
-    agents: "Utilisateurs",
+    users: "Utilisateurs",
     prospects: "Prospects",
     visits: "Visites",
     scripts: "Scripts",

@@ -30,14 +30,14 @@ references = ["docs/adr/0038-admins-sign-in-with-an-email-and-a-code.md, Decisio
 id = 3
 type = "story"
 title = "Utilisateurs offers codes only"
-description = "Removes the passphrase everywhere it is left after 2 — POST /api/admin/me/passphrase, newPassphrase, passphraseResponseSchema, useGeneratePassphrase, PassphraseDialog, Nouvelle phrase de passe in RowMenu, UsersTable, UsersList and the tabbed UsersScreen, the clear-on-deactivate branch, the copy, and one migration dropping users.passphrase_hash — and adds to CodeDialog, on an admin's row only, a line telling them to sign in through Accès administrateur with their email, which needs the user's role in UsersScreen's issued state; data-model.md, design.md › Utilisateurs, deployment.md and security.md follow."
-verify = "`grep -ri passphrase src` finds nothing, drizzle/ has exactly one new migration and it drops passphrase_hash, and UsersScreen.test.tsx shows the Accès administrateur line in the code dialog from the Administrateurs tab and not from the Agents tab."
+description = "Removes the passphrase everywhere it is left after 2 — POST /api/admin/me/passphrase, newPassphrase, passphraseResponseSchema, useGeneratePassphrase, PassphraseDialog, Nouvelle phrase de passe in RowMenu, UsersTable, UsersList and the tabbed UsersScreen, the clear-on-deactivate branch, the copy, and one migration dropping users.passphrase_hash; data-model.md, design.md › Utilisateurs, deployment.md and security.md follow. No line is added to CodeDialog (owner, 2026-10-22)."
+verify = "`grep -ri passphrase src` finds nothing, drizzle/ has exactly one new migration and it drops passphrase_hash, and UsersScreen.test.tsx shows your own row's menu on the Administrateurs tab holding Générer un code and Désactiver only."
 covers = ["R9", "R11"]
 after = [2, "2.6"]
 hitl = false
 risk = "low"
 unknown = "Whether drizzle-kit emits a plain DROP COLUMN or rebuilds the users table; migration-guard reviews either."
-references = [".claude/skills/d1-migration/SKILL.md", "src/client/admin/users/UsersScreen.tsx", "src/client/admin/users/CodeDialog.tsx"]
+references = [".claude/skills/d1-migration/SKILL.md", "src/client/admin/users/UsersScreen.tsx"]
 
 [[entry]]
 id = 4
