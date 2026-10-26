@@ -1228,6 +1228,52 @@ describe("runSync — the swipe's outbox (ADR-0036)", () => {
       expect(stops.every((s) => s.addedAt === 1_700_000_100_000)).toBe(true);
     });
 
+    // The phone's clock ran ahead at the swipe: the server clamped `startedAt` but
+    // kept the phone's stamp as `clientStartedAt` (invariant 12). The joiner is
+    // stamped with `serverTime`, so « Nouveau » must not hang on comparing the
+    // two clocks (ADR-0036 › Numbers; docs/domains/field-operations.md › Joiners).
+    it("stamps a joiner with serverTime when the swipe's phone clock was ahead, and reads it as « Nouveau »", async () => {
+      const serverTime = 1_700_000_100_000;
+      const ahead = serverTime + 2 * 3_600_000;
+      const held = [prospectOf({ name: "H1" }), prospectOf({ name: "H2" })];
+      const newcomer = prospectOf({ name: "Nouveau" });
+      const pulled: TodayTournee = {
+        ...pulledDay(held),
+        startedAt: serverTime - 1_000,
+        clientStartedAt: ahead,
+      };
+      // The swipe wrote each stop's addedAt equal to the phone's start time.
+      pulled.stops = pulled.stops.map((s) => ({ ...s, addedAt: ahead }));
+
+      await runSync({
+        db,
+        identity: AGENT,
+        fetchFn: respondWith(
+          okResponse({ serverTime, prospects: [...held, newcomer], tournee: pulled }),
+        ),
+      });
+
+      const [queued] = await db.outboxStops.toArray();
+      expect(queued).toMatchObject({ prospectId: newcomer.id, number: 3, addedAt: serverTime });
+      const today = stopsOfToday(
+        {
+          pulledTournees: await db.tournees.toArray(),
+          pulledStops: await db.tourneeStops.toArray(),
+          outboxTournees: await db.outboxTournees.toArray(),
+          outboxStops: await db.outboxStops.toArray(),
+          identity: AGENT,
+        },
+        brusselsPeriod(serverTime, 1),
+      );
+      // `stopsOfToday` keeps Dexie's order (by random stop id), so order by number here.
+      const byNumber = [...(today?.stops ?? [])].sort((a, b) => a.number - b.number);
+      expect(byNumber.map((s) => [s.number, s.joiner])).toEqual([
+        [1, false],
+        [2, false],
+        [3, true],
+      ]);
+    });
+
     it("sends the joiner on the next sync, and queues a prospect once per pull", async () => {
       const held = [prospectOf(), prospectOf()];
       const p = prospectOf();

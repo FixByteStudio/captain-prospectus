@@ -552,7 +552,7 @@ function dayIndexer(from: number, to: number): (t: SQL) => SQL {
     sql`cast((${t} + case when ${t} >= ${changeAt} then ${after} else ${before} end) / ${DAY_MS} as integer) - ${firstDay}`;
 }
 
-function periodDays(from: number, to: number, period: number): PeriodDays {
+export function periodDays(from: number, to: number, period: number): PeriodDays {
   return { from, to, dates: periodDates(from, period), dayOf: dayIndexer(from, to) };
 }
 
@@ -562,7 +562,7 @@ function periodDays(from: number, to: number, period: number): PeriodDays {
  * offsets because `periodOffsets` assumes at most one clock change in the span
  * it is given, and two periods can hold two (INVARIANT 7 stays: a dozen binds).
  */
-function twoPeriodsDayKey(
+export function twoPeriodsDayKey(
   { from, to, previousFrom }: { from: number; to: number; previousFrom: number },
   period: number,
 ): (t: SQL) => SQL {

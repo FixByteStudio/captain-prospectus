@@ -1420,8 +1420,18 @@ describe("agent position at sync (ADR-0028)", () => {
   const stored = () => getDb(env.DB).select().from(agentPositions);
 
   beforeEach(async () => {
+    // Noon in Brussels, clear of midnight and of a clock change: a reading taken
+    // seconds before "now" is today's, which the real clock breaks in the first
+    // seconds after midnight (the tournée block below sets the pattern).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse("2026-06-17T10:00:00.000Z"));
     await getDb(env.DB).delete(agentPositions);
   });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("stores nothing for a body with no position", async () => {
     env.DEV_USER_EMAIL = AGENT_ONLY;
     expect((await sync({})).status).toBe(200);
@@ -1677,6 +1687,42 @@ describe("tournée at sync (ADR-0036)", () => {
     const again = await bodyOf(await sync({ tournees: [t], stops }));
     expect(again.accepted.tournees).toEqual([t.id]);
     expect(again.accepted.stops).toEqual(stops.map((s) => s.id));
+  });
+
+  it("still acknowledges the visits when the stops insert throws beside a stored tournée, and the resend lands", async () => {
+    const { ids, t, stops } = await swipe(2);
+    const visit = visitOf(ids[0] ?? "", "interested");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await env.DB.exec(
+      "CREATE TRIGGER fail_stops BEFORE INSERT ON tournee_stops BEGIN SELECT RAISE(ABORT, 'stops down'); END",
+    );
+    let response: Response;
+    let logged: unknown[][];
+    try {
+      response = await sync({ visits: [visit], tournees: [t], stops });
+    } finally {
+      await env.DB.exec("DROP TRIGGER fail_stops");
+      logged = [...error.mock.calls];
+      error.mockRestore();
+    }
+
+    expect(response.status).toBe(200);
+    expect(logged).toContainEqual(["tournee write failed", "Error"]);
+    const body = await bodyOf(response);
+    expect(body.accepted.visits).toEqual([visit.id]);
+    // The tournée row went in before the stops threw; neither is listed, so the phone resends both.
+    const db = getDb(env.DB);
+    expect(await db.select().from(tournees)).toHaveLength(1);
+    expect(await db.select().from(tourneeStops)).toHaveLength(0);
+    expect(body.accepted.tournees).toEqual([]);
+    expect(body.accepted.stops).toEqual([]);
+
+    const again = await bodyOf(await sync({ tournees: [t], stops }));
+    expect(again.accepted.tournees).toEqual([t.id]);
+    expect(again.accepted.stops).toEqual(stops.map((s) => s.id));
+    expect(await db.select().from(tournees)).toHaveLength(1);
+    expect(await db.select().from(tourneeStops)).toHaveLength(2);
+    expect(again.tournee?.stops.map((s) => s.id)).toEqual(stops.map((s) => s.id));
   });
 
   it("gives a second session of the same agent the same tournée and numbers", async () => {
@@ -2175,6 +2221,19 @@ describe("tournée at sync (ADR-0036)", () => {
       (await sync({ stops: [{ ...stops[0], number: TOURNEE_STOP_NUMBER_MAX + 1 }] as never }))
         .status,
     ).toBe(400);
+  });
+
+  // A stop's number counts from 1 (ADR-0036): zero or less is a 400, not a stored gap.
+  it.each([0, -1])("refuses a stop numbered %i", async (number) => {
+    const { ids, t } = await swipe(1);
+    const response = await sync({
+      tournees: [t],
+      stops: [{ ...stopOf(t.id, ids[0] ?? "", 1), number }],
+    });
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe("validation");
+    expect(await getDb(env.DB).select().from(tournees)).toHaveLength(0);
+    expect(await getDb(env.DB).select().from(tourneeStops)).toHaveLength(0);
   });
 
   it("gives a second real session of the agent the same tournée", async () => {
