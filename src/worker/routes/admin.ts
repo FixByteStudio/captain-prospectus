@@ -1574,11 +1574,13 @@ function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined
  * Ordered by the door-day's greatest `coalesce(repaired_at, received_at)`
  * (`listedAt`), not `visited_at`: the feed answers "what has reached me", and a
  * phone that synced a three-day-old visit this minute, or an admin who repaired
- * an orphan, is news. `visits_listed_idx` exists for exactly this ordering.
+ * an orphan, is news.
  *
- * `since` is exclusive, so the client can pass back the greatest `listedAt` it
- * saw and get only the door-days touched since, each whole. Polling every 15 s
- * makes that the difference between 500 rows and none.
+ * `since` is exclusive and is a position in insertion order, not a time: the
+ * client passes back the `nextSince` it was given and gets only the door-days
+ * touched since, each whole. Polling every 15 s makes that the difference
+ * between 500 rows and none. A time would let a sync that stamped `received_at`
+ * early and committed late fall below a cursor already moved past it.
  *
  * Deliberately NOT filtered on `merged_into IS NULL`, which every other admin
  * list does. This one records what agents did, and an absorbed prospect keeps
@@ -1589,14 +1591,14 @@ function refusalReasonFilter(reason: RefusalReason | undefined): SQL | undefined
  */
 adminRoutes.get("/visits", validate("query", visitsSinceQuerySchema), async (c) => {
   const { since, from, to, reason, limit } = c.req.valid("query");
-  const { doorDays, truncated } = await doorDaysTouched(getDb(c.env.DB), {
+  const { doorDays, truncated, nextSince } = await doorDaysTouched(getDb(c.env.DB), {
     since,
     from,
     to,
     reason,
     limit,
   });
-  return c.json<AdminVisitsResponse>({ doorDays, truncated, serverTime: Date.now() });
+  return c.json<AdminVisitsResponse>({ doorDays, truncated, nextSince, serverTime: Date.now() });
 });
 
 /**

@@ -18,7 +18,7 @@ import {
   sourceSchema,
   statusListSchema,
 } from "../../shared/schemas";
-import { arrivedKeys, mergeDoorDays, nextSince } from "./visits/feed";
+import { arrivedKeys, mergeDoorDays } from "./visits/feed";
 import { batched } from "./import/csv";
 import { PAGE_SIZE } from "./pagination";
 import type {
@@ -593,10 +593,11 @@ export function useVisitsFeed(period?: DashboardPeriod, reason?: RefusalReason) 
     held.current = inWindow;
     seeded.current = true;
     setTaken(true);
-    // Advance from what we actually hold, never from the server clock: a visit
-    // written between the query and its answer is then delivered next poll
-    // rather than skipped for good.
-    since.current = nextSince(inWindow);
+    // Advance to where the server's read reached, not to the newest row held:
+    // a `reason` poll whose whole page is door-days the filter drops holds
+    // nothing new, and would ask for that page for ever. `max` because two
+    // overlapping fetches can answer out of order.
+    since.current = Math.max(since.current, page.nextSince);
     setDoorDays(inWindow);
     // `answeredAt` too: a refetch whose answer is unchanged keeps `page`'s
     // reference (structural sharing) but may be this mount's first.

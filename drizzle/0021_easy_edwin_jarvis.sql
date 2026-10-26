@@ -1,0 +1,1 @@
+DROP INDEX `visits_listed_idx`;

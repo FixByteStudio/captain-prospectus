@@ -101,9 +101,18 @@ function doorDay(id: string, receivedAt: number, over: Partial<AdminDoorDay> = {
   return row;
 }
 
-/** The feed's answer: door-days, newest first as the server sends them. */
-function feedAnswer(doorDays: AdminDoorDay[], serverTime: number, truncated = false): Response {
-  return json({ doorDays, truncated, serverTime });
+/**
+ * The feed's answer: door-days, newest first as the server sends them. `nextSince`
+ * is the server's position (a rowid there); unless a test sets it, a stand-in that
+ * moves with the rows.
+ */
+function feedAnswer(
+  doorDays: AdminDoorDay[],
+  serverTime: number,
+  truncated = false,
+  nextSince = Math.max(0, ...doorDays.map((d) => d.listedAt)),
+): Response {
+  return json({ doorDays, truncated, nextSince, serverTime });
 }
 
 function dashboardAnswer(period: number): DashboardResponse {
@@ -668,6 +677,20 @@ describe("VisitsScreen › refusal reasons (GH #249)", () => {
     const poll = asked.slice(beforePoll).find((u) => u.startsWith("/api/admin/visits?"));
     expect(param(poll, "since")).not.toBe("0");
     expect(param(poll, "reason")).toBe("no_need");
+  });
+
+  it("polls from the server's nextSince, though its page held no door-day (GH #636)", async () => {
+    // A reason= read whose every visit was a door-day the filter dropped: no row,
+    // yet the cursor must move or the next poll asks for the same page for ever.
+    const asked = stubFetch({ visits: () => feedAnswer([], 4, false, 42) });
+    const client = renderScreen("/admin/visits?period=7&reason=no_need");
+    await screen.findByText(copy.visits.reasonFilter.empty);
+
+    const beforePoll = asked.length;
+    vi.setSystemTime(NOW + 1);
+    await client.refetchQueries({ queryKey: adminKeys.visitsFeed(), type: "active" });
+    const poll = asked.slice(beforePoll).find((u) => u.startsWith("/api/admin/visits?"));
+    expect(param(poll, "since")).toBe("42");
   });
 
   it("drops ?reason= from the URL when Toutes les raisons is chosen", async () => {

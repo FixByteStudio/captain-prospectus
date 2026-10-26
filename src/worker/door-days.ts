@@ -20,11 +20,22 @@ import type { Db } from "./db/client";
 const LATEST_VISIT_FIRST = sql`${visits.visitedAt} desc, ${visits.receivedAt} desc, ${visits.id} desc`;
 
 /**
- * The live feed's clock: when the visit entered `visits`. A repaired orphan keeps
- * its original `received_at` and is stamped `repaired_at`, so the feed's cursor
- * sees it. `visits_listed_idx` is declared on this same expression.
+ * The live feed's display clock (`listedAt`): when the visit entered `visits`. A
+ * repaired orphan keeps its original `received_at` and is stamped `repaired_at`,
+ * so it is listed from the repair on. It orders what the screen shows; it is not
+ * the cursor, which is `FEED_SEQ`.
  */
 const LISTED_AT = sql`coalesce(${visits.repairedAt}, ${visits.receivedAt})`;
+
+/**
+ * The live feed's cursor: the `visits` rowid, assigned when the row is inserted.
+ * D1 runs writes one at a time, so a later insert always gets a higher rowid,
+ * whatever `received_at` it was stamped with at the start of a slower request
+ * (docs/api.md › The live feed). Nothing deletes a visit, so it never goes back.
+ * Qualified because `doorDaysTouched`'s second read joins `prospects`, which
+ * has its own.
+ */
+const FEED_SEQ = sql`"visits"."rowid"`;
 
 /**
  * The door-days of every agent over `[from, to)` as a subquery body (no
@@ -138,24 +149,26 @@ export async function doorDaysOn(
   );
 }
 
-/** What `doorDaysTouched` answers: the feed's rows and whether the read was cut. */
-export type DoorDaysTouched = { doorDays: AdminDoorDay[]; truncated: boolean };
+/**
+ * What `doorDaysTouched` answers: the feed's rows, whether the read was cut, and
+ * the cursor to ask from next (`since` when nothing matched).
+ */
+export type DoorDaysTouched = { doorDays: AdminDoorDay[]; truncated: boolean; nextSince: number };
 
 /**
  * The door-days the live feed lists (R13, docs/api.md › The live feed): every
- * door-day with a visit whose `received_at` is after `since` and within
- * `[from, to]`, each whole, all its visits included, oldest first.
+ * door-day with a visit inserted after `since` (a `FEED_SEQ`) whose `received_at`
+ * is within `[from, to]`, each whole, all its visits included, oldest first.
  *
  * Three steps, so a door-day is listed whole however few of its visits the
  * bounds touch:
  * 1. The touched visits, `limit + 1` so a cut is known. With `reason`, only
  *    visits that have it: a door-day whose latest visit has it has at least one.
- *    The seed (`since` = 0) reads the newest arrivals, since a fresh tab wants
- *    the latest page. A delta poll reads the oldest first, so the client's
- *    cursor (the greatest `receivedAt` it holds) moves past only what it got,
- *    and takes the whole tie group at the cut, so the exclusive `since` skips
- *    none of it. A sync stamps one `received_at`, so the group is usually one
- *    sync's visits; the page may exceed `limit` by it.
+ *    The seed (`since` = 0) reads the newest insertions, since a fresh tab wants
+ *    the latest page. A delta poll reads the oldest first, so the cursor moves
+ *    past only what was read. The cursor is the last visit read, not the last
+ *    door-day returned: a `reason` poll whose read is all door-days the filter
+ *    drops still moves on, or it would ask for the same page for ever.
  * 2. Each touched visit's Brussels day, in JS rather than SQL: the unscoped feed
  *    spans any number of clock changes, which `periodOffsets` cannot. `Intl` runs
  *    only when an instant leaves the day held, about twice a distinct day
@@ -163,7 +176,7 @@ export type DoorDaysTouched = { doorDays: AdminDoorDay[]; truncated: boolean };
  * 3. Every visit of those door-days in one statement, driven by `json_each` over
  *    one bound JSON array (INVARIANT 7: a chunked `IN` would need six statements
  *    for 500 door-days), each found through `visits_prospect_visited_idx`, and
- *    none received after the newest touched visit.
+ *    none inserted after the newest touched visit.
  *
  * The prospect is the visit's own and is not filtered on `merged_into`: the feed
  * records what agents did, so the name is the one the visit was made against.
@@ -179,7 +192,7 @@ export async function doorDaysTouched(
   }: { since: number; from?: number; to?: number; reason?: RefusalReason; limit: number },
 ): Promise<DoorDaysTouched> {
   const filters = [
-    since > 0 ? sql`${LISTED_AT} > ${since}` : undefined,
+    since > 0 ? sql`${FEED_SEQ} > ${since}` : undefined,
     from !== undefined ? gte(visits.receivedAt, from) : undefined,
     to !== undefined ? lte(visits.receivedAt, to) : undefined,
     reason !== undefined ? eq(visits.refusalReason, reason) : undefined,
@@ -190,38 +203,19 @@ export async function doorDaysTouched(
       agentEmail: visits.agentEmail,
       prospectId: visits.prospectId,
       visitedAt: visits.visitedAt,
-      receivedAt: visits.receivedAt,
-      listedAt: sql<number>`${LISTED_AT}`,
+      seq: sql<number>`${FEED_SEQ}`,
     })
     .from(visits)
     .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(...(since > 0 ? [asc(LISTED_AT), asc(visits.id)] : [desc(LISTED_AT)]))
+    .orderBy(since > 0 ? asc(FEED_SEQ) : desc(FEED_SEQ))
     .limit(limit + 1);
   const truncated = read.length > limit;
   const touched = truncated ? read.slice(0, limit) : read;
-  if (touched.length === 0) return { doorDays: [], truncated };
-
-  const last = touched[touched.length - 1];
-  const past = read[limit];
-  if (since > 0 && last !== undefined && past !== undefined && past.listedAt === last.listedAt) {
-    // The cut splits one arrival: take it whole, or the next poll's `since`
-    // (that very feed clock) would skip the rest of it for good.
-    const tie = await db
-      .select({
-        agentEmail: visits.agentEmail,
-        prospectId: visits.prospectId,
-        visitedAt: visits.visitedAt,
-        receivedAt: visits.receivedAt,
-        listedAt: sql<number>`${LISTED_AT}`,
-      })
-      .from(visits)
-      .where(and(...filters, sql`${LISTED_AT} = ${last.listedAt}`));
-    touched.push(...tie);
-  }
+  if (touched.length === 0) return { doorDays: [], truncated, nextSince: since };
 
   const days = brusselsDays(touched.map((v) => v.visitedAt));
   let newest = 0;
-  for (const v of touched) newest = Math.max(newest, v.listedAt);
+  for (const v of touched) newest = Math.max(newest, v.seq);
   const keys = new Map<string, [string, string, number, number]>();
   for (const v of touched) {
     // Set by `brusselsDays` for every instant it was given.
@@ -272,9 +266,9 @@ export async function doorDaysTouched(
       and "visits"."visited_at" >= json_extract(k.value, '$[2]')
       and "visits"."visited_at" < json_extract(k.value, '$[3]')
       and "visits"."agent_email" = json_extract(k.value, '$[0]')
-      -- A visit synced after the first read waits for the next poll: it would
+      -- A visit inserted after the first read waits for the next poll: it would
       -- lift the cursor past a door-day that read never touched.
-      and ${LISTED_AT} <= ${newest}
+      and ${FEED_SEQ} <= ${newest}
     join ${prospects} on ${prospects.id} = "visits"."prospect_id"
     order by ${LATEST_VISIT_FIRST}
   `);
@@ -325,7 +319,7 @@ export async function doorDaysTouched(
     .filter((d) => reason === undefined || d.refusalReason === reason)
     .sort((a, b) => b.listedAt - a.listedAt || a.key.localeCompare(b.key));
   for (const d of doorDays) d.visits.reverse();
-  return { doorDays, truncated };
+  return { doorDays, truncated, nextSince: newest };
 }
 
 /**

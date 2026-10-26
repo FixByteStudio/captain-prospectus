@@ -125,7 +125,10 @@ function stubFetch(respond: (period: number) => Response | Promise<Response>, ot
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), "http://localhost").pathname;
       if (path === "/api/admin/visits")
-        return (others.feed ?? (() => json({ doorDays: [], truncated: false, serverTime: 0 })))();
+        return (
+          others.feed ??
+          (() => json({ doorDays: [], truncated: false, nextSince: 0, serverTime: 0 }))
+        )();
       if (path === "/api/admin/visits/orphaned")
         return (others.orphans ?? (() => json({ visits: [], remaining: 0 })))();
       if (path === "/api/admin/prospects/duplicates")
@@ -773,7 +776,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
   it("shows the newest 5 of the opening page, with no wash and no announcement (I/O matrix, opening page)", async () => {
     const page = Array.from({ length: 500 }, (_, i) => doorDay(i + 1));
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, nextSince: 0, serverTime: 0 }),
     });
     renderScreen();
 
@@ -787,7 +790,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
   it("puts a polled door-day on top with a wash and one announcement (I/O matrix, new visit)", async () => {
     let page = [doorDay(1), doorDay(2)];
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, nextSince: 0, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(2));
@@ -821,7 +824,9 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     let fail = true;
     stubFetch((period) => json(answer(period)), {
       feed: () =>
-        fail ? json({}, 500) : json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }),
+        fail
+          ? json({}, 500)
+          : json({ doorDays: [doorDay(1)], truncated: false, nextSince: 0, serverTime: 0 }),
     });
     renderScreen();
 
@@ -853,7 +858,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     });
     observer.observe(recent, { childList: true, subtree: true, characterData: true });
 
-    release(json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }));
+    release(json({ doorDays: [doorDay(1)], truncated: false, nextSince: 0, serverTime: 0 }));
     await waitFor(() => expect(rows()).toHaveLength(1));
     observer.disconnect();
     expect(added.some((text) => text.includes(copy.visits.empty))).toBe(false);
@@ -870,7 +875,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
   it("announces only the arrivals among the rows shown", async () => {
     let page = Array.from({ length: 5 }, (_, i) => doorDay(i + 10));
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, nextSince: 0, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(5));
@@ -888,12 +893,13 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
     // What Visites leaves in the shared entry: its last delta page.
     const page = [doorDay(1), doorDay(2), doorDay(3)];
     stubFetch((period) => json(answer(period)), {
-      feed: () => json({ doorDays: page, truncated: false, serverTime: 0 }),
+      feed: () => json({ doorDays: page, truncated: false, nextSince: 0, serverTime: 0 }),
     });
     renderScreen((client) =>
       client.setQueryData(adminKeys.visitsFeed(), {
         doorDays: [doorDay(3)],
         truncated: false,
+        nextSince: 0,
         serverTime: 0,
       }),
     );
@@ -909,7 +915,7 @@ describe("DashboardScreen › Dernières visites (GH #113)", () => {
       feed: () =>
         fail
           ? json({ error: "boom" }, 500)
-          : json({ doorDays: [doorDay(1)], truncated: false, serverTime: 0 }),
+          : json({ doorDays: [doorDay(1)], truncated: false, nextSince: 0, serverTime: 0 }),
     });
     const client = renderScreen();
     await waitFor(() => expect(rows()).toHaveLength(1));

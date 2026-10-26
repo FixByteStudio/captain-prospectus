@@ -5,7 +5,7 @@ import { getDb } from "./db/client";
 import { prospects, visits, visitsOrphaned } from "./db/schema";
 import { doorDayCounts, doorDaysBetween, doorDaysOn, doorDaysTouched } from "./door-days";
 import { periodDays, twoPeriodsDayKey } from "./routes/admin";
-import type { Outcome } from "../shared/constants";
+import type { Outcome, RefusalReason } from "../shared/constants";
 import { brusselsMidnightDaysFromNow, brusselsPeriod } from "../shared/period";
 import { resetTestUsers } from "../../test/users";
 
@@ -73,6 +73,7 @@ async function seedVisit(
   receivedAt = visitedAt,
   id: string = crypto.randomUUID(),
   repairedAt: number | null = null,
+  refusalReason: RefusalReason | null = null,
 ): Promise<void> {
   await getDb(env.DB).insert(visits).values({
     id,
@@ -83,6 +84,7 @@ async function seedVisit(
     receivedAt,
     repairedAt,
     outcome,
+    refusalReason,
     clientVersion: 1,
   });
 }
@@ -263,17 +265,38 @@ describe("doorDayCounts on a clock-change day", () => {
   });
 });
 
-describe("doorDaysTouched on the feed clock (GH #528)", () => {
+describe("doorDaysTouched on the insertion cursor (GH #528, #540, #636)", () => {
   const T = at("2026-10-20T10:00:00.000Z");
+  const prospectsOf = (feed: { doorDays: { prospectId: string }[] }) =>
+    feed.doorDays.map((d) => d.prospectId);
+
+  it("lists a sync that stamped early and committed late, after a poll moved past its stamp", async () => {
+    const s1 = await seedProspect("S1");
+    const s2 = await seedProspect("S2");
+    // S2 stamped 1200 and commits at 1300, S1 stamped 1000 and commits at 1800: rows go in
+    // in commit order, each with the clock its request started on.
+    await seedVisit(s2, A, T + 1200, "no_contact", T + 1200);
+    const first = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 100 });
+    expect(prospectsOf(first)).toEqual([s2]);
+
+    await seedVisit(s1, A, T + 1000, "no_contact", T + 1000);
+    const second = await doorDaysTouched(getDb(env.DB), { since: first.nextSince, limit: 100 });
+    expect(prospectsOf(second)).toEqual([s1]);
+
+    const third = await doorDaysTouched(getDb(env.DB), { since: second.nextSince, limit: 100 });
+    expect(third.doorDays).toEqual([]);
+    // Nothing read: the cursor stays where it was.
+    expect(third.nextSince).toBe(second.nextSince);
+  });
 
   it("lists a repaired visit received before the cursor, whole, with listedAt", async () => {
     const p = await seedProspect("Un");
     await seedVisit(p, A, T, "no_contact", T + 10);
-    // Older on both clocks than the held visit, repaired after the cursor.
+    const held = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 100 });
+    // Older on both clocks than the held visit, repaired (inserted) after the cursor.
     await seedVisit(p, A, T - 1000, "interested", T - 500, crypto.randomUUID(), T + 5000);
 
-    const cursor = T + 100;
-    const feed = await doorDaysTouched(getDb(env.DB), { since: cursor, limit: 100 });
+    const feed = await doorDaysTouched(getDb(env.DB), { since: held.nextSince, limit: 100 });
     expect(feed.doorDays).toHaveLength(1);
     const [day] = feed.doorDays;
     expect(day?.visits).toHaveLength(2);
@@ -281,18 +304,18 @@ describe("doorDaysTouched on the feed clock (GH #528)", () => {
     // The « Reçue » time is still the phone's sync.
     expect(day?.receivedAt).toBe(T + 10);
     // Past the repair, nothing is left.
-    const next = await doorDaysTouched(getDb(env.DB), { since: T + 5000, limit: 100 });
+    const next = await doorDaysTouched(getDb(env.DB), { since: feed.nextSince, limit: 100 });
     expect(next.doorDays).toEqual([]);
   });
 
-  it("seeds the newest page on the feed clock, so a fresh repair makes the cut", async () => {
+  it("seeds the newest insertion, so a fresh repair makes the cut", async () => {
     const synced = await seedProspect("Un");
     const repaired = await seedProspect("Deux");
     await seedVisit(synced, A, T, "no_contact", T);
     await seedVisit(repaired, A, T - 9000, "interested", T - 9000, crypto.randomUUID(), T + 5000);
     const feed = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 1 });
     expect(feed.truncated).toBe(true);
-    expect(feed.doorDays.map((d) => d.prospectId)).toEqual([repaired]);
+    expect(prospectsOf(feed)).toEqual([repaired]);
   });
 
   it("equals received_at for synced visits only", async () => {
@@ -310,16 +333,55 @@ describe("doorDaysTouched on the feed clock (GH #528)", () => {
     expect(feed.doorDays).toEqual([]);
   });
 
-  it("takes a tie group on the feed clock whole", async () => {
-    const p1 = await seedProspect("Un");
-    const p2 = await seedProspect("Deux");
-    const p3 = await seedProspect("Trois");
-    await seedVisit(p1, A, T, "no_contact", T + 1);
-    // Two repairs stamped in the same millisecond, received long before.
-    await seedVisit(p2, A, T, "interested", T - 9000, crypto.randomUUID(), T + 50);
-    await seedVisit(p3, A, T, "interested", T - 8000, crypto.randomUUID(), T + 50);
-    const feed = await doorDaysTouched(getDb(env.DB), { since: T, limit: 2 });
-    expect(feed.doorDays).toHaveLength(3);
+  it("walks a truncated delta poll forward with no gap, visits sharing a received_at included", async () => {
+    const first = await seedProspect("Premier");
+    await seedVisit(first, A, T, "no_contact", T);
+    const { nextSince } = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 100 });
+    // One sync stamps one received_at: these four tie, and the first page's cut falls inside.
+    const tied = [await seedProspect("A"), await seedProspect("B"), await seedProspect("C")];
+    tied.push(await seedProspect("D"));
+    for (const p of tied) await seedVisit(p, A, T, "no_contact", T + 50);
+
+    const seen: string[] = [];
+    let since = nextSince;
+    for (let poll = 0; poll < 10; poll++) {
+      const page = await doorDaysTouched(getDb(env.DB), { since, limit: 3 });
+      if (page.doorDays.length === 0) break;
+      seen.push(...prospectsOf(page));
+      since = page.nextSince;
+    }
+    expect(seen.sort()).toEqual([...tied].sort());
+  });
+
+  it("moves a truncated reason= poll past door-days the filter drops", async () => {
+    const held = await seedProspect("Tenu");
+    await seedVisit(held, A, T, "no_contact", T);
+    const { nextSince } = await doorDaysTouched(getDb(env.DB), { since: 0, limit: 100 });
+    // Each door-day's latest visit, made at T + 2, has no reason; the refusal made at
+    // T + 1 reached the server after it (a phone that synced out of order).
+    const dropped = [await seedProspect("A"), await seedProspect("B"), await seedProspect("C")];
+    for (const p of dropped) await seedVisit(p, A, T + 2, "converted", T + 2);
+    for (const p of dropped) {
+      await seedVisit(p, A, T + 1, "not_interested", T + 3, crypto.randomUUID(), null, "no_need");
+    }
+
+    const page = await doorDaysTouched(getDb(env.DB), {
+      since: nextSince,
+      reason: "no_need",
+      limit: 2,
+    });
+    expect(page.truncated).toBe(true);
+    expect(page.doorDays).toEqual([]);
+    expect(page.nextSince).toBeGreaterThan(nextSince);
+
+    const rest = await doorDaysTouched(getDb(env.DB), {
+      since: page.nextSince,
+      reason: "no_need",
+      limit: 2,
+    });
+    expect(rest.truncated).toBe(false);
+    expect(rest.doorDays).toEqual([]);
+    expect(rest.nextSince).toBeGreaterThan(page.nextSince);
   });
 });
 

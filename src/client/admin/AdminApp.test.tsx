@@ -71,7 +71,7 @@ beforeEach(() => {
         return json({ pairs: [], truncated: false });
       if (url.startsWith("/api/admin/visits/orphaned")) return json(orphans);
       if (url.startsWith("/api/admin/visits?"))
-        return json({ doorDays: [], truncated: false, serverTime: 0 });
+        return json({ doorDays: [], truncated: false, nextSince: 0, serverTime: 0 });
       if (url.startsWith("/api/admin/recap")) return json(RECAP);
       return new Response("{}", { status: 404 });
     }),

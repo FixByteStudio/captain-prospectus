@@ -51,7 +51,7 @@ Mounted before the identity gate ([ADR-0029](adr/0029-own-login-instead-of-cloud
 | `POST /api/admin/prospects/:id/unmerge` | Undo a merge → the restored prospect |
 | `POST /api/admin/import/overpass` | `{polygon: [lat,lng][]}` → `{candidates[], truncated, cached, cachedAt?}`. Nothing is saved: the candidates go through the same preview and the same `POST /prospects/batch` as a CSV |
 | `POST /api/admin/import/places` | `{center: [lat,lng], radius}` → the same `{candidates[], truncated, cached, cachedAt?}`. Google Places (ADR-0020); a circle because Nearby Search has no polygon search. **503** when no key is configured |
-| `GET /api/admin/visits?since=<ms>&from=<ms>&to=<ms>&reason=&limit=` | `{doorDays[], truncated, serverTime}` — one row per door-day (agent, prospect, Brussels day) with a visit whose feed clock (`coalesce(repaired_at, received_at)`) is `> since` and, if given, whose `received_at` is within `[from, to]`; all bounds apply together, and each door-day arrives whole (see [The live feed](#the-live-feed)). With `reason`, the door-days whose latest visit has it. Each row is `{key, prospectId, prospectName, agentEmail, dayStart}`, the latest visit's `visitedAt, outcome, refusalReason, notes, followUpAt`, the greatest `receivedAt`, `listedAt` (the greatest feed clock, the cursor), `flyerGiven` when any visit gave one, and `visits[]` oldest first, each `{id, visitedAt, receivedAt, outcome, refusalReason, flyerGiven, followUpAt, notes, answerCount}`. Newest `listedAt` first, max 500; `truncated` when more than `limit` visits matched. A poll with `since` reads the oldest `limit` arrivals after it, and the whole tie group at the cut, so the page may exceed `limit`. **400** when `from > to` or `reason` is unknown or empty |
+| `GET /api/admin/visits?since=&from=<ms>&to=<ms>&reason=&limit=` | `{doorDays[], truncated, nextSince, serverTime}` — one row per door-day (agent, prospect, Brussels day) with a visit inserted after `since` (a position, the last answer's `nextSince`) and, if given, whose `received_at` is within `[from, to]`; all bounds apply together, and each door-day arrives whole (see [The live feed](#the-live-feed)). With `reason`, the door-days whose latest visit has it. Each row is `{key, prospectId, prospectName, agentEmail, dayStart}`, the latest visit's `visitedAt, outcome, refusalReason, notes, followUpAt`, the greatest `receivedAt`, `listedAt` (the greatest feed clock, the display order), `flyerGiven` when any visit gave one, and `visits[]` oldest first, each `{id, visitedAt, receivedAt, outcome, refusalReason, flyerGiven, followUpAt, notes, answerCount}`. Newest `listedAt` first, max 500; `truncated` when more than `limit` visits matched. A poll with `since` reads the oldest `limit` insertions after it; `nextSince` is the last one read, whether or not its door-day is returned. **400** when `from > to` or `reason` is unknown or empty |
 | `GET /api/admin/visits/orphaned` | `{visits[], remaining}` — the repair queue, newest quarantined first, max 200. Each row carries its `reason`, the `prospectName` when the id still resolves, `hasPosition` (whether the visit recorded where it happened), and up to 5 `candidates` ranked by distance from there. `candidates` is also empty when the visit has a position but no live prospect has one |
 | `POST /api/admin/visits/orphaned/:id/repair` | `{prospectId}` → `{visitId, prospectId, repaired}`. Inserts the visit into `visits`, removes the queue row, derives status. Follows `mergedInto`, so the returned `prospectId` is where it actually landed. `repaired: false` means it was already done (INVARIANT 4). **400** `unknown_prospect` if the target is gone, and the queue row survives |
 | `POST /api/admin/visits/orphaned/:id/discard` | Deletes the row for good → `{discarded}`. Idempotent. The one place a visit is deliberately lost, behind a confirmation in the UI |
@@ -122,7 +122,8 @@ reached the server), the same column the export uses — never
 `visited_at` (INVARIANT 12): a phone can sync days late, and a range read
 against its own clock would silently drop exactly the visits worth looking at.
 `from`/`to` are inclusive at both ends; `since` stays exclusive, because it is
-a paging cursor ("give me what I haven't seen yet") on the feed's own clock, not a range boundary.
+a paging cursor ("give me what I haven't seen yet"), a position in insertion
+order and not a time, not a range boundary.
 Like `dueBefore`, `from` and `to` are non-negative integers, decimal digits
 only — `1e3` or `0x10` is **400**, not a silent 0.
 
@@ -372,36 +373,47 @@ same unit every dashboard figure counts.
   `visited_at` comes from a clock that can be wrong (INVARIANT 12).
   `repaired_at` is null on every synced visit and set only when an orphan's repair
   inserts it, so a repaired visit, received days ago, is listed from the repair on
-  while `received_at` (« Reçue », `from`/`to`, export) never moves.
-  `visits_listed_idx` exists for this ordering.
-- **`since` is exclusive.** The client passes back the highest `listedAt` it
-  holds and gets only the door-days touched since, which is what makes a 15 s
-  poll cheap. Omitted, it returns the most recent page — a freshly opened tab is
-  not empty.
-- **A poll with `since` reads the oldest arrivals first.** Cut at `limit`, it
-  answers the oldest `limit` visits after `since`, so the next poll, from the
-  highest `listedAt` held, picks up the rest with no gap. The visits that share
-  the cut's feed clock are all taken, because the exclusive `since` would skip
-  the ones left out; one sync stamps one `received_at`, so that group is
-  usually one sync's visits, and the page may exceed `limit` by it. The answer is
-  still sorted newest first. The seed (`since` omitted or 0) reads the newest
-  page, and `truncated` there is what the screen announces.
+  while `received_at` (« Reçue », `from`/`to`, export) never moves. `listedAt`
+  only orders what the screen shows; it is not the cursor.
+- **The cursor is the order the rows were inserted in**, the `visits` rowid, sent
+  as `nextSince`. A sync stamps `received_at` when its request starts and
+  commits later, so two syncs can commit in the opposite order of their stamps;
+  a cursor on that clock would sit above the slower one and skip it for good.
+  D1 runs writes one at a time, so a later insert always has a higher rowid, a
+  repaired orphan included (its repair inserts the row), and a visit is never
+  deleted. The sync contract does not change: the phone sends nothing new and
+  `received_at` is stamped as before.
+- **`since` is exclusive.** The client passes back the `nextSince` of the last
+  answer and gets only the door-days touched since, which is what makes a 15 s
+  poll cheap. Omitted or 0, it returns the most recent page — a freshly opened
+  tab is not empty.
+- **`nextSince` is where the read reached**, not the newest row returned: the
+  last visit read, or `since` itself when none matched. A `reason=` poll whose
+  read is all door-days the filter drops returns no row and still moves on;
+  holding on to the newest row returned would ask for the same page for ever.
+  The client keeps the greater of its cursor and `nextSince`.
+- **A poll with `since` reads the oldest insertions first.** Cut at `limit`, it
+  answers the oldest `limit` visits after `since`, so the next poll, from
+  `nextSince`, picks up the rest with no gap. A rowid is unique, so there is no
+  tie group at the cut and a page never exceeds `limit` visits. The answer is
+  still sorted newest first by `listedAt`. The seed (`since` omitted or 0)
+  reads the newest `limit` insertions, and `truncated` there is what the
+  screen announces.
 - **A door-day always arrives whole.** It is listed when any of its visits falls
   in `since`, `from` and `to`, and then with all its visits, those outside the
-  bounds included, up to the newest visit the request touched: one synced
+  bounds included, up to the newest visit the request touched: one inserted
   while the request runs comes with the next poll, so the cursor never passes
   a door-day the request did not read. A second visit to a door-day the client
   holds returns it again under the same `key`, and the client replaces the row.
 - **`truncated`** says more than `limit` visits matched the bounds. `limit` caps
-  those visits (bar a tie group at a delta poll's cut), so it caps the door-days
-  too; the client then reads its count as "500 visites ou plus".
+  those visits, so it caps the door-days too; the client then reads its count as "500 visites ou plus".
 - **Visits of merged prospects are included**, unlike every other admin list,
   which filters `merged_into IS NULL`. This one records what agents did, no
   visit is ever repointed on a merge (`prospecting.md`), and filtering here
   would make history disappear from the feed because an admin tidied a
   duplicate. The name shown is the one the visit was made against.
 - `serverTime` is the server's clock as it answered, so a client never has to
-  derive a cursor from its own.
+  derive a time from its own.
 - **`reason=`** narrows to one refusal reason (a `REFUSAL_REASONS` value): the
   door-days whose latest visit has it, the one a refusal count reads (R12).
   Absent, nothing changes; empty or unknown is **400**. A poll only adds or

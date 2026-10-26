@@ -1897,9 +1897,34 @@ describe("GET /api/admin/visits", () => {
 
   it("treats `since` as exclusive, so polling returns only what is new", async () => {
     await seedVisit("Ancienne", 1_000);
+    const { nextSince } = await feed();
     await seedVisit("Nouvelle", 2_000);
 
-    expect(names(await feed("?since=1000"))).toEqual(["Nouvelle"]);
+    expect(names(await feed(`?since=${nextSince}`))).toEqual(["Nouvelle"]);
+  });
+
+  it("lists a sync that stamped early and committed late, after a poll moved past its stamp", async () => {
+    // S1 stamped 1000 and commits at 1800, S2 stamped 1200 and commits at 1300: the
+    // rows land in commit order, each with the clock its request started on.
+    await seedVisit("S2", 1_200);
+    const first = await feed();
+    expect(names(first)).toEqual(["S2"]);
+
+    await seedVisit("S1", 1_000);
+    const second = await feed(`?since=${first.nextSince}`);
+    expect(names(second)).toEqual(["S1"]);
+
+    const third = await feed(`?since=${second.nextSince}`);
+    expect(third.doorDays).toEqual([]);
+    expect(third.nextSince).toBe(second.nextSince);
+  });
+
+  it("answers nextSince 0 on an empty feed, and echoes `since` when nothing is new", async () => {
+    expect((await feed()).nextSince).toBe(0);
+    await seedVisit("Ancienne", 1_000);
+    const { nextSince } = await feed();
+    expect(nextSince).toBeGreaterThan(0);
+    expect((await feed(`?since=${nextSince}`)).nextSince).toBe(nextSince);
   });
 
   it("returns everything when `since` is absent, so a fresh tab is not empty", async () => {
@@ -1967,11 +1992,12 @@ describe("GET /api/admin/visits", () => {
 
   it("applies from/to alongside since, all three bounds together", async () => {
     await seedVisit("Avant since", 500);
+    const { nextSince } = await feed();
     await seedVisit("Avant la fenetre", 1_000);
     await seedVisit("Dans la fenetre", 2_000);
     await seedVisit("Apres la fenetre", 4_000);
 
-    expect(names(await feed("?since=1000&from=1500&to=3000"))).toEqual(["Dans la fenetre"]);
+    expect(names(await feed(`?since=${nextSince}&from=1500&to=3000`))).toEqual(["Dans la fenetre"]);
   });
 
   it("rejects a `since` that is not a non-negative integer", async () => {
@@ -2014,10 +2040,11 @@ describe("GET /api/admin/visits", () => {
 
     it("answers a poll after the seed with the whole door-day, under the same key", async () => {
       const id = await seedVisit("Pizza Roma", at(10), "no_contact");
-      const [held] = (await feed()).doorDays;
+      const seed = await feed();
+      const [held] = seed.doorDays;
 
       await addVisit(id, { receivedAt: at(16), outcome: "converted" });
-      const poll = await feed(`?since=${held?.receivedAt}`);
+      const poll = await feed(`?since=${seed.nextSince}`);
       expect(poll.doorDays).toHaveLength(1);
       expect(poll.doorDays[0]?.key).toBe(held?.key);
       expect(poll.doorDays[0]?.receivedAt).toBe(at(16));
@@ -2102,8 +2129,9 @@ describe("GET /api/admin/visits", () => {
       expect(names(body)).toEqual(["Pizza Roma", "Le Bouchon"]);
     });
 
-    it("walks a truncated delta poll forward with no gap, a tie at the cut included", async () => {
+    it("walks a truncated delta poll forward with no gap, visits sharing a received_at included", async () => {
       await seedVisit("Avant", at(9));
+      let since = (await feed()).nextSince;
       await seedVisit("Un", at(10));
       // One sync stamps one received_at: these two tie at the first page's cut.
       await seedVisit("Deux", at(11));
@@ -2113,17 +2141,40 @@ describe("GET /api/admin/visits", () => {
 
       const seen: string[] = [];
       const pages: boolean[] = [];
-      let since = at(9);
       for (let poll = 0; poll < 10; poll++) {
         const body = await feed(`?since=${since}&limit=2`);
         if (body.doorDays.length === 0) break;
         pages.push(body.truncated);
         seen.push(...names(body));
-        since = Math.max(...body.doorDays.map((d) => d.receivedAt));
+        since = body.nextSince;
       }
 
-      expect(pages).toEqual([true, false]);
+      expect(pages).toEqual([true, true, false]);
       expect(seen.sort()).toEqual(["Cinq", "Deux", "Quatre", "Trois", "Un"]);
+    });
+
+    it("moves a truncated reason= poll past the door-days it drops", async () => {
+      await seedVisit("Tenu", at(9));
+      const { nextSince } = await feed();
+      // Each door-day's latest visit (made at 12) has no reason; the refusal (made at
+      // 11) reached the server after it.
+      const ids = [
+        await seedVisit("A", at(12), "converted"),
+        await seedVisit("B", at(12), "converted"),
+      ];
+      for (const id of ids) {
+        await addVisit(id, {
+          receivedAt: at(13),
+          visitedAt: at(11),
+          outcome: "not_interested",
+          refusalReason: "no_need",
+        });
+      }
+
+      const page = await feed(`?reason=no_need&since=${nextSince}&limit=1`);
+      expect(page.doorDays).toEqual([]);
+      expect(page.truncated).toBe(true);
+      expect(page.nextSince).toBeGreaterThan(nextSince);
     });
 
     it("orders a door-day by its latest arrival, while its answer stays the latest visit's", async () => {
@@ -2139,7 +2190,7 @@ describe("GET /api/admin/visits", () => {
         outcome: "converted",
         visitedAt: at(16),
       });
-      expect((await feed(`?since=${at(20)}`)).doorDays).toEqual([]);
+      expect((await feed(`?since=${body.nextSince}`)).doorDays).toEqual([]);
     });
 
     it("leaves a visit synced between its two reads to the next poll", async () => {
@@ -2148,10 +2199,11 @@ describe("GET /api/admin/visits", () => {
         await addVisit(id, { receivedAt: at(16), outcome: "converted" });
       });
       const response = await workerFetch("http://localhost/api/admin/visits", undefined, { DB });
-      const [held] = ((await response.json()) as AdminVisitsResponse).doorDays;
+      const seed = (await response.json()) as AdminVisitsResponse;
+      const [held] = seed.doorDays;
       expect(held).toMatchObject({ receivedAt: at(10), outcome: "no_contact" });
 
-      const [next] = (await feed(`?since=${held?.receivedAt}`)).doorDays;
+      const [next] = (await feed(`?since=${seed.nextSince}`)).doorDays;
       expect(next).toMatchObject({ key: held?.key, receivedAt: at(16), outcome: "converted" });
     });
 
@@ -2182,17 +2234,18 @@ describe("GET /api/admin/visits", () => {
         DB: recordingDb(seen),
       });
       expect(response.status).toBe(200);
+      const { nextSince } = (await response.json()) as AdminVisitsResponse;
 
       const statement = only(seen, /json_each\(\?\)/);
-      // The JSON array of door-days, and the greatest touched arrival.
+      // The JSON array of door-days, and the newest touched insertion (the cursor).
       expect((statement.sql.match(/\?/g) ?? []).length).toBe(2);
-      expect(statement.params).toEqual([JSON.stringify([[AGENT, id, DAY, NEXT_DAY]]), at(16)]);
+      expect(statement.params).toEqual([JSON.stringify([[AGENT, id, DAY, NEXT_DAY]]), nextSince]);
       const plan = await planOf(statement);
       expect(plan.some((d) => d.includes("visits_prospect_visited_idx"))).toBe(true);
       expect(scans(plan, "visits")).toEqual([]);
     });
 
-    it("pages a delta poll on the feed clock's index (GH #528)", async () => {
+    it("pages a delta poll on the rowid (GH #528, #636)", async () => {
       await seedVisit("Pizza Roma", at(10), "no_contact");
 
       const seen: Recorded[] = [];
@@ -2201,11 +2254,10 @@ describe("GET /api/admin/visits", () => {
       });
       expect(response.status).toBe(200);
 
-      const statement = only(seen, /order by coalesce\(/, /limit \?/);
+      const statement = only(seen, /"rowid" > \?/, /limit \?/);
       expect(statement.params[0]).toBe(1);
       const plan = await planOf(statement);
-      expect(plan.some((d) => d.includes("visits_listed_idx"))).toBe(true);
-      expect(scans(plan, "visits")).toEqual([]);
+      expect(plan).toEqual(["SEARCH visits USING INTEGER PRIMARY KEY (rowid>?)"]);
     });
   });
 
@@ -2228,12 +2280,13 @@ describe("GET /api/admin/visits", () => {
 
     it("applies reason alongside since, from and to", async () => {
       await seedVisit("Avant since", 500, "not_interested", "no_need");
+      const { nextSince } = await feed();
       await seedVisit("Avant la fenetre", 1_000, "not_interested", "no_need");
       await seedVisit("Autre raison", 2_000, "not_interested", "other");
       await seedVisit("Dans la fenetre", 2_500, "not_interested", "no_need");
       await seedVisit("Apres la fenetre", 4_000, "not_interested", "no_need");
 
-      expect(names(await feed("?reason=no_need&since=600&from=1500&to=3000"))).toEqual([
+      expect(names(await feed(`?reason=no_need&since=${nextSince}&from=1500&to=3000`))).toEqual([
         "Dans la fenetre",
       ]);
     });
