@@ -1367,9 +1367,11 @@ and there is no Rôle column. Mockups: forge
   reactivate — keeps the screen as it was and toasts "L'action n'a pas abouti. Réessayez."
 - **The code `Dialog`.** Titled "Code pour {nom}". The eight characters in
   `text-display`, tabular, split 4 + 4 by a space ("K7QM 2XPA" — the
-  normaliser ignores spaces), with "Valable jusqu'à {heure}, une seule fois."
-  under it, `{heure}` the code's expiry as the server returns it, in Brussels
-  time, so a wrong device clock cannot misstate it. Then "Ce code ne sera
+  normaliser ignores spaces), with "Valable jusqu'au {jour} à {heure}, une seule fois."
+  under it, `{jour}` ("mercredi 7 octobre") and `{heure}` the code's expiry as
+  the server returns it, in Brussels time, so a wrong device clock cannot
+  misstate it. The day is always there: an agent's code lasts 24 hours, and a
+  time alone reads as already past that afternoon. Then "Ce code ne sera
   plus affiché. En générer un autre annule celui-ci." in meta, a `secondary`
   "Copier" (toast "Code copié.", or "Copie impossible. Recopiez-le à la
   main." when the clipboard refuses; the code stays on screen either way) and
@@ -1554,7 +1556,8 @@ the 1,000 KiB precache.
   form (ADR-0018), with a `z.pick` of the login schema as resolver; it only
   checks that a field is filled: "Saisissez votre code." under either Code
   field, "Saisissez votre adresse e-mail."
-- **A refused sign-in** (401) shows a destructive `Alert` above the button
+- **A refused sign-in** (401, or a 400: a body the server rejects, which a
+  retry cannot fix; the form's own checks stop most such values first) shows a destructive `Alert` above the button
   and keeps what was typed. For a code: "Ce code ne fonctionne pas. Il a
   peut-être expiré ou déjà servi : demandez-en un nouveau." For the admin
   form, one sentence whichever part was wrong, the role included: "Adresse

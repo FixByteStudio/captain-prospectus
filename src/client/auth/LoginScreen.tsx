@@ -60,9 +60,14 @@ function refusalCopy(refusal: Refusal, mode: Mode): string {
   return refusal === "unreachable" ? copy.login.unreachable : copy.login.failed;
 }
 
-/** A 401 is a refusal; a rejected fetch never reached the server; the rest is the server's. */
+/**
+ * A 401 is a refusal, and so is a 400 (a pasted value over the cap: a retry
+ * cannot pass, and the same sentence leaks nothing). A rejected fetch never
+ * reached the server; the rest is the server's.
+ */
 function refusalFor(error: unknown): Refusal {
-  if (error instanceof ApiError) return error.status === 401 ? "refused" : "failed";
+  if (error instanceof ApiError)
+    return error.status === 401 || error.status === 400 ? "refused" : "failed";
   return error instanceof TypeError ? "unreachable" : "failed";
 }
 

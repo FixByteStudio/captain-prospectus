@@ -128,6 +128,17 @@ describe("LoginScreen — admin form", () => {
     expect((screen.getByLabelText(copy.login.code) as HTMLInputElement).value).toBe("wrong");
   });
 
+  // The form's own resolver stops an over-cap value, so a 400 here is the server
+  // refusing a body the client let through: a retry of the same value cannot pass.
+  it("says a 400 as a refusal, not try again", async () => {
+    stubFetch(json(400, { error: "validation", issues: [] }));
+    renderLogin();
+
+    await fillAndSubmit(OWNER, "wrong");
+
+    expect((await screen.findByRole("alert")).textContent).toBe(copy.login.adminRefused);
+  });
+
   it("says the network failed when the request never reached the server", async () => {
     stubFetch(() => Promise.reject(new TypeError("Failed to fetch")));
     renderLogin();
@@ -228,6 +239,15 @@ describe("LoginScreen — code form", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe(copy.login.codeRefused);
     expect(codeInput().value).toBe("k7qm 2xpa");
+  });
+
+  it("says a 400 as a refusal, not try again", async () => {
+    stubFetch(json(400, { error: "validation", issues: [] }));
+    renderLogin();
+
+    await submitCode("k7qm 2xpa");
+
+    expect((await screen.findByRole("alert")).textContent).toBe(copy.login.codeRefused);
   });
 
   it("asks for an empty code and sends nothing", async () => {
