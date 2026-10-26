@@ -95,6 +95,41 @@ describe("runSync — what clears the outbox", () => {
     expect(remaining.map((v) => v.id)).toEqual([kept.id]);
   });
 
+  it("deletes only the field prospects the server listed in accepted", async () => {
+    const prospect = (name: string): FieldProspect => ({
+      id: crypto.randomUUID(),
+      name,
+      type: "food_truck",
+      lat: null,
+      lng: null,
+      address: null,
+      phone: null,
+      createdAt: 1_700_000_000_000,
+    });
+    const kept = prospect("Le camion refusé");
+    const accepted = prospect("Le camion accepté");
+    await db.outboxProspects.bulkAdd([kept, accepted]);
+    const sent: SyncRequest[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)) as SyncRequest);
+      return new Response(
+        JSON.stringify(
+          okResponse({
+            accepted: { prospects: [accepted.id], visits: [], tournees: [], stops: [] },
+          }),
+        ),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const result = await runSync({ db, identity: AGENT, fetchFn });
+
+    // Both went out, so only the server's `accepted` can tell them apart.
+    expect(sent[0]?.prospects.map((p) => p.id).sort()).toEqual([kept.id, accepted.id].sort());
+    expect(result).toMatchObject({ status: "ok", acceptedProspects: 1, remaining: 1 });
+    expect((await db.outboxProspects.toArray()).map((p) => p.id)).toEqual([kept.id]);
+  });
+
   it("keeps everything when the response omits accepted ids entirely", async () => {
     await db.outboxVisits.add(visit());
     await runSync({ db, identity: AGENT, fetchFn: respondWith(okResponse()) });
