@@ -2,7 +2,8 @@
 #
 # From the epic #59 retrospective (2026-09-25),
 # `_bmad-output/implementation-artifacts/epic-59-retro-2026-09-25.md`:
-# action 6 (finding F2) and action 8 (finding F1).
+# action 6 (finding F2) and action 8 (finding F1); and from the #538, #579 and #580 retros
+# (2026-10-24), the CAP-19 process lines.
 
 [workflow]
 
@@ -28,6 +29,24 @@ to be HEAD when the spec was drafted. Stamp it at branch time and re-stamp it at
 3. When the change is handed over as a pull request, re-stamp from the merge-base once more, since
    the base branch may have moved while the story was in flight, and state the baseline in the PR
    description alongside the verification results.
+""",
+  # Retro follow-up CAP-19 (#538 action 10, #579 action 6, #580 action 10). CodeRabbit reviews
+  # almost none of this repo's PRs, so "ready to merge" used to be said with its comments unread.
+  """
+Before you tell the owner a pull request is ready to merge, list the review bot's actionable
+comments, each marked answered, filed or open: the inline ones
+(`gh api --paginate repos/:owner/:repo/pulls/<n>/comments`), the review bodies, where it files
+nitpicks and "outside diff range" items (`.../pulls/<n>/reviews`), and its summary comment
+(`.../issues/<n>/comments`). When the bot posted a « skipped » notice instead of reviewing, write that
+line rather than an empty list.
+""",
+  # Retro follow-up CAP-19 (#538 action 10, finding N1): a skew test one day off passed while the
+  # phone ahead of the server across midnight swiped the wrong tournée.
+  """
+A spec that says "whatever the phone's clock" (or any clock the phone supplies) includes, in its
+tests, a skew that crosses the Brussels midnight: a phone ahead of the server and a phone behind it,
+with `Date` faked to just before and just after 00:00. A skew of a whole day, or one that stays inside
+a day, does not cover it.
 """,
 ]
 

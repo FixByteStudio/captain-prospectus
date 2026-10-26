@@ -29,6 +29,9 @@ must survive the new schema.
 | Drop column | stop reading/writing it | drop it |
 | Make column NOT NULL | backfill + code always writes it | add constraint (table rebuild) |
 
+## A unique index on a table whose writes were unconstrained
+`CREATE UNIQUE INDEX` fails with `UNIQUE constraint failed` when the table already holds the duplicates the index forbids, and every `Deploy` after that fails at the migration step, with the old Worker still serving. It means those rows exist in the database being migrated, not that the migration is wrong. While the data stage is **disposable**, the remedy is a [fresh redeploy](../../../docs/deployment.md#fresh-redeploy) by the owner, not a dedupe script. Say so in the PR description, so the owner knows what a red `Deploy` means.
+
 ## Never, in either stage
 - Edit a migration already merged to `main`. Squashing `drizzle/` while disposable is a separate PR,
   only when the owner asks.
