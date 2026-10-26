@@ -335,6 +335,7 @@
   summary: Test the row re-check inside the guarded `INSERT … SELECT` of the passphrase login and the code generate route, where the row changes between the read and the write.
   evidence: The verification-gap lens showed that replacing either guarded insert with a plain insert passes every test; the race window needs a D1 hook the routes do not expose.
   narrowed_by: GH #612 — the passphrase login is gone (#610, #611); only the code generate route's guarded insert is left to test.
+  closed_by: GH #639 — already tested, since GH #355 (PR #358): `users.test.ts` › « answers 409 and stores nothing for a user deactivated just before the insert » uses `beforeStatement` to deactivate the user before the `login_codes` insert. Dropping `AND users.active = 1` from the insert's SELECT fails it and the deactivated-user test.
 - source_spec: `_bmad-output/implementation-artifacts/spec-gh-307-device-sessions.md`
   summary: No test exercises a migration's backfill against rows that exist before it runs (e.g. 0012's `sessions.id` backfill).
   evidence: test/setup-worker.ts applies every migration once to an empty database, so a broken backfill UPDATE passes CI; checked by hand on a scratch SQLite file for #307.

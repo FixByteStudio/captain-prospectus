@@ -6,7 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import type { Device, User } from "../../../shared/schemas";
 import { copy } from "../../copy";
-import { formatBrusselsTime, formatDateTime, formatShortDate } from "../../format";
+import { formatDateTime, formatShortDate } from "../../format";
 import { toast } from "sonner";
 import { Toaster } from "../../ui/sonner";
 import { adminKeys } from "../queries";
@@ -397,9 +397,8 @@ describe("UsersScreen", () => {
       const dialog = await screen.findByRole("dialog", { name: t.codeDialog.title("Léa Dupont") });
       expect(within(dialog).getByText("K7QM 2XPA")).toBeTruthy();
       expect(
-        within(dialog).getByText(t.codeDialog.validUntil(formatBrusselsTime(ISSUED.expiresAt))),
+        within(dialog).getByText(t.codeDialog.validUntil("mercredi 7 octobre", "15:39")),
       ).toBeTruthy();
-      expect(formatBrusselsTime(ISSUED.expiresAt)).toBe("15:39");
       expect(within(dialog).getByText(t.codeDialog.once)).toBeTruthy();
       expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
       const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
@@ -408,6 +407,41 @@ describe("UsersScreen", () => {
       await userEvent.click(within(dialog).getByRole("button", { name: t.codeDialog.done }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
+
+    // The dialog reads only the server's `expiresAt` (the lifetimes are the
+    // server's, ADR-0039: agent 24 h, admin 1 h), so each role's row gets both
+    // expiries, plus a 1 h code that crosses Brussels midnight.
+    const AT = "2026-10-07T13:39:00Z";
+    it.each([
+      { role: "agent", issued: AT, hours: 24, day: "jeudi 8 octobre", time: "15:39" },
+      { role: "agent", issued: AT, hours: 1, day: "mercredi 7 octobre", time: "16:39" },
+      { role: "admin", issued: AT, hours: 1, day: "mercredi 7 octobre", time: "16:39" },
+      { role: "admin", issued: AT, hours: 24, day: "jeudi 8 octobre", time: "15:39" },
+      {
+        role: "admin",
+        issued: "2026-10-07T21:30:00Z",
+        hours: 1,
+        day: "jeudi 8 octobre",
+        time: "00:30",
+      },
+    ])(
+      "names the day of a $role's code issued at $issued, expiring in $hours h",
+      async ({ role, issued, hours, day, time }) => {
+        const [name, path] =
+          role === "admin"
+            ? ["Sam Owner", "sam%40example.com"]
+            : ["Léa Dupont", "lea%40example.com"];
+        const expiresAt = Date.parse(issued) + hours * 3_600_000;
+        stubFetch([[ADMIN, LEA]], {
+          [`POST /api/admin/users/${path}/code`]: () => json({ ...ISSUED, expiresAt }, 201),
+        });
+        renderScreen();
+        if (role === "admin") await showAdmins();
+        await generateFor(name);
+        const dialog = await screen.findByRole("dialog", { name: t.codeDialog.title(name) });
+        expect(within(dialog).getByText(t.codeDialog.validUntil(day, time))).toBeTruthy();
+      },
+    );
 
     it("copies the code and toasts, keeping it on screen", async () => {
       stubFetch([[ADMIN, LEA]], { [GENERATE]: () => json(ISSUED, 201) });

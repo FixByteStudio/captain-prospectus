@@ -90,10 +90,11 @@ export const adminCopy = {
       confirm: "Désactiver",
     },
 
-    /** Shown once; `time` is the server's expiry in Brussels time. */
+    /** Shown once; `day` ("mercredi 7 octobre") and `time` are the server's expiry in Brussels time. */
     codeDialog: {
       title: (name: string) => `Code pour ${name}`,
-      validUntil: (time: string) => `Valable jusqu'à ${time}, une seule fois.`,
+      validUntil: (day: string, time: string) =>
+        `Valable jusqu'au ${day} à ${time}, une seule fois.`,
       once: "Ce code ne sera plus affiché. En générer un autre annule celui-ci.",
       copy: "Copier",
       done: "Terminé",
