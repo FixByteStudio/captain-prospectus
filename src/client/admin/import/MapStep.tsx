@@ -27,6 +27,8 @@ import {
 } from "./map";
 import type { Circle } from "./map";
 import { useOverpassImport, usePlacesImport, type ImportLogFacts } from "../queries";
+import { TypeChips } from "./TypeChips";
+import { chipOf, keepTypes, useTypeChips, type TypeChip } from "./type-chips";
 
 /** The two map providers. Not `Source`: CSV is not something you draw. */
 export type MapProvider = "osm" | "google";
@@ -64,6 +66,7 @@ export function MapStep({
   const [circle, setCircle] = useState<Circle | null>(null);
   const overpass = useOverpassImport();
   const places = usePlacesImport();
+  const [chips, setChips] = useTypeChips();
 
   const google = provider === "google";
   const search = google ? places : overpass;
@@ -98,15 +101,14 @@ export function MapStep({
   // A place OSM has no name for cannot be imported: `name` is required by the
   // contract (docs/domains/ingestion.md, "Unnamed elements"). Both lists are
   // derived from one memo, so `?? []` cannot mint a new array every render.
-  const { candidates, importable, likely } = useMemo(() => {
+  const { candidates, importable } = useMemo(() => {
     const found = search.data?.candidates ?? [];
-    const named = found.filter((c) => c.named);
-    return {
-      candidates: found,
-      importable: named,
-      likely: named.filter((c) => c.likelyDuplicateOf !== null).length,
-    };
+    return { candidates: found, importable: found.filter((c) => c.named) };
   }, [search.data]);
+  // The type chips narrow what is offered; a likely duplicate of an unticked
+  // type is not one the admin can opt back in.
+  const kept = keepTypes(importable, chips);
+  const likely = kept.filter((c) => c.likelyDuplicateOf !== null).length;
   const unnamed = candidates.length - importable.length;
 
   // A place that looks already listed stays out unless the admin opts in, and
@@ -114,9 +116,7 @@ export function MapStep({
   // on the answer itself rather than reset in an effect.
   const [includedFor, setIncludedFor] = useState<AreaSearchResponse | null>(null);
   const includeLikely = search.data !== undefined && includedFor === search.data;
-  const toImport = includeLikely
-    ? importable
-    : importable.filter((c) => c.likelyDuplicateOf === null);
+  const toImport = includeLikely ? kept : kept.filter((c) => c.likelyDuplicateOf === null);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -276,12 +276,16 @@ export function MapStep({
               </p>
             )}
 
+            {importable.length > 0 && (
+              <TypeChips rows={importable} value={chips} onChange={setChips} disabled={isRunning} />
+            )}
+
             {candidates.length === 0 ? (
               <p className="text-muted-foreground">{copy.map.results.empty}</p>
             ) : (
               <ul className="border-border divide-border max-h-[28rem] divide-y overflow-y-auto border-y">
                 {candidates.map((candidate) => (
-                  <CandidateRow key={candidate.sourceRef} candidate={candidate} />
+                  <CandidateRow key={candidate.sourceRef} candidate={candidate} chips={chips} />
                 ))}
               </ul>
             )}
@@ -352,6 +356,11 @@ export function MapStep({
         {search.data && importable.length === 0 && candidates.length > 0 && (
           <p className="text-muted-foreground mt-2">{copy.map.results.nothingToImport}</p>
         )}
+        {importable.length > 0 && kept.length === 0 && (
+          <p className="text-muted-foreground mt-2">
+            {chips.length === 0 ? copy.import.types.none : copy.import.types.nothingOfTypes}
+          </p>
+        )}
       </Surface>
     </div>
   );
@@ -397,16 +406,29 @@ function searchError(error: unknown): string {
  * other list in this app (design.md). The edge never speaks alone: a likely
  * duplicate names the prospect it looks like.
  */
-function CandidateRow({ candidate }: { candidate: AreaCandidate }) {
+function CandidateRow({
+  candidate,
+  chips,
+}: {
+  candidate: AreaCandidate;
+  chips: readonly TypeChip[];
+}) {
+  const excluded = candidate.named && !chips.includes(chipOf(candidate.type));
   const edge = !candidate.named
     ? cn("text-muted-foreground px-3 py-2", STATUS_EDGE.rejected)
-    : candidate.likelyDuplicateOf
-      ? cn("px-3 py-2", STATUS_EDGE.follow_up)
-      : cn("px-3 py-2", STATUS_EDGE.new);
+    : excluded
+      ? cn("text-muted-foreground px-3 py-2", STATUS_EDGE.rejected)
+      : candidate.likelyDuplicateOf
+        ? cn("px-3 py-2", STATUS_EDGE.follow_up)
+        : cn("px-3 py-2", STATUS_EDGE.new);
   return (
     <li className={edge}>
       <span className="flex items-baseline justify-between gap-2">
-        <span className={candidate.named ? "font-medium" : "decoration-border line-through"}>
+        <span
+          className={
+            !candidate.named ? "decoration-border line-through" : excluded ? "" : "font-medium"
+          }
+        >
           {candidate.named ? candidate.name : copy.map.results.noName}
         </span>
         <span className="text-muted-foreground shrink-0 text-xs">
@@ -416,7 +438,8 @@ function CandidateRow({ candidate }: { candidate: AreaCandidate }) {
       {candidate.address && (
         <span className="text-muted-foreground block text-xs">{candidate.address}</span>
       )}
-      {candidate.named && candidate.likelyDuplicateOf && (
+      {excluded && <span className="block text-xs">{copy.import.types.excluded}</span>}
+      {candidate.named && !excluded && candidate.likelyDuplicateOf && (
         <span className="text-warn block text-xs">
           {copy.map.results.looksLike(candidate.likelyDuplicateOf.name)}
         </span>

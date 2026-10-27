@@ -160,8 +160,9 @@ export function ImportScreen() {
             importer.reset();
             setStep("columns");
           }}
-          onStart={() =>
-            importer.start(ready, {
+          onStart={(rows) =>
+            importer.start(rows, {
+              // A row left out by the type chips is a choice, not a rejection (ADR-0030).
               rejected: rejected.length,
               // The log's cap (ADR-0030), so a long name cannot refuse the batch.
               ...(fileName && { fileName: fileName.slice(0, IMPORT_LOG_FILE_NAME_MAX) }),

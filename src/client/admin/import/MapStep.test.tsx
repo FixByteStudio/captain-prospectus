@@ -14,6 +14,7 @@ import { copy } from "../../copy";
 import { createAdminQueryClient } from "../query-client";
 import { ImportScreen } from "./ImportScreen";
 import type { Circle } from "./map";
+import { TYPE_CHIPS_KEY } from "./type-chips";
 
 /**
  * A stub for the Leaflet-imperative canvas: buttons that call `onMapClick`
@@ -113,6 +114,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  globalThis.localStorage.removeItem(TYPE_CHIPS_KEY);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -181,6 +183,61 @@ describe("MapStep", () => {
       zoneVertices: 3,
     });
     expect(body.importLog).not.toHaveProperty("zoneRadiusM");
+  });
+
+  it("leaves an unticked type out of the import and remembers the choice", async () => {
+    stubFetch(
+      vi.fn(async () =>
+        json(
+          answer({
+            candidates: [
+              candidate({ sourceRef: "node/1", name: "L'Estaminet", type: "restaurant" }),
+              candidate({ sourceRef: "node/2", name: "Kebab Royal", type: "fast_food" }),
+              candidate({ sourceRef: "node/3", name: "Le Zinc", type: "bar" }),
+            ],
+          }),
+        ),
+      ),
+    );
+    await goToMap();
+    await drawPolygon();
+    await userEvent.click(screen.getByRole("button", { name: copy.map.search }));
+    await screen.findByText(copy.map.results.found(3));
+
+    // Fast food counts under Restaurant (the owner's call).
+    const chips = screen.getByRole("toolbar", { name: copy.import.types.label });
+    expect(
+      within(chips)
+        .getByRole("button", { name: copy.import.types.chip("Restaurant", 2) })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    await userEvent.click(
+      within(chips).getByRole("button", { name: copy.import.types.chip("Bar", 1) }),
+    );
+
+    expect(
+      within(screen.getByText("Le Zinc").closest("li") as HTMLElement).getByText(
+        copy.import.types.excluded,
+      ),
+    ).toBeTruthy();
+    expect(JSON.parse(globalThis.localStorage.getItem(TYPE_CHIPS_KEY) ?? "null")).toEqual([
+      "restaurant",
+      "cafe",
+      "food_truck",
+      "other",
+    ]);
+
+    await userEvent.click(screen.getByRole("button", { name: copy.map.results.start(2) }));
+    const [, sent] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => String(url) !== "/api/admin/imports",
+    );
+    const body = JSON.parse(String(sent?.[1]?.body)) as {
+      rows: { sourceRef: string }[];
+      importLog: Record<string, unknown>;
+    };
+    expect(body.rows.map((r) => r.sourceRef)).toEqual(["node/1", "node/2"]);
+    // Left out by choice, not rejected (ADR-0030).
+    expect(body.importLog).toMatchObject({ rejected: 0 });
   });
 
   it("keeps a likely duplicate out unless ticked, and resets the tick on a new search", async () => {

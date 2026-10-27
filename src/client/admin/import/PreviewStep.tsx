@@ -13,6 +13,8 @@ import { STATUS_EDGE } from "../status";
 import { ImportBottomBar } from "./ImportBottomBar";
 import { ImportProgressCard } from "./ImportProgressCard";
 import type { MappedRow } from "./csv";
+import { TypeChips } from "./TypeChips";
+import { chipOf, keepTypes, useTypeChips } from "./type-chips";
 
 /** Enough to judge the file by; the full list is the import itself. */
 const SHOWN = 50;
@@ -46,9 +48,11 @@ export function PreviewStep({
   error: string | null;
   delimiter: string;
   onBack: () => void;
-  onStart: () => void;
+  onStart: (rows: ImportRow[]) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "errors">("all");
+  const [chips, setChips] = useTypeChips();
+  const kept = keepTypes(ready, chips);
   const total = ready.length + rejected.length;
   const share = (n: number) => Math.round((n / total) * 100);
   const showReady = filter === "all";
@@ -69,12 +73,12 @@ export function PreviewStep({
         <Surface className="flex items-center justify-between gap-3 px-5 py-4">
           <span>
             <strong className="text-display tnum block font-semibold">
-              {formatCount(ready.length)}
+              {formatCount(kept.length)}
             </strong>
-            <span className="text-muted-foreground">{copy.import.preview.ready(ready.length)}</span>
+            <span className="text-muted-foreground">{copy.import.preview.ready(kept.length)}</span>
           </span>
           <Badge variant="tint-success" className="tnum">
-            {copy.import.preview.share(share(ready.length))}
+            {copy.import.preview.share(share(kept.length))}
           </Badge>
         </Surface>
         <Surface className="flex items-center justify-between gap-3 px-5 py-4">
@@ -96,6 +100,10 @@ export function PreviewStep({
           </Badge>
         </Surface>
       </div>
+
+      {ready.length > 0 && (
+        <TypeChips rows={ready} value={chips} onChange={setChips} disabled={isRunning} />
+      )}
 
       <ToggleGroup
         type="single"
@@ -148,34 +156,48 @@ export function PreviewStep({
               ),
             )}
 
-            {shown.map((row, index) => (
-              <TableRow key={`ready-${index}`}>
-                <TableCell className={cn("pl-3.5 font-medium", STATUS_EDGE.new)}>
-                  {row.name}
-                </TableCell>
-                <TableCell className="text-muted-foreground whitespace-nowrap">
-                  {TYPE_LABELS[row.type]}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{row.address ?? "—"}</TableCell>
-                <TableCell className="text-muted-foreground tnum text-right whitespace-nowrap">
-                  {typeof row.lat === "number" && typeof row.lng === "number"
-                    ? copy.fieldProspect.positionSet(
-                        formatCoordinate(row.lat),
-                        formatCoordinate(row.lng),
-                      )
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground whitespace-nowrap">
-                  {typeof row.lat === "number" && typeof row.lng === "number" ? (
-                    <Badge variant="tint-success">{copy.import.preview.readyChip}</Badge>
-                  ) : (
-                    <Badge className="bg-tint-warn text-warn" variant="secondary">
-                      {copy.import.preview.noCoordinates}
-                    </Badge>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            {shown.map((row, index) => {
+              // Shown, greyed, rather than hidden: the chips say what is left out.
+              const excluded = !chips.includes(chipOf(row.type));
+              return (
+                <TableRow
+                  key={`ready-${index}`}
+                  className={cn(excluded && "text-muted-foreground")}
+                >
+                  <TableCell
+                    className={cn(
+                      "pl-3.5",
+                      excluded ? STATUS_EDGE.rejected : cn("font-medium", STATUS_EDGE.new),
+                    )}
+                  >
+                    {row.name}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                    {TYPE_LABELS[row.type]}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{row.address ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground tnum text-right whitespace-nowrap">
+                    {typeof row.lat === "number" && typeof row.lng === "number"
+                      ? copy.fieldProspect.positionSet(
+                          formatCoordinate(row.lat),
+                          formatCoordinate(row.lng),
+                        )
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                    {excluded ? (
+                      <Badge variant="secondary">{copy.import.types.excluded}</Badge>
+                    ) : typeof row.lat === "number" && typeof row.lng === "number" ? (
+                      <Badge variant="tint-success">{copy.import.preview.readyChip}</Badge>
+                    ) : (
+                      <Badge className="bg-tint-warn text-warn" variant="secondary">
+                        {copy.import.preview.noCoordinates}
+                      </Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Surface>
@@ -194,8 +216,14 @@ export function PreviewStep({
         </Alert>
       )}
 
-      {ready.length === 0 && (
+      {ready.length === 0 ? (
         <p className="text-muted-foreground mt-3">{copy.import.preview.nothingToImport}</p>
+      ) : (
+        kept.length === 0 && (
+          <p className="text-muted-foreground mt-3">
+            {chips.length === 0 ? copy.import.types.none : copy.import.types.nothingOfTypes}
+          </p>
+        )
       )}
 
       <ImportBottomBar
@@ -204,8 +232,8 @@ export function PreviewStep({
         onBack={onBack}
         backDisabled={isRunning}
         action={
-          <Button onClick={onStart} disabled={isRunning || ready.length === 0}>
-            {error ? copy.import.actions.retry : copy.import.actions.start(ready.length)}
+          <Button onClick={() => onStart(kept)} disabled={isRunning || kept.length === 0}>
+            {error ? copy.import.actions.retry : copy.import.actions.start(kept.length)}
           </Button>
         }
       />
