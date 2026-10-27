@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -27,6 +27,7 @@ import { AdminOfflineScreen } from "./auth/AdminOfflineScreen";
 import { cn } from "./lib/utils";
 import { brusselsPeriod } from "../shared/period";
 import { AccountMenu } from "./field/AccountMenu";
+import { FieldChunkBoundary } from "./field/FieldChunkBoundary";
 import { FieldTabs } from "./field/FieldTabs";
 import { useFieldNow } from "./field/field-clock";
 import { LeaveGuardProvider, useLeaveGuard } from "./field/leave-guard";
@@ -79,12 +80,10 @@ const loadAdminApp = () =>
  * reachable offline the instant the round loads. It changes only how much JS
  * runs before the first paint of the list itself.
  */
-const VisitScreen = lazy(() =>
-  import("./field/VisitScreen").then((module) => ({ default: module.VisitScreen })),
-);
-const AddProspectScreen = lazy(() =>
-  import("./field/AddProspectScreen").then((module) => ({ default: module.AddProspectScreen })),
-);
+const loadVisitScreen = () =>
+  import("./field/VisitScreen").then((module) => ({ default: module.VisitScreen }));
+const loadAddProspectScreen = () =>
+  import("./field/AddProspectScreen").then((module) => ({ default: module.AddProspectScreen }));
 /**
  * Leaflet is reached through this chunk (RoundMap.tsx, which the visit's
  * tablet pane also loads lazily, spec-gh-126), not the entry one (ADR-0026):
@@ -93,17 +92,15 @@ const AddProspectScreen = lazy(() =>
  * globPatterns), so "lazy" here means off the first paint, not off the
  * download — Carte still works the first time it is opened offline.
  */
-const CarteScreen = lazy(() =>
-  import("./field/CarteScreen").then((module) => ({ default: module.CarteScreen })),
-);
+const loadCarteScreen = () =>
+  import("./field/CarteScreen").then((module) => ({ default: module.CarteScreen }));
 
 /**
  * Carnet, lazy like Carte: the agent only opens it after the first stop, so the
  * entry chunk does not carry it (ADR-0026).
  */
-const CarnetScreen = lazy(() =>
-  import("./field/CarnetScreen").then((module) => ({ default: module.CarnetScreen })),
-);
+const loadCarnetScreen = () =>
+  import("./field/CarnetScreen").then((module) => ({ default: module.CarnetScreen }));
 
 /** What `FieldFrame` hands the routes under it: the gate it already decided, and the clock it decided it on. */
 type FieldContext = { gate: TourneeGate; now: number };
@@ -137,33 +134,27 @@ function FieldRoutes() {
       <Route
         path="map"
         element={
-          <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
-            <CarteScreen />
-          </Suspense>
+          <FieldChunkBoundary load={loadCarteScreen}>{(Screen) => <Screen />}</FieldChunkBoundary>
         }
       />
       <Route
         path="logbook"
         element={
-          <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
-            <CarnetScreen />
-          </Suspense>
+          <FieldChunkBoundary load={loadCarnetScreen}>{(Screen) => <Screen />}</FieldChunkBoundary>
         }
       />
       <Route
         path="new"
         element={
-          <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
-            <AddProspectScreen />
-          </Suspense>
+          <FieldChunkBoundary load={loadAddProspectScreen}>
+            {(Screen) => <Screen />}
+          </FieldChunkBoundary>
         }
       />
       <Route
         path=":id"
         element={
-          <Suspense fallback={<p className="text-muted-foreground" aria-busy="true" />}>
-            <VisitScreen />
-          </Suspense>
+          <FieldChunkBoundary load={loadVisitScreen}>{(Screen) => <Screen />}</FieldChunkBoundary>
         }
       />
     </Routes>

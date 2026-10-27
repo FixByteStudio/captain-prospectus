@@ -29,11 +29,11 @@ Source: the owner's decisions in the party-mode session of 2026-10-19 (board ite
 - R1 (item 9): every client URL slug is English: `/round`, `/round/map`, `/round/logbook`, `/round/new`, `/round/:id`, `/admin/users`, `/admin/duplicates`, `/admin/visits`, `/admin/orphans`, `/admin/round`. The UI stays French; the code keeps `tournee`; the glossary gets a slug column.
 - R2 (item 1): an admin cannot do a tournée. An admin who wants to canvass creates an agent account.
 - R3 (item 2): `/api/agent/*` is for agents only (a `requireAgent` beside `requireAdmin`).
-- R4 (item 2): a prospect can be assigned only to an active agent: `/api/admin/agents`, PATCH, bulk assign and import `assignedTo`.
+- R4 (item 2): a prospect can be assigned only to an active agent: `/api/admin/agents`, PATCH and bulk assign. Import writes `assignedTo: null`.
 - R5 (item 2): the admin's field side is gone with every link to it: `adminAccess`, the `adminOnline` prop chain, the avatar card's Tableau de bord, the `/` redirect that sends an offline admin to the field (so an installed PWA, `start_url` `/`, opens `/admin` for an admin), `agent.ts`'s admin exceptions, and their tests.
 - R6 (item 3): an admin with no network sees « Vous êtes hors ligne » a one-line reason and one Réessayer button, no field side.
 - R7 (items 4, 7): roles are fixed at creation: no « Passer admin » / « Passer agent ». Changing a role means a new account and deactivating the old one; the deactivation confirmation asks the admin to have the user sync first. Item 4 (refuse a promotion while work is assigned) is superseded by this.
-- R8 (item 8): the Agents screen becomes Utilisateurs, in two sections (Administrateurs, Agents); the role is chosen once, in Ajouter un utilisateur.
+- R8 (item 8): the Agents screen becomes Utilisateurs, in two tabs (Agents, Administrateurs; first built as two sections, amended to tabs on 2026-10-21, #607); the role is chosen once, in Ajouter un utilisateur.
 - R9 (item 5): two login forms stay. The admin form takes an email and a code; the passphrase is removed everywhere (column, dialog, schema, copy); the admin route keeps break-glass.
 - R10 (item 5): each form checks the role: an admin code on the agent form, or an agent code on the admin form, gets the same 401 as a wrong code.
 - R11 (item 6): an admin gets a code from their own row on a device already signed in, or from another admin. Break-glass stays in the admin form as today (`OWNER_EMAIL` + `BREAK_GLASS`), the last resort.

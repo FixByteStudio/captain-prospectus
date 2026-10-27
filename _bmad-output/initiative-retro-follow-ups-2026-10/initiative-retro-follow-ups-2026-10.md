@@ -1,6 +1,7 @@
 ---
 tracker_id: "7"
 remote: "https://github.com/FixByteStudio/captain-prospectus/milestone/7"
+status: done
 type: initiative
 title: "Retro follow-ups, October 2026"
 parent: none

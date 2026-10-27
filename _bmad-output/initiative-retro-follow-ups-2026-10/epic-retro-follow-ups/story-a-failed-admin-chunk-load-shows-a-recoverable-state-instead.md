@@ -1,7 +1,8 @@
 ---
 tracker_id: "562"
 remote: "https://github.com/FixbyteStudio/captain-prospectus/issues/562"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 7
 type: story
 title: "A failed admin chunk load shows a recoverable state instead of throwing"

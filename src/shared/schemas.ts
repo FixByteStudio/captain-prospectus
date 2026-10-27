@@ -22,6 +22,7 @@ import * as z from "zod/mini";
 import {
   ADMIN_VISITS_PAGE_SIZE,
   AGENT_POSITION_ACCURACY_MAX_M,
+  CREDENTIAL_MAX,
   DASHBOARD_DEFAULT_PERIOD,
   DASHBOARD_PERIODS,
   EMAIL_MAX,
@@ -109,9 +110,6 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
  * exact break-glass comparison sees; the server normalises it for the code
  * check only (shared/credential.ts).
  */
-/** A typed credential's cap. Its own number, not `shortText`'s: a credential is never trimmed to fit. */
-const CREDENTIAL_MAX = 200;
-
 /**
  * A one-time code, sent as typed: the server normalises it (shared/credential.ts),
  * so the client never rewrites or rejects what the agent entered.

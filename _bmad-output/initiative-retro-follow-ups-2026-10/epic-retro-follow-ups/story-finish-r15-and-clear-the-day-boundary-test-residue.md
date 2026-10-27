@@ -1,7 +1,8 @@
 ---
 tracker_id: "638"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/638"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 6
 type: story
 title: "Finish R15 and clear the day-boundary test residue"

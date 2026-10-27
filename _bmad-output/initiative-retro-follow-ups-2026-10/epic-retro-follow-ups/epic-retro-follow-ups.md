@@ -1,6 +1,8 @@
 ---
 tracker_id: "632"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/632"
+tracker_status: done
+status: done
 type: epic
 title: "The October 2026 retro actions are done, pinned and written down"
 parent: initiative-retro-follow-ups-2026-10

@@ -256,6 +256,8 @@ export const copy = {
     codeLede: "Entrez le code que vous a donné un administrateur.",
     code: "Code",
     codeRequired: "Saisissez votre code.",
+    /** Filled but over the cap (a paste): "Saisissez" would say it is empty. */
+    codeTooLong: "Ce code est trop long. Vérifiez-le ou demandez-en un nouveau.",
     codeRefused:
       "Ce code ne fonctionne pas. Il a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
     toAdmin: "Accès administrateur",
@@ -264,6 +266,7 @@ export const copy = {
     email: "Adresse e-mail",
     submit: "Se connecter",
     emailRequired: "Saisissez votre adresse e-mail.",
+    emailTooLong: "Cette adresse e-mail est trop longue. Vérifiez-la.",
     /** One sentence whichever part was wrong (ADR-0038). */
     adminRefused:
       "Adresse e-mail ou code incorrect. Le code a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
@@ -306,6 +309,17 @@ export const copy = {
       body: "Le tableau de bord n'a pas pu joindre le serveur. Réessayez dans un instant.",
       stillUnreached: "Le serveur ne répond toujours pas. Réessayez dans un instant.",
     },
+  },
+
+  /** A field screen whose chunk failed to load (GH #654). Its own words: the
+   * Hors ligne screen is the admin's (ADR-0037), and the round stays usable. */
+  fieldChunk: {
+    title: "Cet écran ne s'est pas ouvert",
+    body: "Votre tournée et vos visites sont conservées. Réessayez, ou passez à un autre onglet.",
+    retry: "Réessayer",
+    checking: "Vérification…",
+    /** A « Réessayer » that failed again, so the press is not mistaken for nothing. */
+    stillFailing: "Toujours impossible à ouvrir. Réessayez dans un instant.",
   },
 
   /** The service worker has a new build waiting (registerType: "prompt"). */

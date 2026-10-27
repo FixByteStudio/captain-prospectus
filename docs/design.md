@@ -1562,7 +1562,11 @@ the 1,000 KiB precache.
 - **Validation** is a shadcn `form` over react-hook-form like every other
   form (ADR-0018), with a `z.pick` of the login schema as resolver; it only
   checks that a field is filled: "Saisissez votre code." under either Code
-  field, "Saisissez votre adresse e-mail."
+  field, "Saisissez votre adresse e-mail." A filled value over the cap
+  (a paste: 200 characters for a code, `EMAIL_MAX` for an email) gets its own
+  sentence instead, never "Saisissez": "Ce code est trop long. Vérifiez-le ou
+  demandez-en un nouveau.", "Cette adresse e-mail est trop longue.
+  Vérifiez-la."
 - **A refused sign-in** (401, or a 400: a body the server rejects, which a
   retry cannot fix; the form's own checks stop most such values first) shows a destructive `Alert` above the button
   and keeps what was typed. For a code: "Ce code ne fonctionne pas. Il a
