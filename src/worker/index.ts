@@ -102,7 +102,7 @@ app.notFound((c) => c.json({ error: "not_found" }, 404));
 
 /**
  * Exported by name so `errors.test.ts` can mount it on its own Hono app
- * without a real route (docs/backlog/008-d1-limit-detection-and-logs.md).
+ * without a real route.
  */
 export const onError: ErrorHandler<AppEnv> = (err, c) => {
   if (err instanceof HTTPException) return err.getResponse();

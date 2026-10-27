@@ -38,19 +38,3 @@ Start from [000-template.md](000-template.md).
 
 | id | Task | Status |
 |---|---|---|
-| [001](001-prospect-csv-export.md) | CSV export of the prospect ledger | done |
-| [002](002-visit-csv-export.md) | CSV export of visits | done |
-| [003](003-orphan-visit-rejected-ids.md) | Orphan and unowned visits: quarantine, then repair | done (ADR-0022) |
-| [004](004-field-bundle-budget.md) | Bring the field entry chunk back under its bundle budget | done (ADR-0017; budget superseded by ADR-0026) |
-| [005](005-outbox-identity-stamp.md) | Stamp outbox rows with the identity that wrote them (merge before #119) | done |
-| [006](006-agent-comment-cites-adr-0022.md) | Point the sync route's assignee comment at ADR-0022 (#47) | done |
-| [007](007-sync-body-parsed-once.md) | Parse the sync body once, keeping 426 ahead of validation (#31) | done |
-| [008](008-d1-limit-detection-and-logs.md) | Recognise D1's daily-limit error through Drizzle, redact error logs (#37) | done |
-| [009](009-geolocation-fixture-for-dom-tests.md) | Let a DOM test choose the agent's position (#87) | done |
-| [010](010-offline-admin-dom-test.md) | Pin that an offline admin opens the field side (#85) | done (superseded by #115) |
-| [011](011-top-bar-secondary-handlers-dom-tests.md) | Pin the admin top bar's remaining handlers (part of #86) | done |
-| [012](012-evict-expired-map-cache-rows.md) | Evict expired map-cache rows in the daily sweep (#25) | done |
-| [013](013-sync-identity-from-cache.md) | Do not stamp or sync under an unconfirmed cached identity | done |
-| [014](014-scripts-rebuilt.md) | Scripts rebuilt (#184) | done |
-| [015](015-six-screens-check-prep.md) | Prepare the six-screen check at 1280, 820 and 390, light and dark (#185) | done |
-| [016](016-admin-screens-sweep.md) | Sweep epic #174's admin screens (#186) | done |

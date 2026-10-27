@@ -18,7 +18,6 @@ Nothing in this file is a rule — the rules are in the repo, on purpose.
 | The decision | [docs/adr/0016](docs/adr/0016-autonomous-overnight-agent-runs.md) (status `proposed`) | Accept it in the PR, like any ADR |
 | The behaviour | [.claude/skills/night-shift/SKILL.md](.claude/skills/night-shift/SKILL.md) | Changing what the night shift does is a reviewable diff, not an edit to a web form |
 | The queue | [docs/backlog/](docs/backlog/) — [README](docs/backlog/README.md), [template](docs/backlog/000-template.md) | A file is in the clone. No connector, no `gh` auth, reviewable beside the code that implements it |
-| First tasks | [001 prospect CSV export](docs/backlog/001-prospect-csv-export.md) `ready` · [002 visit CSV export](docs/backlog/002-visit-csv-export.md) `ready`, needs 001 · [003 orphan visits](docs/backlog/003-orphan-visit-rejected-ids.md) `needs-decision` | 001 is the loop validator: one route, one pure function, two tests, two doc lines, no client code, no migration |
 | Pointers | `CLAUDE.md` skills section · `docs/roadmap.md` M6 branch-protection line · `docs/adr/README.md` row | So the next reader finds it without this file |
 
 **Why 001 is not "add Vitest".** The usual advice is to validate the loop with
