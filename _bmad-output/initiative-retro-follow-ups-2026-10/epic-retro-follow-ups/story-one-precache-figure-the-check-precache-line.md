@@ -1,7 +1,8 @@
 ---
 tracker_id: "637"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/637"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 5
 type: story
 title: "One precache figure: the check:precache line"

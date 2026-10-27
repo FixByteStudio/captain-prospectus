@@ -1,7 +1,8 @@
 ---
 tracker_id: "640"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/640"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 9
 type: story
 title: "Docs pass: docs, ADRs, glossary, comments and planning files match what shipped"

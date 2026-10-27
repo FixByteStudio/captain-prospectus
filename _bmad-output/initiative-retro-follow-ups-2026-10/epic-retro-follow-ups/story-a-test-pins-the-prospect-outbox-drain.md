@@ -1,7 +1,8 @@
 ---
 tracker_id: "635"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/635"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 3
 type: story
 title: "A test pins the prospect outbox drain"

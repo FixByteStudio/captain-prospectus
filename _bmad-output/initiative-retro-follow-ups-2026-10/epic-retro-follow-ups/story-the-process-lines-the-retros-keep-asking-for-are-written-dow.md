@@ -1,7 +1,8 @@
 ---
 tracker_id: "641"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/641"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 10
 type: story
 title: "The process lines the retros keep asking for are written down once"
