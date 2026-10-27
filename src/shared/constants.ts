@@ -31,6 +31,9 @@ export const QUESTION_KEY_MAX = 60;
 /** RFC 5321's longest address. */
 export const EMAIL_MAX = 320;
 
+/** A typed credential's cap. Its own number, not `shortText`'s: a credential is never trimmed to fit. */
+export const CREDENTIAL_MAX = 200;
+
 /** docs/glossary.md — a prospect's lifecycle. */
 export const STATUSES = [
   "new",
