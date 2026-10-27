@@ -7,7 +7,7 @@
 ## Context
 
 The field route's JavaScript is **158.78 kB gzipped** against the 150 kB budget in
-[vision.md](../vision.md). [backlog/004](../backlog/004-field-bundle-budget.md)
+[vision.md](../vision.md). A backlog task
 opened at the end of M2 to settle it, and
 [ADR-0015](0015-native-controls-on-the-field-route.md) requires a re-measurement
 before M3 spends anything further.

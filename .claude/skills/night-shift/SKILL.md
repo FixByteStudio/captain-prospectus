@@ -120,8 +120,7 @@ Open a **draft** PR that changes only documentation:
 
 - the task file's `status` set to `needs-decision`
 - a `## Why this is not ready` section, and a `## Options` table of **two or
-  three** options with their trade-offs — the shape
-  `docs/backlog/003-orphan-visit-rejected-ids.md` already uses
+  three** options with their trade-offs
 - any code you wrote, committed but clearly described as unfinished
 
 Do not choose the option. Do not implement one "to show what it would look like".

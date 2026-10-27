@@ -61,14 +61,14 @@ route's precache stays under the 1,000 KiB ceiling.
 - [x] Measure the field route's JS bundle against the ADR-0014 budget note — the admin
       side is a lazy chunk, the budget is in [vision.md](vision.md); re-measured at the
       end of M2: **158 kB, over the 150 kB budget** — `zod` becoming reachable for the
-      first time once the sync engine is actually wired, tracked as
-      [backlog/004](backlog/004-field-bundle-budget.md) and settled at the start of M3 by
+      first time once the sync engine is actually wired, tracked as a
+      backlog task and settled at the start of M3 by
       [ADR-0017](adr/0017-zod-mini-for-the-shared-wire-contract.md): **141.95 kB, under budget**
 
 ## M3 — Scripts
 - [x] Field bundle back under budget before the milestone spends anything —
       [ADR-0017](adr/0017-zod-mini-for-the-shared-wire-contract.md), closing
-      [backlog/004](backlog/004-field-bundle-budget.md)
+      its backlog task
 - [x] **Design pass**: the question editor is the
       most complex screen in the app — written up in
       [design.md](design.md#the-script-editor)
@@ -134,7 +134,7 @@ route's precache stays under the 1,000 KiB ceiling.
       [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34) (the backup workflow ships the whole database to a GitHub artifact,
       which contradicts this doc and is really a retention decision),
       [#35](https://github.com/FixbyteStudio/captain-prospectus/issues/35), [#36](https://github.com/FixbyteStudio/captain-prospectus/issues/36), [#37](https://github.com/FixbyteStudio/captain-prospectus/issues/37), [#38](https://github.com/FixbyteStudio/captain-prospectus/issues/38), [#31](https://github.com/FixbyteStudio/captain-prospectus/issues/31),
-      [#32](https://github.com/FixbyteStudio/captain-prospectus/issues/32), and [backlog/005](backlog/005-outbox-identity-stamp.md), which stays
+      [#32](https://github.com/FixbyteStudio/captain-prospectus/issues/32), and the outbox identity stamp, which stays
       a task of its own because it needs a Dexie migration
 - [x] Orphan visits — solved as a **quarantine**, not the `rejected` field this line used to
       ask for ([ADR-0022](adr/0022-quarantine-visits-the-server-cannot-take.md)). A
@@ -157,8 +157,7 @@ route's precache stays under the 1,000 KiB ceiling.
       [data-model.md](data-model.md). Backups move to R2, closing
       [#34](https://github.com/FixbyteStudio/captain-prospectus/issues/34) — the bucket and
       the token scope are one-time setup in [deployment.md](deployment.md)
-- [x] CSV export of prospects and visits — [backlog/001](backlog/001-prospect-csv-export.md)
-      and [002](backlog/002-visit-csv-export.md). One serialiser in `src/shared/csv.ts`,
+- [x] CSV export of prospects and visits — two backlog tasks. One serialiser in `src/shared/csv.ts`,
       unit-tested away from D1, and two admin routes. Timestamps go out as ISO-8601
       because a spreadsheet shows epoch ms as a 13-digit number; the visits range reads
       `received_at`, not `visited_at`, so a phone that syncs days late is not silently
