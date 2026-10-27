@@ -14,6 +14,7 @@ import { copy } from "../copy/field";
 import { formatBrusselsTime } from "../format";
 import { fieldDb } from "../field/db";
 import type { PwaState } from "../pwa";
+import { EMAIL_MAX } from "../../shared/constants";
 import type { Visit } from "../../shared/schemas";
 import { LoginScreen } from "./LoginScreen";
 
@@ -174,6 +175,24 @@ describe("LoginScreen — admin form", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("says an over-cap email and code are too long, not empty, and sends nothing", async () => {
+    const calls = stubFetch(json(200, { email: OWNER, role: "admin" }));
+    renderLogin();
+    const user = userEvent.setup();
+    await toAdmin(user);
+    await user.click(screen.getByLabelText(copy.login.email));
+    await user.paste("a".repeat(EMAIL_MAX + 1));
+    await user.click(screen.getByLabelText(copy.login.code));
+    await user.paste("x".repeat(201));
+    await user.click(screen.getByRole("button", { name: copy.login.submit }));
+
+    expect(await screen.findByText(copy.login.emailTooLong)).toBeTruthy();
+    expect(screen.getByText(copy.login.codeTooLong)).toBeTruthy();
+    expect(screen.queryByText(copy.login.emailRequired)).toBeNull();
+    expect(screen.queryByText(copy.login.codeRequired)).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
   it("disables the button offline, keeps the fields editable, and recovers online", async () => {
     stubFetch(json(200, { email: OWNER, role: "admin" }));
     renderLogin();
@@ -255,6 +274,19 @@ describe("LoginScreen — code form", () => {
     renderLogin();
     await userEvent.setup().click(screen.getByRole("button", { name: copy.login.submit }));
     expect(await screen.findByText(copy.login.codeRequired)).toBeTruthy();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("says an over-cap code is too long, not empty, and sends nothing", async () => {
+    const calls = stubFetch(json(200, { email: OWNER, role: "admin" }));
+    renderLogin();
+    const user = userEvent.setup();
+    await user.click(codeInput());
+    await user.paste("x".repeat(201));
+    await user.click(screen.getByRole("button", { name: copy.login.submit }));
+
+    expect(await screen.findByText(copy.login.codeTooLong)).toBeTruthy();
+    expect(screen.queryByText(copy.login.codeRequired)).toBeNull();
     expect(calls).toHaveLength(0);
   });
 

@@ -34,7 +34,7 @@ import { formatBrusselsTime } from "../format";
 import { fieldDb } from "../field/db";
 import { useOnline } from "../hooks/use-online";
 import type { PwaState } from "../pwa";
-import { LOGIN_WINDOW_MS } from "../../shared/constants";
+import { CREDENTIAL_MAX, EMAIL_MAX, LOGIN_WINDOW_MS } from "../../shared/constants";
 import {
   adminLoginSchema,
   codeLoginSchema,
@@ -42,7 +42,7 @@ import {
   type LoginRequest,
 } from "../../shared/schemas";
 
-/** Only "is it filled" is the client's to judge; the server judges the rest. */
+/** Only "is it filled" and "is it over the cap" are the client's to judge; the server judges the rest. */
 const codeFormSchema = z.pick(codeLoginSchema, { code: true });
 const adminFormSchema = z.pick(adminLoginSchema, { email: true, code: true });
 type CodeForm = z.infer<typeof codeFormSchema>;
@@ -70,6 +70,14 @@ function refusalFor(error: unknown): Refusal {
     return error.status === 401 || error.status === 400 ? "refused" : "failed";
   return error instanceof TypeError ? "unreachable" : "failed";
 }
+
+/**
+ * An over-cap value is filled, so "Saisissez" would say it is empty. The
+ * resolver reports no issue kind (its `type` is ""), so the value is measured
+ * against the schema's own cap; the email is trimmed first, as the schema does.
+ */
+const isOverCap = (value: string, max: number, trim = false): boolean =>
+  (trim ? value.trim() : value).length > max;
 
 function landingFor(role: "admin" | "agent"): string {
   return role === "admin" ? "/admin" : "/round";
@@ -299,7 +307,11 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
                             {...field}
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5">{copy.login.codeRequired}</FormMessage>
+                        <FormMessage className="mt-1.5">
+                          {isOverCap(field.value, CREDENTIAL_MAX)
+                            ? copy.login.codeTooLong
+                            : copy.login.codeRequired}
+                        </FormMessage>
                       </FormItem>
                     )}
                   />
@@ -330,7 +342,11 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
                             {...field}
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5">{copy.login.emailRequired}</FormMessage>
+                        <FormMessage className="mt-1.5">
+                          {isOverCap(field.value, EMAIL_MAX, true)
+                            ? copy.login.emailTooLong
+                            : copy.login.emailRequired}
+                        </FormMessage>
                       </FormItem>
                     )}
                   />
@@ -349,7 +365,11 @@ export function LoginScreen({ pwa }: { pwa: PwaState }) {
                             {...field}
                           />
                         </FormControl>
-                        <FormMessage className="mt-1.5">{copy.login.codeRequired}</FormMessage>
+                        <FormMessage className="mt-1.5">
+                          {isOverCap(field.value, CREDENTIAL_MAX)
+                            ? copy.login.codeTooLong
+                            : copy.login.codeRequired}
+                        </FormMessage>
                       </FormItem>
                     )}
                   />

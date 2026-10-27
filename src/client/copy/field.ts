@@ -256,6 +256,8 @@ export const copy = {
     codeLede: "Entrez le code que vous a donné un administrateur.",
     code: "Code",
     codeRequired: "Saisissez votre code.",
+    /** Filled but over the cap (a paste): "Saisissez" would say it is empty. */
+    codeTooLong: "Ce code est trop long. Vérifiez-le ou demandez-en un nouveau.",
     codeRefused:
       "Ce code ne fonctionne pas. Il a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
     toAdmin: "Accès administrateur",
@@ -264,6 +266,7 @@ export const copy = {
     email: "Adresse e-mail",
     submit: "Se connecter",
     emailRequired: "Saisissez votre adresse e-mail.",
+    emailTooLong: "Cette adresse e-mail est trop longue. Vérifiez-la.",
     /** One sentence whichever part was wrong (ADR-0038). */
     adminRefused:
       "Adresse e-mail ou code incorrect. Le code a peut-être expiré ou déjà servi\u00a0: demandez-en un nouveau.",
