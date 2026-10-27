@@ -5,6 +5,7 @@ Closes #
 
 ## Checklist
 - [ ] Typecheck, tests and build pass
+- [ ] Field route touched: the `check:precache` line `pnpm build` ends with, pasted here and no other precache figure — or the field route is untouched
 - [ ] Docs updated (`docs/api.md`, `docs/data-model.md`, domain docs) — or not needed
 - [ ] New/changed architectural decision → ADR added — or not needed
 - [ ] Schema change: one migration while the data stage is disposable, expand/contract reviewed once it is protected — or none

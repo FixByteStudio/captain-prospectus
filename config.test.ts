@@ -155,15 +155,15 @@ describe("CI", () => {
     return [...body.matchAll(/^\s*- run: (.+)$/gm)].map(([, command]) => command.trim());
   }
 
-  it("runs check:precache after the build in the same job, so the ceiling fails CI rather than waiting for a human to read the build log", () => {
+  it("builds in CI with a build script that ends with check:precache, so the ceiling fails CI and the log ends with its line", () => {
     // ADR-0026 named the CI check as follow-up work; without this assertion,
-    // ci.yml could drop the step again and nothing would notice (GH #67).
+    // `build` could drop the check again and nothing would notice (GH #67, #637).
     const steps = runStepsOf(readFileSync(".github/workflows/ci.yml", "utf8"), "check");
-    const buildAt = steps.findIndex((s) => s === "pnpm run build");
-    const checkAt = steps.findIndex((s) => s === "pnpm run check:precache");
-    expect(buildAt, "the check job never runs pnpm run build").toBeGreaterThan(-1);
-    expect(checkAt, "the check job never runs pnpm run check:precache").toBeGreaterThan(-1);
-    expect(checkAt, "check:precache must run after the build").toBeGreaterThan(buildAt);
+    expect(steps, "the check job never runs pnpm run build").toContain("pnpm run build");
+    const { scripts } = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(scripts.build.split("&&").at(-1)?.trim()).toBe("node scripts/check-precache.mjs");
   });
 
   it("enforces exactly ADR-0026's 1,000 KiB ceiling, not some other number", () => {

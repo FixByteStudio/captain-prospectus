@@ -15,9 +15,11 @@
  * read from the chunk-module map `vite.config.ts` writes beside dist/client:
  * a leak like that would otherwise pass silently until it crossed the ceiling.
  *
- * Run after `pnpm build` (wired as `check:precache` in package.json and
- * ci.yml), never instead of it: this script trusts the build's own output
- * rather than re-running Rollup or Workbox itself.
+ * It runs after `vite build` as the last step of `pnpm build` (and alone as
+ * `pnpm check:precache`), never instead of it: this script trusts the build's
+ * own output rather than re-running Rollup or Workbox itself. Its summary line
+ * is printed last on purpose: it is the one precache figure a PR quotes, and
+ * Workbox's own line above it counts less (ADR-0031).
  *
  * `CHECK_PRECACHE_ROOT`/`CHECK_PRECACHE_CEILING_KIB` are a seam for
  * `check-precache.test.mjs` only — the real CLI (package.json, ci.yml) never
@@ -148,12 +150,12 @@ const overrides = [
 ]
   .filter(Boolean)
   .join(", ");
-console.log(
-  `check:precache — ${entries.length} entries (${totalKiB.toFixed(2)} KiB) against a ${CEILING_KIB} KiB ceiling${overrides ? ` [${overrides}]` : ""}`,
-);
 for (const entry of [...entries].sort((a, b) => b.bytes - a.bytes)) {
   console.log(`  ${(entry.bytes / 1024).toFixed(2)} KiB  ${entry.url}`);
 }
+console.log(
+  `check:precache — ${entries.length} entries (${totalKiB.toFixed(2)} KiB) against a ${CEILING_KIB} KiB ceiling${overrides ? ` [${overrides}]` : ""}`,
+);
 
 // Every check below reports before the script exits, so one run names both an
 // overweight precache and the leak behind it.
