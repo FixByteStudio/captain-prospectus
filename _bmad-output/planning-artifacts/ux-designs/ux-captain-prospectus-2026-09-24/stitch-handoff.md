@@ -40,7 +40,7 @@ Captain Prospectus is a B2B field-canvassing app used in Brussels. An admin impo
 restaurants, cafés, bars and food trucks (from a CSV file or from an area drawn on a
 map), assigns them to field agents, and watches visits come in. Field agents walk a
 daily round on their phone, visit each place, hand over a flyer and record the outcome.
-The admin also goes out in the field sometimes.
+An admin never does a round; the field side is for agents only.
 
 ALL USER-FACING TEXT IS IN FRENCH. Use exactly the French strings I give in quotes.
 Sentence case everywhere. Dates like "24/09/2026 15:24", numbers in fr-FR ("1 284").
@@ -325,8 +325,7 @@ Shell (reused by every field screen):
 - Top bar: logo mark, "Captain Prospectus", and on the right a sync dot with a
   pending count (e.g. amber dot "2").
 - A sync strip under the top bar, only when there is something to say (see F8).
-- Bottom tab bar [ASSUMPTION on tabs]: "Tournée" (active), "Carte", "Ajouter". An
-  admin also gets a 4th tab, "Tableau de bord".
+- Bottom tab bar [ASSUMPTION on tabs]: "Tournée" (active), "Carte", "Ajouter".
 
 Content:
 1. Title "Tournée du jour", subtitle "17 arrêts".
