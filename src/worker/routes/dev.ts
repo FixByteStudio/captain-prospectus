@@ -32,6 +32,7 @@ import { deriveProspectStatus } from "./status";
 const DEV_USERS: readonly { email: string; role: Role }[] = [
   { email: "admin@example.com", role: "admin" },
   { email: "agent@example.com", role: "agent" },
+  { email: "agent2@example.com", role: "agent" },
 ];
 
 export const devRoutes = new Hono<AppEnv>();
@@ -71,7 +72,7 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   const db = getDb(c.env.DB);
   const now = Date.now();
 
-  // 0. The two local users DEV_USER_EMAIL may name; requireIdentity reads the
+  // 0. The local users DEV_USER_EMAIL may name, and a second agent to assign to; requireIdentity reads the
   // role from here (ADR-0029). An existing row, deactivated or re-roled since,
   // is left as it is.
   const insertedUsers = await db
@@ -214,8 +215,7 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   }
 
   // 7. One quarantined visit of each reason, shaped as sync writes them.
-  const orphans =
-    body.orphans === false ? [] : seedOrphans(seeds, stored, c.env.DEV_USER_EMAIL, now);
+  const orphans = body.orphans === false ? [] : seedOrphans(seeds, stored, now);
   let insertedOrphans = 0;
   if (orphans.length > 0) {
     // A repaired orphan now lives in `visits`; quarantining it again would
@@ -281,7 +281,6 @@ type StoredProspect = {
 function seedOrphans(
   seeds: readonly Seed[],
   stored: ReadonlyMap<string, StoredProspect>,
-  devUser: string | undefined,
   now: number,
 ): NewOrphanedVisitRow[] {
   const live = seeds.flatMap(({ input, key }) => {
@@ -290,9 +289,11 @@ function seedOrphans(
   });
   const agents = [
     ...new Set(
-      [...live.map((r) => r.assignedTo), devUser ?? null].filter(
-        (a): a is string => typeof a === "string",
-      ),
+      [
+        ...live.map((r) => r.assignedTo),
+        // An admin is not assignable (ADR-0037), so the other side of a mismatch is a seeded agent.
+        ...DEV_USERS.filter((u) => u.role === "agent").map((u) => u.email),
+      ].filter((a): a is string => typeof a === "string"),
     ),
   ];
 

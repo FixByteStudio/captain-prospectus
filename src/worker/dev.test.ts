@@ -111,19 +111,20 @@ describe("POST /api/dev/seed", () => {
    * database needs both rows before the app opens. test/setup-worker.ts has
    * already seeded them, hence the wipe; the seed puts them back.
    */
-  it("inserts the two local users once, and never changes an existing row", async () => {
+  it("inserts the local users once, and never changes an existing row", async () => {
     const db = getDb(env.DB);
     await db.delete(sessions);
     await db.delete(users);
 
     const first = await seed(seedBody());
-    expect(first.inserted.users).toBe(2);
+    expect(first.inserted.users).toBe(3);
     const rows = await db
       .select({ email: users.email, role: users.role, active: users.active })
       .from(users)
       .orderBy(users.email);
     expect(rows).toEqual([
       { email: "admin@example.com", role: "admin", active: true },
+      { email: "agent2@example.com", role: "agent", active: true },
       { email: "agent@example.com", role: "agent", active: true },
     ]);
 
@@ -164,6 +165,16 @@ describe("POST /api/dev/seed", () => {
     expect(row?.status).toBe("new");
   });
 
+  // ADR-0037: an admin cannot be assigned, and DEV_USER_EMAIL is the admin locally.
+  it("quarantines visits against seeded agents only, never the admin", async () => {
+    expect((await postSeed(seedBody())).status).toBe(200);
+    const rows = await getDb(env.DB)
+      .select({ agentEmail: visitsOrphaned.agentEmail })
+      .from(visitsOrphaned);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.agentEmail).not.toBe(env.DEV_USER_EMAIL);
+  });
+
   it("quarantines nothing when orphans is false", async () => {
     const response = await postSeed(seedBody({ orphans: false }));
     expect(await response.json()).toMatchObject({ inserted: { orphans: 0 } });
@@ -174,7 +185,7 @@ describe("POST /api/dev/seed", () => {
   it("stores each position as a reading from today, one row per email however often it runs", async () => {
     const positions = [
       { email: "agent@example.com", lat: 50.85, lng: 4.35, accuracy: 15 },
-      { email: "admin@example.com", lat: 50.84, lng: 4.36, accuracy: 25 },
+      { email: "agent2@example.com", lat: 50.84, lng: 4.36, accuracy: 25 },
     ];
     expect((await postSeed(seedBody({ positions }))).status).toBe(200);
     expect((await postSeed(seedBody({ positions }))).status).toBe(200);
@@ -183,7 +194,7 @@ describe("POST /api/dev/seed", () => {
       .select()
       .from(agentPositions)
       .orderBy(agentPositions.agentEmail);
-    expect(rows.map((r) => r.agentEmail)).toEqual(["admin@example.com", "agent@example.com"]);
+    expect(rows.map((r) => r.agentEmail)).toEqual(["agent2@example.com", "agent@example.com"]);
     expect(rows.every((r) => Math.abs(r.capturedAt - Date.now()) < 60_000)).toBe(true);
   });
 
@@ -282,8 +293,8 @@ describe("POST /api/dev/seed", () => {
 
 /* ------------------------------------------------ the dashboard's data (#108) */
 
-const DEV = "admin@example.com";
-const OTHER = "agent@example.com";
+const DEV = "agent@example.com";
+const OTHER = "agent2@example.com";
 
 type SeedProspect = DevSeed["prospects"][number];
 

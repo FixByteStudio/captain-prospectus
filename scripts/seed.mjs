@@ -14,8 +14,9 @@
 import { script } from "./seed-script.mjs";
 
 const URL_BASE = process.env.SEED_URL ?? "http://localhost:5173";
-const AGENT = process.env.DEV_USER_EMAIL ?? "admin@example.com";
-const OTHER_AGENT = "agent@example.com";
+// Agents only: an admin cannot be assigned work (ADR-0037), whatever DEV_USER_EMAIL says.
+const AGENT = "agent@example.com";
+const OTHER_AGENT = "agent2@example.com";
 
 // Around the Grand-Place, Brussels — the area this canvasses (docs/vision.md).
 const CENTER = { lat: 50.8467, lng: 4.3525 };
@@ -60,7 +61,7 @@ const prospects = NAMES.map(([name, type], i) => ({
   lat: i % 7 === 0 ? null : CENTER.lat + Math.sin(i) * 0.012,
   lng: i % 7 === 0 ? null : CENTER.lng + Math.cos(i) * 0.012,
   address: i % 7 === 0 ? `${i + 1} rue de la Ruche, Bruxelles` : null,
-  // Two thirds to the dev user, the rest to a second agent, a few unassigned.
+  // Two thirds to the first agent, the rest to the second, a few unassigned.
   assignedTo: i % 3 === 2 ? OTHER_AGENT : i % 11 === 0 ? null : AGENT,
 }));
 
@@ -149,8 +150,6 @@ const generated = PLACES.flatMap((place, row) =>
 /**
  * Two readings taken at seed time, so Tournée du jour has a position to draw
  * (a position is only served for the day it was taken: re-run this each day).
- * The admin's is not something production stores — it is here so the screen
- * opened as the dev user shows one.
  */
 const positions = [
   { email: OTHER_AGENT, lat: CENTER.lat + 0.004, lng: CENTER.lng - 0.006, accuracy: 15 },
