@@ -3,8 +3,8 @@
  * nobody, no visits, nothing quarantined. The default `pnpm db:seed:local`;
  * `pnpm db:seed:local:full` loads the 300 places and 180 days of seed.mjs.
  *
- * The route also inserts the two local users DEV_USER_EMAIL may name:
- * admin@example.com (admin) and agent@example.com (agent). The active script
+ * The route also inserts the local users: admin@example.com (admin, what
+ * DEV_USER_EMAIL names), agent@example.com and agent2@example.com. The active script
  * goes in too, so the agent can record a visit once the admin assigns a prospect.
  *
  * Posts to the dev-only /api/dev/seed route, like seed.mjs. Running it twice

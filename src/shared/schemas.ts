@@ -1306,7 +1306,7 @@ export const devSeedResultSchema = z.object({
     prospects: z.int().check(z.nonnegative()),
     visits: z.int().check(z.nonnegative()),
     orphans: z.int().check(z.nonnegative()),
-    /** The two local users; an existing row is never changed. */
+    /** The local users; an existing row is never changed. */
     users: z.int().check(z.nonnegative()),
   }),
 });
