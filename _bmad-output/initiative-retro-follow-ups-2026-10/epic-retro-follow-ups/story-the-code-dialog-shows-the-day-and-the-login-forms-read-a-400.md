@@ -1,7 +1,8 @@
 ---
 tracker_id: "639"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/639"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 8
 type: story
 title: "The code dialog shows the day and the login forms read a 400 as a refusal"

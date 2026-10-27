@@ -1,7 +1,8 @@
 ---
 tracker_id: "636"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/636"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 4
 type: story
 title: "The Visites feed cursor follows stamp order"

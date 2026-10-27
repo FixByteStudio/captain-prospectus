@@ -1,7 +1,8 @@
 ---
 tracker_id: "633"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/633"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 1
 type: story
 title: "Break-glass refuses an agent row"

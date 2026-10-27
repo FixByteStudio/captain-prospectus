@@ -1,7 +1,8 @@
 ---
 tracker_id: "634"
 remote: "https://github.com/FixByteStudio/captain-prospectus/issues/634"
-tracker_status: backlog
+tracker_status: done
+status: done
 id: 2
 type: story
 title: "Tests and lint pin what the admin-field split and the code login loosened"
