@@ -308,6 +308,17 @@ export const copy = {
     },
   },
 
+  /** A field screen whose chunk failed to load (GH #654). Its own words: the
+   * Hors ligne screen is the admin's (ADR-0037), and the round stays usable. */
+  fieldChunk: {
+    title: "Cet écran ne s'est pas ouvert",
+    body: "Votre tournée et vos visites sont conservées. Réessayez, ou passez à un autre onglet.",
+    retry: "Réessayer",
+    checking: "Vérification…",
+    /** A « Réessayer » that failed again, so the press is not mistaken for nothing. */
+    stillFailing: "Toujours impossible à ouvrir. Réessayez dans un instant.",
+  },
+
   /** The service worker has a new build waiting (registerType: "prompt"). */
   update: {
     available: "Une nouvelle version est disponible.",

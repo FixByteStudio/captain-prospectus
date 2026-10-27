@@ -83,6 +83,11 @@ outcome first is also what says whether the questions are obligatory at all.
   instead would take down the visit form, and an agent who cannot open it loses
   the visit — INVARIANT 5 by another route.
 
+**A failed field screen chunk gets a retry, not a crash** (`field/FieldChunkBoundary.tsx`): Carte, Carnet,
+Visit and Add prospect are lazy, so a stale hash after a deploy can reject their `import()`. The screen
+is replaced by an inline « Cet écran ne s'est pas ouvert » under the band and tabs, and « Réessayer »
+imports the chunk again at the same URL. The admin's Hors ligne screen is not used: it has no field link.
+
 ## Field prospects
 Agents add places not in the base: name and type required, position defaults to current location.
 
