@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { copy } from "./copy/field";
 import { Alert, AlertTitle } from "@/ui/alert";
 import { buttonVariants } from "@/ui/button-variants";
+import { Spinner } from "@/ui/spinner";
 import { useLeaveGuard } from "./field/leave-guard";
 import type { PwaState } from "./pwa";
 
@@ -57,6 +58,8 @@ export function UpdatePrompt({ pwa }: { pwa: PwaState }) {
   // Outside the field's LeaveGuardProvider (the admin shell) this falls
   // through to the default context, which just runs `update` (spec-gh-74).
   const { leave } = useLeaveGuard();
+  // Set inside `leave`, so « Annuler » on the leave dialog leaves the banner as it was.
+  const [updating, setUpdating] = useState(false);
   if (!needRefresh) return null;
 
   return (
@@ -68,6 +71,7 @@ export function UpdatePrompt({ pwa }: { pwa: PwaState }) {
         <button
           type="button"
           className={buttonVariants({ size: "sm", variant: "secondary" })}
+          disabled={updating}
           onClick={dismiss}
         >
           {copy.update.dismiss}
@@ -75,9 +79,17 @@ export function UpdatePrompt({ pwa }: { pwa: PwaState }) {
         <button
           type="button"
           className={buttonVariants({ size: "sm" })}
-          onClick={() => leave(update)}
+          disabled={updating}
+          aria-busy={updating}
+          onClick={() =>
+            leave(() => {
+              setUpdating(true);
+              update();
+            })
+          }
         >
-          {copy.update.apply}
+          {updating && <Spinner aria-hidden />}
+          {updating ? copy.update.applying : copy.update.apply}
         </button>
       </div>
     </Alert>

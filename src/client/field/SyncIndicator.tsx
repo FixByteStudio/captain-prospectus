@@ -12,10 +12,12 @@
  * it returns.
  */
 import { ClockIcon, CloudUploadIcon, UserXIcon, XIcon, type LucideIcon } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { copy } from "../copy/field";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "@/ui/button-variants";
+import { Spinner } from "@/ui/spinner";
 import { useLeaveGuard } from "./leave-guard";
 import type { PwaState } from "../pwa";
 import {
@@ -125,6 +127,8 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
   const heldBack = heldBackMessage(useSyncState().heldBack);
   const { leave } = useLeaveGuard();
   const navigate = useNavigate();
+  // Same as the update banner: from the tap to the reload, say it is happening.
+  const [updating, setUpdating] = useState(false);
 
   const runAction = () => {
     if (!strip?.action) return;
@@ -136,7 +140,10 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
         leave(() => void navigate("/login"));
         return;
       case "apply-update":
-        leave(pwa.update);
+        leave(() => {
+          setUpdating(true);
+          pwa.update();
+        });
         return;
       case "reload":
         leave(() => window.location.reload());
@@ -150,6 +157,7 @@ export function SyncStrip({ pwa }: { pwa: PwaState }) {
         politeness="assertive"
         strip={strip?.politeness === "assertive" ? strip : null}
         onAction={runAction}
+        busy={updating}
       />
       {heldBack && (
         <p className="bg-secondary text-foreground flex min-h-8 items-center gap-2 px-4 py-1.5 text-xs font-medium">
@@ -165,10 +173,12 @@ function StripRegion({
   politeness,
   strip,
   onAction,
+  busy = false,
 }: {
   politeness: "polite" | "assertive";
   strip: SyncView["strip"];
   onAction?: () => void;
+  busy?: boolean;
 }) {
   const Icon = strip && STRIP_ICON[strip.icon];
 
@@ -187,6 +197,8 @@ function StripRegion({
           {strip.action && (
             <button
               type="button"
+              disabled={busy}
+              aria-busy={busy}
               onClick={onAction}
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
@@ -201,7 +213,12 @@ function StripRegion({
                 "hover:bg-transparent hover:text-current focus-visible:border-current focus-visible:ring-current dark:hover:bg-transparent",
               )}
             >
-              {strip.action === "update" ? copy.update.apply : copy.sync.reconnect}
+              {busy && <Spinner aria-hidden />}
+              {strip.action !== "update"
+                ? copy.sync.reconnect
+                : busy
+                  ? copy.update.applying
+                  : copy.update.apply}
             </button>
           )}
         </>

@@ -158,6 +158,8 @@ describe("SyncStrip", () => {
     await user.click(screen.getByRole("button", { name: copy.update.apply }));
 
     expect(update).toHaveBeenCalledOnce();
+    const applying = screen.getByRole("button", { name: copy.update.applying });
+    expect(applying.hasAttribute("disabled")).toBe(true);
   });
 
   it("keeps waiting writes in the polite region, with no button", () => {

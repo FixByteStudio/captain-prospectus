@@ -326,6 +326,8 @@ export const copy = {
   update: {
     available: "Une nouvelle version est disponible.",
     apply: "Mettre à jour",
+    /** Between the tap and the reload, so the tap is not mistaken for nothing. */
+    applying: "Mise à jour…",
     dismiss: "Plus tard",
   },
 } as const;

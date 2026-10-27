@@ -68,4 +68,38 @@ describe("UpdatePrompt", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(pwa.update).toHaveBeenCalledOnce();
   });
+
+  it("shows the update is under way once tapped, and blocks a second tap", async () => {
+    const user = userEvent.setup();
+    const pwa = waitingBuild();
+    render(<UpdatePrompt pwa={pwa} />);
+
+    await user.click(screen.getByRole("button", { name: copy.update.apply }));
+
+    const applying = screen.getByRole("button", { name: copy.update.applying });
+    expect(applying.hasAttribute("disabled")).toBe(true);
+    expect(applying.getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("button", { name: copy.update.dismiss }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    await user.click(applying);
+    expect(pwa.update).toHaveBeenCalledOnce();
+  });
+
+  it("stays as it was when the leave dialog is cancelled", async () => {
+    const user = userEvent.setup();
+    const pwa = waitingBuild();
+    render(
+      <LeaveGuardProvider>
+        <DirtyForm />
+        <UpdatePrompt pwa={pwa} />
+      </LeaveGuardProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: copy.update.apply }));
+    await user.click(screen.getByRole("button", { name: copy.nav.leaveGuard.cancel }));
+
+    expect(screen.queryByRole("button", { name: copy.update.applying })).toBeNull();
+    expect(pwa.update).not.toHaveBeenCalled();
+  });
 });

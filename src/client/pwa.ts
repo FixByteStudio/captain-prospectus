@@ -28,6 +28,14 @@ let updateServiceWorkerFn: ((reload?: boolean) => Promise<void>) | undefined;
 let forced = false;
 
 /**
+ * `updateServiceWorker(true)` reloads only when the waiting worker takes
+ * control. If another tab already activated it, nothing is waiting and the tap
+ * would hang on « Mise à jour… »; by then the new build is active, so a plain
+ * reload is enough to land on it.
+ */
+const UPDATE_FALLBACK_MS = 10_000;
+
+/**
  * Re-check first, because a phone old enough to be refused may not have seen
  * the new build yet. In "prompt" mode `updateServiceWorker` only posts
  * `skipWaiting` to a worker already waiting, so with nothing to take this is a
@@ -70,7 +78,10 @@ export function usePwa(): PwaState {
   return {
     needRefresh,
     offlineReady,
-    update: () => void updateServiceWorker(true),
+    update: () => {
+      void updateServiceWorker(true);
+      window.setTimeout(() => window.location.reload(), UPDATE_FALLBACK_MS);
+    },
     dismiss: () => setNeedRefresh(false),
   };
 }
