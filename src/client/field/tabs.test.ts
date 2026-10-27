@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fieldTabs, isCurrentTab } from "./tabs";
 
 describe("fieldTabs", () => {
-  it("gives every role four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
+  it("gives the agent four tabs, in order: Tournée, Carte, Carnet, Ajouter", () => {
     expect(fieldTabs().map((t) => t.path)).toEqual([
       "/round",
       "/round/map",

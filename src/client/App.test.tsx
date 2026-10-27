@@ -485,7 +485,6 @@ describe("The tournée gate", () => {
   describe("at Brussels midnight", () => {
     const EVE = Date.UTC(2026, 9, 14, 21, 59, 30);
     const MIDNIGHT = Date.UTC(2026, 9, 14, 22, 0, 0);
-    const weekdayOf = formatBrusselsWeekday;
     /** The prospect a visit form opens on, assigned so it is also the next day's snapshot. */
     const BAR = assigned({ id: "44444444-4444-4444-8444-444444444444", name: "Bar du soir" });
 
@@ -543,8 +542,8 @@ describe("The tournée gate", () => {
       await act(() => vi.advanceTimersByTimeAsync(30_000));
 
       expect(await swipe()).toBeTruthy();
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
-      expect(screen.queryByText(weekdayOf(EVE))).toBeNull();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
+      expect(screen.queryByText(formatBrusselsWeekday(EVE))).toBeNull();
       expect(screen.getByRole("alertdialog", { name: copy.location.title })).toBeTruthy();
       expect(fieldBand()).toBeNull();
     });
@@ -597,7 +596,7 @@ describe("The tournée gate", () => {
       expect(row?.prospectId).toBe(BAR.id);
       const dialog = screen.getByRole("alertdialog", { name: copy.location.title });
       expect(dialog.textContent).toContain(copy.visit.saved);
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
     });
 
     it("leaves the save summary open across midnight, and saving behaves the same", async () => {
@@ -693,7 +692,7 @@ describe("The tournée gate", () => {
       });
 
       expect(await swipe()).toBeTruthy();
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
     });
 
     it("stays on the new day when a sync lands at 00:05", async () => {
@@ -708,7 +707,7 @@ describe("The tournée gate", () => {
       await setMeta(fieldDb, "lastSyncAt", Date.now());
 
       expect(await swipe()).toBeTruthy();
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
     });
 
     it("shows no saved line for a save made before midnight, on the same history entry", async () => {
@@ -730,7 +729,7 @@ describe("The tournée gate", () => {
       renderApp("/round");
 
       expect(await swipe()).toBeTruthy();
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
       expect(fieldBand()).toBeNull();
     });
 
@@ -739,12 +738,12 @@ describe("The tournée gate", () => {
       await fieldDb.tournees.clear();
       renderApp("/round");
       expect(await swipe()).toBeTruthy();
-      expect(screen.getByText(weekdayOf(EVE))).toBeTruthy();
+      expect(screen.getByText(formatBrusselsWeekday(EVE))).toBeTruthy();
 
       crossTo(MIDNIGHT);
 
-      expect(screen.getByText(weekdayOf(MIDNIGHT))).toBeTruthy();
-      expect(screen.queryByText(weekdayOf(EVE))).toBeNull();
+      expect(screen.getByText(formatBrusselsWeekday(MIDNIGHT))).toBeTruthy();
+      expect(screen.queryByText(formatBrusselsWeekday(EVE))).toBeNull();
       expect(screen.getByRole("alertdialog", { name: copy.location.title })).toBeTruthy();
     });
   });
