@@ -2652,6 +2652,12 @@ Outside the field route (the admin update banner, and the update prompt on
 `/login`) there is no provider, so `leave` runs its action at once, unchanged
 from before #74.
 
+Once the update runs, its button turns into a disabled « Mise à jour… » with a
+spinner (and the banner's « Plus tard » is disabled) until the page reloads,
+so the tap never looks like nothing happened. If the reload has not come ten
+seconds later (another tab already activated the build), `usePwa` reloads the
+page itself.
+
 ### Account card
 
 The field avatar is a `button` (48px target around the 32px disc) that opens a
