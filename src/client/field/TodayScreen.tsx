@@ -64,7 +64,7 @@ export function TodayScreen() {
           </div>
 
           {rest.length > 0 && (
-            <ul className="mt-4 space-y-2 md:col-span-2 md:col-start-1 md:row-start-1 md:mt-0">
+            <ul className="my-4 space-y-2 md:col-span-2 md:col-start-1 md:row-start-1 md:mt-0">
               {rest.map((item) => (
                 <StopRow
                   key={item.id}
