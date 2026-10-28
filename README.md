@@ -35,7 +35,7 @@ pnpm dev                 # then, in another terminal:
 pnpm db:seed:local
 ```
 
-The default seed holds 10 blank prospects, unassigned and never visited, plus the active script; the users are the admin and the agent of `.dev.vars`. For about 300 places and 180 days of visit history for two agents, so every figure on Tableau de bord has data, run `pnpm db:seed:local:full` instead. Running it again inserts nothing while the seeded prospects are unedited, but it merges an unmerged one again, and the dates stay those of the first run. For fresh dates, delete `.wrangler/state`, then run `pnpm db:migrate:local && pnpm db:seed:local:full` (never `--remote`).
+The default seed holds 10 blank prospects, unassigned and never visited, plus the active script; the users are the admin and the agent of `.dev.vars`. For about 300 places and 180 days of visit history for two agents, so every figure on Tableau de bord has data, run `pnpm db:seed:local:full` instead. For the users alone (`admin@example.com` and `agent@example.com`, no prospects, no script), run `pnpm db:seed:local:users`. Running it again inserts nothing while the seeded prospects are unedited, but it merges an unmerged one again, and the dates stay those of the first run. For fresh dates, delete `.wrangler/state`, then run `pnpm db:migrate:local && pnpm db:seed:local:full` (never `--remote`).
 
 ## Where to start
 

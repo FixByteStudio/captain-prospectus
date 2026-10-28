@@ -28,11 +28,13 @@ import { FIXED_STORIES, seedHistory, seedId } from "../dev-seed-history";
 import type { AppEnv } from "../types";
 import { deriveProspectStatus } from "./status";
 
+const SECOND_AGENT = "agent2@example.com";
+
 /** The local users, matching `.dev.vars.example`'s DEV_USER_EMAIL choices. */
 const DEV_USERS: readonly { email: string; role: Role }[] = [
   { email: "admin@example.com", role: "admin" },
   { email: "agent@example.com", role: "agent" },
-  { email: "agent2@example.com", role: "agent" },
+  { email: SECOND_AGENT, role: "agent" },
 ];
 
 export const devRoutes = new Hono<AppEnv>();
@@ -75,9 +77,11 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   // 0. The local users DEV_USER_EMAIL may name, and a second agent to assign to; requireIdentity reads the
   // role from here (ADR-0029). An existing row, deactivated or re-roled since,
   // is left as it is.
+  const devUsers =
+    body.secondAgent === false ? DEV_USERS.filter((u) => u.email !== SECOND_AGENT) : DEV_USERS;
   const insertedUsers = await db
     .insert(users)
-    .values(DEV_USERS.map(({ email, role }) => ({ email, role, active: true, createdAt: now })))
+    .values(devUsers.map(({ email, role }) => ({ email, role, active: true, createdAt: now })))
     .onConflictDoNothing()
     .returning({ email: users.email });
 
@@ -142,16 +146,18 @@ devRoutes.post("/seed", validate("json", devSeedSchema), async (c) => {
   }
 
   // 3. The script.
-  await db
-    .insert(scripts)
-    .values({
-      name: body.script.name,
-      version: 1,
-      questions: body.script.questions,
-      isActive: true,
-      createdAt: now,
-    })
-    .onConflictDoNothing();
+  if (body.script) {
+    await db
+      .insert(scripts)
+      .values({
+        name: body.script.name,
+        version: 1,
+        questions: body.script.questions,
+        isActive: true,
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+  }
 
   // 4. The histories. The fixed stories go to each agent's first prospects in
   // this request — counted per request, so every batch seed.mjs sends gets its
