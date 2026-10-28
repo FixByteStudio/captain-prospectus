@@ -1269,9 +1269,12 @@ export const devSeedSchema = z
         }),
       )
       .check(z.maxLength(IMPORT_ROWS_PER_REQUEST)),
-    script: scriptCreateSchema,
+    /** Absent inserts no script, for the users-only seed. */
+    script: z.optional(scriptCreateSchema),
     /** `false` quarantines nothing, for the blank seed. Absent means true. */
     orphans: z.optional(z.boolean()),
+    /** `false` leaves agent2@example.com out, for the users-only seed. Absent means true. */
+    secondAgent: z.optional(z.boolean()),
     /** Readings taken "now", so the admin round view has a position to draw. */
     positions: z.optional(
       z

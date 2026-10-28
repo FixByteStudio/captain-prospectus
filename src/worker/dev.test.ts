@@ -145,6 +145,32 @@ describe("POST /api/dev/seed", () => {
     }
   });
 
+  it("inserts only the admin and one agent for the users-only seed", async () => {
+    const db = getDb(env.DB);
+    await db.delete(sessions);
+    await db.delete(users);
+    await db.delete(scripts);
+
+    try {
+      const result = await seed({ prospects: [], orphans: false, secondAgent: false });
+      expect(result).toEqual({
+        seeded: 0,
+        inserted: { prospects: 0, visits: 0, orphans: 0, users: 2 },
+      });
+      const rows = await db
+        .select({ email: users.email, role: users.role })
+        .from(users)
+        .orderBy(users.email);
+      expect(rows).toEqual([
+        { email: "admin@example.com", role: "admin" },
+        { email: "agent@example.com", role: "agent" },
+      ]);
+      expect(await db.select().from(scripts)).toEqual([]);
+    } finally {
+      await seedTestUsers();
+    }
+  });
+
   it("derives status new when nothing is assigned", async () => {
     await postSeed(
       seedBody({
