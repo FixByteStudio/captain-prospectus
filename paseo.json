@@ -1,0 +1,31 @@
+{
+  "worktree": {
+    "setup": ["pnpm install --frozen-lockfile", "pnpm db:migrate:local"]
+  },
+  "scripts": {
+    "dev": {
+      "type": "service",
+      "command": "pnpm dev --port $PASEO_PORT --strictPort"
+    },
+    "test": {
+      "command": "pnpm test"
+    },
+    "typecheck": {
+      "command": "pnpm typecheck"
+    },
+    "lint": {
+      "command": "pnpm lint"
+    }
+  },
+  "metadataGeneration": {
+    "branchName": {
+      "instructions": "Conventional type prefix: feat/, fix/, chore/, docs/, refactor/, test/, then a short kebab-case summary using glossary words (docs/glossary.md)."
+    },
+    "commitMessage": {
+      "instructions": "Conventional Commits with a domain scope, e.g. feat(field-ops): … or fix(ingestion): …. Imperative subject. Always end with the trailer: Co-Authored-By: m0hss <dev.fixbyte@proton.me>"
+    },
+    "pullRequest": {
+      "instructions": "Lead with a one-paragraph summary, then a Test plan section. Use 'Refs #n' (not 'Closes #n') for hitl stories. If the field route changed, paste the check:precache line that pnpm build prints."
+    }
+  }
+}
