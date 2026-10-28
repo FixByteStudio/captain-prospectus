@@ -12,6 +12,7 @@ import { copy } from "../../copy";
 import type { ImportsResponse } from "../../../shared/schemas";
 import { createAdminQueryClient } from "../query-client";
 import { ImportScreen } from "./ImportScreen";
+import { TYPE_CHIPS_KEY } from "./type-chips";
 
 // The map fork's own canvas is Leaflet-imperative and out of scope here
 // (#181); a stub keeps the fork's presence assertable without a Leaflet DOM.
@@ -99,6 +100,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  globalThis.localStorage.removeItem(TYPE_CHIPS_KEY);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -283,6 +285,51 @@ describe("ImportScreen", () => {
       fileName: "prospects.csv",
     });
     expect(body.importLog).not.toHaveProperty("zoneVertices");
+  });
+
+  it("greys an unticked type in the ledger and sends only the ticked ones", async () => {
+    const fetchMock = stubFetch(() => json({ created: 2, updated: 0 }));
+    renderScreen();
+    const file = new File(
+      [["nom,type", "Chez Marcel,restaurant", "Le Zinc,bar", "Café du Port,cafe"].join("\n")],
+      "prospects.csv",
+      { type: "text/csv" },
+    );
+    await userEvent.upload(fileInput(), file);
+    await screen.findByText(copy.import.columns.lede);
+    await userEvent.click(screen.getByText(copy.import.actions.toPreview));
+    await screen.findByText(copy.import.preview.coordinates);
+
+    const chips = screen.getByRole("toolbar", { name: copy.import.types.label });
+    await userEvent.click(
+      within(chips).getByRole("button", { name: copy.import.types.chip("Bar", 1) }),
+    );
+    const zinc = screen.getByText("Le Zinc").closest("tr") as HTMLElement;
+    expect(within(zinc).getByText(copy.import.types.excluded)).toBeTruthy();
+    expect(screen.getByText(copy.import.preview.ready(2))).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: copy.import.actions.start(2) }));
+    await screen.findByText(copy.import.result.title);
+    const body = JSON.parse(String(batchCalls(fetchMock)[0]?.[1]?.body)) as {
+      rows: { name: string }[];
+      importLog: Record<string, unknown>;
+    };
+    expect(body.rows.map((r) => r.name)).toEqual(["Chez Marcel", "Café du Port"]);
+    // Left out by choice, not rejected (ADR-0030).
+    expect(body.importLog).toMatchObject({ rejected: 0 });
+  });
+
+  it("names an empty choice instead of importing nothing", async () => {
+    await goToPreview(2);
+    const chips = screen.getByRole("toolbar", { name: copy.import.types.label });
+    for (const button of within(chips).getAllByRole("button")) {
+      if (button.getAttribute("aria-pressed") === "true") await userEvent.click(button);
+    }
+    expect(screen.getByText(copy.import.types.none)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: copy.import.actions.start(0) }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it("sends 300 rows as 250 then 50, reading 250 / 300 in between", async () => {

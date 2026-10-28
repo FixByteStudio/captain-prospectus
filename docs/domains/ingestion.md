@@ -8,6 +8,8 @@ source → candidates (browser) → admin preview & mapping → POST /api/admin/
 
 The admin always sees a preview before anything is written.
 
+**Type chips.** Both previews (the CSV's Aperçu and the map's results) carry one chip per type, with its count: Restaurant (which includes `fast_food`), Café, Bar, Food truck, Autre. A row of an unticked type is greyed and is not sent; it is a choice, not a rejection, so the import log's `rejected` count leaves it out. The filter runs in the browser after the search, never in the Overpass query, so unticking a chip costs no request and leaves the cache key alone. The last choice is remembered per device in `localStorage` (`cap-import-types`); nothing stored, or nothing ticked, starts every chip ticked.
+
 ## CSV import
 - Parsed **in the browser** (PapaParse). The file never leaves the laptop and is never stored.
 - Admin maps columns → fields: `name` (required), `type`, `lat`, `lng`, `address`, `phone`, `website`, `cuisine`, `sourceRef`.

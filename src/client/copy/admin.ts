@@ -504,6 +504,15 @@ export const adminCopy = {
       noCoordinates: "Sans coordonnées",
     },
 
+    // The type filter, shared by the CSV preview and the map results.
+    types: {
+      label: "Types à importer",
+      chip: (label: string, n: number) => `${label} · ${formatCount(n)}`,
+      excluded: "Type exclu",
+      none: "Cochez au moins un type pour importer.",
+      nothingOfTypes: "Aucun lieu des types cochés. Cochez un autre type pour importer.",
+    },
+
     reasons: {
       missingName: "Nom manquant",
       invalid: "Valeur invalide",

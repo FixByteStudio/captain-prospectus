@@ -792,8 +792,14 @@ unchanged apart from its rail.
   ready rows read « Prêt », or « Sans coordonnées » on the warn tint.
   « Toutes les lignes » / « Voir les {4} erreurs » filters it. Coordinates
   still go through `formatCoordinate` and every count through `formatCount`.
-  No per-row checkboxes (every valid row is sent) and no created/updated
-  forecast: that split is only known after, in the result dialog.
+  Above the filter, the type chips (« Restaurant · 212 », « Bar · 37 »…)
+  pick which types go in; a row of an unticked type stays in the ledger,
+  muted, with « Type exclu » in Statut, and the KPI card and the gold button
+  count only what will be sent. The map results carry the same chips and
+  grey their rows the same way ([ingestion](domains/ingestion.md)).
+  No per-row checkboxes (every valid row of a ticked type is sent) and no
+  created/updated forecast: that split is only known after, in the result
+  dialog.
 - **Running** floats a progress card bottom right over the bottom bar:
   « Import en cours », "{done} / {total}" in `.tnum`, and a `Progress` bar in
   ink, not gold (the gold-progress exception is daily progress and Taux de
